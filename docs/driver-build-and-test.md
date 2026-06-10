@@ -16,7 +16,11 @@ msbuild src\driver\MacroHidDriver\MacroHidDriver.vcxproj /p:Configuration=Debug 
 msbuild src\service\MacroEngineService\MacroEngineService.vcxproj /p:Configuration=Debug /p:Platform=x64
 ```
 
-The native projects are intentionally not added to `MacroHID.sln` on this machine because `VCTargetsPath` is unavailable without the C++ workload.
+Or use the repo script:
+
+```powershell
+.\scripts\Build-Native.ps1 -Configuration Release
+```
 
 ## Test Signing
 
@@ -29,12 +33,21 @@ shutdown /r /t 0
 
 After reboot, create a test certificate, sign the catalog, and install the driver package from the WDK build output. Exact certificate commands depend on your local certificate store policy.
 
+The install script automates the normal development path:
+
+```powershell
+.\scripts\Install-TestDriver.ps1 -Configuration Release -EnableTestSigning
+```
+
+If the script enables test signing, reboot Windows and run it again without `-EnableTestSigning`.
+
 ## Install Smoke Test
 
 After the test-signed driver is installed as `Root\MacroHid`, run:
 
 ```powershell
 src\service\MacroEngineService\x64\Debug\MacroEngineService.exe
+dotnet run --project src\tools\MacroRunner\MacroRunner.csproj -- --macro samples\baseline.mcrx --send --pixels skip
 ```
 
 Expected behavior:
@@ -43,6 +56,19 @@ Expected behavior:
 - `IOCTL_MACROHID_PING` succeeds.
 - Two keyboard reports are submitted: Ctrl+A down, then release.
 - `IOCTL_MACROHID_GET_STATS` reports at least two submitted reports and zero rejected reports.
+- `MacroRunner --send` parses a `.mcrx`, schedules HID reports with QPC timing, submits them, and prints submit latency percentiles.
+
+Dry-run smoke test without an installed driver:
+
+```powershell
+.\scripts\Invoke-SmokeTest.ps1 -Pixels match
+```
+
+Installed-driver smoke test:
+
+```powershell
+.\scripts\Invoke-SmokeTest.ps1 -Send -Pixels skip
+```
 
 ## Notes
 

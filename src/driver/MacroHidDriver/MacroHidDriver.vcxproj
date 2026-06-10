@@ -56,7 +56,10 @@
     <ClInclude Include="..\..\shared\MacroHidProtocol\MacroHidProtocol.h" />
   </ItemGroup>
   <ItemGroup>
-    <Inf Include="MacroHidDriver.inf" />
+    <Inf Include="MacroHidDriver.inf">
+      <DateStamp>06/01/2026</DateStamp>
+      <TimeStamp>0.1.0.0</TimeStamp>
+    </Inf>
   </ItemGroup>
   <Target Name="MacroHidAddDriverBinaryToPackage" BeforeTargets="DriverPackageTarget" Condition="Exists('$(TargetPath)')">
     <ItemGroup>

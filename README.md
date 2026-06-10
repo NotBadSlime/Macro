@@ -5,8 +5,10 @@ MacroHID is a Windows automation project for legal local desktop workflows. It c
 ## Current State
 
 - `.NET` solution: builds the core macro model, `.mcrx` parser, HID report encoder, latency probe, and WPF studio.
+- Macro execution plan: expands high-level steps such as `key.tap`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled HID reports.
+- `MacroRunner`: dry-runs `.mcrx` files into HID report timelines and can submit those reports to the MacroHID driver with `--send`.
 - Native driver/service source: VHF/KMDF driver skeleton and C++ driver client are present under `src/driver` and `src/service`.
-- Driver build/install requires Visual Studio 2022 with C++ workload and WDK. This machine currently has .NET 8 but not the VC/WDK command-line tools in `PATH`.
+- Local build environment: Visual Studio 2022 Build Tools and WDK 10.0.26100 are supported by the native build scripts.
 
 ## Build and Test
 
@@ -14,7 +16,22 @@ MacroHID is a Windows automation project for legal local desktop workflows. It c
 dotnet build MacroHID.sln
 dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj
 dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj -- --iterations 2000 --interval-us 1000
+dotnet run --project src\tools\MacroRunner\MacroRunner.csproj -- --macro samples\baseline.mcrx --pixels match
 dotnet run --project src\ui\MacroStudio\MacroStudio.csproj
+```
+
+Native build:
+
+```powershell
+.\scripts\Build-Native.ps1 -Configuration Release
+```
+
+Driver install and smoke test require Administrator PowerShell and Windows test signing:
+
+```powershell
+.\scripts\Install-TestDriver.ps1 -Configuration Release -EnableTestSigning
+# Reboot if the script asks for it, then run the install script again without -EnableTestSigning.
+.\scripts\Invoke-SmokeTest.ps1 -Send -Pixels skip
 ```
 
 ## GitHub Actions
@@ -22,7 +39,8 @@ dotnet run --project src\ui\MacroStudio\MacroStudio.csproj
 The repository includes `.github/workflows/ci.yml`.
 
 - The `.NET core, tools, and WPF` job builds `MacroHID.sln`, runs the core tests, runs a short `LatencyProbe` smoke test, and uploads `MacroStudio` plus `LatencyProbe` artifacts.
-- The `Native service and VHF driver` job runs on `windows-2022`, initializes MSBuild, restores native packages, and builds the C++ service plus VHF/KMDF driver with `msbuild`.
+- The `.NET core, tools, and WPF` job also runs a `MacroRunner` dry-run smoke test and uploads `MacroRunner`.
+- The `Native service and VHF driver` job runs on `windows-2022`, initializes MSBuild, verifies WDK/driver build tools, and builds the C++ service plus VHF/KMDF driver with `msbuild`.
 
 Use `windows-2022` instead of `windows-latest` for now so the CI environment stays aligned with Visual Studio 2022 and the WDK assumptions in this project.
 
@@ -33,6 +51,7 @@ Use `windows-2022` instead of `windows-latest` for now so the CI environment sta
 - `src/driver/MacroHidDriver` - KMDF + Virtual HID Framework source driver skeleton.
 - `src/service/MacroEngineService` - C++ driver client and first smoke-test service entry.
 - `src/tools/LatencyProbe` - user-mode scheduler jitter and report encoding benchmark.
+- `src/tools/MacroRunner` - `.mcrx` dry-run and optional driver-send execution harness.
 - `src/ui/MacroStudio` - WPF macro editor and diagnostics shell.
 - `samples` - sample `.mcrx` macros.
 

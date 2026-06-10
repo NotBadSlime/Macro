@@ -83,6 +83,11 @@ public static class HidReportEncoder
         return [ConsumerReportId, (byte)(usage & 0xFF), (byte)((usage >> 8) & 0xFF)];
     }
 
+    public static byte[] EncodeConsumerRelease()
+    {
+        return [ConsumerReportId, 0x00, 0x00];
+    }
+
     public static byte[] EncodeReleaseAll()
     {
         return [KeyboardReportId, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];

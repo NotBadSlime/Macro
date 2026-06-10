@@ -6,6 +6,9 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers wheel and consumer control steps", McrxParserCoversWheelAndConsumerSteps),
     ("Sample baseline macro remains parseable", SampleBaselineMacroRemainsParseable),
     ("Scheduler expands repeats and applies waits with QPC ticks", SchedulerExpandsRepeatsAndAppliesWaits),
+    ("Report compiler expands hold actions into timed HID reports", ReportCompilerExpandsHoldActions),
+    ("Report compiler evaluates pixel branches before emitting reports", ReportCompilerEvaluatesPixelBranches),
+    ("Protocol constants match driver IOCTL contract", ProtocolConstantsMatchDriverIoctlContract),
     ("HID report encoder covers keyboard, mouse, and consumer reports", HidReportEncoderCoversReports),
     ("Pixel conditions match expected colors within tolerance", PixelConditionsMatchWithinTolerance),
     ("Latency histogram computes p50 p95 p99 from microsecond samples", LatencyHistogramComputesPercentiles),
@@ -116,6 +119,67 @@ static void SchedulerExpandsRepeatsAndAppliesWaits()
     Assert.Equal(3_000, scheduled[1].DueTick);
     Assert.Equal(6_000, scheduled[2].DueTick);
     Assert.Equal(HidKey.B, ((KeyStep)scheduled[2].Step).Key);
+}
+
+static void ReportCompilerExpandsHoldActions()
+{
+    var document = new MacroDocument(
+        Version: 1,
+        Name: "reports",
+        Steps:
+        [
+            new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.LeftCtrl, TimeSpan.FromMilliseconds(2)),
+            new MouseButtonStep(MouseButton.Left, ButtonActionKind.Click, TimeSpan.FromMilliseconds(3)),
+            new ConsumerStep(ConsumerControl.VolumeUp, ButtonActionKind.Click, TimeSpan.FromMilliseconds(4))
+        ]);
+
+    var reports = MacroReportCompiler.Compile(document, startTick: 10_000, qpcFrequency: 1_000_000);
+
+    Assert.Equal(6, reports.Count);
+    Assert.Equal(10_000, reports[0].DueTick);
+    Assert.SequenceEqual([0x01, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00], reports[0].Report);
+    Assert.Equal(12_000, reports[1].DueTick);
+    Assert.SequenceEqual([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], reports[1].Report);
+    Assert.Equal(12_000, reports[2].DueTick);
+    Assert.SequenceEqual([0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], reports[2].Report);
+    Assert.Equal(15_000, reports[3].DueTick);
+    Assert.SequenceEqual([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], reports[3].Report);
+    Assert.Equal(15_000, reports[4].DueTick);
+    Assert.SequenceEqual([0x03, 0xE9, 0x00], reports[4].Report);
+    Assert.Equal(19_000, reports[5].DueTick);
+    Assert.SequenceEqual([0x03, 0x00, 0x00], reports[5].Report);
+}
+
+static void ReportCompilerEvaluatesPixelBranches()
+{
+    var condition = new PixelCondition(
+        new PixelCoordinate(CoordinateScope.Screen, x: 5, y: 6),
+        new RgbColor(1, 2, 3),
+        tolerance: 0);
+    var document = new MacroDocument(
+        Version: 1,
+        Name: "pixel",
+        Steps:
+        [
+            new PixelWhenStep(condition,
+            [
+                new KeyStep(KeyActionKind.Down, HidKey.Enter, HidModifier.None, TimeSpan.Zero)
+            ])
+        ]);
+
+    var falseReports = MacroReportCompiler.Compile(document, 0, 1_000_000, _ => false);
+    var trueReports = MacroReportCompiler.Compile(document, 0, 1_000_000, _ => true);
+
+    Assert.Equal(0, falseReports.Count);
+    Assert.Equal(1, trueReports.Count);
+    Assert.SequenceEqual([0x01, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00], trueReports[0].Report);
+}
+
+static void ProtocolConstantsMatchDriverIoctlContract()
+{
+    Assert.Equal(0x80002004u, MacroHidProtocol.IoctlPing);
+    Assert.Equal(0x8000A008u, MacroHidProtocol.IoctlSubmitReport);
+    Assert.Equal(0x8000600Cu, MacroHidProtocol.IoctlGetStats);
 }
 
 static void SampleBaselineMacroRemainsParseable()

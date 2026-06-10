@@ -37,11 +37,17 @@ jobs:
       - name: Run latency probe smoke test
         run: dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj --configuration Release --no-build -- --iterations 250 --interval-us 1000
 
+      - name: Run macro runner dry-run smoke test
+        run: dotnet run --project src\tools\MacroRunner\MacroRunner.csproj --configuration Release --no-build -- --macro samples\baseline.mcrx --pixels match
+
       - name: Publish MacroStudio
         run: dotnet publish src\ui\MacroStudio\MacroStudio.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts\MacroStudio
 
       - name: Publish LatencyProbe
         run: dotnet publish src\tools\LatencyProbe\LatencyProbe.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts\LatencyProbe
+
+      - name: Publish MacroRunner
+        run: dotnet publish src\tools\MacroRunner\MacroRunner.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts\MacroRunner
 
       - name: Upload .NET artifacts
         uses: actions/upload-artifact@v4
