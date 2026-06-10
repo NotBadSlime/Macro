@@ -60,7 +60,7 @@ bool DriverClient::Ping() const
     DWORD bytesReturned = 0;
     BOOL ok = DeviceIoControl(
         handle_,
-        IOCTL_MACROHID_PING,
+        static_cast<DWORD>(IOCTL_MACROHID_PING),
         nullptr,
         0,
         nullptr,
@@ -91,7 +91,7 @@ bool DriverClient::SubmitReport(unsigned long sequence, const std::vector<unsign
     DWORD bytesReturned = 0;
     BOOL ok = DeviceIoControl(
         handle_,
-        IOCTL_MACROHID_SUBMIT_REPORT,
+        static_cast<DWORD>(IOCTL_MACROHID_SUBMIT_REPORT),
         &packet,
         sizeof(packet),
         nullptr,
@@ -109,7 +109,7 @@ std::optional<MACROHID_DRIVER_STATS> DriverClient::GetStats() const
     DWORD bytesReturned = 0;
     BOOL ok = DeviceIoControl(
         handle_,
-        IOCTL_MACROHID_GET_STATS,
+        static_cast<DWORD>(IOCTL_MACROHID_GET_STATS),
         nullptr,
         0,
         &stats,

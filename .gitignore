@@ -1,5 +1,8 @@
 bin/
 obj/
+src/**/x64/
+src/driver/MacroHidDriver/MacroHidDriver/
+src/service/MacroEngineService/MacroEng.*/
 .vs/
 *.user
 *.suo

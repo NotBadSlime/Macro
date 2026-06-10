@@ -10,6 +10,12 @@ PnpLockdown=1
 [DestinationDirs]
 DefaultDestDir=12
 
+[SourceDisksNames]
+1=%DiskName%,,,
+
+[SourceDisksFiles]
+MacroHidDriver.sys=1
+
 [Manufacturer]
 %ManufacturerName%=Standard,NTamd64.10.0
 
@@ -40,5 +46,6 @@ KmdfLibraryVersion=1.33
 
 [Strings]
 ManufacturerName="MacroHID"
+DiskName="MacroHID Driver Disk"
 MacroHid.DeviceDesc="MacroHID Virtual Keyboard and Mouse"
 MacroHid.ServiceDesc="MacroHID Virtual HID Source Driver"

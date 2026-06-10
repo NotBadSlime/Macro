@@ -1,6 +1,12 @@
 #pragma once
 
+#if !defined(_NTDDK_) && !defined(_WDMDDK_) && !defined(_NTIFS_)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #include <winioctl.h>
+#endif
 
 #define MACROHID_PROTOCOL_VERSION 1
 #define MACROHID_MAX_REPORT_SIZE 64
