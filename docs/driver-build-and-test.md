@@ -31,6 +31,8 @@ bcdedit /set testsigning on
 shutdown /r /t 0
 ```
 
+If `bcdedit /set testsigning on` reports that the value is protected by Secure Boot policy, disable Secure Boot in UEFI/BIOS first. Windows will not load a test-signed kernel driver while Secure Boot blocks test-signing mode.
+
 After reboot, create a test certificate, sign the catalog, and install the driver package from the WDK build output. Exact certificate commands depend on your local certificate store policy.
 
 The install script automates the normal development path:

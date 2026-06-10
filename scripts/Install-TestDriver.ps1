@@ -32,7 +32,21 @@ function Find-WdkTool([string]$name) {
 }
 
 if ($EnableTestSigning) {
-    bcdedit /set testsigning on | Out-Host
+    $bcdeditOutput = bcdedit /set testsigning on 2>&1
+    $bcdeditOutput | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        $message = ($bcdeditOutput | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                $_.Exception.Message
+            }
+            else {
+                [string]$_
+            }
+        }) -join [Environment]::NewLine
+        $message = $message.Trim()
+        throw "Failed to enable Windows test signing. If bcdedit says the value is protected by Secure Boot policy, disable Secure Boot in UEFI/BIOS, boot Windows again, then rerun this script with -EnableTestSigning. bcdedit exit code $LASTEXITCODE. Output: $message"
+    }
+
     if (-not (Test-TestSigningEnabled)) {
         Write-Warning "Test signing was requested. Reboot Windows, then run this script again."
         exit 10
