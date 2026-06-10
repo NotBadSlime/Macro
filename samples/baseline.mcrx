@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "name": "baseline",
+  "steps": [
+    {
+      "type": "key.tap",
+      "key": "A",
+      "modifiers": ["LeftCtrl"],
+      "holdMs": 5
+    },
+    {
+      "type": "mouse.move",
+      "mode": "relative",
+      "x": 25,
+      "y": -10,
+      "durationMs": 0
+    },
+    {
+      "type": "mouse.wheel",
+      "vertical": -1,
+      "horizontal": 0
+    },
+    {
+      "type": "consumer.tap",
+      "control": "VolumeUp"
+    },
+    {
+      "type": "wait",
+      "ms": 2
+    },
+    {
+      "type": "pixel.when",
+      "scope": "screen",
+      "x": 100,
+      "y": 200,
+      "r": 10,
+      "g": 20,
+      "b": 30,
+      "tolerance": 4,
+      "then": [
+        {
+          "type": "key.down",
+          "key": "Enter"
+        }
+      ]
+    }
+  ]
+}

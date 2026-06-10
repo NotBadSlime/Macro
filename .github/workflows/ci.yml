@@ -1,0 +1,87 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    name: .NET core, tools, and WPF
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore MacroHID.sln
+
+      - name: Build
+        run: dotnet build MacroHID.sln --configuration Release --no-restore
+
+      - name: Run core tests
+        run: dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release --no-build
+
+      - name: Run latency probe smoke test
+        run: dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj --configuration Release --no-build -- --iterations 250 --interval-us 1000
+
+      - name: Publish MacroStudio
+        run: dotnet publish src\ui\MacroStudio\MacroStudio.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts\MacroStudio
+
+      - name: Publish LatencyProbe
+        run: dotnet publish src\tools\LatencyProbe\LatencyProbe.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts\LatencyProbe
+
+      - name: Upload .NET artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacroHID-dotnet-${{ github.sha }}
+          path: artifacts
+
+  native:
+    name: Native service and VHF driver
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+
+      - name: Show Visual Studio environment
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          msbuild -version
+
+      - name: Build native service
+        run: msbuild src\service\MacroEngineService\MacroEngineService.vcxproj /m /p:Configuration=Release /p:Platform=x64
+
+      - name: Build VHF driver
+        run: msbuild src\driver\MacroHidDriver\MacroHidDriver.vcxproj /m /p:Configuration=Release /p:Platform=x64
+
+      - name: Upload native artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MacroHID-native-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            src\service\MacroEngineService\x64\Release\*.exe
+            src\driver\MacroHidDriver\x64\Release\*.sys
+            src\driver\MacroHidDriver\x64\Release\*.inf
+            src\driver\MacroHidDriver\x64\Release\*.cat
