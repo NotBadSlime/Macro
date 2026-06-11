@@ -9,6 +9,8 @@ public sealed record KeyInputAction(
     HidKey Key,
     HidModifier Modifiers) : InputAction;
 
+public sealed record TextInputAction(string Text) : InputAction;
+
 public sealed record MouseMoveInputAction(
     MouseMoveMode Mode,
     int X,
@@ -78,6 +80,9 @@ public static class InputActionCompiler
                     break;
                 case KeyStep key:
                     CompileKey(key, actions, startTick, qpcFrequency, ref elapsedTicks);
+                    break;
+                case TextStep text:
+                    AddAction(actions, new TextInputAction(text.Text), startTick + elapsedTicks, text);
                     break;
                 case MouseButtonStep button:
                     CompileMouseButton(button, actions, startTick, qpcFrequency, ref elapsedTicks);

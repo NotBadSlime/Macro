@@ -58,6 +58,8 @@ public sealed record KeyStep(
     HidModifier Modifiers,
     TimeSpan Hold) : MacroStep;
 
+public sealed record TextStep(string Text) : MacroStep;
+
 public sealed record MouseMoveStep(
     MouseMoveMode Mode,
     int X,

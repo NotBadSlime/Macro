@@ -14,7 +14,7 @@ The script publishes:
 - `MacroRunner`
 - `LatencyProbe`
 - scripts, samples, and documentation
-- bundled `MacroConverter` when `..\MacroConverter\dist\MacroConverter-win32-x64` exists
+- built-in conversion libraries used by MacroStudio
 
 The installer is written to:
 
@@ -38,6 +38,7 @@ MacroHID is pure user-mode and submits input through Windows `SendInput`.
 - No Windows test-signing mode is required.
 - Secure Boot does not need to be changed.
 - `MacroRunner --send` submits input directly through SendInput.
-- Diagnostics show the visible-desktop pixel sampler, SendInput backend, and MacroConverter status.
+- Diagnostics show the visible-desktop pixel sampler and SendInput backend.
+- MacroStudio includes built-in import/export for `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro files. No external Electron converter is installed.
 
 To control an elevated/admin application, run MacroStudio or MacroRunner as Administrator so both processes are at the same integrity level. Secure desktop, UAC prompts, protected processes, and anti-cheat protected contexts are intentionally out of scope.

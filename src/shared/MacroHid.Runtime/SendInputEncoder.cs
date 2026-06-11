@@ -16,7 +16,8 @@ public readonly record struct SendInputPacket(
     uint Flags,
     int MouseX,
     int MouseY,
-    uint MouseData);
+    uint MouseData,
+    ushort ScanCode = 0);
 
 public static class SendInputEncoder
 {
@@ -29,6 +30,7 @@ public static class SendInputEncoder
         return action switch
         {
             KeyInputAction key => EncodeKey(key),
+            TextInputAction text => EncodeText(text),
             MouseMoveInputAction move => EncodeMouseMove(move, virtualDesktop),
             MouseButtonInputAction button => EncodeMouseButton(button),
             MouseWheelInputAction wheel => EncodeMouseWheel(wheel),
@@ -63,6 +65,23 @@ public static class SendInputEncoder
         foreach (var modifierVirtualKey in ModifierVirtualKeys(action.Modifiers).Reverse())
         {
             packets.Add(KeyboardPacket(modifierVirtualKey, keyUp: true));
+        }
+
+        return packets;
+    }
+
+    private static IReadOnlyList<SendInputPacket> EncodeText(TextInputAction action)
+    {
+        if (string.IsNullOrEmpty(action.Text))
+        {
+            return [];
+        }
+
+        var packets = new List<SendInputPacket>(action.Text.Length * 2);
+        foreach (var ch in action.Text)
+        {
+            packets.Add(UnicodePacket(ch, keyUp: false));
+            packets.Add(UnicodePacket(ch, keyUp: true));
         }
 
         return packets;
@@ -207,6 +226,17 @@ public static class SendInputEncoder
         }
 
         return new SendInputPacket(SendInputPacketKind.Keyboard, virtualKey, flags, 0, 0, 0);
+    }
+
+    private static SendInputPacket UnicodePacket(char value, bool keyUp)
+    {
+        var flags = RuntimeNativeMethods.KeyEventFUnicode;
+        if (keyUp)
+        {
+            flags |= RuntimeNativeMethods.KeyEventFKeyUp;
+        }
+
+        return new SendInputPacket(SendInputPacketKind.Keyboard, 0, flags, 0, 0, 0, value);
     }
 
     private static IEnumerable<ushort> ModifierVirtualKeys(HidModifier modifiers)

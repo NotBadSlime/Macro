@@ -1,4 +1,5 @@
 using MacroHid.Core;
+using MacroHid.Converter;
 using MacroHid.Runtime;
 using MacroStudio;
 using System.Globalization;
@@ -8,14 +9,17 @@ var tests = new (string Name, Action Body)[]
 {
     ("MCRX parser covers keyboard, mouse, wait, repeat, and pixel steps", McrxParserCoversBaselineSteps),
     ("MCRX parser covers wheel and consumer control steps", McrxParserCoversWheelAndConsumerSteps),
+    ("MCRX parser covers key text steps", McrxParserCoversKeyTextSteps),
     ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
     ("MCRX parser defaults missing playback settings", McrxParserDefaultsMissingPlaybackSettings),
     ("MCRX parser rejects invalid playback settings", McrxParserRejectsInvalidPlaybackSettings),
     ("Sample baseline macro remains parseable", SampleBaselineMacroRemainsParseable),
     ("Scheduler expands repeats and applies waits with QPC ticks", SchedulerExpandsRepeatsAndAppliesWaits),
     ("Input action compiler expands hold actions into timed actions", InputActionCompilerExpandsHoldActions),
+    ("Input action compiler emits text actions", InputActionCompilerEmitsTextActions),
     ("Input action compiler evaluates pixel branches before emitting actions", InputActionCompilerEvaluatesPixelBranches),
     ("SendInput encoder covers keyboard, mouse, wheel, and consumer input", SendInputEncoderCoversInputActions),
+    ("SendInput encoder covers Unicode text actions", SendInputEncoderCoversUnicodeTextActions),
     ("Pixel conditions match expected colors within tolerance", PixelConditionsMatchWithinTolerance),
     ("Latency histogram computes p50 p95 p99 from microsecond samples", LatencyHistogramComputesPercentiles),
     ("Playback controller starts and stops toggle loop on trigger press", PlaybackControllerStopsToggleLoopOnTriggerPress),
@@ -25,7 +29,9 @@ var tests = new (string Name, Action Body)[]
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Runtime diagnostics report SendInput availability from stats", RuntimeDiagnosticsReportSendInputAvailabilityFromStats),
-    ("MacroConverter integration finds sibling packaged executable", MacroConverterIntegrationFindsSiblingPackagedExecutable),
+    ("Embedded converter imports MacroConverter formats", EmbeddedConverterImportsMacroConverterFormats),
+    ("Embedded converter exports MacroConverter formats", EmbeddedConverterExportsMacroConverterFormats),
+    ("Embedded converter reports warnings for unsupported external features", EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures),
 };
 
 var failed = 0;
@@ -164,6 +170,23 @@ static void InputActionCompilerExpandsHoldActions()
     Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Up), actions[5].Action);
 }
 
+static void InputActionCompilerEmitsTextActions()
+{
+    var document = new MacroDocument(
+        Version: 1,
+        Name: "text",
+        Steps:
+        [
+            new TextStep("Hi")
+        ]);
+
+    var actions = InputActionCompiler.Compile(document, startTick: 500, qpcFrequency: 1_000_000);
+
+    Assert.Equal(1, actions.Count);
+    Assert.Equal(500, actions[0].DueTick);
+    Assert.Equal(new TextInputAction("Hi"), actions[0].Action);
+}
+
 static void InputActionCompilerEvaluatesPixelBranches()
 {
     var condition = new PixelCondition(
@@ -226,6 +249,24 @@ static void McrxParserCoversWheelAndConsumerSteps()
     Assert.Equal(new MouseWheelInputAction(-1, 2, MouseButton.None), actions[0].Action);
     Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Down), actions[1].Action);
     Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Up), actions[2].Action);
+}
+
+static void McrxParserCoversKeyTextSteps()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "text-input",
+      "steps": [
+        { "type": "key.text", "text": "Hello 世界" }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+
+    var text = Assert.IsType<TextStep>(document.Steps[0]);
+    Assert.Equal("Hello 世界", text.Text);
 }
 
 static void McrxParserCoversPlaybackHotkeySettings()
@@ -333,6 +374,22 @@ static void SendInputEncoderCoversInputActions()
 
     var consumer = SendInputEncoder.Encode(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Down));
     Assert.Equal(0xAF, consumer[0].VirtualKey);
+}
+
+static void SendInputEncoderCoversUnicodeTextActions()
+{
+    var packets = SendInputEncoder.Encode(new TextInputAction("A中"));
+
+    Assert.Equal(4, packets.Count);
+    Assert.Equal(SendInputPacketKind.Keyboard, packets[0].Kind);
+    Assert.Equal(0, packets[0].VirtualKey);
+    Assert.Equal((ushort)'A', packets[0].ScanCode);
+    Assert.Equal(0x0004u, packets[0].Flags);
+    Assert.Equal((ushort)'A', packets[1].ScanCode);
+    Assert.Equal(0x0006u, packets[1].Flags);
+    Assert.Equal((ushort)'中', packets[2].ScanCode);
+    Assert.Equal(0x0004u, packets[2].Flags);
+    Assert.Equal(0x0006u, packets[3].Flags);
 }
 
 static void PixelConditionsMatchWithinTolerance()
@@ -469,27 +526,133 @@ static void RuntimeDiagnosticsReportSendInputAvailabilityFromStats()
     Assert.Contains("nativeInputs=12", present.InputBackend.Detail);
 }
 
-static void MacroConverterIntegrationFindsSiblingPackagedExecutable()
+static void EmbeddedConverterImportsMacroConverterFormats()
 {
-    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
-    var macroRoot = Path.Combine(root, "Macro");
-    var startDirectory = Path.Combine(macroRoot, "src", "ui", "MacroStudio", "bin", "Release", "net8.0-windows");
-    var converterExe = Path.Combine(root, "MacroConverter", "dist", "MacroConverter-win32-x64", "MacroConverter.exe");
+    const string qmacro = """
+    MoveTo 640, 360
+    LeftClick 1
+    Delay 250
+    KeyPress "F1", 1
+    SayString "MacroConverter"
+    """;
+    const string lua = """
+    macro.begin("Lua")
+    macro.move(10, 20)
+    macro.click("right", 1)
+    macro.wait(15)
+    macro.key("Escape", 1)
+    macro.text("hello")
+    macro.finish()
+    """;
+    const string xmouse = """
+    <XMouseProfile name="XMouse Demo">
+      <Button name="Button4">
+        <Action type="simulated-keystrokes" keys="{CTRL}C{WAITMS:200}{LMB}" />
+      </Button>
+    </XMouseProfile>
+    """;
+    const string macroXml = """
+    <MacroConverterMacro version="1" name="XML Demo">
+      <Nodes>
+        <Node id="start" type="start" label="Start" x="0" y="120" />
+        <Node id="move" type="mouse.move" label="Move" x="160" y="120"><Data x="320" y="240" durationMs="120" /></Node>
+        <Node id="click" type="mouse.click" label="Click" x="320" y="120"><Data button="left" count="1" /></Node>
+        <Node id="end" type="end" label="End" x="480" y="120" />
+      </Nodes>
+      <Edges>
+        <Edge id="e-start-move" source="start" target="move" kind="default" />
+        <Edge id="e-move-click" source="move" target="click" kind="default" />
+        <Edge id="e-click-end" source="click" target="end" kind="default" />
+      </Edges>
+    </MacroConverterMacro>
+    """;
+    const string razer = """
+    <Macro>
+      <Name>Razer Demo</Name>
+      <MacroEvents>
+        <MacroEvent><Type>6</Type><Number>2</Number><LoopEvent><State>0</State></LoopEvent></MacroEvent>
+        <MacroEvent><Type>2</Type><MouseEvent><MouseButton>0</MouseButton><State>0</State></MouseEvent></MacroEvent>
+        <MacroEvent><Type>0</Type><Number>0.010</Number></MacroEvent>
+        <MacroEvent><Type>2</Type><MouseEvent><MouseButton>0</MouseButton><State>1</State></MouseEvent></MacroEvent>
+        <MacroEvent><Type>6</Type><Number>2</Number><LoopEvent><State>1</State></LoopEvent></MacroEvent>
+      </MacroEvents>
+      <Version>4</Version>
+    </Macro>
+    """;
 
-    Directory.CreateDirectory(startDirectory);
-    Directory.CreateDirectory(Path.GetDirectoryName(converterExe)!);
-    File.WriteAllText(converterExe, string.Empty);
+    var qmacroResult = MacroConversionService.ImportToMcrx(new MacroImportRequest(qmacro, "sample.mq"));
+    Assert.Equal(MacroConversionFormat.QMacro, qmacroResult.SourceFormat);
+    Assert.IsType<TextStep>(qmacroResult.Document.Steps.Last());
 
-    try
-    {
-        var status = MacroConverterIntegration.Probe(startDirectory);
-        Assert.True(status.Available);
-        Assert.Equal(Path.GetFullPath(converterExe), status.ExecutablePath);
-    }
-    finally
-    {
-        Directory.Delete(root, recursive: true);
-    }
+    var luaResult = MacroConversionService.ImportToMcrx(new MacroImportRequest(lua, "sample.lua"));
+    Assert.Equal(MacroConversionFormat.Lua, luaResult.SourceFormat);
+    Assert.True(luaResult.Document.Steps.OfType<TextStep>().Any());
+
+    var xmouseResult = MacroConversionService.ImportToMcrx(new MacroImportRequest(xmouse, "sample.xmbcs"));
+    Assert.Equal(MacroConversionFormat.XMouse, xmouseResult.SourceFormat);
+    Assert.True(xmouseResult.Document.Steps.OfType<WaitStep>().Any());
+
+    var macroXmlResult = MacroConversionService.ImportToMcrx(new MacroImportRequest(macroXml, "sample.xml"));
+    Assert.Equal(MacroConversionFormat.MacroConverterXml, macroXmlResult.SourceFormat);
+    Assert.IsType<MouseMoveStep>(macroXmlResult.Document.Steps[0]);
+
+    var razerResult = MacroConversionService.ImportToMcrx(new MacroImportRequest(razer, "sample.xml"));
+    Assert.Equal(MacroConversionFormat.RazerSynapseXml, razerResult.SourceFormat);
+    var repeat = Assert.IsType<RepeatStep>(razerResult.Document.Steps[0]);
+    Assert.Equal(2, repeat.Count);
+    Assert.IsType<MouseButtonStep>(repeat.Steps[0]);
+}
+
+static void EmbeddedConverterExportsMacroConverterFormats()
+{
+    var document = new MacroDocument(
+        1,
+        "Export Demo",
+        [
+            new MouseMoveStep(MouseMoveMode.Absolute, 100, 200, TimeSpan.Zero),
+            new MouseButtonStep(MouseButton.Left, ButtonActionKind.Click, TimeSpan.FromMilliseconds(10)),
+            new WaitStep(TimeSpan.FromMilliseconds(25)),
+            new KeyStep(KeyActionKind.Tap, HidKey.F1, HidModifier.None, TimeSpan.Zero),
+            new TextStep("MacroConverter")
+        ]);
+
+    var mcrx = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.MacroHidMcrx);
+    Assert.Contains("\"key.text\"", mcrx.Output);
+
+    var xml = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.MacroConverterXml);
+    Assert.Contains("<MacroConverterMacro", xml.Output);
+    Assert.Contains("keyboard.text", xml.Output);
+
+    var lua = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.Lua);
+    Assert.Contains("macro.text(\"MacroConverter\")", lua.Output);
+
+    var qmacro = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.QMacro);
+    Assert.Contains("SayString \"MacroConverter\"", qmacro.Output);
+
+    var xmouse = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.XMouse);
+    Assert.Contains("{LMB}", xmouse.Output);
+
+    var razer = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.RazerSynapseXml);
+    Assert.Contains("<Macro>", razer.Output);
+    Assert.True(razer.Diagnostics.Any(item => item.Severity == MacroDiagnosticSeverity.Warning));
+}
+
+static void EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures()
+{
+    var document = new MacroDocument(
+        1,
+        "Unsupported",
+        [
+            new ConsumerStep(ConsumerControl.VolumeUp, ButtonActionKind.Click, TimeSpan.Zero),
+            new PixelWhenStep(
+                new PixelCondition(new PixelCoordinate(CoordinateScope.Screen, 10, 20), new RgbColor(1, 2, 3), 0),
+                [new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.Zero)])
+        ]);
+
+    var export = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.Lua);
+
+    Assert.True(export.Diagnostics.Any(item => item.Severity == MacroDiagnosticSeverity.Warning));
+    Assert.True(export.Output.Contains("macro.begin", StringComparison.Ordinal));
 }
 
 static class Assert

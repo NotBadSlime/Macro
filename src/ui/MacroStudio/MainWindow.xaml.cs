@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using MacroHid.Converter;
 using MacroHid.Core;
 using MacroHid.Runtime;
 using Microsoft.Win32;
@@ -46,7 +47,9 @@ public partial class MainWindow : Window
     private bool listening;
     private bool capturingTrigger;
     private bool updatingLanguageComboBox;
-    private MacroConverterStatus? converterStatus;
+    private MacroImportResult? pendingImport;
+    private string? pendingImportJson;
+    private List<AuxiliaryMacroFile> razerModuleFiles = [];
     private string? statusResourceKey = "InputBackendReady";
     private string? statusPlainText;
     private object[] statusArgs = [];
@@ -60,6 +63,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         LocalizationService.Initialize();
         InitializeLanguageComboBox();
+        InitializeExportFormatBox();
         ApplyLocalization();
         MacroEditor.Text = SampleMacro;
         ValidateCurrentMacro();
@@ -99,6 +103,29 @@ public partial class MainWindow : Window
         updatingLanguageComboBox = false;
     }
 
+    private void InitializeExportFormatBox()
+    {
+        ExportFormatBox.Items.Clear();
+        foreach (var format in MacroConversionService.GetFormats().Where(item => item.CanExport))
+        {
+            var item = new ComboBoxItem
+            {
+                Tag = format.Format,
+                Content = format.Label
+            };
+            ExportFormatBox.Items.Add(item);
+            if (format.Format == MacroConversionFormat.MacroConverterXml)
+            {
+                ExportFormatBox.SelectedItem = item;
+            }
+        }
+
+        if (ExportFormatBox.SelectedItem is null && ExportFormatBox.Items.Count > 0)
+        {
+            ExportFormatBox.SelectedIndex = 0;
+        }
+    }
+
     private void ApplyLocalization()
     {
         Title = L("AppTitle");
@@ -121,8 +148,12 @@ public partial class MainWindow : Window
         StopPlaybackButton.Content = L("Stop");
         SequenceGroupBox.Header = L("Sequence");
         DiagnosticsGroupBox.Header = L("Diagnostics");
-        ConverterGroupBox.Header = L("Converter");
-        OpenConverterButton.Content = L("OpenConverter");
+        ConversionGroupBox.Header = L("ImportExport");
+        ImportMacroButton.Content = L("ImportMacro");
+        ImportRazerModulesButton.Content = L("ImportRazerModules");
+        ApplyImportButton.Content = L("ApplyImport");
+        ExportFormatLabelText.Text = L("ExportFormat");
+        ExportMacroButton.Content = L("ExportMacro");
 
         foreach (var item in LanguageComboBox.Items.OfType<ComboBoxItem>())
         {
@@ -148,6 +179,7 @@ public partial class MainWindow : Window
 
         RefreshDynamicText();
         RefreshRuntimeDiagnostics();
+        RefreshConversionText();
     }
 
     private void RefreshDynamicText()
@@ -275,24 +307,104 @@ public partial class MainWindow : Window
         RefreshRuntimeDiagnostics();
     }
 
-    private void OpenConverter_Click(object sender, RoutedEventArgs e)
+    private void ImportMacro_Click(object sender, RoutedEventArgs e)
     {
-        converterStatus = MacroConverterIntegration.Probe();
-        RefreshConverterStatus();
-
-        if (converterStatus.ExecutablePath is null)
+        var dialog = new OpenFileDialog
         {
-            SetPlaybackResultResource("LastResultMessage", L("ConverterStatusUnavailable"));
+            Filter = L("ConverterImportFileFilter"),
+            Title = L("ImportMacroTitle")
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
             return;
         }
 
         try
         {
-            MacroConverterIntegration.Launch(converterStatus.ExecutablePath);
+            var content = File.ReadAllText(dialog.FileName);
+            pendingImport = MacroConversionService.ImportToMcrx(new MacroImportRequest(
+                content,
+                dialog.FileName,
+                MacroConversionFormat.Auto,
+                razerModuleFiles));
+            pendingImportJson = McrxSerializer.Serialize(pendingImport.Document);
+            ApplyImportButton.IsEnabled = true;
+            RefreshConversionText();
+            SetPlaybackResultResource("LastResultMessage", LF("ConversionImported", pendingImport.SourceFormat, pendingImport.Document.Steps.Count));
         }
         catch (Exception ex)
         {
-            SetPlaybackResultResource("LastResultMessage", LF("ConverterOpenFailed", ex.Message));
+            pendingImport = null;
+            pendingImportJson = null;
+            ApplyImportButton.IsEnabled = false;
+            ConversionText.Text = LF("ConversionImportFailed", ex.Message);
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+        }
+    }
+
+    private void ImportRazerModules_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = L("RazerModuleFileFilter"),
+            Title = L("ImportRazerModulesTitle"),
+            Multiselect = true
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        razerModuleFiles = dialog.FileNames
+            .Select(fileName => new AuxiliaryMacroFile(Path.GetFileName(fileName), File.ReadAllText(fileName)))
+            .ToList();
+        RefreshConversionText();
+        SetPlaybackResultResource("LastResultMessage", LF("ConversionModulesLoaded", razerModuleFiles.Count));
+    }
+
+    private void ApplyImport_Click(object sender, RoutedEventArgs e)
+    {
+        if (pendingImportJson is null)
+        {
+            return;
+        }
+
+        MacroEditor.Text = pendingImportJson;
+        ValidateCurrentMacro();
+        SetStatusResource("MacroValid");
+        SetPlaybackResultResource("LastResultMessage", L("ConversionApplied"));
+    }
+
+    private void ExportMacro_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
+            var format = GetSelectedExportFormat();
+            var export = MacroConversionService.ExportFromMcrx(document, format);
+            var dialog = new SaveFileDialog
+            {
+                Filter = FormatFilter(format),
+                Title = L("ExportMacroTitle"),
+                DefaultExt = MacroConversionService.GetDefaultExtension(format),
+                FileName = export.FileName
+            };
+
+            if (dialog.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            File.WriteAllText(dialog.FileName, export.Output);
+            ConversionText.Text = FormatDiagnostics(export.Diagnostics);
+            SetPlaybackResultResource("LastResultMessage", LF("ConversionExported", Path.GetFileName(dialog.FileName)));
+        }
+        catch (Exception ex)
+        {
+            ConversionText.Text = LF("ConversionExportFailed", ex.Message);
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
         }
     }
 
@@ -330,17 +442,46 @@ public partial class MainWindow : Window
         var diagnostics = RuntimeDiagnosticsSnapshot.Collect();
         PixelText.Text = LF("PixelSamplerStatus", diagnostics.PixelSampler.Detail);
         InputBackendText.Text = LF("InputBackendStatus", diagnostics.InputBackend.Detail);
-        converterStatus = MacroConverterIntegration.Probe();
-        RefreshConverterStatus();
     }
 
-    private void RefreshConverterStatus()
+    private void RefreshConversionText()
     {
-        converterStatus ??= MacroConverterIntegration.Probe();
-        ConverterText.Text = converterStatus.Available
-            ? L("ConverterStatusAvailable")
-            : L("ConverterStatusUnavailable");
-        OpenConverterButton.IsEnabled = converterStatus.Available;
+        if (pendingImport is null)
+        {
+            ConversionText.Text = razerModuleFiles.Count > 0
+                ? LF("ConversionModulesLoaded", razerModuleFiles.Count)
+                : L("ConversionReady");
+            return;
+        }
+
+        ConversionText.Text = LF("ConversionImported", pendingImport.SourceFormat, pendingImport.Document.Steps.Count)
+            + Environment.NewLine
+            + FormatDiagnostics(pendingImport.Diagnostics);
+    }
+
+    private MacroConversionFormat GetSelectedExportFormat()
+    {
+        return ExportFormatBox.SelectedItem is ComboBoxItem { Tag: MacroConversionFormat format }
+            ? format
+            : MacroConversionFormat.MacroConverterXml;
+    }
+
+    private static string FormatFilter(MacroConversionFormat format)
+    {
+        return MacroConversionService.GetFormats().FirstOrDefault(item => item.Format == format)?.FileDialogFilter
+            ?? "All files (*.*)|*.*";
+    }
+
+    private static string FormatDiagnostics(IReadOnlyList<MacroConversionDiagnostic> diagnostics)
+    {
+        if (diagnostics.Count == 0)
+        {
+            return L("ConversionDiagnosticsNone");
+        }
+
+        return string.Join(
+            Environment.NewLine,
+            diagnostics.Select(item => $"{item.Severity}: {item.Message}"));
     }
 
     private void CaptureTrigger_Click(object sender, RoutedEventArgs e)
@@ -691,10 +832,12 @@ public partial class MainWindow : Window
         return step switch
         {
             KeyStep key => $"key.{key.Kind.ToString().ToLowerInvariant()} {key.Modifiers}+{key.Key}",
+            TextStep text => $"key.text length={text.Text.Length}",
             MouseMoveStep move => $"mouse.move {move.Mode} x={move.X} y={move.Y} buttons={move.Buttons}",
             MouseButtonStep button => $"mouse.{button.Kind.ToString().ToLowerInvariant()} {button.Button}",
             MouseWheelStep wheel => $"mouse.wheel vertical={wheel.Vertical} horizontal={wheel.Horizontal}",
             ConsumerStep consumer => $"consumer.{consumer.Kind.ToString().ToLowerInvariant()} {consumer.Control}",
+            RepeatStep repeat => $"repeat count={repeat.Count} steps={repeat.Steps.Count}",
             PixelWhenStep pixel => $"pixel.when {pixel.Condition.Coordinate.Scope} x={pixel.Condition.Coordinate.X} y={pixel.Condition.Coordinate.Y}",
             _ => step.GetType().Name
         };

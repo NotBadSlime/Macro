@@ -101,6 +101,7 @@ public static class McrxParser
             "key.down" => ParseKey(stepElement, KeyActionKind.Down),
             "key.up" => ParseKey(stepElement, KeyActionKind.Up),
             "key.tap" => ParseKey(stepElement, KeyActionKind.Tap),
+            "key.text" => new TextStep(GetString(stepElement, "text", string.Empty) ?? string.Empty),
             "mouse.move" => ParseMouseMove(stepElement),
             "mouse.down" => ParseMouseButton(stepElement, ButtonActionKind.Down),
             "mouse.up" => ParseMouseButton(stepElement, ButtonActionKind.Up),

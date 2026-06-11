@@ -222,14 +222,31 @@
                     </Grid>
                 </GroupBox>
 
-                <GroupBox x:Name="ConverterGroupBox" Grid.Row="2" Header="Converter">
+                <GroupBox x:Name="ConversionGroupBox" Grid.Row="2" Header="Import / Export">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="ConverterText" Text="MacroConverter: checking" TextWrapping="Wrap" VerticalAlignment="Center" />
-                        <Button x:Name="OpenConverterButton" Grid.Column="1" Content="Open Converter" Click="OpenConverter_Click" Margin="12,0,0,0" />
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <WrapPanel>
+                            <Button x:Name="ImportMacroButton" MinWidth="78" Content="Import" Click="ImportMacro_Click" />
+                            <Button x:Name="ImportRazerModulesButton" MinWidth="108" Content="Razer Modules" Click="ImportRazerModules_Click" />
+                            <Button x:Name="ApplyImportButton" MinWidth="72" Content="Apply" Click="ApplyImport_Click" IsEnabled="False" />
+                        </WrapPanel>
+                        <Grid Grid.Row="1" Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="86" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock x:Name="ExportFormatLabelText" Text="Export Format" Foreground="{StaticResource SecondaryTextBrush}" />
+                                <ComboBox x:Name="ExportFormatBox" Height="28" />
+                            </StackPanel>
+                            <Button x:Name="ExportMacroButton" Grid.Column="2" Height="28" Margin="0,16,0,0" Content="Export" Click="ExportMacro_Click" />
+                        </Grid>
+                        <TextBlock x:Name="ConversionText" Grid.Row="2" Text="Converter built in" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{StaticResource SecondaryTextBrush}" />
                     </Grid>
                 </GroupBox>
 

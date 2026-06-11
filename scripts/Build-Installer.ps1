@@ -77,8 +77,6 @@ try {
     Copy-DirectoryIfExists (Join-Path $repoRoot "scripts") (Join-Path $inputRoot "scripts")
     Copy-DirectoryIfExists (Join-Path $repoRoot "samples") (Join-Path $inputRoot "samples")
     Copy-DirectoryIfExists (Join-Path $repoRoot "docs") (Join-Path $inputRoot "docs")
-    $macroConverterDist = Join-Path (Split-Path -Parent $repoRoot) "MacroConverter\dist\MacroConverter-win32-x64"
-    Copy-DirectoryIfExists $macroConverterDist (Join-Path $inputRoot "MacroConverter")
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $inputRoot -Force
     Remove-InstallerDebugArtifacts $inputRoot
 

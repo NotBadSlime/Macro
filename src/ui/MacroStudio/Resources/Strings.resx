@@ -150,21 +150,6 @@
   <data name="Diagnostics" xml:space="preserve">
     <value>Diagnostics</value>
   </data>
-  <data name="Converter" xml:space="preserve">
-    <value>Converter</value>
-  </data>
-  <data name="OpenConverter" xml:space="preserve">
-    <value>Open Converter</value>
-  </data>
-  <data name="ConverterStatusAvailable" xml:space="preserve">
-    <value>MacroConverter: available</value>
-  </data>
-  <data name="ConverterStatusUnavailable" xml:space="preserve">
-    <value>MacroConverter: not found</value>
-  </data>
-  <data name="ConverterOpenFailed" xml:space="preserve">
-    <value>Could not open MacroConverter: {0}</value>
-  </data>
   <data name="PixelSamplerPending" xml:space="preserve">
     <value>Pixel sampler: DXGI backend pending</value>
   </data>
@@ -200,5 +185,62 @@
   </data>
   <data name="MacroFileFilter" xml:space="preserve">
     <value>MacroHID macro (*.mcrx)|*.mcrx|JSON (*.json)|*.json|All files (*.*)|*.*</value>
+  </data>
+  <data name="ImportExport" xml:space="preserve">
+    <value>Import / Export</value>
+  </data>
+  <data name="ImportMacro" xml:space="preserve">
+    <value>Import</value>
+  </data>
+  <data name="ImportRazerModules" xml:space="preserve">
+    <value>Razer Modules</value>
+  </data>
+  <data name="ApplyImport" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="ExportFormat" xml:space="preserve">
+    <value>Export Format</value>
+  </data>
+  <data name="ExportMacro" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="ConversionReady" xml:space="preserve">
+    <value>Converter built in</value>
+  </data>
+  <data name="ConversionImported" xml:space="preserve">
+    <value>Imported {0}: {1} steps ready</value>
+  </data>
+  <data name="ConversionApplied" xml:space="preserve">
+    <value>Imported macro applied to editor</value>
+  </data>
+  <data name="ConversionExported" xml:space="preserve">
+    <value>Exported {0}</value>
+  </data>
+  <data name="ConversionModulesLoaded" xml:space="preserve">
+    <value>Razer modules loaded: {0}</value>
+  </data>
+  <data name="ConversionDiagnosticsNone" xml:space="preserve">
+    <value>No conversion warnings</value>
+  </data>
+  <data name="ConversionImportFailed" xml:space="preserve">
+    <value>Import failed: {0}</value>
+  </data>
+  <data name="ConversionExportFailed" xml:space="preserve">
+    <value>Export failed: {0}</value>
+  </data>
+  <data name="ImportMacroTitle" xml:space="preserve">
+    <value>Import macro</value>
+  </data>
+  <data name="ImportRazerModulesTitle" xml:space="preserve">
+    <value>Import Razer module XML files</value>
+  </data>
+  <data name="ExportMacroTitle" xml:space="preserve">
+    <value>Export macro</value>
+  </data>
+  <data name="ConverterImportFileFilter" xml:space="preserve">
+    <value>Supported macro files (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt|All files (*.*)|*.*</value>
+  </data>
+  <data name="RazerModuleFileFilter" xml:space="preserve">
+    <value>Razer XML (*.xml)|*.xml|All files (*.*)|*.*</value>
   </data>
 </root>

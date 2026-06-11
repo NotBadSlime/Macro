@@ -114,6 +114,7 @@ static string DescribeAction(InputAction action)
     return action switch
     {
         KeyInputAction key => $"key.{key.Kind} key={key.Key} modifiers={key.Modifiers}",
+        TextInputAction text => $"key.text length={text.Text.Length}",
         MouseMoveInputAction move => $"mouse.move mode={move.Mode} x={move.X} y={move.Y} buttons={move.Buttons}",
         MouseButtonInputAction button => $"mouse.button {button.Kind} button={button.Button}",
         MouseWheelInputAction wheel => $"mouse.wheel vertical={wheel.Vertical} horizontal={wheel.Horizontal}",

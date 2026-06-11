@@ -9,6 +9,7 @@ internal static partial class RuntimeNativeMethods
 
     public const uint KeyEventFExtendedKey = 0x0001;
     public const uint KeyEventFKeyUp = 0x0002;
+    public const uint KeyEventFUnicode = 0x0004;
 
     public const uint MouseEventFMove = 0x0001;
     public const uint MouseEventFLeftDown = 0x0002;

@@ -100,6 +100,7 @@ public sealed class SendInputMacroSink : IMacroInputSink
                     Keyboard = new NativeKeyboardInput
                     {
                         VirtualKey = packet.VirtualKey,
+                        ScanCode = packet.ScanCode,
                         Flags = packet.Flags
                     }
                 }

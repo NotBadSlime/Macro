@@ -41,9 +41,12 @@
 { "type": "key.tap", "key": "A", "modifiers": ["LeftCtrl"], "holdMs": 5 }
 { "type": "key.down", "key": "Enter" }
 { "type": "key.up", "key": "Enter" }
+{ "type": "key.text", "text": "Hello 世界" }
 ```
 
 `key` names use MacroHID's stable key names and are translated to Win32 input codes for the SendInput backend. Common letters, numbers, function keys, navigation keys, keypad keys, and modifiers are supported. Keys without a Win32 virtual-key equivalent are rejected at playback time with a clear error.
+
+`key.text` sends Unicode text through SendInput Unicode packets. It is intended for imported text actions such as MacroConverter `keyboard.text` and QMacro `SayString`.
 
 ### Mouse
 

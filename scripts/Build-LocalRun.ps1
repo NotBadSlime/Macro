@@ -34,8 +34,6 @@ try {
     Copy-DirectoryIfExists (Join-Path $repoRoot "samples") (Join-Path $outputRoot "samples")
     Copy-DirectoryIfExists (Join-Path $repoRoot "docs") (Join-Path $outputRoot "docs")
     Copy-DirectoryIfExists (Join-Path $repoRoot "scripts") (Join-Path $outputRoot "scripts")
-    $macroConverterDist = Join-Path (Split-Path -Parent $repoRoot) "MacroConverter\dist\MacroConverter-win32-x64"
-    Copy-DirectoryIfExists $macroConverterDist (Join-Path $outputRoot "MacroConverter")
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $outputRoot -Force
 
     $studioExe = Join-Path $outputRoot "MacroStudio\MacroStudio.exe"

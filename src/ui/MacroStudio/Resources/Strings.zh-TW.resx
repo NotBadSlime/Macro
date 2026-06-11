@@ -50,11 +50,6 @@
   <data name="PlaybackCountAtLeastOne" xml:space="preserve"><value>播放次數至少為 1。</value></data>
   <data name="Sequence" xml:space="preserve"><value>序列</value></data>
   <data name="Diagnostics" xml:space="preserve"><value>診斷</value></data>
-  <data name="Converter" xml:space="preserve"><value>轉換器</value></data>
-  <data name="OpenConverter" xml:space="preserve"><value>開啟轉換器</value></data>
-  <data name="ConverterStatusAvailable" xml:space="preserve"><value>MacroConverter：可用</value></data>
-  <data name="ConverterStatusUnavailable" xml:space="preserve"><value>MacroConverter：未找到</value></data>
-  <data name="ConverterOpenFailed" xml:space="preserve"><value>無法開啟 MacroConverter：{0}</value></data>
   <data name="PixelSamplerPending" xml:space="preserve"><value>像素取樣器：DXGI 後端待實作</value></data>
   <data name="InputBackendPending" xml:space="preserve"><value>輸入後端：SendInput 待就緒</value></data>
   <data name="PixelSamplerStatus" xml:space="preserve"><value>像素取樣器：{0}</value></data>
@@ -67,4 +62,23 @@
   <data name="OpenMacroTitle" xml:space="preserve"><value>開啟巨集</value></data>
   <data name="SaveMacroTitle" xml:space="preserve"><value>儲存巨集</value></data>
   <data name="MacroFileFilter" xml:space="preserve"><value>MacroHID 巨集 (*.mcrx)|*.mcrx|JSON (*.json)|*.json|所有檔案 (*.*)|*.*</value></data>
+  <data name="ImportExport" xml:space="preserve"><value>匯入 / 匯出</value></data>
+  <data name="ImportMacro" xml:space="preserve"><value>匯入</value></data>
+  <data name="ImportRazerModules" xml:space="preserve"><value>雷雲模組</value></data>
+  <data name="ApplyImport" xml:space="preserve"><value>套用</value></data>
+  <data name="ExportFormat" xml:space="preserve"><value>匯出格式</value></data>
+  <data name="ExportMacro" xml:space="preserve"><value>匯出</value></data>
+  <data name="ConversionReady" xml:space="preserve"><value>轉換器已內建</value></data>
+  <data name="ConversionImported" xml:space="preserve"><value>已匯入 {0}：{1} 個步驟待套用</value></data>
+  <data name="ConversionApplied" xml:space="preserve"><value>已套用匯入巨集到編輯器</value></data>
+  <data name="ConversionExported" xml:space="preserve"><value>已匯出 {0}</value></data>
+  <data name="ConversionModulesLoaded" xml:space="preserve"><value>已載入雷雲模組：{0}</value></data>
+  <data name="ConversionDiagnosticsNone" xml:space="preserve"><value>沒有轉換警告</value></data>
+  <data name="ConversionImportFailed" xml:space="preserve"><value>匯入失敗：{0}</value></data>
+  <data name="ConversionExportFailed" xml:space="preserve"><value>匯出失敗：{0}</value></data>
+  <data name="ImportMacroTitle" xml:space="preserve"><value>匯入巨集</value></data>
+  <data name="ImportRazerModulesTitle" xml:space="preserve"><value>匯入雷雲模組 XML</value></data>
+  <data name="ExportMacroTitle" xml:space="preserve"><value>匯出巨集</value></data>
+  <data name="ConverterImportFileFilter" xml:space="preserve"><value>支援的巨集檔案 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt|所有檔案 (*.*)|*.*</value></data>
+  <data name="RazerModuleFileFilter" xml:space="preserve"><value>雷雲 XML (*.xml)|*.xml|所有檔案 (*.*)|*.*</value></data>
 </root>

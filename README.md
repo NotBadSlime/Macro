@@ -1,15 +1,15 @@
 # MacroHID
 
-MacroHID is a Windows input macro project for legal local desktop automation. It combines a .NET macro runtime, Windows `SendInput` submission, visible-desktop pixel sampling, a WPF editor, MacroConverter integration, and latency diagnostics.
+MacroHID is a Windows input macro project for legal local desktop automation. It combines a .NET macro runtime, Windows `SendInput` submission, visible-desktop pixel sampling, a WPF editor, built-in macro conversion, and latency diagnostics.
 
 ## Current State
 
-- `.NET` solution: builds the core macro model, `.mcrx` parser, input action compiler, SendInput runtime, latency probe, MacroRunner, and WPF studio.
-- Macro execution expands steps such as `key.tap`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled input actions.
+- `.NET` solution: builds the core macro model, `.mcrx` parser/serializer, conversion library, input action compiler, SendInput runtime, latency probe, MacroRunner, and WPF studio.
+- Macro execution expands steps such as `key.tap`, `key.text`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled input actions.
 - `MacroRunner` can dry-run `.mcrx` files into an input action timeline, or submit those actions through `SendInput` with `--send`.
 - `MacroStudio` supports English, Simplified Chinese, and Traditional Chinese UI text with a runtime language selector.
-- Diagnostics probe the live visible-desktop pixel sampler, the SendInput backend, and bundled MacroConverter availability.
-- MacroConverter integration: when a sibling `MacroConverter\dist\MacroConverter-win32-x64` build is present, local-run and installer builds include it and MacroStudio exposes a launch entry.
+- Diagnostics probe the live visible-desktop pixel sampler and the SendInput backend.
+- MacroStudio has a built-in import/export panel for MacroHID `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro scripts. It does not bundle or launch the sibling Electron MacroConverter app.
 - The project is pure user-mode. It does not install a driver, does not use test signing, and does not require Secure Boot changes.
 
 ## Build and Test
@@ -53,10 +53,11 @@ The repository includes `.github/workflows/ci.yml`.
 ## Project Layout
 
 - `src/shared/MacroHid.Core` - macro document model, parser, scheduler, input action compiler, pixel condition helpers, and latency statistics.
+- `src/shared/MacroHid.Converter` - built-in import/export adapters for MacroHID, MacroConverter XML, Razer, Lua, XMouse, and QMacro formats.
 - `src/shared/MacroHid.Runtime` - SendInput backend, playback runtime, pixel sampler, diagnostics, and Win32 interop.
 - `src/tools/LatencyProbe` - user-mode scheduler jitter and input encoding benchmark.
 - `src/tools/MacroRunner` - `.mcrx` dry-run and SendInput execution harness.
-- `src/ui/MacroStudio` - WPF macro editor, hotkey playback, diagnostics, localization, and MacroConverter launch entry.
+- `src/ui/MacroStudio` - WPF macro editor, hotkey playback, diagnostics, localization, and built-in import/export tools.
 - `samples` - sample `.mcrx` macros.
 - `installer` - Inno Setup script and localized installer language files.
 

@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\shared\MacroHid.Converter\MacroHid.Converter.csproj" />
     <ProjectReference Include="..\..\src\shared\MacroHid.Core\MacroHid.Core.csproj" />
     <ProjectReference Include="..\..\src\shared\MacroHid.Runtime\MacroHid.Runtime.csproj" />
     <ProjectReference Include="..\..\src\ui\MacroStudio\MacroStudio.csproj" />
