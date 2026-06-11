@@ -41,5 +41,6 @@ MacroHID is pure user-mode and submits input through Windows `SendInput`.
 - `MacroRunner --send` submits input directly through SendInput.
 - Diagnostics show the visible-desktop pixel sampler and SendInput backend.
 - MacroStudio includes built-in import/export for `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro files. No external Electron converter is installed.
+- MacroStudio keeps the user's macro database in `%APPDATA%\MacroHID\MacroLibrary` as ordinary `.mcrx` files plus a small `library.json` index. The installer does not create a background service for this database.
 
 To control an elevated/admin application with MacroRunner, run MacroRunner as Administrator so both processes are at the same integrity level. Secure desktop, UAC prompts, protected processes, and anti-cheat protected contexts are intentionally out of scope.

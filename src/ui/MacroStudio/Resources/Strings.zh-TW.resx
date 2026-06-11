@@ -81,4 +81,42 @@
   <data name="ExportMacroTitle" xml:space="preserve"><value>匯出巨集</value></data>
   <data name="ConverterImportFileFilter" xml:space="preserve"><value>支援的巨集檔案 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt|所有檔案 (*.*)|*.*</value></data>
   <data name="RazerModuleFileFilter" xml:space="preserve"><value>雷雲 XML (*.xml)|*.xml|所有檔案 (*.*)|*.*</value></data>
+  <data name="MacroLibrary" xml:space="preserve"><value>巨集資料庫</value></data>
+  <data name="NewMacro" xml:space="preserve"><value>新增</value></data>
+  <data name="NewFolder" xml:space="preserve"><value>資料夾</value></data>
+  <data name="DuplicateMacro" xml:space="preserve"><value>複製</value></data>
+  <data name="Delete" xml:space="preserve"><value>刪除</value></data>
+  <data name="SaveLibrary" xml:space="preserve"><value>儲存到庫</value></data>
+  <data name="Add" xml:space="preserve"><value>新增</value></data>
+  <data name="AddDelay" xml:space="preserve"><value>延遲</value></data>
+  <data name="AddKeyboard" xml:space="preserve"><value>鍵盤功能</value></data>
+  <data name="AddMouseButton" xml:space="preserve"><value>滑鼠按鍵</value></data>
+  <data name="AddMouseMove" xml:space="preserve"><value>滑鼠移動</value></data>
+  <data name="AddWheel" xml:space="preserve"><value>滾輪</value></data>
+  <data name="AddText" xml:space="preserve"><value>文字功能</value></data>
+  <data name="AddLoop" xml:space="preserve"><value>循環</value></data>
+  <data name="AddPixel" xml:space="preserve"><value>像素條件</value></data>
+  <data name="AddMacroHint" xml:space="preserve"><value>把左側巨集拖到序列裡，可以複製它的步驟。</value></data>
+  <data name="Duration" xml:space="preserve"><value>時長</value></data>
+  <data name="MoveUp" xml:space="preserve"><value>上移</value></data>
+  <data name="MoveDown" xml:space="preserve"><value>下移</value></data>
+  <data name="SearchMacros" xml:space="preserve"><value>搜尋巨集</value></data>
+  <data name="AdvancedJson" xml:space="preserve"><value>MCRX JSON</value></data>
+  <data name="SortName" xml:space="preserve"><value>按字母順序</value></data>
+  <data name="SortRecentlyUpdated" xml:space="preserve"><value>最近更新</value></data>
+  <data name="Ungrouped" xml:space="preserve"><value>巨集</value></data>
+  <data name="Folder" xml:space="preserve"><value>資料夾</value></data>
+  <data name="DropActionsHint" xml:space="preserve"><value>把動作拖到這裡，或直接點擊右側新增項。</value></data>
+  <data name="LibrarySaved" xml:space="preserve"><value>巨集資料庫已儲存</value></data>
+  <data name="DeleteMacroConfirm" xml:space="preserve"><value>從本地資料庫刪除巨集「{0}」？</value></data>
+  <data name="ActionInserted" xml:space="preserve"><value>已插入{0}</value></data>
+  <data name="InsertedMacroSteps" xml:space="preserve"><value>已插入巨集「{0}」（{1} 個步驟）</value></data>
+  <data name="TemplateDelay" xml:space="preserve"><value>延遲</value></data>
+  <data name="TemplateKeyboard" xml:space="preserve"><value>鍵盤功能</value></data>
+  <data name="TemplateMouseButton" xml:space="preserve"><value>滑鼠按鍵</value></data>
+  <data name="TemplateMouseMove" xml:space="preserve"><value>滑鼠移動</value></data>
+  <data name="TemplateMouseWheel" xml:space="preserve"><value>滾輪</value></data>
+  <data name="TemplateText" xml:space="preserve"><value>文字功能</value></data>
+  <data name="TemplateLoop" xml:space="preserve"><value>循環</value></data>
+  <data name="TemplatePixel" xml:space="preserve"><value>像素條件</value></data>
 </root>

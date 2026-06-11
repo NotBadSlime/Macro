@@ -29,12 +29,15 @@ var tests = new (string Name, Action Body)[]
     ("Playback executor checks cancellation before submitting delayed actions", PlaybackExecutorChecksCancellationBeforeDelayedActions),
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
+    ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
     ("Runtime diagnostics report SendInput availability from stats", RuntimeDiagnosticsReportSendInputAvailabilityFromStats),
     ("Embedded converter imports MacroConverter formats", EmbeddedConverterImportsMacroConverterFormats),
     ("Embedded converter preserves Razer sub-millisecond timing", EmbeddedConverterPreservesRazerSubMillisecondTiming),
     ("Embedded converter exports MacroConverter formats", EmbeddedConverterExportsMacroConverterFormats),
     ("Embedded converter reports warnings for unsupported external features", EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures),
+    ("Macro library store persists and duplicates macros", MacroLibraryStorePersistsAndDuplicatesMacros),
+    ("Macro action templates create playable steps", MacroActionTemplatesCreatePlayableSteps),
 };
 
 var failed = 0;
@@ -544,6 +547,16 @@ static void LocalizationResourcesCoverPlaybackLabelInThreeLanguages()
     Assert.Equal("播放", LocalizationService.Get("Playback", new CultureInfo("zh-TW")));
 }
 
+static void LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages()
+{
+    Assert.Equal("Macro Library", LocalizationService.Get("MacroLibrary", new CultureInfo("en-US")));
+    Assert.Equal("宏数据库", LocalizationService.Get("MacroLibrary", new CultureInfo("zh-CN")));
+    Assert.Equal("巨集資料庫", LocalizationService.Get("MacroLibrary", new CultureInfo("zh-TW")));
+    Assert.Equal("Keyboard Function", LocalizationService.Get("AddKeyboard", new CultureInfo("en-US")));
+    Assert.Equal("键盘功能", LocalizationService.Get("AddKeyboard", new CultureInfo("zh-CN")));
+    Assert.Equal("鍵盤功能", LocalizationService.Get("AddKeyboard", new CultureInfo("zh-TW")));
+}
+
 static void MacroStudioManifestRequestsAdministratorByDefault()
 {
     var manifestPath = Path.Combine("src", "ui", "MacroStudio", "app.manifest");
@@ -724,6 +737,82 @@ static void EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures()
 
     Assert.True(export.Diagnostics.Any(item => item.Severity == MacroDiagnosticSeverity.Warning));
     Assert.True(export.Output.Contains("macro.begin", StringComparison.Ordinal));
+}
+
+static void MacroLibraryStorePersistsAndDuplicatesMacros()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var store = new MacroLibraryStore(root);
+        var created = store.CreateMacro("Burst A", "Combat",
+        [
+            new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.FromMilliseconds(0.5)),
+            new WaitStep(TimeSpan.FromMilliseconds(12))
+        ]);
+
+        var snapshot = store.Load();
+        Assert.Equal(1, snapshot.Items.Count);
+        Assert.Equal("Burst A", snapshot.Items[0].Name);
+        Assert.Equal("Combat", snapshot.Items[0].Folder);
+        Assert.Equal(created.Id, snapshot.SelectedMacroId);
+
+        var saved = store.ReadMacro(created.Id);
+        Assert.Equal("Burst A", saved.Name);
+        Assert.Equal(2, saved.Steps.Count);
+
+        var duplicate = store.DuplicateMacro(created.Id, "Burst A Copy");
+        var reloaded = new MacroLibraryStore(root).Load();
+        Assert.Equal(2, reloaded.Items.Count);
+        Assert.True(reloaded.Items.Any(item => item.Id == duplicate.Id && item.Name == "Burst A Copy"));
+        Assert.Equal("Burst A Copy", new MacroLibraryStore(root).ReadMacro(duplicate.Id).Name);
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void MacroActionTemplatesCreatePlayableSteps()
+{
+    var delay = Assert.IsType<WaitStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.Delay));
+    Assert.Equal(TimeSpan.FromMilliseconds(100), delay.Duration);
+
+    var key = Assert.IsType<KeyStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.Keyboard));
+    Assert.Equal(KeyActionKind.Tap, key.Kind);
+    Assert.Equal(HidKey.A, key.Key);
+
+    var mouse = Assert.IsType<MouseButtonStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.MouseButton));
+    Assert.Equal(MouseButton.Left, mouse.Button);
+    Assert.Equal(ButtonActionKind.Click, mouse.Kind);
+
+    var move = Assert.IsType<MouseMoveStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.MouseMove));
+    Assert.Equal(MouseMoveMode.Relative, move.Mode);
+
+    var text = Assert.IsType<TextStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.Text));
+    Assert.Equal("text", text.Text);
+
+    var repeat = Assert.IsType<RepeatStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.Loop));
+    Assert.Equal(2, repeat.Count);
+    Assert.True(repeat.Steps.Count > 0);
+
+    var document = new MacroDocument(
+        Version: 1,
+        Name: "templates",
+        Steps:
+        [
+            delay,
+            key,
+            mouse,
+            move,
+            text,
+            repeat
+        ]);
+    var roundTrip = McrxParser.Parse(McrxSerializer.Serialize(document));
+    Assert.Equal(6, roundTrip.Steps.Count);
 }
 
 static class Assert

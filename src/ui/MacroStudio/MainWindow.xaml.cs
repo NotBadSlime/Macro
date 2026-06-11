@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using MacroHid.Converter;
 using MacroHid.Core;
 using MacroHid.Runtime;
@@ -14,6 +15,9 @@ namespace MacroStudio;
 
 public partial class MainWindow : Window
 {
+    private const string ActionTemplateDragFormat = "MacroHID.ActionTemplate";
+    private const string MacroLibraryDragFormat = "MacroHID.MacroLibraryItem";
+
     private const string SampleMacro = """
     {
       "version": 1,
@@ -50,6 +54,11 @@ public partial class MainWindow : Window
     private MacroImportResult? pendingImport;
     private string? pendingImportJson;
     private List<AuxiliaryMacroFile> razerModuleFiles = [];
+    private readonly MacroLibraryStore libraryStore = new(MacroLibraryStore.GetDefaultRoot());
+    private MacroLibrarySnapshot librarySnapshot = new([], null);
+    private string? selectedMacroId;
+    private bool suppressMacroSelection;
+    private bool updatingMacroName;
     private string? statusResourceKey = "InputBackendReady";
     private string? statusPlainText;
     private object[] statusArgs = [];
@@ -65,8 +74,7 @@ public partial class MainWindow : Window
         InitializeLanguageComboBox();
         InitializeExportFormatBox();
         ApplyLocalization();
-        MacroEditor.Text = SampleMacro;
-        ValidateCurrentMacro();
+        InitializeMacroLibrary();
         RefreshRuntimeDiagnostics();
     }
 
@@ -134,10 +142,32 @@ public partial class MainWindow : Window
         SaveButton.Content = L("Save");
         ValidateButton.Content = L("Validate");
         ProbeButton.Content = L("Probe");
-        MacroGroupBox.Header = L("Macro");
+        LibraryTitleText.Text = L("MacroLibrary");
+        NewMacroButton.Content = L("NewMacro");
+        NewFolderButton.Content = L("NewFolder");
+        DuplicateMacroButton.Content = L("DuplicateMacro");
+        DeleteMacroButton.Content = L("Delete");
+        SaveLibraryButton.Content = L("SaveLibrary");
+        RunNowHeaderButton.Content = L("RunNow");
+        StopHeaderButton.Content = L("Stop");
+        SequenceTitleText.Text = L("Sequence");
+        AddTitleText.Text = L("Add");
+        AddDelayText.Text = L("AddDelay");
+        AddKeyboardText.Text = L("AddKeyboard");
+        AddMouseText.Text = L("AddMouseButton");
+        AddMouseMoveText.Text = L("AddMouseMove");
+        AddWheelText.Text = L("AddWheel");
+        AddTextActionText.Text = L("AddText");
+        AddLoopText.Text = L("AddLoop");
+        AddPixelText.Text = L("AddPixel");
+        AddMacroHintText.Text = L("AddMacroHint");
+        DurationLabelText.Text = L("Duration");
+        StepUpButton.Content = L("MoveUp");
+        StepDownButton.Content = L("MoveDown");
+        StepDeleteButton.Content = L("Delete");
         NameLabelText.Text = L("Name");
         ScheduledStepsLabelText.Text = L("ScheduledSteps");
-        PlaybackGroupBox.Header = L("Playback");
+        PlaybackTitleText.Text = L("Playback");
         TriggerLabelText.Text = L("Trigger");
         CaptureTriggerButton.Content = L("Capture");
         ModeLabelText.Text = L("Mode");
@@ -146,14 +176,24 @@ public partial class MainWindow : Window
         StopListeningButton.Content = L("StopListening");
         RunNowButton.Content = L("RunNow");
         StopPlaybackButton.Content = L("Stop");
-        SequenceGroupBox.Header = L("Sequence");
-        DiagnosticsGroupBox.Header = L("Diagnostics");
-        ConversionGroupBox.Header = L("ImportExport");
+        DiagnosticsTitleText.Text = L("Diagnostics");
+        ConversionTitleText.Text = L("ImportExport");
         ImportMacroButton.Content = L("ImportMacro");
         ImportRazerModulesButton.Content = L("ImportRazerModules");
         ApplyImportButton.Content = L("ApplyImport");
         ExportFormatLabelText.Text = L("ExportFormat");
         ExportMacroButton.Content = L("ExportMacro");
+        MacroSearchBox.ToolTip = L("SearchMacros");
+        AdvancedJsonExpander.Header = L("AdvancedJson");
+
+        foreach (var item in LibrarySortBox.Items.OfType<ComboBoxItem>())
+        {
+            item.Content = item.Tag?.ToString() switch
+            {
+                "updated" => L("SortRecentlyUpdated"),
+                _ => L("SortName")
+            };
+        }
 
         foreach (var item in LanguageComboBox.Items.OfType<ComboBoxItem>())
         {
@@ -243,6 +283,268 @@ public partial class MainWindow : Window
 
         LocalizationService.SetLanguage(cultureName);
         ApplyLocalization();
+        RefreshMacroLibraryList();
+    }
+
+    private void InitializeMacroLibrary()
+    {
+        librarySnapshot = libraryStore.Load();
+        if (librarySnapshot.Items.Count == 0)
+        {
+            libraryStore.CreateMacro(McrxParser.Parse(SampleMacro));
+            librarySnapshot = libraryStore.Load();
+        }
+
+        selectedMacroId = librarySnapshot.SelectedMacroId ?? librarySnapshot.Items.FirstOrDefault()?.Id;
+        RefreshMacroLibraryList();
+        if (selectedMacroId is not null)
+        {
+            LoadMacroFromLibrary(selectedMacroId);
+        }
+        else
+        {
+            SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
+        }
+    }
+
+    private void RefreshMacroLibraryList()
+    {
+        librarySnapshot = libraryStore.Load();
+        var selectedId = selectedMacroId ?? librarySnapshot.SelectedMacroId;
+        var search = MacroSearchBox.Text.Trim();
+        var sortMode = (LibrarySortBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "name";
+        var items = librarySnapshot.Items.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            items = items.Where(item =>
+                item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                || item.Folder.Contains(search, StringComparison.CurrentCultureIgnoreCase));
+        }
+
+        items = sortMode == "updated"
+            ? items.OrderByDescending(item => item.UpdatedAt).ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
+            : items.OrderBy(item => string.IsNullOrWhiteSpace(item.Folder) ? L("Ungrouped") : item.Folder, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase);
+
+        suppressMacroSelection = true;
+        MacroListBox.Items.Clear();
+        var grouped = items
+            .GroupBy(item => string.IsNullOrWhiteSpace(item.Folder) ? L("Ungrouped") : item.Folder)
+            .OrderBy(group => group.Key, StringComparer.CurrentCultureIgnoreCase);
+
+        MacroLibraryListEntry? selectedEntry = null;
+        foreach (var group in grouped)
+        {
+            MacroListBox.Items.Add(MacroLibraryListEntry.Header(group.Key));
+            foreach (var item in group)
+            {
+                var entry = MacroLibraryListEntry.Macro(item);
+                MacroListBox.Items.Add(entry);
+                if (item.Id == selectedId)
+                {
+                    selectedEntry = entry;
+                }
+            }
+        }
+
+        MacroListBox.SelectedItem = selectedEntry;
+        suppressMacroSelection = false;
+    }
+
+    private void MacroSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        RefreshMacroLibraryList();
+    }
+
+    private void LibrarySortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (MacroListBox is not null)
+        {
+            RefreshMacroLibraryList();
+        }
+    }
+
+    private void MacroListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (suppressMacroSelection)
+        {
+            return;
+        }
+
+        if (MacroListBox.SelectedItem is not MacroLibraryListEntry { Item: { } item })
+        {
+            return;
+        }
+
+        selectedMacroId = item.Id;
+        libraryStore.SetSelected(item.Id);
+        LoadMacroFromLibrary(item.Id);
+    }
+
+    private void MacroListBox_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        if (MacroListBox.SelectedItem is not MacroLibraryListEntry { Item: { } item })
+        {
+            return;
+        }
+
+        DragDrop.DoDragDrop(MacroListBox, new DataObject(MacroLibraryDragFormat, item.Id), DragDropEffects.Copy);
+    }
+
+    private void LoadMacroFromLibrary(string id)
+    {
+        try
+        {
+            selectedMacroId = id;
+            var document = libraryStore.ReadMacro(id);
+            SetEditorDocument(document);
+            SetStatusPlainText(document.Name);
+        }
+        catch (Exception ex)
+        {
+            SetStatusPlainText(ex.Message);
+        }
+    }
+
+    private void SetEditorDocument(MacroDocument document)
+    {
+        MacroEditor.Text = McrxSerializer.Serialize(document);
+        ValidateCurrentMacro();
+    }
+
+    private void NewMacro_Click(object sender, RoutedEventArgs e)
+    {
+        var name = NextMacroName("Macro");
+        var item = libraryStore.CreateMacro(name);
+        selectedMacroId = item.Id;
+        RefreshMacroLibraryList();
+        LoadMacroFromLibrary(item.Id);
+    }
+
+    private void NewFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var folder = NextFolderName();
+        var item = libraryStore.CreateMacro(NextMacroName("Macro"), folder);
+        selectedMacroId = item.Id;
+        RefreshMacroLibraryList();
+        LoadMacroFromLibrary(item.Id);
+    }
+
+    private void DuplicateMacro_Click(object sender, RoutedEventArgs e)
+    {
+        if (selectedMacroId is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var document = McrxParser.Parse(MacroEditor.Text);
+            libraryStore.SaveMacro(selectedMacroId, document);
+            var item = libraryStore.DuplicateMacro(selectedMacroId, $"{document.Name} Copy");
+            selectedMacroId = item.Id;
+            RefreshMacroLibraryList();
+            LoadMacroFromLibrary(item.Id);
+        }
+        catch (Exception ex)
+        {
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+        }
+    }
+
+    private void DeleteMacro_Click(object sender, RoutedEventArgs e)
+    {
+        if (selectedMacroId is null)
+        {
+            return;
+        }
+
+        var name = MacroNameBox.Text.Trim();
+        var result = MessageBox.Show(
+            this,
+            LF("DeleteMacroConfirm", string.IsNullOrWhiteSpace(name) ? L("Macro") : name),
+            L("Delete"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        libraryStore.DeleteMacro(selectedMacroId);
+        librarySnapshot = libraryStore.Load();
+        selectedMacroId = librarySnapshot.SelectedMacroId;
+        RefreshMacroLibraryList();
+        if (selectedMacroId is not null)
+        {
+            LoadMacroFromLibrary(selectedMacroId);
+        }
+        else
+        {
+            SetEditorDocument(new MacroDocument(1, NextMacroName("Macro"), PlaybackSettings.Default, []));
+        }
+    }
+
+    private void SaveLibrary_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
+            MacroLibraryItem item;
+            if (selectedMacroId is null)
+            {
+                item = libraryStore.CreateMacro(document);
+            }
+            else
+            {
+                item = libraryStore.SaveMacro(selectedMacroId, document);
+            }
+
+            selectedMacroId = item.Id;
+            RefreshMacroLibraryList();
+            SetStatusResource("LibrarySaved");
+        }
+        catch (Exception ex)
+        {
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+            SetStatusResource("MacroInvalid");
+        }
+    }
+
+    private string NextMacroName(string prefix)
+    {
+        var used = libraryStore.Load().Items.Select(item => item.Name).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        for (var i = 1; i < 10_000; i++)
+        {
+            var candidate = $"{prefix} {i}";
+            if (!used.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return $"{prefix} {DateTime.Now:HHmmss}";
+    }
+
+    private string NextFolderName()
+    {
+        var used = libraryStore.Load().Items.Select(item => item.Folder).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        for (var i = 1; i < 10_000; i++)
+        {
+            var candidate = $"{L("Folder")} {i}";
+            if (!used.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return $"{L("Folder")} {DateTime.Now:HHmmss}";
     }
 
     private void OpenMacro_Click(object sender, RoutedEventArgs e)
@@ -366,11 +668,14 @@ public partial class MainWindow : Window
 
     private void ApplyImport_Click(object sender, RoutedEventArgs e)
     {
-        if (pendingImportJson is null)
+        if (pendingImportJson is null || pendingImport is null)
         {
             return;
         }
 
+        var item = libraryStore.CreateMacro(pendingImport.Document);
+        selectedMacroId = item.Id;
+        RefreshMacroLibraryList();
         MacroEditor.Text = pendingImportJson;
         ValidateCurrentMacro();
         SetStatusResource("MacroValid");
@@ -414,27 +719,240 @@ public partial class MainWindow : Window
         {
             var document = McrxParser.Parse(MacroEditor.Text);
             var scheduled = MacroScheduler.Compile(document, Stopwatch.GetTimestamp(), Stopwatch.Frequency);
+            var selectedStepIndex = StepList.SelectedItem is StepDisplayItem selectedStep ? selectedStep.Index : -1;
 
             MacroNameText.Text = document.Name;
+            updatingMacroName = true;
+            MacroNameBox.Text = document.Name;
+            updatingMacroName = false;
             StepCountText.Text = scheduled.Count.ToString();
+            DurationText.Text = FormatDuration(EstimateDuration(document.Steps));
             StepList.Items.Clear();
 
-            foreach (var step in scheduled)
+            for (var i = 0; i < document.Steps.Count; i++)
             {
-                StepList.Items.Add($"{step.DueTick}: {Describe(step.Step)}");
+                StepList.Items.Add(StepDisplayItem.FromStep(i, document.Steps[i], Describe(document.Steps[i]), FormatStepBadge(document.Steps[i])));
             }
 
+            if (selectedStepIndex >= 0 && selectedStepIndex < StepList.Items.Count)
+            {
+                StepList.SelectedIndex = selectedStepIndex;
+            }
+
+            RefreshSelectedStepText();
             SetStatusResource("MacroValid");
             SetPlaybackControls(document.Playback);
         }
         catch (Exception ex)
         {
             MacroNameText.Text = "-";
+            updatingMacroName = true;
+            MacroNameBox.Text = string.Empty;
+            updatingMacroName = false;
             StepCountText.Text = "0";
+            DurationText.Text = "0 ms";
             StepList.Items.Clear();
-            StepList.Items.Add(ex.Message);
+            StepList.Items.Add(StepDisplayItem.Error(ex.Message));
+            SelectedStepText.Text = ex.Message;
             SetStatusResource("MacroInvalid");
         }
+    }
+
+    private void ActionPalette_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button)
+        {
+            AddTemplateFromTag(button.Tag?.ToString());
+        }
+    }
+
+    private void ActionPalette_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || sender is not Button button)
+        {
+            return;
+        }
+
+        if (button.Tag?.ToString() is not { Length: > 0 } tag)
+        {
+            return;
+        }
+
+        DragDrop.DoDragDrop(button, new DataObject(ActionTemplateDragFormat, tag), DragDropEffects.Copy);
+    }
+
+    private void StepList_Drop(object sender, DragEventArgs e)
+    {
+        try
+        {
+            if (e.Data.GetDataPresent(ActionTemplateDragFormat)
+                && e.Data.GetData(ActionTemplateDragFormat) is string template)
+            {
+                AddTemplateFromTag(template);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Data.GetDataPresent(MacroLibraryDragFormat)
+                && e.Data.GetData(MacroLibraryDragFormat) is string macroId)
+            {
+                var document = libraryStore.ReadMacro(macroId);
+                InsertSteps(document.Steps);
+                SetPlaybackResultResource("LastResultMessage", LF("InsertedMacroSteps", document.Name, document.Steps.Count));
+                e.Handled = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+        }
+    }
+
+    private void StepList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        RefreshSelectedStepText();
+    }
+
+    private void StepUp_Click(object sender, RoutedEventArgs e)
+    {
+        MoveSelectedStep(-1);
+    }
+
+    private void StepDown_Click(object sender, RoutedEventArgs e)
+    {
+        MoveSelectedStep(1);
+    }
+
+    private void StepDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (StepList.SelectedItem is not StepDisplayItem { Index: >= 0 } selected)
+        {
+            return;
+        }
+
+        try
+        {
+            var document = McrxParser.Parse(MacroEditor.Text);
+            var steps = document.Steps.ToList();
+            if (selected.Index >= steps.Count)
+            {
+                return;
+            }
+
+            steps.RemoveAt(selected.Index);
+            SetEditorDocument(document with { Steps = steps });
+            if (steps.Count > 0)
+            {
+                StepList.SelectedIndex = Math.Min(selected.Index, steps.Count - 1);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+        }
+    }
+
+    private void MacroNameBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        ApplyMacroNameFromBox();
+    }
+
+    private void MacroNameBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        ApplyMacroNameFromBox();
+        Keyboard.ClearFocus();
+        e.Handled = true;
+    }
+
+    private void AddTemplateFromTag(string? tag)
+    {
+        if (!Enum.TryParse<MacroActionTemplateKind>(tag, ignoreCase: true, out var kind))
+        {
+            return;
+        }
+
+        InsertSteps([MacroActionTemplateFactory.CreateStep(kind)]);
+        SetPlaybackResultResource("LastResultMessage", LF("ActionInserted", L($"Template{kind}")));
+    }
+
+    private void InsertSteps(IReadOnlyList<MacroStep> stepsToInsert)
+    {
+        if (stepsToInsert.Count == 0)
+        {
+            return;
+        }
+
+        var document = McrxParser.Parse(MacroEditor.Text);
+        var steps = document.Steps.ToList();
+        var insertAt = StepList.SelectedItem is StepDisplayItem { Index: >= 0 } selected
+            ? selected.Index + 1
+            : steps.Count;
+        steps.InsertRange(insertAt, stepsToInsert);
+        SetEditorDocument(document with { Steps = steps });
+        StepList.SelectedIndex = insertAt;
+    }
+
+    private void MoveSelectedStep(int offset)
+    {
+        if (StepList.SelectedItem is not StepDisplayItem { Index: >= 0 } selected)
+        {
+            return;
+        }
+
+        try
+        {
+            var document = McrxParser.Parse(MacroEditor.Text);
+            var steps = document.Steps.ToList();
+            var target = selected.Index + offset;
+            if (selected.Index < 0 || selected.Index >= steps.Count || target < 0 || target >= steps.Count)
+            {
+                return;
+            }
+
+            (steps[selected.Index], steps[target]) = (steps[target], steps[selected.Index]);
+            SetEditorDocument(document with { Steps = steps });
+            StepList.SelectedIndex = target;
+        }
+        catch (Exception ex)
+        {
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+        }
+    }
+
+    private void ApplyMacroNameFromBox()
+    {
+        if (updatingMacroName)
+        {
+            return;
+        }
+
+        try
+        {
+            var document = McrxParser.Parse(MacroEditor.Text);
+            var name = string.IsNullOrWhiteSpace(MacroNameBox.Text) ? document.Name : MacroNameBox.Text.Trim();
+            if (string.Equals(document.Name, name, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetEditorDocument(document with { Name = name });
+        }
+        catch (Exception ex)
+        {
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+        }
+    }
+
+    private void RefreshSelectedStepText()
+    {
+        SelectedStepText.Text = StepList.SelectedItem is StepDisplayItem { Index: >= 0 } selected
+            ? $"{selected.Title}: {selected.Subtitle}"
+            : L("DropActionsHint");
     }
 
     private void RefreshRuntimeDiagnostics()
@@ -682,6 +1200,12 @@ public partial class MainWindow : Window
         var settings = GetPlaybackSettingsFromControls();
         var root = JsonNode.Parse(MacroEditor.Text)?.AsObject()
             ?? throw new JsonException("Macro JSON root must be an object.");
+        var macroName = MacroNameBox.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(macroName))
+        {
+            root["name"] = macroName;
+        }
+
         var playback = new JsonObject
         {
             ["mode"] = ToPlaybackModeText(settings.Mode),
@@ -827,13 +1351,57 @@ public partial class MainWindow : Window
         return modifiers;
     }
 
+    private static TimeSpan EstimateDuration(IReadOnlyList<MacroStep> steps)
+    {
+        var ticks = 0L;
+        foreach (var step in steps)
+        {
+            ticks += EstimateStepDuration(step).Ticks;
+        }
+
+        return TimeSpan.FromTicks(ticks);
+    }
+
+    private static TimeSpan EstimateStepDuration(MacroStep step)
+    {
+        return step switch
+        {
+            KeyStep key => key.Hold,
+            MouseMoveStep move => move.Duration,
+            MouseButtonStep button => button.Hold,
+            ConsumerStep consumer => consumer.Hold,
+            WaitStep wait => wait.Duration,
+            RepeatStep repeat => TimeSpan.FromTicks(EstimateDuration(repeat.Steps).Ticks * Math.Max(0, repeat.Count)),
+            PixelWhenStep pixel => EstimateDuration(pixel.ThenSteps),
+            _ => TimeSpan.Zero
+        };
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalSeconds >= 1)
+        {
+            return $"{duration.TotalSeconds:0.###} s";
+        }
+
+        return $"{duration.TotalMilliseconds:0.###} ms";
+    }
+
+    private static string FormatStepBadge(MacroStep step)
+    {
+        var duration = EstimateStepDuration(step);
+        return duration > TimeSpan.Zero ? FormatDuration(duration) : string.Empty;
+    }
+
     private static string Describe(MacroStep step)
     {
         return step switch
         {
-            KeyStep key => $"key.{key.Kind.ToString().ToLowerInvariant()} {key.Modifiers}+{key.Key}",
-            TextStep text => $"key.text length={text.Text.Length}",
-            MouseMoveStep move => $"mouse.move {move.Mode} x={move.X} y={move.Y} buttons={move.Buttons}",
+            KeyStep key => key.Modifiers == HidModifier.None
+                ? $"key.{key.Kind.ToString().ToLowerInvariant()} {key.Key}"
+                : $"key.{key.Kind.ToString().ToLowerInvariant()} {key.Modifiers}+{key.Key}",
+            TextStep text => $"key.text \"{TrimForDisplay(text.Text)}\"",
+            MouseMoveStep move => $"mouse.move {move.Mode} x={move.X} y={move.Y}",
             MouseButtonStep button => $"mouse.{button.Kind.ToString().ToLowerInvariant()} {button.Button}",
             MouseWheelStep wheel => $"mouse.wheel vertical={wheel.Vertical} horizontal={wheel.Horizontal}",
             ConsumerStep consumer => $"consumer.{consumer.Kind.ToString().ToLowerInvariant()} {consumer.Control}",
@@ -841,5 +1409,107 @@ public partial class MainWindow : Window
             PixelWhenStep pixel => $"pixel.when {pixel.Condition.Coordinate.Scope} x={pixel.Condition.Coordinate.X} y={pixel.Condition.Coordinate.Y}",
             _ => step.GetType().Name
         };
+    }
+
+    private static string TrimForDisplay(string value)
+    {
+        return value.Length <= 32 ? value : $"{value[..29]}...";
+    }
+}
+
+public sealed class MacroLibraryListEntry
+{
+    private static readonly Brush HeaderBrush = new SolidColorBrush(Color.FromRgb(158, 164, 170));
+    private static readonly Brush MacroBrush = new SolidColorBrush(Color.FromRgb(101, 216, 78));
+    private static readonly Brush TextBrush = new SolidColorBrush(Color.FromRgb(244, 246, 248));
+
+    private MacroLibraryListEntry(MacroLibraryItem? item, string title, string subtitle, string icon, Brush accent, FontWeight weight, Brush titleBrush)
+    {
+        Item = item;
+        Title = title;
+        Subtitle = subtitle;
+        Icon = icon;
+        Accent = accent;
+        Weight = weight;
+        TitleBrush = titleBrush;
+    }
+
+    public MacroLibraryItem? Item { get; }
+
+    public string Title { get; }
+
+    public string Subtitle { get; }
+
+    public string Icon { get; }
+
+    public Brush Accent { get; }
+
+    public FontWeight Weight { get; }
+
+    public Brush TitleBrush { get; }
+
+    public static MacroLibraryListEntry Header(string title)
+    {
+        return new MacroLibraryListEntry(null, title, string.Empty, "F", HeaderBrush, FontWeights.SemiBold, HeaderBrush);
+    }
+
+    public static MacroLibraryListEntry Macro(MacroLibraryItem item)
+    {
+        var subtitle = item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        return new MacroLibraryListEntry(item, item.Name, subtitle, "M", MacroBrush, FontWeights.Normal, TextBrush);
+    }
+}
+
+public sealed class StepDisplayItem
+{
+    private static readonly Brush GreenBrush = new SolidColorBrush(Color.FromRgb(101, 216, 78));
+    private static readonly Brush BlueBrush = new SolidColorBrush(Color.FromRgb(74, 163, 255));
+    private static readonly Brush OrangeBrush = new SolidColorBrush(Color.FromRgb(255, 159, 67));
+    private static readonly Brush PinkBrush = new SolidColorBrush(Color.FromRgb(231, 90, 165));
+    private static readonly Brush RedBrush = new SolidColorBrush(Color.FromRgb(229, 83, 92));
+    private static readonly Brush GrayBrush = new SolidColorBrush(Color.FromRgb(158, 164, 170));
+
+    private StepDisplayItem(int index, string icon, string title, string subtitle, string badge, Brush accentBrush)
+    {
+        Index = index;
+        Icon = icon;
+        Title = title;
+        Subtitle = subtitle;
+        Badge = badge;
+        AccentBrush = accentBrush;
+    }
+
+    public int Index { get; }
+
+    public string Icon { get; }
+
+    public string Title { get; }
+
+    public string Subtitle { get; }
+
+    public string Badge { get; }
+
+    public Brush AccentBrush { get; }
+
+    public static StepDisplayItem FromStep(int index, MacroStep step, string subtitle, string badge)
+    {
+        return step switch
+        {
+            KeyStep => new StepDisplayItem(index, "K", $"#{index + 1} Key", subtitle, badge, GreenBrush),
+            TextStep => new StepDisplayItem(index, "T", $"#{index + 1} Text", subtitle, badge, BlueBrush),
+            MouseMoveStep => new StepDisplayItem(index, "XY", $"#{index + 1} Move", subtitle, badge, OrangeBrush),
+            MouseButtonStep => new StepDisplayItem(index, "M", $"#{index + 1} Mouse", subtitle, badge, OrangeBrush),
+            MouseWheelStep => new StepDisplayItem(index, "W", $"#{index + 1} Wheel", subtitle, badge, BlueBrush),
+            ConsumerStep => new StepDisplayItem(index, "C", $"#{index + 1} Media", subtitle, badge, PinkBrush),
+            WaitStep => new StepDisplayItem(index, "D", $"#{index + 1} Delay", subtitle, badge, GrayBrush),
+            RepeatStep => new StepDisplayItem(index, "R", $"#{index + 1} Loop", subtitle, badge, RedBrush),
+            PixelWhenStep => new StepDisplayItem(index, "P", $"#{index + 1} Pixel", subtitle, badge, PinkBrush),
+            _ => new StepDisplayItem(index, "?", $"#{index + 1} Step", subtitle, badge, GrayBrush)
+        };
+    }
+
+    public static StepDisplayItem Error(string message)
+    {
+        return new StepDisplayItem(-1, "!", "Invalid macro", message, string.Empty, RedBrush);
     }
 }

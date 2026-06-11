@@ -7,6 +7,7 @@ MacroHID is a Windows input macro project for legal local desktop automation. It
 - `.NET` solution: builds the core macro model, `.mcrx` parser/serializer, conversion library, input action compiler, SendInput runtime, latency probe, MacroRunner, and WPF studio.
 - Macro execution expands steps such as `key.tap`, `key.text`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled input actions.
 - `MacroRunner` can dry-run `.mcrx` files into an input action timeline, or submit those actions through `SendInput` with `--send`.
+- `MacroStudio` includes a local macro database, a dark macro-workbench UI, draggable action templates for keyboard, mouse, delay, text, loop, and pixel steps, and macro-to-macro step insertion from the library.
 - `MacroStudio` supports English, Simplified Chinese, and Traditional Chinese UI text with a runtime language selector, and requests Administrator privileges on startup so it can automate elevated desktop apps.
 - Diagnostics probe the live visible-desktop pixel sampler and the SendInput backend.
 - MacroStudio has a built-in import/export panel for MacroHID `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro scripts. It does not bundle or launch the sibling Electron MacroConverter app.
@@ -60,6 +61,10 @@ The repository includes `.github/workflows/ci.yml`.
 - `src/ui/MacroStudio` - WPF macro editor, hotkey playback, diagnostics, localization, and built-in import/export tools.
 - `samples` - sample `.mcrx` macros.
 - `installer` - Inno Setup script and localized installer language files.
+
+## Macro Library
+
+MacroStudio stores its local macro database under `%APPDATA%\MacroHID\MacroLibrary`. Each macro is still saved as `.mcrx`, with `library.json` holding the library index, folder names, selection state, and updated timestamps. The editor can also open or save standalone `.mcrx` files for sharing.
 
 ## Scope Boundary
 
