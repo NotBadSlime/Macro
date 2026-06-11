@@ -25,13 +25,16 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers key text steps", McrxParserCoversKeyTextSteps),
     ("MCRX parser preserves fractional millisecond timing", McrxParserPreservesFractionalMillisecondTiming),
     ("MCRX serializer works when JSON reflection defaults are disabled", McrxSerializerWorksWhenJsonReflectionDefaultsAreDisabled),
+    ("MCRX parser covers macro call and pixel time windows", McrxParserCoversMacroCallAndPixelTimeWindows),
     ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
+    ("MCRX parser covers modifier-only and mouse side button triggers", McrxParserCoversModifierOnlyAndMouseSideButtonTriggers),
     ("MCRX parser defaults missing playback settings", McrxParserDefaultsMissingPlaybackSettings),
     ("MCRX parser rejects invalid playback settings", McrxParserRejectsInvalidPlaybackSettings),
     ("Sample baseline macro remains parseable", SampleBaselineMacroRemainsParseable),
     ("Scheduler expands repeats and applies waits with QPC ticks", SchedulerExpandsRepeatsAndAppliesWaits),
     ("Input action compiler expands hold actions into timed actions", InputActionCompilerExpandsHoldActions),
     ("Input action compiler emits text actions", InputActionCompilerEmitsTextActions),
+    ("Input action compiler expands macro calls and pixel windows", InputActionCompilerExpandsMacroCallsAndPixelWindows),
     ("Input action compiler evaluates pixel branches before emitting actions", InputActionCompilerEvaluatesPixelBranches),
     ("SendInput encoder covers keyboard, mouse, wheel, and consumer input", SendInputEncoderCoversInputActions),
     ("SendInput encoder covers Unicode text actions", SendInputEncoderCoversUnicodeTextActions),
@@ -41,6 +44,7 @@ var tests = new (string Name, Action Body)[]
     ("Playback controller runs fixed count once by default", PlaybackControllerRunsFixedCountOnceByDefault),
     ("Playback controller cancels hold loop when trigger is released", PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased),
     ("Playback executor checks cancellation before submitting delayed actions", PlaybackExecutorChecksCancellationBeforeDelayedActions),
+    ("Playback executor resolves macro call steps", PlaybackExecutorResolvesMacroCallSteps),
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
@@ -208,6 +212,49 @@ static void InputActionCompilerEmitsTextActions()
     Assert.Equal(new TextInputAction("Hi"), actions[0].Action);
 }
 
+static void InputActionCompilerExpandsMacroCallsAndPixelWindows()
+{
+    var target = new MacroDocument(
+        1,
+        "burst",
+        [
+            new KeyStep(KeyActionKind.Tap, HidKey.B, HidModifier.None, TimeSpan.FromMilliseconds(1))
+        ]);
+    var condition = new PixelCondition(
+        new PixelCoordinate(CoordinateScope.Screen, 10, 20),
+        new RgbColor(255, 0, 0),
+        4);
+    var document = new MacroDocument(
+        1,
+        "flow",
+        [
+            new MacroCallStep("burst"),
+            new PixelWhenStep(
+                condition,
+                [new MouseButtonStep(MouseButton.Left, ButtonActionKind.Click, TimeSpan.FromMilliseconds(1))],
+                WindowStart: TimeSpan.FromMilliseconds(3),
+                WindowEnd: TimeSpan.FromMilliseconds(5),
+                PollInterval: TimeSpan.FromMilliseconds(1))
+        ]);
+
+    var actions = InputActionCompiler.Compile(
+        document,
+        startTick: 100,
+        qpcFrequency: 1_000,
+        pixelEvaluator: _ => true,
+        macroResolver: name => name == "burst" ? target : null);
+
+    Assert.Equal(4, actions.Count);
+    Assert.Equal(100, actions[0].DueTick);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None), actions[0].Action);
+    Assert.Equal(101, actions[1].DueTick);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Up, HidKey.B, HidModifier.None), actions[1].Action);
+    Assert.Equal(103, actions[2].DueTick);
+    Assert.Equal(new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Down), actions[2].Action);
+    Assert.Equal(104, actions[3].DueTick);
+    Assert.Equal(new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Up), actions[3].Action);
+}
+
 static void InputActionCompilerEvaluatesPixelBranches()
 {
     var condition = new PixelCondition(
@@ -353,6 +400,52 @@ static JsonSerializerOptions GetPrivateJsonOptions(Type type, string fieldName)
         ?? throw new InvalidOperationException($"Field {type.Name}.{fieldName} is null."));
 }
 
+static void McrxParserCoversMacroCallAndPixelTimeWindows()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "flow",
+      "steps": [
+        { "type": "macro.call", "macro": "burst" },
+        {
+          "type": "pixel.when",
+          "scope": "screen",
+          "x": 10,
+          "y": 20,
+          "r": 255,
+          "g": 0,
+          "b": 0,
+          "tolerance": 6,
+          "windowStartMs": 3000,
+          "windowEndMs": 5000,
+          "pollIntervalMs": 25,
+          "then": [
+            { "type": "key.tap", "key": "F" }
+          ]
+        }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+
+    var call = Assert.IsType<MacroCallStep>(document.Steps[0]);
+    Assert.Equal("burst", call.Macro);
+
+    var pixel = Assert.IsType<PixelWhenStep>(document.Steps[1]);
+    Assert.Equal(TimeSpan.FromSeconds(3), pixel.WindowStart);
+    Assert.Equal(TimeSpan.FromSeconds(5), pixel.WindowEnd);
+    Assert.Equal(TimeSpan.FromMilliseconds(25), pixel.PollInterval);
+    Assert.Equal(new RgbColor(255, 0, 0), pixel.Condition.Expected);
+
+    var serialized = McrxSerializer.Serialize(document);
+    Assert.Contains("\"type\": \"macro.call\"", serialized);
+    Assert.Contains("\"windowStartMs\": 3000", serialized);
+    Assert.Contains("\"windowEndMs\": 5000", serialized);
+    Assert.Contains("\"pollIntervalMs\": 25", serialized);
+}
+
 static void McrxParserCoversPlaybackHotkeySettings()
 {
     const string json = """
@@ -377,6 +470,21 @@ static void McrxParserCoversPlaybackHotkeySettings()
     Assert.Equal(HidKey.F8, document.Playback.Trigger!.Key);
     Assert.Equal(HidModifier.LeftCtrl | HidModifier.LeftAlt, document.Playback.Trigger.Modifiers);
     Assert.Equal("Ctrl+Alt+F8", document.Playback.Trigger.ToString());
+}
+
+static void McrxParserCoversModifierOnlyAndMouseSideButtonTriggers()
+{
+    var ctrl = McrxParser.ParseHotkeyGesture("Ctrl");
+    Assert.Equal(HidModifier.LeftCtrl, ctrl.Modifiers);
+    Assert.Equal(HidKey.None, ctrl.Key);
+    Assert.Equal(MouseButton.None, ctrl.MouseButton);
+    Assert.Equal("Ctrl", ctrl.ToString());
+
+    var mouse = McrxParser.ParseHotkeyGesture("Ctrl+X1");
+    Assert.Equal(HidModifier.LeftCtrl, mouse.Modifiers);
+    Assert.Equal(HidKey.None, mouse.Key);
+    Assert.Equal(MouseButton.X1, mouse.MouseButton);
+    Assert.Equal("Ctrl+X1", mouse.ToString());
 }
 
 static void McrxParserDefaultsMissingPlaybackSettings()
@@ -415,7 +523,7 @@ static void McrxParserRejectsInvalidPlaybackSettings()
     {
       "version": 1,
       "name": "invalid-trigger",
-      "playback": { "trigger": "Ctrl+Alt", "mode": "fixedCount" },
+      "playback": { "trigger": "F8+F9", "mode": "fixedCount" },
       "steps": [
         { "type": "key.tap", "key": "A" }
       ]
@@ -582,6 +690,32 @@ static void PlaybackExecutorChecksCancellationBeforeDelayedActions()
     Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
 }
 
+static void PlaybackExecutorResolvesMacroCallSteps()
+{
+    var sink = new RecordingInputSink();
+    var target = new MacroDocument(
+        1,
+        "burst",
+        [new KeyStep(KeyActionKind.Tap, HidKey.B, HidModifier.None, TimeSpan.FromMilliseconds(1))]);
+    var document = new MacroDocument(
+        1,
+        "caller",
+        [new MacroCallStep("burst")]);
+    var executor = new MacroPlaybackExecutor(
+        sink,
+        macroResolver: name => name == "burst" ? target : null);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, Count: 1, PixelEvaluationMode.MatchAll, NoWait: true),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.Equal(PlaybackRunStatus.Completed, result.Status);
+    Assert.Equal(2, sink.Actions.Count);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None), sink.Actions[0]);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Up, HidKey.B, HidModifier.None), sink.Actions[1]);
+}
+
 static void LocalizationNormalizesSupportedCultures()
 {
     Assert.Equal("zh-CN", LocalizationService.NormalizeCultureName(new CultureInfo("zh-Hans-CN")));
@@ -604,6 +738,12 @@ static void LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages()
     Assert.Equal("Keyboard Function", LocalizationService.Get("AddKeyboard", new CultureInfo("en-US")));
     Assert.Equal("键盘功能", LocalizationService.Get("AddKeyboard", new CultureInfo("zh-CN")));
     Assert.Equal("鍵盤功能", LocalizationService.Get("AddKeyboard", new CultureInfo("zh-TW")));
+    Assert.Equal("Macro", LocalizationService.Get("AddMacro", new CultureInfo("en-US")));
+    Assert.Equal("宏", LocalizationService.Get("AddMacro", new CultureInfo("zh-CN")));
+    Assert.Equal("巨集", LocalizationService.Get("AddMacro", new CultureInfo("zh-TW")));
+    Assert.Equal("Pixel IF", LocalizationService.Get("PixelIf", new CultureInfo("en-US")));
+    Assert.Equal("像素 IF 条件", LocalizationService.Get("PixelIf", new CultureInfo("zh-CN")));
+    Assert.Equal("像素 IF 條件", LocalizationService.Get("PixelIf", new CultureInfo("zh-TW")));
 }
 
 static void MacroStudioManifestRequestsAdministratorByDefault()
@@ -626,6 +766,10 @@ static void MacroStudioUsesBorderlessCustomWindowChrome()
     Assert.Contains("MinimizeWindowButton", xaml);
     Assert.Contains("MaximizeWindowButton", xaml);
     Assert.Contains("CloseWindowButton", xaml);
+    Assert.Contains("StepEditorPanel", xaml);
+    Assert.Contains("MacroTargetBox", xaml);
+    Assert.Contains("PickPixelColorButton", xaml);
+    Assert.Contains("Color=\"#F5F5F7\"", xaml);
     Assert.Contains("TopChromeBar_MouseLeftButtonDown", codeBehind);
     Assert.Contains("ToggleWindowMaximize", codeBehind);
 }

@@ -36,7 +36,8 @@ public static class InputActionCompiler
         MacroDocument document,
         long startTick,
         long qpcFrequency,
-        Func<PixelCondition, bool>? pixelEvaluator = null)
+        Func<PixelCondition, bool>? pixelEvaluator = null,
+        Func<string, MacroDocument?>? macroResolver = null)
     {
         if (qpcFrequency <= 0)
         {
@@ -45,7 +46,7 @@ public static class InputActionCompiler
 
         var actions = new List<ScheduledInputAction>();
         var elapsedTicks = 0L;
-        CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, ref elapsedTicks);
+        CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, ref elapsedTicks, depth: 0);
         return actions;
     }
 
@@ -55,8 +56,15 @@ public static class InputActionCompiler
         long startTick,
         long qpcFrequency,
         Func<PixelCondition, bool>? pixelEvaluator,
-        ref long elapsedTicks)
+        Func<string, MacroDocument?>? macroResolver,
+        ref long elapsedTicks,
+        int depth)
     {
+        if (depth > 16)
+        {
+            throw new InvalidOperationException("Macro call nesting is too deep.");
+        }
+
         foreach (var step in steps)
         {
             switch (step)
@@ -67,14 +75,41 @@ public static class InputActionCompiler
                 case RepeatStep repeat:
                     for (var i = 0; i < repeat.Count; i++)
                     {
-                        CompileSteps(repeat.Steps, actions, startTick, qpcFrequency, pixelEvaluator, ref elapsedTicks);
+                        CompileSteps(repeat.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, ref elapsedTicks, depth);
                     }
 
                     break;
+                case MacroCallStep macro:
+                    if (macroResolver is null)
+                    {
+                        throw new InvalidOperationException($"Macro call '{macro.Macro}' cannot be resolved without a macro resolver.");
+                    }
+
+                    var document = macroResolver(macro.Macro)
+                        ?? throw new InvalidOperationException($"Macro call target '{macro.Macro}' was not found.");
+                    CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, ref elapsedTicks, depth + 1);
+                    break;
                 case PixelWhenStep pixel:
+                    if (pixel.WindowStart is { } windowStart)
+                    {
+                        var windowStartTicks = ToTicks(windowStart, qpcFrequency);
+                        if (elapsedTicks < windowStartTicks)
+                        {
+                            elapsedTicks = windowStartTicks;
+                        }
+                    }
+
                     if (pixelEvaluator?.Invoke(pixel.Condition) == true)
                     {
-                        CompileSteps(pixel.ThenSteps, actions, startTick, qpcFrequency, pixelEvaluator, ref elapsedTicks);
+                        CompileSteps(pixel.ThenSteps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, ref elapsedTicks, depth);
+                    }
+                    else if (pixel.WindowEnd is { } windowEnd)
+                    {
+                        var windowEndTicks = ToTicks(windowEnd, qpcFrequency);
+                        if (elapsedTicks < windowEndTicks)
+                        {
+                            elapsedTicks = windowEndTicks;
+                        }
                     }
 
                     break;

@@ -53,11 +53,23 @@ public static class McrxParser
 
         var modifiers = HidModifier.None;
         HidKey? key = null;
+        MouseButton mouseButton = MouseButton.None;
         foreach (var rawPart in value.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (TryParseModifier(rawPart, out var modifier))
             {
                 modifiers |= modifier;
+                continue;
+            }
+
+            if (TryParseTriggerMouseButton(rawPart, out var parsedMouseButton))
+            {
+                if (mouseButton != MouseButton.None || key is not null)
+                {
+                    throw new JsonException($"Playback trigger '{value}' contains more than one non-modifier key or mouse button.");
+                }
+
+                mouseButton = parsedMouseButton;
                 continue;
             }
 
@@ -69,12 +81,12 @@ public static class McrxParser
             key = ParseHidKey(rawPart);
         }
 
-        if (key is null)
+        if (key is null && mouseButton == MouseButton.None && modifiers == HidModifier.None)
         {
-            throw new JsonException($"Playback trigger '{value}' must include a non-modifier key.");
+            throw new JsonException($"Playback trigger '{value}' must include a key, mouse button, or modifier.");
         }
 
-        return new HotkeyGesture(modifiers, key.Value);
+        return new HotkeyGesture(modifiers, key ?? HidKey.None, mouseButton);
     }
 
     private static IReadOnlyList<MacroStep> ParseSteps(JsonElement stepsElement)
@@ -112,6 +124,7 @@ public static class McrxParser
             "consumer.tap" => ParseConsumer(stepElement, ButtonActionKind.Click),
             "wait" => new WaitStep(TimeSpan.FromMilliseconds(GetDouble(stepElement, "ms", 0))),
             "repeat" => new RepeatStep(GetInt(stepElement, "count", 1), ParseSteps(stepElement.GetProperty("steps"))),
+            "macro.call" => new MacroCallStep(GetString(stepElement, "macro", string.Empty) ?? string.Empty),
             "pixel.when" => ParsePixelWhen(stepElement),
             _ => throw new JsonException($"Unsupported macro step type '{type}'.")
         };
@@ -197,7 +210,12 @@ public static class McrxParser
                 checked((byte)GetInt(stepElement, "b", 0))),
             checked((byte)GetInt(stepElement, "tolerance", 0)));
 
-        return new PixelWhenStep(condition, ParseSteps(stepElement.GetProperty("then")));
+        return new PixelWhenStep(
+            condition,
+            ParseSteps(stepElement.GetProperty("then")),
+            GetOptionalTimeSpan(stepElement, "windowStartMs"),
+            GetOptionalTimeSpan(stepElement, "windowEndMs"),
+            GetOptionalTimeSpan(stepElement, "pollIntervalMs"));
     }
 
     private static HidKey ParseHidKey(string? value)
@@ -257,6 +275,28 @@ public static class McrxParser
         }
     }
 
+    private static bool TryParseTriggerMouseButton(string value, out MouseButton button)
+    {
+        switch (value.ToLowerInvariant())
+        {
+            case "x1":
+            case "mousex1":
+            case "button4":
+            case "mouse4":
+                button = MouseButton.X1;
+                return true;
+            case "x2":
+            case "mousex2":
+            case "button5":
+            case "mouse5":
+                button = MouseButton.X2;
+                return true;
+            default:
+                button = MouseButton.None;
+                return false;
+        }
+    }
+
     private static MouseButton ParseMouseButtons(JsonElement stepElement)
     {
         var buttons = MouseButton.None;
@@ -292,6 +332,13 @@ public static class McrxParser
     private static double GetDouble(JsonElement element, string name, double defaultValue)
     {
         return element.TryGetProperty(name, out var property) ? property.GetDouble() : defaultValue;
+    }
+
+    private static TimeSpan? GetOptionalTimeSpan(JsonElement element, string name)
+    {
+        return element.TryGetProperty(name, out var property)
+            ? TimeSpan.FromMilliseconds(property.GetDouble())
+            : null;
     }
 
     private static string? GetString(JsonElement element, string name, string? defaultValue)

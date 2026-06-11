@@ -62,15 +62,18 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
     private readonly IMacroInputSink inputSink;
     private readonly IPlaybackDelayStrategy delayStrategy;
     private readonly Func<PixelCondition, bool> livePixelEvaluator;
+    private readonly Func<string, MacroDocument?>? macroResolver;
 
     public MacroPlaybackExecutor(
         IMacroInputSink inputSink,
         IPlaybackDelayStrategy? delayStrategy = null,
-        Func<PixelCondition, bool>? livePixelEvaluator = null)
+        Func<PixelCondition, bool>? livePixelEvaluator = null,
+        Func<string, MacroDocument?>? macroResolver = null)
     {
         this.inputSink = inputSink;
         this.delayStrategy = delayStrategy ?? new QpcPlaybackDelayStrategy();
         this.livePixelEvaluator = livePixelEvaluator ?? ScreenPixelSampler.Matches;
+        this.macroResolver = macroResolver;
     }
 
     public Task<PlaybackRunResult> RunAsync(
@@ -112,7 +115,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
                     document,
                     startTick: 0,
                     qpcFrequency,
-                    GetPixelEvaluator(options.PixelMode));
+                    GetPixelEvaluator(options.PixelMode),
+                    macroResolver);
                 RuntimeNativeMethods.QueryPerformanceCounter(out var iterationStartTick);
 
                 foreach (var action in actions)

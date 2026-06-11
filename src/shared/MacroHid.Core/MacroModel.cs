@@ -13,7 +13,7 @@ public sealed record PlaybackSettings(HotkeyGesture? Trigger, PlaybackMode Mode,
     public static PlaybackSettings Default { get; } = new(null, PlaybackMode.FixedCount, 1);
 }
 
-public sealed record HotkeyGesture(HidModifier Modifiers, HidKey Key)
+public sealed record HotkeyGesture(HidModifier Modifiers, HidKey Key, MouseButton MouseButton = MouseButton.None)
 {
     public override string ToString()
     {
@@ -38,7 +38,15 @@ public sealed record HotkeyGesture(HidModifier Modifiers, HidKey Key)
             parts.Add("Win");
         }
 
-        parts.Add(Key.ToString());
+        if (Key != HidKey.None)
+        {
+            parts.Add(Key.ToString());
+        }
+        else if (MouseButton != MouseButton.None)
+        {
+            parts.Add(MouseButton.ToString());
+        }
+
         return string.Join("+", parts);
     }
 }
@@ -86,9 +94,19 @@ public sealed record WaitStep(TimeSpan Duration) : MacroStep;
 
 public sealed record RepeatStep(int Count, IReadOnlyList<MacroStep> Steps) : MacroStep;
 
+public sealed record MacroCallStep(string Macro) : MacroStep;
+
 public sealed record PixelWhenStep(
     PixelCondition Condition,
-    IReadOnlyList<MacroStep> ThenSteps) : MacroStep;
+    IReadOnlyList<MacroStep> ThenSteps,
+    TimeSpan? WindowStart = null,
+    TimeSpan? WindowEnd = null,
+    TimeSpan? PollInterval = null) : MacroStep
+{
+    public TimeSpan EffectivePollInterval => PollInterval is { } value && value > TimeSpan.Zero
+        ? value
+        : TimeSpan.FromMilliseconds(25);
+}
 
 public enum KeyActionKind
 {

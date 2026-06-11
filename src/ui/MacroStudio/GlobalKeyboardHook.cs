@@ -6,21 +6,31 @@ namespace MacroStudio;
 public sealed class GlobalKeyboardHook : IDisposable
 {
     private const int WhKeyboardLl = 13;
+    private const int WhMouseLl = 14;
     private const int WmKeyDown = 0x0100;
     private const int WmKeyUp = 0x0101;
     private const int WmSysKeyDown = 0x0104;
     private const int WmSysKeyUp = 0x0105;
+    private const int WmXButtonDown = 0x020B;
+    private const int WmXButtonUp = 0x020C;
     private const int LlkHfInjected = 0x10;
+    private const int LlmHfInjected = 0x1;
+    private const int XButton1 = 0x0001;
+    private const int XButton2 = 0x0002;
 
-    private readonly LowLevelKeyboardProc hookProc;
+    private readonly LowLevelHookProc keyboardHookProc;
+    private readonly LowLevelHookProc mouseHookProc;
     private readonly HashSet<int> pressedKeys = [];
+    private readonly HashSet<MouseButton> pressedMouseButtons = [];
     private IntPtr hookHandle;
+    private IntPtr mouseHookHandle;
     private HotkeyGesture? gesture;
     private bool triggerDown;
 
     public GlobalKeyboardHook()
     {
-        hookProc = HookCallback;
+        keyboardHookProc = KeyboardHookCallback;
+        mouseHookProc = MouseHookCallback;
     }
 
     public event EventHandler? TriggerPressed;
@@ -33,10 +43,18 @@ public sealed class GlobalKeyboardHook : IDisposable
         gesture = trigger;
         triggerDown = false;
         pressedKeys.Clear();
-        hookHandle = SetWindowsHookEx(WhKeyboardLl, hookProc, IntPtr.Zero, 0);
+        pressedMouseButtons.Clear();
+        hookHandle = SetWindowsHookEx(WhKeyboardLl, keyboardHookProc, IntPtr.Zero, 0);
         if (hookHandle == IntPtr.Zero)
         {
             throw new InvalidOperationException($"Failed to install keyboard hook. error={Marshal.GetLastWin32Error()}");
+        }
+
+        mouseHookHandle = SetWindowsHookEx(WhMouseLl, mouseHookProc, IntPtr.Zero, 0);
+        if (mouseHookHandle == IntPtr.Zero)
+        {
+            Stop();
+            throw new InvalidOperationException($"Failed to install mouse hook. error={Marshal.GetLastWin32Error()}");
         }
     }
 
@@ -48,8 +66,15 @@ public sealed class GlobalKeyboardHook : IDisposable
             hookHandle = IntPtr.Zero;
         }
 
+        if (mouseHookHandle != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(mouseHookHandle);
+            mouseHookHandle = IntPtr.Zero;
+        }
+
         triggerDown = false;
         pressedKeys.Clear();
+        pressedMouseButtons.Clear();
     }
 
     public void Dispose()
@@ -117,7 +142,7 @@ public sealed class GlobalKeyboardHook : IDisposable
         return key != HidKey.None;
     }
 
-    private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0 && gesture is not null)
         {
@@ -139,11 +164,46 @@ public sealed class GlobalKeyboardHook : IDisposable
         return CallNextHookEx(hookHandle, nCode, wParam, lParam);
     }
 
+    private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0 && gesture is not null)
+        {
+            var message = wParam.ToInt32();
+            if (message is WmXButtonDown or WmXButtonUp)
+            {
+                var data = Marshal.PtrToStructure<MouseLlHookStruct>(lParam);
+                if ((data.Flags & LlmHfInjected) == 0
+                    && TryGetXButton(data.MouseData, out var button))
+                {
+                    if (message == WmXButtonDown)
+                    {
+                        HandleMouseDown(button);
+                    }
+                    else
+                    {
+                        HandleMouseUp(button);
+                    }
+                }
+            }
+        }
+
+        return CallNextHookEx(mouseHookHandle, nCode, wParam, lParam);
+    }
+
     private void HandleKeyDown(int virtualKey)
     {
         var wasAdded = pressedKeys.Add(virtualKey);
         if (!wasAdded || gesture is null || triggerDown)
         {
+            return;
+        }
+
+        if (gesture.Key == HidKey.None
+            && gesture.MouseButton == MouseButton.None
+            && ModifiersMatch(gesture.Modifiers))
+        {
+            triggerDown = true;
+            TriggerPressed?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -164,8 +224,43 @@ public sealed class GlobalKeyboardHook : IDisposable
         }
     }
 
+    private void HandleMouseDown(MouseButton button)
+    {
+        var wasAdded = pressedMouseButtons.Add(button);
+        if (!wasAdded || gesture is null || triggerDown)
+        {
+            return;
+        }
+
+        if (gesture.MouseButton == button && ModifiersMatch(gesture.Modifiers))
+        {
+            triggerDown = true;
+            TriggerPressed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void HandleMouseUp(MouseButton button)
+    {
+        pressedMouseButtons.Remove(button);
+        if (triggerDown && gesture is not null && !GestureIsDown(gesture))
+        {
+            triggerDown = false;
+            TriggerReleased?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     private bool GestureIsDown(HotkeyGesture trigger)
     {
+        if (trigger.Key == HidKey.None && trigger.MouseButton == MouseButton.None)
+        {
+            return ModifiersMatch(trigger.Modifiers);
+        }
+
+        if (trigger.MouseButton != MouseButton.None)
+        {
+            return pressedMouseButtons.Contains(trigger.MouseButton) && ModifiersMatch(trigger.Modifiers);
+        }
+
         return IsKeyDown(trigger.Key) && ModifiersMatch(trigger.Modifiers);
     }
 
@@ -187,7 +282,20 @@ public sealed class GlobalKeyboardHook : IDisposable
         return (modifiers & mask) == 0 || pressedKeys.Contains(leftVirtualKey) || pressedKeys.Contains(rightVirtualKey);
     }
 
-    private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+    private static bool TryGetXButton(int mouseData, out MouseButton button)
+    {
+        var highWord = (mouseData >> 16) & 0xFFFF;
+        button = highWord switch
+        {
+            XButton1 => MouseButton.X1,
+            XButton2 => MouseButton.X2,
+            _ => MouseButton.None
+        };
+
+        return button != MouseButton.None;
+    }
+
+    private delegate IntPtr LowLevelHookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct KbdLlHookStruct
@@ -199,10 +307,27 @@ public sealed class GlobalKeyboardHook : IDisposable
         public IntPtr ExtraInfo;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseLlHookStruct
+    {
+        public Point Point;
+        public int MouseData;
+        public int Flags;
+        public int Time;
+        public IntPtr ExtraInfo;
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SetWindowsHookEx(
         int idHook,
-        LowLevelKeyboardProc lpfn,
+        LowLevelHookProc lpfn,
         IntPtr hmod,
         uint dwThreadId);
 

@@ -20,6 +20,7 @@
   <data name="Playback" xml:space="preserve"><value>播放</value></data>
   <data name="Trigger" xml:space="preserve"><value>触发键</value></data>
   <data name="Capture" xml:space="preserve"><value>捕获</value></data>
+  <data name="Apply" xml:space="preserve"><value>应用</value></data>
   <data name="Mode" xml:space="preserve"><value>模式</value></data>
   <data name="Count" xml:space="preserve"><value>次数</value></data>
   <data name="ModeToggleLoop" xml:space="preserve"><value>按下循环</value></data>
@@ -73,6 +74,7 @@
   <data name="ConversionApplied" xml:space="preserve"><value>已应用导入宏到编辑器</value></data>
   <data name="ConversionExported" xml:space="preserve"><value>已导出 {0}</value></data>
   <data name="ConversionModulesLoaded" xml:space="preserve"><value>已加载雷云模块：{0}</value></data>
+  <data name="ConversionModulesImported" xml:space="preserve"><value>已加载雷云模块：{0}；加入宏数据库：{1}</value></data>
   <data name="ConversionDiagnosticsNone" xml:space="preserve"><value>没有转换警告</value></data>
   <data name="ConversionImportFailed" xml:space="preserve"><value>导入失败：{0}</value></data>
   <data name="ConversionExportFailed" xml:space="preserve"><value>导出失败：{0}</value></data>
@@ -94,9 +96,21 @@
   <data name="AddMouseMove" xml:space="preserve"><value>鼠标移动</value></data>
   <data name="AddWheel" xml:space="preserve"><value>滚轮</value></data>
   <data name="AddText" xml:space="preserve"><value>文本功能</value></data>
+  <data name="AddMacro" xml:space="preserve"><value>宏</value></data>
   <data name="AddLoop" xml:space="preserve"><value>循环</value></data>
   <data name="AddPixel" xml:space="preserve"><value>像素条件</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>把左侧宏拖到序列里，可以复制它的步骤。</value></data>
+  <data name="StepProperties" xml:space="preserve"><value>属性</value></data>
+  <data name="StepPropertiesHint" xml:space="preserve"><value>选择一个步骤后可视化编辑。</value></data>
+  <data name="Key" xml:space="preserve"><value>键位</value></data>
+  <data name="Action" xml:space="preserve"><value>动作</value></data>
+  <data name="MoveMode" xml:space="preserve"><value>移动模式</value></data>
+  <data name="TimingMs" xml:space="preserve"><value>时间（毫秒）</value></data>
+  <data name="LoopCount" xml:space="preserve"><value>循环次数</value></data>
+  <data name="PixelIf" xml:space="preserve"><value>像素 IF 条件</value></data>
+  <data name="PickColor" xml:space="preserve"><value>取色</value></data>
+  <data name="StepPropertiesApplied" xml:space="preserve"><value>步骤已更新</value></data>
+  <data name="PickColorFailed" xml:space="preserve"><value>无法读取当前屏幕像素。</value></data>
   <data name="Duration" xml:space="preserve"><value>时长</value></data>
   <data name="MoveUp" xml:space="preserve"><value>上移</value></data>
   <data name="MoveDown" xml:space="preserve"><value>下移</value></data>
@@ -117,6 +131,7 @@
   <data name="TemplateMouseMove" xml:space="preserve"><value>鼠标移动</value></data>
   <data name="TemplateMouseWheel" xml:space="preserve"><value>滚轮</value></data>
   <data name="TemplateText" xml:space="preserve"><value>文本功能</value></data>
+  <data name="TemplateMacro" xml:space="preserve"><value>宏</value></data>
   <data name="TemplateLoop" xml:space="preserve"><value>循环</value></data>
   <data name="TemplatePixel" xml:space="preserve"><value>像素条件</value></data>
 </root>

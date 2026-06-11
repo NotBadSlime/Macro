@@ -7,23 +7,23 @@
         Width="1360"
         MinHeight="720"
         MinWidth="1180"
-        Background="#202124"
+        Background="#F5F5F7"
         FontFamily="Segoe UI"
         ResizeMode="CanResize"
         WindowStyle="None">
     <Window.Resources>
-        <SolidColorBrush x:Key="PageBackgroundBrush" Color="#202124" />
-        <SolidColorBrush x:Key="PanelBrush" Color="#111214" />
-        <SolidColorBrush x:Key="PanelRaisedBrush" Color="#17181A" />
-        <SolidColorBrush x:Key="PanelHoverBrush" Color="#242629" />
-        <SolidColorBrush x:Key="PanelBorderBrush" Color="#303236" />
-        <SolidColorBrush x:Key="PrimaryTextBrush" Color="#F4F6F8" />
-        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#9EA4AA" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#65D84E" />
-        <SolidColorBrush x:Key="BlueAccentBrush" Color="#4AA3FF" />
-        <SolidColorBrush x:Key="OrangeAccentBrush" Color="#FF9F43" />
-        <SolidColorBrush x:Key="PinkAccentBrush" Color="#E75AA5" />
-        <SolidColorBrush x:Key="DangerBrush" Color="#E5535C" />
+        <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F5F5F7" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="PanelRaisedBrush" Color="#FBFBFD" />
+        <SolidColorBrush x:Key="PanelHoverBrush" Color="#EEF2F7" />
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#DADDE5" />
+        <SolidColorBrush x:Key="PrimaryTextBrush" Color="#1D1D1F" />
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#6E6E73" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#34C759" />
+        <SolidColorBrush x:Key="BlueAccentBrush" Color="#007AFF" />
+        <SolidColorBrush x:Key="OrangeAccentBrush" Color="#FF9500" />
+        <SolidColorBrush x:Key="PinkAccentBrush" Color="#FF2D55" />
+        <SolidColorBrush x:Key="DangerBrush" Color="#FF3B30" />
 
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
@@ -32,7 +32,7 @@
         <Style TargetType="TextBox">
             <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Background" Value="#0B0C0D" />
+            <Setter Property="Background" Value="#FFFFFF" />
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="CaretBrush" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="Padding" Value="9,5" />
@@ -41,8 +41,8 @@
 
         <Style TargetType="ComboBox">
             <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
-            <Setter Property="Background" Value="#0B0C0D" />
-            <Setter Property="Foreground" Value="#111214" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="Padding" Value="6,2" />
         </Style>
 
@@ -52,8 +52,8 @@
             <Setter Property="Padding" Value="12,0" />
             <Setter Property="Margin" Value="0,0,8,0" />
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Background" Value="#272A2E" />
-            <Setter Property="BorderBrush" Value="#383B41" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#D5D9E2" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -70,8 +70,8 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#33373D" />
-                    <Setter Property="BorderBrush" Value="#4B5057" />
+                    <Setter Property="Background" Value="#F0F3F8" />
+                    <Setter Property="BorderBrush" Value="#C8CDD8" />
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Opacity" Value="0.45" />
@@ -80,15 +80,15 @@
         </Style>
 
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
-            <Setter Property="Foreground" Value="#101214" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
             <Setter Property="Background" Value="{StaticResource AccentBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
         </Style>
 
         <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
-            <Setter Property="Background" Value="#3A2024" />
-            <Setter Property="BorderBrush" Value="#664044" />
-            <Setter Property="Foreground" Value="#FFE6E9" />
+            <Setter Property="Background" Value="#FFF2F2" />
+            <Setter Property="BorderBrush" Value="#FFD1D1" />
+            <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
         </Style>
 
         <Style x:Key="WindowControlButton" TargetType="Button">
@@ -112,7 +112,7 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#2B2E33" />
+                    <Setter Property="Background" Value="#EDEEF2" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -147,7 +147,7 @@
             <Setter Property="Padding" Value="10,0" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Background" Value="#0B0C0D" />
+            <Setter Property="Background" Value="#FFFFFF" />
             <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
@@ -165,14 +165,14 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#191B1E" />
-                    <Setter Property="BorderBrush" Value="#50545B" />
+                    <Setter Property="Background" Value="#F5F7FA" />
+                    <Setter Property="BorderBrush" Value="#C8CDD8" />
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <Style TargetType="ListBox">
-            <Setter Property="Background" Value="#0B0C0D" />
+            <Setter Property="Background" Value="#FFFFFF" />
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
@@ -196,11 +196,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#1A1C1F" />
+                                <Setter TargetName="Root" Property="Background" Value="#F4F6FA" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#24351F" />
-                                <Setter TargetName="Root" Property="BorderBrush" Value="#4DAE3C" />
+                                <Setter TargetName="Root" Property="Background" Value="#EAF7EA" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#34C759" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -246,7 +246,7 @@
                         HorizontalAlignment="Center"
                         VerticalAlignment="Top">
                     <TextBlock Text="{Binding Icon}"
-                               Foreground="#111214"
+                               Foreground="#1D1D1F"
                                FontSize="12"
                                FontWeight="Bold"
                                HorizontalAlignment="Center"
@@ -280,7 +280,7 @@
     <DockPanel>
         <Border x:Name="TopChromeBar"
                 DockPanel.Dock="Top"
-                Background="#17181A"
+                Background="#FFFFFF"
                 BorderBrush="{StaticResource PanelBorderBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="16,10"
@@ -308,7 +308,7 @@
                               Height="30"
                               Margin="0,0,14,0"
                               SelectionChanged="LanguageComboBox_SelectionChanged" />
-                    <Border Background="#0B0C0D"
+                    <Border Background="#F5F7FA"
                             BorderBrush="{StaticResource PanelBorderBrush}"
                             BorderThickness="1"
                             CornerRadius="7"
@@ -474,7 +474,7 @@
                              TextWrapping="NoWrap"
                              Padding="10"
                              BorderBrush="{StaticResource PanelBorderBrush}"
-                             Background="#08090A" />
+                             Background="#FFFFFF" />
                 </Expander>
             </Grid>
 
@@ -546,6 +546,16 @@
                                     <TextBlock x:Name="AddTextActionText" Grid.Column="1" Text="Text" VerticalAlignment="Center" />
                                 </Grid>
                             </Button>
+                            <Button x:Name="AddMacroButton" Tag="Macro" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="M" Foreground="{StaticResource AccentBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="AddMacroText" Grid.Column="1" Text="Macro" VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
                             <Button x:Name="AddLoopButton" Tag="Loop" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -571,6 +581,155 @@
                                        TextWrapping="Wrap"
                                        Margin="0,4,0,0"
                                        Text="Drag another macro from the library into the sequence to copy its steps." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="StepEditorPanel"
+                            Style="{StaticResource PanelBorder}"
+                            Padding="14"
+                            Margin="0,0,0,12">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,12">
+                                <TextBlock x:Name="StepEditorTitleText" Text="Step Properties" Style="{StaticResource PanelTitle}" />
+                                <Button x:Name="ApplyStepEditButton"
+                                        DockPanel.Dock="Right"
+                                        MinWidth="72"
+                                        Content="Apply"
+                                        Click="ApplyStepEdit_Click" />
+                            </DockPanel>
+                            <TextBlock x:Name="StepEditorHintText"
+                                       Text="Select a step to edit it visually."
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,10" />
+
+                            <StackPanel x:Name="StepEditorFieldsPanel">
+                                <StackPanel x:Name="MacroEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="MacroTargetLabelText" Text="Macro" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox x:Name="MacroTargetBox" Height="30" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="KeyboardEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="KeyLabelText" Text="Key" Style="{StaticResource FieldLabel}" />
+                                    <DockPanel>
+                                        <Button x:Name="CaptureStepKeyButton" DockPanel.Dock="Right" Width="78" Content="Capture" Click="CaptureStepKey_Click" />
+                                        <TextBox x:Name="StepKeyBox" Height="30" Margin="0,0,8,0" />
+                                    </DockPanel>
+                                    <WrapPanel Margin="0,8,0,0">
+                                        <CheckBox x:Name="StepCtrlBox" Content="Ctrl" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,0,12,0" />
+                                        <CheckBox x:Name="StepShiftBox" Content="Shift" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,0,12,0" />
+                                        <CheckBox x:Name="StepAltBox" Content="Alt" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,0,12,0" />
+                                        <CheckBox x:Name="StepWinBox" Content="Win" Foreground="{StaticResource PrimaryTextBrush}" />
+                                    </WrapPanel>
+                                </StackPanel>
+
+                                <StackPanel x:Name="ButtonEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="ActionKindLabelText" Text="Action" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox x:Name="ActionKindBox" Height="30" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="MouseButtonEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="MouseButtonLabelText" Text="Mouse Button" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox x:Name="MouseButtonBox" Height="30" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="MouseMoveEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="MoveModeLabelText" Text="Move Mode" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox x:Name="MoveModeBox" Height="30" />
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="MoveXBox" Height="30" />
+                                        <TextBox x:Name="MoveYBox" Grid.Column="2" Height="30" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel x:Name="WheelEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="WheelLabelText" Text="Wheel" Style="{StaticResource FieldLabel}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="WheelVerticalBox" Height="30" />
+                                        <TextBox x:Name="WheelHorizontalBox" Grid.Column="2" Height="30" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel x:Name="TimingEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="TimingLabelText" Text="Timing (ms)" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="TimingMsBox" Height="30" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="TextEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="TextActionLabelText" Text="Text" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="StepTextBox" Height="72" AcceptsReturn="True" TextWrapping="Wrap" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="LoopEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="LoopCountLabelText" Text="Loop Count" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="LoopCountBox" Height="30" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="PixelEditPanel" Margin="0,0,0,10">
+                                    <TextBlock x:Name="PixelLabelText" Text="Pixel IF" Style="{StaticResource FieldLabel}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="PixelXBox" Height="30" />
+                                        <TextBox x:Name="PixelYBox" Grid.Column="2" Height="30" />
+                                        <TextBox x:Name="PixelToleranceBox" Grid.Column="4" Height="30" />
+                                    </Grid>
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="PixelRBox" Height="30" />
+                                        <TextBox x:Name="PixelGBox" Grid.Column="2" Height="30" />
+                                        <TextBox x:Name="PixelBBox" Grid.Column="4" Height="30" />
+                                    </Grid>
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="PixelWindowStartBox" Height="30" />
+                                        <TextBox x:Name="PixelWindowEndBox" Grid.Column="2" Height="30" />
+                                        <TextBox x:Name="PixelPollBox" Grid.Column="4" Height="30" />
+                                    </Grid>
+                                    <DockPanel Margin="0,8,0,0">
+                                        <Border x:Name="PixelColorPreview"
+                                                DockPanel.Dock="Left"
+                                                Width="34"
+                                                Height="30"
+                                                Background="#000000"
+                                                BorderBrush="{StaticResource PanelBorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="6" />
+                                        <Button x:Name="PickPixelColorButton"
+                                                MinWidth="118"
+                                                Margin="8,0,0,0"
+                                                Content="Pick Color"
+                                                Click="PickPixelColor_Click" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 

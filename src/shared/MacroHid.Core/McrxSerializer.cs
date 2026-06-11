@@ -74,13 +74,18 @@ public static class McrxSerializer
             WaitStep wait => new JsonObject
             {
                 ["type"] = "wait",
-            ["ms"] = ToMillisecondsValue(wait.Duration)
+                ["ms"] = ToMillisecondsValue(wait.Duration)
             },
             RepeatStep repeat => new JsonObject
             {
                 ["type"] = "repeat",
                 ["count"] = repeat.Count,
                 ["steps"] = SerializeSteps(repeat.Steps)
+            },
+            MacroCallStep macro => new JsonObject
+            {
+                ["type"] = "macro.call",
+                ["macro"] = macro.Macro
             },
             PixelWhenStep pixel => SerializePixelWhen(pixel),
             _ => throw new NotSupportedException($"Unsupported macro step '{step.GetType().Name}'.")
@@ -197,7 +202,7 @@ public static class McrxSerializer
 
     private static JsonObject SerializePixelWhen(PixelWhenStep step)
     {
-        return new JsonObject
+        var result = new JsonObject
         {
             ["type"] = "pixel.when",
             ["scope"] = step.Condition.Coordinate.Scope.ToString().ToLowerInvariant(),
@@ -210,6 +215,23 @@ public static class McrxSerializer
             ["tolerance"] = step.Condition.Tolerance,
             ["then"] = SerializeSteps(step.ThenSteps)
         };
+
+        if (step.WindowStart is { } windowStart)
+        {
+            result["windowStartMs"] = ToMillisecondsValue(windowStart);
+        }
+
+        if (step.WindowEnd is { } windowEnd)
+        {
+            result["windowEndMs"] = ToMillisecondsValue(windowEnd);
+        }
+
+        if (step.PollInterval is { } pollInterval)
+        {
+            result["pollIntervalMs"] = ToMillisecondsValue(pollInterval);
+        }
+
+        return result;
     }
 
     private static void AddButtons(JsonObject target, MouseButton buttons)

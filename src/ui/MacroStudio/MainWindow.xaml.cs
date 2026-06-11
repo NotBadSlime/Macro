@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
@@ -12,6 +13,7 @@ using MacroHid.Converter;
 using MacroHid.Core;
 using MacroHid.Runtime;
 using Microsoft.Win32;
+using CoreMouseButton = MacroHid.Core.MouseButton;
 
 namespace MacroStudio;
 
@@ -52,7 +54,9 @@ public partial class MainWindow : Window
     private readonly SendInputMacroSink inputSink = new();
     private bool listening;
     private bool capturingTrigger;
+    private bool capturingStepKey;
     private bool updatingLanguageComboBox;
+    private bool updatingStepEditor;
     private MacroImportResult? pendingImport;
     private string? pendingImportJson;
     private List<AuxiliaryMacroFile> razerModuleFiles = [];
@@ -75,6 +79,7 @@ public partial class MainWindow : Window
         LocalizationService.Initialize();
         InitializeLanguageComboBox();
         InitializeExportFormatBox();
+        InitializeStepEditorControls();
         ApplyLocalization();
         InitializeMacroLibrary();
         RefreshRuntimeDiagnostics();
@@ -136,6 +141,65 @@ public partial class MainWindow : Window
         }
     }
 
+    private void InitializeStepEditorControls()
+    {
+        FillEnumBox(ActionKindBox, ButtonActionKind.Click);
+        FillEnumBox(MouseButtonBox, CoreMouseButton.Left);
+        FillEnumBox(MoveModeBox, MouseMoveMode.Relative);
+        RefreshMacroTargetBox();
+        StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
+        ApplyStepEditButton.IsEnabled = false;
+    }
+
+    private static void FillEnumBox<TEnum>(ComboBox comboBox, TEnum selected)
+        where TEnum : struct, Enum
+    {
+        comboBox.Items.Clear();
+        foreach (var value in Enum.GetValues<TEnum>())
+        {
+            if (value.ToString() == "None")
+            {
+                continue;
+            }
+
+            var item = new ComboBoxItem
+            {
+                Tag = value,
+                Content = value.ToString()
+            };
+            comboBox.Items.Add(item);
+            if (EqualityComparer<TEnum>.Default.Equals(value, selected))
+            {
+                comboBox.SelectedItem = item;
+            }
+        }
+    }
+
+    private void RefreshMacroTargetBox(string? selected = null)
+    {
+        if (MacroTargetBox is null)
+        {
+            return;
+        }
+
+        var previous = selected ?? (MacroTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+        MacroTargetBox.Items.Clear();
+        foreach (var item in libraryStore.Load().Items.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var comboItem = new ComboBoxItem
+            {
+                Tag = item.Name,
+                Content = item.Name
+            };
+            MacroTargetBox.Items.Add(comboItem);
+            if (string.Equals(item.Name, previous, StringComparison.CurrentCultureIgnoreCase)
+                || string.Equals(item.Id, previous, StringComparison.OrdinalIgnoreCase))
+            {
+                MacroTargetBox.SelectedItem = comboItem;
+            }
+        }
+    }
+
     private void ApplyLocalization()
     {
         Title = L("AppTitle");
@@ -160,9 +224,25 @@ public partial class MainWindow : Window
         AddMouseMoveText.Text = L("AddMouseMove");
         AddWheelText.Text = L("AddWheel");
         AddTextActionText.Text = L("AddText");
+        AddMacroText.Text = L("AddMacro");
         AddLoopText.Text = L("AddLoop");
         AddPixelText.Text = L("AddPixel");
         AddMacroHintText.Text = L("AddMacroHint");
+        StepEditorTitleText.Text = L("StepProperties");
+        StepEditorHintText.Text = L("StepPropertiesHint");
+        ApplyStepEditButton.Content = L("Apply");
+        MacroTargetLabelText.Text = L("Macro");
+        KeyLabelText.Text = L("Key");
+        CaptureStepKeyButton.Content = L("Capture");
+        ActionKindLabelText.Text = L("Action");
+        MouseButtonLabelText.Text = L("AddMouseButton");
+        MoveModeLabelText.Text = L("MoveMode");
+        WheelLabelText.Text = L("AddWheel");
+        TimingLabelText.Text = L("TimingMs");
+        TextActionLabelText.Text = L("AddText");
+        LoopCountLabelText.Text = L("LoopCount");
+        PixelLabelText.Text = L("PixelIf");
+        PickPixelColorButton.Content = L("PickColor");
         DurationLabelText.Text = L("Duration");
         StepUpButton.Content = L("MoveUp");
         StepDownButton.Content = L("MoveDown");
@@ -421,6 +501,7 @@ public partial class MainWindow : Window
 
         MacroListBox.SelectedItem = selectedEntry;
         suppressMacroSelection = false;
+        RefreshMacroTargetBox();
     }
 
     private void MacroSearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -733,8 +814,32 @@ public partial class MainWindow : Window
         razerModuleFiles = dialog.FileNames
             .Select(fileName => new AuxiliaryMacroFile(Path.GetFileName(fileName), File.ReadAllText(fileName)))
             .ToList();
+        var importedCount = 0;
+        foreach (var file in razerModuleFiles)
+        {
+            try
+            {
+                var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(
+                    file.Content,
+                    file.FileName,
+                    MacroConversionFormat.RazerSynapseXml,
+                    []));
+                libraryStore.CreateMacro(imported.Document);
+                importedCount++;
+            }
+            catch
+            {
+                // Some Synapse module files only serve as references for a parent macro.
+            }
+        }
+
+        if (importedCount > 0)
+        {
+            RefreshMacroLibraryList();
+        }
+
         RefreshConversionText();
-        SetPlaybackResultResource("LastResultMessage", LF("ConversionModulesLoaded", razerModuleFiles.Count));
+        SetPlaybackResultResource("LastResultMessage", LF("ConversionModulesImported", razerModuleFiles.Count, importedCount));
     }
 
     private void ApplyImport_Click(object sender, RoutedEventArgs e)
@@ -1024,6 +1129,429 @@ public partial class MainWindow : Window
         SelectedStepText.Text = StepList.SelectedItem is StepDisplayItem { Index: >= 0 } selected
             ? $"{selected.Title}: {selected.Subtitle}"
             : L("DropActionsHint");
+        RefreshStepEditor();
+    }
+
+    private void RefreshStepEditor()
+    {
+        if (StepList.SelectedItem is not StepDisplayItem { Index: >= 0 } selected)
+        {
+            StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
+            ApplyStepEditButton.IsEnabled = false;
+            StepEditorHintText.Text = L("StepPropertiesHint");
+            return;
+        }
+
+        try
+        {
+            var document = McrxParser.Parse(MacroEditor.Text);
+            if (selected.Index >= document.Steps.Count)
+            {
+                return;
+            }
+
+            updatingStepEditor = true;
+            PopulateStepEditor(document.Steps[selected.Index]);
+            updatingStepEditor = false;
+            StepEditorFieldsPanel.Visibility = Visibility.Visible;
+            ApplyStepEditButton.IsEnabled = true;
+            StepEditorHintText.Text = $"{selected.Title}: {selected.Subtitle}";
+        }
+        catch (Exception ex)
+        {
+            StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
+            ApplyStepEditButton.IsEnabled = false;
+            StepEditorHintText.Text = ex.Message;
+        }
+    }
+
+    private void PopulateStepEditor(MacroStep step)
+    {
+        SetEditorPanels(
+            keyboard: step is KeyStep,
+            action: step is KeyStep or MouseButtonStep or ConsumerStep,
+            mouseButton: step is MouseButtonStep,
+            mouseMove: step is MouseMoveStep,
+            wheel: step is MouseWheelStep,
+            timing: step is KeyStep or MouseButtonStep or ConsumerStep or MouseMoveStep or WaitStep,
+            text: step is TextStep,
+            loop: step is RepeatStep,
+            macro: step is MacroCallStep,
+            pixel: step is PixelWhenStep);
+
+        switch (step)
+        {
+            case KeyStep key:
+                StepKeyBox.Text = key.Key.ToString();
+                SetModifierBoxes(key.Modifiers);
+                SetComboBox(ActionKindBox, key.Kind.ToString());
+                TimingMsBox.Text = FormatNumber(key.Hold.TotalMilliseconds);
+                break;
+            case MouseButtonStep button:
+                SetComboBox(MouseButtonBox, button.Button.ToString());
+                SetComboBox(ActionKindBox, button.Kind.ToString());
+                TimingMsBox.Text = FormatNumber(button.Hold.TotalMilliseconds);
+                break;
+            case MouseMoveStep move:
+                SetComboBox(MoveModeBox, move.Mode.ToString());
+                MoveXBox.Text = move.X.ToString();
+                MoveYBox.Text = move.Y.ToString();
+                TimingMsBox.Text = FormatNumber(move.Duration.TotalMilliseconds);
+                break;
+            case MouseWheelStep wheel:
+                WheelVerticalBox.Text = wheel.Vertical.ToString();
+                WheelHorizontalBox.Text = wheel.Horizontal.ToString();
+                break;
+            case WaitStep wait:
+                TimingMsBox.Text = FormatNumber(wait.Duration.TotalMilliseconds);
+                break;
+            case TextStep text:
+                StepTextBox.Text = text.Text;
+                break;
+            case RepeatStep repeat:
+                LoopCountBox.Text = repeat.Count.ToString();
+                break;
+            case MacroCallStep macro:
+                RefreshMacroTargetBox(macro.Macro);
+                break;
+            case PixelWhenStep pixel:
+                PixelXBox.Text = pixel.Condition.Coordinate.X.ToString();
+                PixelYBox.Text = pixel.Condition.Coordinate.Y.ToString();
+                PixelToleranceBox.Text = pixel.Condition.Tolerance.ToString();
+                PixelRBox.Text = pixel.Condition.Expected.R.ToString();
+                PixelGBox.Text = pixel.Condition.Expected.G.ToString();
+                PixelBBox.Text = pixel.Condition.Expected.B.ToString();
+                PixelWindowStartBox.Text = pixel.WindowStart is { } start ? FormatNumber(start.TotalMilliseconds) : string.Empty;
+                PixelWindowEndBox.Text = pixel.WindowEnd is { } end ? FormatNumber(end.TotalMilliseconds) : string.Empty;
+                PixelPollBox.Text = pixel.PollInterval is { } poll ? FormatNumber(poll.TotalMilliseconds) : string.Empty;
+                UpdatePixelPreview(pixel.Condition.Expected);
+                break;
+        }
+    }
+
+    private void SetEditorPanels(
+        bool keyboard,
+        bool action,
+        bool mouseButton,
+        bool mouseMove,
+        bool wheel,
+        bool timing,
+        bool text,
+        bool loop,
+        bool macro,
+        bool pixel)
+    {
+        KeyboardEditPanel.Visibility = ToVisibility(keyboard);
+        ButtonEditPanel.Visibility = ToVisibility(action);
+        MouseButtonEditPanel.Visibility = ToVisibility(mouseButton);
+        MouseMoveEditPanel.Visibility = ToVisibility(mouseMove);
+        WheelEditPanel.Visibility = ToVisibility(wheel);
+        TimingEditPanel.Visibility = ToVisibility(timing);
+        TextEditPanel.Visibility = ToVisibility(text);
+        LoopEditPanel.Visibility = ToVisibility(loop);
+        MacroEditPanel.Visibility = ToVisibility(macro);
+        PixelEditPanel.Visibility = ToVisibility(pixel);
+    }
+
+    private static Visibility ToVisibility(bool visible)
+    {
+        return visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ApplyStepEdit_Click(object sender, RoutedEventArgs e)
+    {
+        if (updatingStepEditor || StepList.SelectedItem is not StepDisplayItem { Index: >= 0 } selected)
+        {
+            return;
+        }
+
+        try
+        {
+            var document = McrxParser.Parse(MacroEditor.Text);
+            var steps = document.Steps.ToList();
+            if (selected.Index >= steps.Count)
+            {
+                return;
+            }
+
+            steps[selected.Index] = BuildEditedStep(steps[selected.Index]);
+            SetEditorDocument(document with { Steps = steps });
+            StepList.SelectedIndex = selected.Index;
+            SetPlaybackResultResource("LastResultMessage", L("StepPropertiesApplied"));
+        }
+        catch (Exception ex)
+        {
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+        }
+    }
+
+    private MacroStep BuildEditedStep(MacroStep current)
+    {
+        return current switch
+        {
+            KeyStep key => key with
+            {
+                Key = ParseHidKeyFromText(StepKeyBox.Text),
+                Kind = GetComboBoxEnum<KeyActionKind>(ActionKindBox),
+                Modifiers = ReadStepModifiers(),
+                Hold = TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))
+            },
+            MouseButtonStep button => button with
+            {
+                Button = GetComboBoxEnum<CoreMouseButton>(MouseButtonBox),
+                Kind = GetComboBoxEnum<ButtonActionKind>(ActionKindBox),
+                Hold = TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))
+            },
+            MouseMoveStep move => move with
+            {
+                Mode = GetComboBoxEnum<MouseMoveMode>(MoveModeBox),
+                X = ReadInt(MoveXBox.Text, 0),
+                Y = ReadInt(MoveYBox.Text, 0),
+                Duration = TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))
+            },
+            MouseWheelStep wheel => wheel with
+            {
+                Vertical = ReadInt(WheelVerticalBox.Text, 0),
+                Horizontal = ReadInt(WheelHorizontalBox.Text, 0)
+            },
+            WaitStep => new WaitStep(TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))),
+            TextStep => new TextStep(StepTextBox.Text),
+            RepeatStep repeat => repeat with { Count = Math.Max(1, ReadInt(LoopCountBox.Text, repeat.Count)) },
+            MacroCallStep => new MacroCallStep(ReadSelectedMacroName()),
+            PixelWhenStep pixel => BuildEditedPixelStep(pixel),
+            _ => current
+        };
+    }
+
+    private PixelWhenStep BuildEditedPixelStep(PixelWhenStep current)
+    {
+        var color = new RgbColor(
+            checked((byte)Math.Clamp(ReadInt(PixelRBox.Text, current.Condition.Expected.R), 0, 255)),
+            checked((byte)Math.Clamp(ReadInt(PixelGBox.Text, current.Condition.Expected.G), 0, 255)),
+            checked((byte)Math.Clamp(ReadInt(PixelBBox.Text, current.Condition.Expected.B), 0, 255)));
+        var condition = new PixelCondition(
+            new PixelCoordinate(
+                current.Condition.Coordinate.Scope,
+                ReadInt(PixelXBox.Text, current.Condition.Coordinate.X),
+                ReadInt(PixelYBox.Text, current.Condition.Coordinate.Y),
+                current.Condition.Coordinate.WindowTitle),
+            color,
+            checked((byte)Math.Clamp(ReadInt(PixelToleranceBox.Text, current.Condition.Tolerance), 0, 255)));
+        UpdatePixelPreview(color);
+        return current with
+        {
+            Condition = condition,
+            WindowStart = ReadOptionalTimeSpan(PixelWindowStartBox.Text),
+            WindowEnd = ReadOptionalTimeSpan(PixelWindowEndBox.Text),
+            PollInterval = ReadOptionalTimeSpan(PixelPollBox.Text)
+        };
+    }
+
+    private void CaptureStepKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (capturingStepKey)
+        {
+            StopStepKeyCapture();
+            return;
+        }
+
+        capturingStepKey = true;
+        SetPlaybackResultResource("LastResultPressTrigger");
+        AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureStepKey_KeyDown), true);
+    }
+
+    private void CaptureStepKey_KeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (IsModifierKey(key))
+        {
+            return;
+        }
+
+        var virtualKey = KeyInterop.VirtualKeyFromKey(key);
+        if (GlobalKeyboardHook.TryMapVirtualKeyToHidKey(virtualKey, out var hidKey))
+        {
+            StepKeyBox.Text = hidKey.ToString();
+        }
+
+        StopStepKeyCapture();
+        e.Handled = true;
+    }
+
+    private void StopStepKeyCapture()
+    {
+        if (!capturingStepKey)
+        {
+            return;
+        }
+
+        capturingStepKey = false;
+        RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureStepKey_KeyDown));
+    }
+
+    private void PickPixelColor_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryPickScreenPixel(out var x, out var y, out var color))
+        {
+            SetPlaybackResultResource("LastResultMessage", L("PickColorFailed"));
+            return;
+        }
+
+        PixelXBox.Text = x.ToString();
+        PixelYBox.Text = y.ToString();
+        PixelRBox.Text = color.R.ToString();
+        PixelGBox.Text = color.G.ToString();
+        PixelBBox.Text = color.B.ToString();
+        UpdatePixelPreview(color);
+    }
+
+    private static bool TryPickScreenPixel(out int x, out int y, out RgbColor color)
+    {
+        x = 0;
+        y = 0;
+        color = new RgbColor(0, 0, 0);
+        if (!GetCursorPos(out var point))
+        {
+            return false;
+        }
+
+        var dc = GetDC(IntPtr.Zero);
+        if (dc == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        try
+        {
+            var pixel = GetPixel(dc, point.X, point.Y);
+            if (pixel == 0xFFFF_FFFF)
+            {
+                return false;
+            }
+
+            x = point.X;
+            y = point.Y;
+            color = new RgbColor(
+                (byte)(pixel & 0xFF),
+                (byte)((pixel >> 8) & 0xFF),
+                (byte)((pixel >> 16) & 0xFF));
+            return true;
+        }
+        finally
+        {
+            _ = ReleaseDC(IntPtr.Zero, dc);
+        }
+    }
+
+    private void UpdatePixelPreview(RgbColor color)
+    {
+        PixelColorPreview.Background = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+    }
+
+    private string ReadSelectedMacroName()
+    {
+        return (MacroTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
+            ?? MacroTargetBox.Text.Trim();
+    }
+
+    private HidModifier ReadStepModifiers()
+    {
+        var modifiers = HidModifier.None;
+        if (StepCtrlBox.IsChecked == true)
+        {
+            modifiers |= HidModifier.LeftCtrl;
+        }
+
+        if (StepShiftBox.IsChecked == true)
+        {
+            modifiers |= HidModifier.LeftShift;
+        }
+
+        if (StepAltBox.IsChecked == true)
+        {
+            modifiers |= HidModifier.LeftAlt;
+        }
+
+        if (StepWinBox.IsChecked == true)
+        {
+            modifiers |= HidModifier.LeftGui;
+        }
+
+        return modifiers;
+    }
+
+    private void SetModifierBoxes(HidModifier modifiers)
+    {
+        StepCtrlBox.IsChecked = (modifiers & (HidModifier.LeftCtrl | HidModifier.RightCtrl)) != 0;
+        StepShiftBox.IsChecked = (modifiers & (HidModifier.LeftShift | HidModifier.RightShift)) != 0;
+        StepAltBox.IsChecked = (modifiers & (HidModifier.LeftAlt | HidModifier.RightAlt)) != 0;
+        StepWinBox.IsChecked = (modifiers & (HidModifier.LeftGui | HidModifier.RightGui)) != 0;
+    }
+
+    private static void SetComboBox(ComboBox comboBox, string value)
+    {
+        foreach (var item in comboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag?.ToString(), value, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.Content?.ToString(), value, StringComparison.OrdinalIgnoreCase))
+            {
+                comboBox.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private static TEnum GetComboBoxEnum<TEnum>(ComboBox comboBox)
+        where TEnum : struct, Enum
+    {
+        if (comboBox.SelectedItem is ComboBoxItem { Tag: TEnum value })
+        {
+            return value;
+        }
+
+        return Enum.TryParse<TEnum>(comboBox.Text, ignoreCase: true, out var parsed)
+            ? parsed
+            : Enum.GetValues<TEnum>()[0];
+    }
+
+    private static HidKey ParseHidKeyFromText(string value)
+    {
+        var text = value.Trim();
+        if (text.Length == 1 && char.IsDigit(text[0]))
+        {
+            text = $"D{text}";
+        }
+
+        if (!Enum.TryParse<HidKey>(text, ignoreCase: true, out var key) || key == HidKey.None)
+        {
+            throw new InvalidOperationException($"Unsupported key '{value}'.");
+        }
+
+        return key;
+    }
+
+    private static int ReadInt(string value, int defaultValue)
+    {
+        return int.TryParse(value.Trim(), out var parsed) ? parsed : defaultValue;
+    }
+
+    private static double ReadDouble(string value, double defaultValue)
+    {
+        return double.TryParse(value.Trim(), out var parsed) ? parsed : defaultValue;
+    }
+
+    private static TimeSpan? ReadOptionalTimeSpan(string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : TimeSpan.FromMilliseconds(ReadDouble(value, 0));
+    }
+
+    private static string FormatNumber(double value)
+    {
+        return Math.Abs(value - Math.Round(value)) < 0.000_1
+            ? ((int)Math.Round(value)).ToString()
+            : value.ToString("0.####", LocalizationService.CurrentCulture);
     }
 
     private void RefreshRuntimeDiagnostics()
@@ -1082,8 +1610,11 @@ public partial class MainWindow : Window
         }
 
         capturingTrigger = true;
+        TriggerTextBox.Text = string.Empty;
         SetPlaybackResultResource("LastResultPressTrigger");
         AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureTrigger_KeyDown), true);
+        AddHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureTrigger_KeyUp), true);
+        AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(CaptureTrigger_MouseDown), true);
     }
 
     private void CaptureTrigger_KeyDown(object sender, KeyEventArgs e)
@@ -1091,6 +1622,7 @@ public partial class MainWindow : Window
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (IsModifierKey(key))
         {
+            TriggerTextBox.Text = new HotkeyGesture(ReadCurrentModifiers(), HidKey.None).ToString();
             return;
         }
 
@@ -1104,6 +1636,48 @@ public partial class MainWindow : Window
         }
 
         var gesture = new HotkeyGesture(ReadCurrentModifiers(), hidKey);
+        TriggerTextBox.Text = gesture.ToString();
+        SetPlaybackResultResource("LastResultCapturedTrigger", gesture);
+        StopCapture();
+        e.Handled = true;
+    }
+
+    private void CaptureTrigger_KeyUp(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (!IsModifierKey(key))
+        {
+            return;
+        }
+
+        var modifier = ModifierFromKey(key) | ReadCurrentModifiers();
+        if (modifier == HidModifier.None)
+        {
+            return;
+        }
+
+        var gesture = new HotkeyGesture(modifier, HidKey.None);
+        TriggerTextBox.Text = gesture.ToString();
+        SetPlaybackResultResource("LastResultCapturedTrigger", gesture);
+        StopCapture();
+        e.Handled = true;
+    }
+
+    private void CaptureTrigger_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var button = e.ChangedButton switch
+        {
+            System.Windows.Input.MouseButton.XButton1 => CoreMouseButton.X1,
+            System.Windows.Input.MouseButton.XButton2 => CoreMouseButton.X2,
+            _ => CoreMouseButton.None
+        };
+
+        if (button == CoreMouseButton.None)
+        {
+            return;
+        }
+
+        var gesture = new HotkeyGesture(ReadCurrentModifiers(), HidKey.None, button);
         TriggerTextBox.Text = gesture.ToString();
         SetPlaybackResultResource("LastResultCapturedTrigger", gesture);
         StopCapture();
@@ -1126,7 +1700,7 @@ public partial class MainWindow : Window
             keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
             keyboardHook.Start(document.Playback.Trigger);
 
-            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink));
+            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback));
             listening = true;
             SetPlaybackStatusResource("PlaybackStatusListeningWithTrigger", document.Playback.Trigger);
             SetPlaybackResultResource("HotkeyListenerStarted");
@@ -1157,7 +1731,7 @@ public partial class MainWindow : Window
         try
         {
             var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
-            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink));
+            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback));
             await playbackController.RunNowAsync();
             UpdatePlaybackStatus();
             _ = WatchPlaybackAsync(playbackController);
@@ -1264,6 +1838,32 @@ public partial class MainWindow : Window
         }
 
         return McrxParser.Parse(MacroEditor.Text);
+    }
+
+    private MacroDocument? ResolveMacroForPlayback(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        try
+        {
+            var current = McrxParser.Parse(MacroEditor.Text);
+            if (string.Equals(current.Name, name, StringComparison.CurrentCultureIgnoreCase))
+            {
+                return current;
+            }
+        }
+        catch
+        {
+            // The active editor document may be mid-edit; saved macros still remain resolvable.
+        }
+
+        var item = libraryStore.Load().Items.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, name, StringComparison.CurrentCultureIgnoreCase)
+            || string.Equals(candidate.Id, name, StringComparison.OrdinalIgnoreCase));
+        return item is null ? null : libraryStore.ReadMacro(item.Id);
     }
 
     private void ApplyPlaybackSettingsToEditor()
@@ -1398,11 +1998,29 @@ public partial class MainWindow : Window
 
         capturingTrigger = false;
         RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureTrigger_KeyDown));
+        RemoveHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureTrigger_KeyUp));
+        RemoveHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(CaptureTrigger_MouseDown));
     }
 
     private static bool IsModifierKey(Key key)
     {
         return key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
+    }
+
+    private static HidModifier ModifierFromKey(Key key)
+    {
+        return key switch
+        {
+            Key.LeftCtrl => HidModifier.LeftCtrl,
+            Key.RightCtrl => HidModifier.RightCtrl,
+            Key.LeftShift => HidModifier.LeftShift,
+            Key.RightShift => HidModifier.RightShift,
+            Key.LeftAlt => HidModifier.LeftAlt,
+            Key.RightAlt => HidModifier.RightAlt,
+            Key.LWin => HidModifier.LeftGui,
+            Key.RWin => HidModifier.RightGui,
+            _ => HidModifier.None
+        };
     }
 
     private static HidModifier ReadCurrentModifiers()
@@ -1467,6 +2085,26 @@ public partial class MainWindow : Window
         return $"{duration.TotalMilliseconds:0.###} ms";
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out Point lpPoint);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetDC(IntPtr hWnd);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern uint GetPixel(IntPtr hdc, int nXPos, int nYPos);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
     private static string FormatStepBadge(MacroStep step)
     {
         var duration = EstimateStepDuration(step);
@@ -1485,10 +2123,25 @@ public partial class MainWindow : Window
             MouseButtonStep button => $"mouse.{button.Kind.ToString().ToLowerInvariant()} {button.Button}",
             MouseWheelStep wheel => $"mouse.wheel vertical={wheel.Vertical} horizontal={wheel.Horizontal}",
             ConsumerStep consumer => $"consumer.{consumer.Kind.ToString().ToLowerInvariant()} {consumer.Control}",
+            MacroCallStep macro => $"macro.call {macro.Macro}",
             RepeatStep repeat => $"repeat count={repeat.Count} steps={repeat.Steps.Count}",
-            PixelWhenStep pixel => $"pixel.when {pixel.Condition.Coordinate.Scope} x={pixel.Condition.Coordinate.X} y={pixel.Condition.Coordinate.Y}",
+            PixelWhenStep pixel => DescribePixelCondition(pixel),
             _ => step.GetType().Name
         };
+    }
+
+    private static string DescribePixelCondition(PixelWhenStep pixel)
+    {
+        var condition = pixel.Condition;
+        var timeWindow = pixel.WindowStart is null && pixel.WindowEnd is null
+            ? string.Empty
+            : $" after {FormatOptionalMs(pixel.WindowStart, "0")}..{FormatOptionalMs(pixel.WindowEnd, "end")}ms";
+        return $"IF pixel {condition.Coordinate.Scope} x={condition.Coordinate.X} y={condition.Coordinate.Y} rgb({condition.Expected.R},{condition.Expected.G},{condition.Expected.B}) +/-{condition.Tolerance}{timeWindow} then {pixel.ThenSteps.Count} step(s)";
+    }
+
+    private static string FormatOptionalMs(TimeSpan? value, string fallback)
+    {
+        return value is { } time ? $"{time.TotalMilliseconds:0.###}" : fallback;
     }
 
     private static string TrimForDisplay(string value)
@@ -1499,9 +2152,9 @@ public partial class MainWindow : Window
 
 public sealed class MacroLibraryListEntry
 {
-    private static readonly Brush HeaderBrush = new SolidColorBrush(Color.FromRgb(158, 164, 170));
-    private static readonly Brush MacroBrush = new SolidColorBrush(Color.FromRgb(101, 216, 78));
-    private static readonly Brush TextBrush = new SolidColorBrush(Color.FromRgb(244, 246, 248));
+    private static readonly Brush HeaderBrush = new SolidColorBrush(Color.FromRgb(110, 110, 115));
+    private static readonly Brush MacroBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
+    private static readonly Brush TextBrush = new SolidColorBrush(Color.FromRgb(29, 29, 31));
 
     private MacroLibraryListEntry(MacroLibraryItem? item, string title, string subtitle, string icon, Brush accent, FontWeight weight, Brush titleBrush)
     {
@@ -1542,12 +2195,12 @@ public sealed class MacroLibraryListEntry
 
 public sealed class StepDisplayItem
 {
-    private static readonly Brush GreenBrush = new SolidColorBrush(Color.FromRgb(101, 216, 78));
-    private static readonly Brush BlueBrush = new SolidColorBrush(Color.FromRgb(74, 163, 255));
-    private static readonly Brush OrangeBrush = new SolidColorBrush(Color.FromRgb(255, 159, 67));
-    private static readonly Brush PinkBrush = new SolidColorBrush(Color.FromRgb(231, 90, 165));
-    private static readonly Brush RedBrush = new SolidColorBrush(Color.FromRgb(229, 83, 92));
-    private static readonly Brush GrayBrush = new SolidColorBrush(Color.FromRgb(158, 164, 170));
+    private static readonly Brush GreenBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
+    private static readonly Brush BlueBrush = new SolidColorBrush(Color.FromRgb(0, 122, 255));
+    private static readonly Brush OrangeBrush = new SolidColorBrush(Color.FromRgb(255, 149, 0));
+    private static readonly Brush PinkBrush = new SolidColorBrush(Color.FromRgb(255, 45, 85));
+    private static readonly Brush RedBrush = new SolidColorBrush(Color.FromRgb(255, 59, 48));
+    private static readonly Brush GrayBrush = new SolidColorBrush(Color.FromRgb(142, 142, 147));
 
     private StepDisplayItem(int index, string icon, string title, string subtitle, string badge, Brush accentBrush)
     {
@@ -1582,8 +2235,9 @@ public sealed class StepDisplayItem
             MouseWheelStep => new StepDisplayItem(index, "W", $"#{index + 1} Wheel", subtitle, badge, BlueBrush),
             ConsumerStep => new StepDisplayItem(index, "C", $"#{index + 1} Media", subtitle, badge, PinkBrush),
             WaitStep => new StepDisplayItem(index, "D", $"#{index + 1} Delay", subtitle, badge, GrayBrush),
+            MacroCallStep => new StepDisplayItem(index, "M", $"#{index + 1} Macro", subtitle, badge, GreenBrush),
             RepeatStep => new StepDisplayItem(index, "R", $"#{index + 1} Loop", subtitle, badge, RedBrush),
-            PixelWhenStep => new StepDisplayItem(index, "P", $"#{index + 1} Pixel", subtitle, badge, PinkBrush),
+            PixelWhenStep => new StepDisplayItem(index, "IF", $"#{index + 1} Pixel IF", subtitle, badge, PinkBrush),
             _ => new StepDisplayItem(index, "?", $"#{index + 1} Step", subtitle, badge, GrayBrush)
         };
     }

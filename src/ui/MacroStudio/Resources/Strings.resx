@@ -60,6 +60,9 @@
   <data name="Capture" xml:space="preserve">
     <value>Capture</value>
   </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
   <data name="Mode" xml:space="preserve">
     <value>Mode</value>
   </data>
@@ -219,6 +222,9 @@
   <data name="ConversionModulesLoaded" xml:space="preserve">
     <value>Razer modules loaded: {0}</value>
   </data>
+  <data name="ConversionModulesImported" xml:space="preserve">
+    <value>Razer modules loaded: {0}; added to library: {1}</value>
+  </data>
   <data name="ConversionDiagnosticsNone" xml:space="preserve">
     <value>No conversion warnings</value>
   </data>
@@ -256,9 +262,21 @@
   <data name="AddMouseMove" xml:space="preserve"><value>Mouse Move</value></data>
   <data name="AddWheel" xml:space="preserve"><value>Wheel</value></data>
   <data name="AddText" xml:space="preserve"><value>Text Function</value></data>
+  <data name="AddMacro" xml:space="preserve"><value>Macro</value></data>
   <data name="AddLoop" xml:space="preserve"><value>Loop</value></data>
   <data name="AddPixel" xml:space="preserve"><value>Pixel Condition</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>Drag another macro from the library into the sequence to copy its steps.</value></data>
+  <data name="StepProperties" xml:space="preserve"><value>Properties</value></data>
+  <data name="StepPropertiesHint" xml:space="preserve"><value>Select a step to edit it visually.</value></data>
+  <data name="Key" xml:space="preserve"><value>Key</value></data>
+  <data name="Action" xml:space="preserve"><value>Action</value></data>
+  <data name="MoveMode" xml:space="preserve"><value>Move Mode</value></data>
+  <data name="TimingMs" xml:space="preserve"><value>Time (ms)</value></data>
+  <data name="LoopCount" xml:space="preserve"><value>Loop Count</value></data>
+  <data name="PixelIf" xml:space="preserve"><value>Pixel IF</value></data>
+  <data name="PickColor" xml:space="preserve"><value>Pick Color</value></data>
+  <data name="StepPropertiesApplied" xml:space="preserve"><value>Step updated</value></data>
+  <data name="PickColorFailed" xml:space="preserve"><value>Could not read the current screen pixel.</value></data>
   <data name="Duration" xml:space="preserve"><value>Duration</value></data>
   <data name="MoveUp" xml:space="preserve"><value>Up</value></data>
   <data name="MoveDown" xml:space="preserve"><value>Down</value></data>
@@ -279,6 +297,7 @@
   <data name="TemplateMouseMove" xml:space="preserve"><value>mouse move</value></data>
   <data name="TemplateMouseWheel" xml:space="preserve"><value>wheel</value></data>
   <data name="TemplateText" xml:space="preserve"><value>text function</value></data>
+  <data name="TemplateMacro" xml:space="preserve"><value>macro</value></data>
   <data name="TemplateLoop" xml:space="preserve"><value>loop</value></data>
   <data name="TemplatePixel" xml:space="preserve"><value>pixel condition</value></data>
 </root>

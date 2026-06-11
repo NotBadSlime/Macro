@@ -8,6 +8,7 @@ public enum MacroActionTemplateKind
     MouseMove,
     MouseWheel,
     Text,
+    Macro,
     Loop,
     Pixel
 }
@@ -24,6 +25,7 @@ public static class MacroActionTemplateFactory
             MacroActionTemplateKind.MouseMove => new MouseMoveStep(MouseMoveMode.Relative, 20, 0, TimeSpan.Zero),
             MacroActionTemplateKind.MouseWheel => new MouseWheelStep(-1, 0),
             MacroActionTemplateKind.Text => new TextStep("text"),
+            MacroActionTemplateKind.Macro => new MacroCallStep(string.Empty),
             MacroActionTemplateKind.Loop => new RepeatStep(2, [new WaitStep(TimeSpan.FromMilliseconds(100))]),
             MacroActionTemplateKind.Pixel => new PixelWhenStep(
                 new PixelCondition(new PixelCoordinate(CoordinateScope.Screen, 0, 0), new RgbColor(0, 0, 0), 0),
