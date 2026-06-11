@@ -185,9 +185,48 @@ jobs:
             }
           }
 
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Find-Iscc {
+            $candidates = @(
+              (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+              (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+              (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+            )
+            $pathCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+            if ($pathCommand) {
+              $candidates += $pathCommand.Source
+            }
+            foreach ($candidate in $candidates) {
+              if ($candidate -and (Test-Path $candidate)) {
+                return (Resolve-Path $candidate).Path
+              }
+            }
+            return $null
+          }
+
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            if (Get-Command choco.exe -ErrorAction SilentlyContinue) {
+              choco install innosetup --no-progress -y
+            }
+            else {
+              winget install --id JRSoftware.InnoSetup --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+            }
+          }
+
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            throw 'Inno Setup compiler ISCC.exe was not found after installation.'
+          }
+          Write-Host "ISCC=$iscc"
+          & $iscc /?
+
       - name: Build installer
         shell: pwsh
-        run: .\scripts\Build-Installer.ps1 -Configuration Release -InstallInno
+        run: .\scripts\Build-Installer.ps1 -Configuration Release
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
