@@ -209,12 +209,7 @@ jobs:
 
           $iscc = Find-Iscc
           if (-not $iscc) {
-            if (Get-Command choco.exe -ErrorAction SilentlyContinue) {
-              choco install innosetup --no-progress -y
-            }
-            else {
-              winget install --id JRSoftware.InnoSetup --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-            }
+            winget install --id JRSoftware.InnoSetup --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
           }
 
           $iscc = Find-Iscc
@@ -222,7 +217,6 @@ jobs:
             throw 'Inno Setup compiler ISCC.exe was not found after installation.'
           }
           Write-Host "ISCC=$iscc"
-          & $iscc /?
 
       - name: Build installer
         shell: pwsh
