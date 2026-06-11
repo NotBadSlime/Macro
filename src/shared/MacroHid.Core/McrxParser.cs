@@ -15,9 +15,66 @@ public static class McrxParser
         var root = document.RootElement;
         var version = root.TryGetProperty("version", out var versionProperty) ? versionProperty.GetInt32() : 1;
         var name = root.TryGetProperty("name", out var nameProperty) ? nameProperty.GetString() ?? "macro" : "macro";
+        var playback = root.TryGetProperty("playback", out var playbackProperty)
+            ? ParsePlayback(playbackProperty)
+            : PlaybackSettings.Default;
         var steps = ParseSteps(root.GetProperty("steps"));
 
-        return new MacroDocument(version, name, steps);
+        return new MacroDocument(version, name, playback, steps);
+    }
+
+    private static PlaybackSettings ParsePlayback(JsonElement playbackElement)
+    {
+        if (playbackElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException("'playback' must be an object.");
+        }
+
+        var trigger = playbackElement.TryGetProperty("trigger", out var triggerElement)
+            ? ParseHotkeyGesture(triggerElement.GetString())
+            : null;
+        var mode = ParseEnum<PlaybackMode>(GetString(playbackElement, "mode", PlaybackSettings.Default.Mode.ToString()), "playback mode");
+        var count = GetInt(playbackElement, "count", PlaybackSettings.Default.Count);
+
+        if (count < 1)
+        {
+            throw new JsonException("'playback.count' must be at least 1.");
+        }
+
+        return new PlaybackSettings(trigger, mode, count);
+    }
+
+    public static HotkeyGesture ParseHotkeyGesture(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new JsonException("Playback trigger value is required.");
+        }
+
+        var modifiers = HidModifier.None;
+        HidKey? key = null;
+        foreach (var rawPart in value.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (TryParseModifier(rawPart, out var modifier))
+            {
+                modifiers |= modifier;
+                continue;
+            }
+
+            if (key is not null)
+            {
+                throw new JsonException($"Playback trigger '{value}' contains more than one non-modifier key.");
+            }
+
+            key = ParseHidKey(rawPart);
+        }
+
+        if (key is null)
+        {
+            throw new JsonException($"Playback trigger '{value}' must include a non-modifier key.");
+        }
+
+        return new HotkeyGesture(modifiers, key.Value);
     }
 
     private static IReadOnlyList<MacroStep> ParseSteps(JsonElement stepsElement)
@@ -155,6 +212,48 @@ public static class McrxParser
         }
 
         return ParseEnum<HidKey>(value, "HID key");
+    }
+
+    private static bool TryParseModifier(string value, out HidModifier modifier)
+    {
+        switch (value.ToLowerInvariant())
+        {
+            case "ctrl":
+            case "control":
+            case "leftctrl":
+                modifier = HidModifier.LeftCtrl;
+                return true;
+            case "rightctrl":
+                modifier = HidModifier.RightCtrl;
+                return true;
+            case "shift":
+            case "leftshift":
+                modifier = HidModifier.LeftShift;
+                return true;
+            case "rightshift":
+                modifier = HidModifier.RightShift;
+                return true;
+            case "alt":
+            case "leftalt":
+                modifier = HidModifier.LeftAlt;
+                return true;
+            case "rightalt":
+                modifier = HidModifier.RightAlt;
+                return true;
+            case "win":
+            case "gui":
+            case "leftwin":
+            case "leftgui":
+                modifier = HidModifier.LeftGui;
+                return true;
+            case "rightwin":
+            case "rightgui":
+                modifier = HidModifier.RightGui;
+                return true;
+            default:
+                modifier = HidModifier.None;
+                return false;
+        }
     }
 
     private static MouseButton ParseMouseButtons(JsonElement stepElement)

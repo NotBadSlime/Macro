@@ -1,9 +1,14 @@
 using MacroHid.Core;
+using MacroHid.Runtime;
+using System.Text.Json;
 
 var tests = new (string Name, Action Body)[]
 {
     ("MCRX parser covers keyboard, mouse, wait, repeat, and pixel steps", McrxParserCoversBaselineSteps),
     ("MCRX parser covers wheel and consumer control steps", McrxParserCoversWheelAndConsumerSteps),
+    ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
+    ("MCRX parser defaults missing playback settings", McrxParserDefaultsMissingPlaybackSettings),
+    ("MCRX parser rejects invalid playback settings", McrxParserRejectsInvalidPlaybackSettings),
     ("Sample baseline macro remains parseable", SampleBaselineMacroRemainsParseable),
     ("Scheduler expands repeats and applies waits with QPC ticks", SchedulerExpandsRepeatsAndAppliesWaits),
     ("Report compiler expands hold actions into timed HID reports", ReportCompilerExpandsHoldActions),
@@ -12,6 +17,10 @@ var tests = new (string Name, Action Body)[]
     ("HID report encoder covers keyboard, mouse, and consumer reports", HidReportEncoderCoversReports),
     ("Pixel conditions match expected colors within tolerance", PixelConditionsMatchWithinTolerance),
     ("Latency histogram computes p50 p95 p99 from microsecond samples", LatencyHistogramComputesPercentiles),
+    ("Playback controller starts and stops toggle loop on trigger press", PlaybackControllerStopsToggleLoopOnTriggerPress),
+    ("Playback controller runs fixed count once by default", PlaybackControllerRunsFixedCountOnceByDefault),
+    ("Playback controller cancels hold loop when trigger is released", PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased),
+    ("Playback executor checks cancellation before submitting delayed reports", PlaybackExecutorChecksCancellationBeforeDelayedReports),
 };
 
 var failed = 0;
@@ -219,6 +228,79 @@ static void McrxParserCoversWheelAndConsumerSteps()
     Assert.SequenceEqual([0x03, 0xE9, 0x00], HidReportEncoder.EncodeConsumer(consumer.Control));
 }
 
+static void McrxParserCoversPlaybackHotkeySettings()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "hotkey-playback",
+      "playback": {
+        "trigger": "Ctrl+Alt+F8",
+        "mode": "toggleLoop",
+        "count": 3
+      },
+      "steps": [
+        { "type": "key.tap", "key": "A" }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+
+    Assert.Equal(PlaybackMode.ToggleLoop, document.Playback.Mode);
+    Assert.Equal(3, document.Playback.Count);
+    Assert.Equal(HidKey.F8, document.Playback.Trigger!.Key);
+    Assert.Equal(HidModifier.LeftCtrl | HidModifier.LeftAlt, document.Playback.Trigger.Modifiers);
+    Assert.Equal("Ctrl+Alt+F8", document.Playback.Trigger.ToString());
+}
+
+static void McrxParserDefaultsMissingPlaybackSettings()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "manual",
+      "steps": [
+        { "type": "key.tap", "key": "A" }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+
+    Assert.Equal(PlaybackMode.FixedCount, document.Playback.Mode);
+    Assert.Equal(1, document.Playback.Count);
+    Assert.Equal(null, document.Playback.Trigger);
+}
+
+static void McrxParserRejectsInvalidPlaybackSettings()
+{
+    const string invalidCountJson = """
+    {
+      "version": 1,
+      "name": "invalid-count",
+      "playback": { "mode": "fixedCount", "count": 0 },
+      "steps": [
+        { "type": "key.tap", "key": "A" }
+      ]
+    }
+    """;
+
+    const string invalidTriggerJson = """
+    {
+      "version": 1,
+      "name": "invalid-trigger",
+      "playback": { "trigger": "Ctrl+Alt", "mode": "fixedCount" },
+      "steps": [
+        { "type": "key.tap", "key": "A" }
+      ]
+    }
+    """;
+
+    Assert.Throws<JsonException>(() => McrxParser.Parse(invalidCountJson));
+    Assert.Throws<JsonException>(() => McrxParser.Parse(invalidTriggerJson));
+}
+
 static void HidReportEncoderCoversReports()
 {
     var keyboard = HidReportEncoder.EncodeKeyboard(
@@ -257,6 +339,87 @@ static void LatencyHistogramComputesPercentiles()
     Assert.Equal(500, histogram.PercentileMicroseconds(0.95));
     Assert.Equal(500, histogram.PercentileMicroseconds(0.99));
     Assert.Contains("p95=500us", histogram.Summary());
+}
+
+static void PlaybackControllerStopsToggleLoopOnTriggerPress()
+{
+    var document = new MacroDocument(
+        1,
+        "toggle",
+        new PlaybackSettings(new HotkeyGesture(HidModifier.LeftCtrl, HidKey.F8), PlaybackMode.ToggleLoop, 1),
+        [new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+    var executor = new ControlledPlaybackExecutor();
+    var controller = new MacroPlaybackController(document, executor);
+
+    controller.TriggerPressedAsync().GetAwaiter().GetResult();
+
+    Assert.Equal(PlaybackStatus.Running, controller.Status);
+    Assert.Equal(PlaybackMode.ToggleLoop, executor.LastOptions!.Mode);
+
+    controller.TriggerPressedAsync().GetAwaiter().GetResult();
+
+    Assert.True(executor.LastCancellationToken.IsCancellationRequested);
+    executor.Complete();
+    controller.WhenIdleAsync().GetAwaiter().GetResult();
+    Assert.Equal(PlaybackStatus.Idle, controller.Status);
+}
+
+static void PlaybackControllerRunsFixedCountOnceByDefault()
+{
+    var document = new MacroDocument(
+        1,
+        "fixed",
+        [new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+    var executor = new ControlledPlaybackExecutor();
+    var controller = new MacroPlaybackController(document, executor);
+
+    controller.TriggerPressedAsync().GetAwaiter().GetResult();
+
+    Assert.Equal(PlaybackMode.FixedCount, executor.LastOptions!.Mode);
+    Assert.Equal(1, executor.LastOptions.Count);
+    executor.Complete();
+    controller.WhenIdleAsync().GetAwaiter().GetResult();
+    Assert.Equal(PlaybackStatus.Idle, controller.Status);
+}
+
+static void PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased()
+{
+    var document = new MacroDocument(
+        1,
+        "hold",
+        new PlaybackSettings(new HotkeyGesture(HidModifier.None, HidKey.F9), PlaybackMode.HoldLoop, 1),
+        [new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+    var executor = new ControlledPlaybackExecutor();
+    var controller = new MacroPlaybackController(document, executor);
+
+    controller.TriggerPressedAsync().GetAwaiter().GetResult();
+    controller.TriggerReleased();
+
+    Assert.True(executor.LastCancellationToken.IsCancellationRequested);
+    executor.Complete();
+    controller.WhenIdleAsync().GetAwaiter().GetResult();
+    Assert.Equal(PlaybackStatus.Idle, controller.Status);
+}
+
+static void PlaybackExecutorChecksCancellationBeforeDelayedReports()
+{
+    var document = new MacroDocument(
+        1,
+        "cancel",
+        [new WaitStep(TimeSpan.FromMilliseconds(10)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+    var sink = new RecordingReportSink();
+    using var cancellation = new CancellationTokenSource();
+    var delay = new CancellingDelayStrategy(cancellation);
+    var executor = new MacroPlaybackExecutor(sink, delay);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, Count: 1, PixelEvaluationMode.MatchAll, NoWait: false),
+        cancellation.Token).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+    byte[] keyDownAReport = [0x01, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00];
+    Assert.False(sink.Reports.Any(report => report.SequenceEqual(keyDownAReport)));
 }
 
 static class Assert
@@ -309,5 +472,77 @@ static class Assert
         }
 
         return (T)value;
+    }
+
+    public static void Throws<TException>(Action action)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"Expected exception {typeof(TException).Name}.");
+    }
+}
+
+sealed class ControlledPlaybackExecutor : IMacroPlaybackExecutor
+{
+    private readonly TaskCompletionSource<PlaybackRunResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public PlaybackExecutionOptions? LastOptions { get; private set; }
+
+    public CancellationToken LastCancellationToken { get; private set; }
+
+    public Task<PlaybackRunResult> RunAsync(
+        MacroDocument document,
+        PlaybackExecutionOptions options,
+        CancellationToken cancellationToken)
+    {
+        LastOptions = options;
+        LastCancellationToken = cancellationToken;
+        return completion.Task;
+    }
+
+    public void Complete()
+    {
+        completion.TrySetResult(new PlaybackRunResult(PlaybackRunStatus.Completed, IterationsCompleted: 1, ReportsSubmitted: 0, Cancelled: false, DriverStats: null));
+    }
+}
+
+sealed class RecordingReportSink : IMacroReportSink
+{
+    public bool IsAvailable => true;
+
+    public List<byte[]> Reports { get; } = [];
+
+    public void Submit(uint sequence, byte[] report)
+    {
+        Reports.Add(report.ToArray());
+    }
+
+    public MacroDriverStats? GetStats()
+    {
+        return null;
+    }
+}
+
+sealed class CancellingDelayStrategy : IPlaybackDelayStrategy
+{
+    private readonly CancellationTokenSource cancellation;
+
+    public CancellingDelayStrategy(CancellationTokenSource cancellation)
+    {
+        this.cancellation = cancellation;
+    }
+
+    public void WaitUntil(long dueTick, long qpcFrequency, CancellationToken cancellationToken, bool noWait)
+    {
+        cancellation.Cancel();
+        cancellationToken.ThrowIfCancellationRequested();
     }
 }

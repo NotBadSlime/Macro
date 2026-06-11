@@ -23,6 +23,14 @@ The installer is written to:
 artifacts\installer\MacroHID-Setup-x64.exe
 ```
 
+For development verification without creating or installing the setup package, use:
+
+```powershell
+.\scripts\Build-LocalRun.ps1 -Configuration Release -Launch
+```
+
+This creates `artifacts\local-run\MacroStudio\MacroStudio.exe` as a framework-dependent executable that uses the installed .NET 8 runtime.
+
 ## Driver Option
 
 The installer can be used without installing the driver. This is useful for editing macros, validating `.mcrx` files, running dry-runs, and inspecting diagnostics on machines that are not configured for test drivers.

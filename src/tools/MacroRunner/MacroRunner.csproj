@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\MacroHid.Core\MacroHid.Core.csproj" />
+    <ProjectReference Include="..\..\shared\MacroHid.Runtime\MacroHid.Runtime.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,54 @@
 namespace MacroHid.Core;
 
-public sealed record MacroDocument(int Version, string Name, IReadOnlyList<MacroStep> Steps);
+public sealed record MacroDocument(int Version, string Name, PlaybackSettings Playback, IReadOnlyList<MacroStep> Steps)
+{
+    public MacroDocument(int Version, string Name, IReadOnlyList<MacroStep> Steps)
+        : this(Version, Name, PlaybackSettings.Default, Steps)
+    {
+    }
+}
+
+public sealed record PlaybackSettings(HotkeyGesture? Trigger, PlaybackMode Mode, int Count)
+{
+    public static PlaybackSettings Default { get; } = new(null, PlaybackMode.FixedCount, 1);
+}
+
+public sealed record HotkeyGesture(HidModifier Modifiers, HidKey Key)
+{
+    public override string ToString()
+    {
+        var parts = new List<string>();
+        if ((Modifiers & (HidModifier.LeftCtrl | HidModifier.RightCtrl)) != 0)
+        {
+            parts.Add("Ctrl");
+        }
+
+        if ((Modifiers & (HidModifier.LeftShift | HidModifier.RightShift)) != 0)
+        {
+            parts.Add("Shift");
+        }
+
+        if ((Modifiers & (HidModifier.LeftAlt | HidModifier.RightAlt)) != 0)
+        {
+            parts.Add("Alt");
+        }
+
+        if ((Modifiers & (HidModifier.LeftGui | HidModifier.RightGui)) != 0)
+        {
+            parts.Add("Win");
+        }
+
+        parts.Add(Key.ToString());
+        return string.Join("+", parts);
+    }
+}
+
+public enum PlaybackMode
+{
+    ToggleLoop,
+    HoldLoop,
+    FixedCount
+}
 
 public abstract record MacroStep;
 

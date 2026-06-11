@@ -62,6 +62,7 @@
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
@@ -83,11 +84,60 @@
                     </Grid>
                 </GroupBox>
 
-                <GroupBox Grid.Row="1" Header="Sequence">
+                <GroupBox Grid.Row="1" Header="Playback">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="96" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.ColumnSpan="3">
+                            <TextBlock Text="Trigger" Foreground="#4B5563" />
+                            <DockPanel Margin="0,3,0,8">
+                                <Button DockPanel.Dock="Right" Width="78" Content="Capture" Click="CaptureTrigger_Click" />
+                                <TextBox x:Name="TriggerTextBox" Height="28" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                            </DockPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="0">
+                            <TextBlock Text="Mode" Foreground="#4B5563" />
+                            <ComboBox x:Name="PlaybackModeBox" Height="28" SelectionChanged="PlaybackModeBox_SelectionChanged">
+                                <ComboBoxItem Content="toggleLoop" />
+                                <ComboBoxItem Content="holdLoop" />
+                                <ComboBoxItem Content="fixedCount" IsSelected="True" />
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="2">
+                            <TextBlock Text="Count" Foreground="#4B5563" />
+                            <TextBox x:Name="PlaybackCountTextBox" Height="28" Text="1" VerticalContentAlignment="Center" />
+                        </StackPanel>
+
+                        <WrapPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="0,10,0,0">
+                            <Button MinWidth="104" Height="30" Margin="0,0,8,8" Content="Start Listening" Click="StartListening_Click" />
+                            <Button MinWidth="104" Height="30" Margin="0,0,8,8" Content="Stop Listening" Click="StopListening_Click" />
+                            <Button MinWidth="78" Height="30" Margin="0,0,8,8" Content="Run Now" Click="RunNow_Click" />
+                            <Button MinWidth="64" Height="30" Margin="0,0,0,8" Content="Stop" Click="StopPlayback_Click" />
+                        </WrapPanel>
+
+                        <StackPanel Grid.Row="3" Grid.ColumnSpan="3">
+                            <TextBlock x:Name="PlaybackStatusText" Text="Playback: Idle" />
+                            <TextBlock x:Name="PlaybackResultText" Text="Last result: none" Margin="0,4,0,0" Foreground="#4B5563" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Grid.Row="2" Header="Sequence">
                     <ListBox x:Name="StepList" FontFamily="Consolas" FontSize="13" />
                 </GroupBox>
 
-                <GroupBox Grid.Row="2" Header="Diagnostics">
+                <GroupBox Grid.Row="3" Header="Diagnostics">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />

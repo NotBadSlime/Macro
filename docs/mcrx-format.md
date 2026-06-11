@@ -6,9 +6,32 @@
 {
   "version": 1,
   "name": "baseline",
+  "playback": {
+    "trigger": "Ctrl+Alt+F8",
+    "mode": "fixedCount",
+    "count": 1
+  },
   "steps": []
 }
 ```
+
+## Playback
+
+`playback` is optional. Missing playback settings default to manual `fixedCount` playback with `count` set to `1`.
+
+```json
+{
+  "trigger": "Ctrl+Alt+F8",
+  "mode": "toggleLoop",
+  "count": 1
+}
+```
+
+`trigger` can be a single key such as `F8` or a combination using `Ctrl`, `Shift`, `Alt`, and `Win`. Modes are:
+
+- `toggleLoop`: press the trigger once to loop, press it again to stop.
+- `holdLoop`: loop while the trigger is held, stop when it is released.
+- `fixedCount`: play `count` times. `count` must be at least `1`.
 
 ## Supported Steps
 

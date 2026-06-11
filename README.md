@@ -32,6 +32,15 @@ Build the Inno Setup installer:
 .\scripts\Build-Installer.ps1 -Configuration Release
 ```
 
+Build and launch a local framework-dependent verification folder:
+
+```powershell
+.\scripts\Build-LocalRun.ps1 -Configuration Release
+.\artifacts\local-run\MacroStudio\MacroStudio.exe
+```
+
+Use `.\scripts\Build-LocalRun.ps1 -Configuration Release -Launch` to start MacroStudio immediately after publishing. This local run folder depends on the installed .NET 8 runtime and is meant for development verification without running the Inno Setup installer.
+
 Driver install and smoke test require Administrator PowerShell and Windows test signing:
 
 ```powershell
