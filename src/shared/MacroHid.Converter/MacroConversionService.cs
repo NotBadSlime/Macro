@@ -561,7 +561,7 @@ public static class MacroConversionService
 
             if (type == "0")
             {
-                steps.Add(new WaitStep(TimeSpan.FromMilliseconds(ToIntSecondsAsMilliseconds(ElementValue(current, "Number")))));
+                steps.Add(new WaitStep(TimeSpan.FromMilliseconds(ToMillisecondsFromSeconds(ElementValue(current, "Number")))));
                 continue;
             }
 
@@ -574,10 +574,10 @@ public static class MacroConversionService
                 }
 
                 var button = RazerMouseButton(ToInt(ElementValue(mouse, "MouseButton")));
-                var holdMs = 0;
+                var holdMs = 0.0;
                 if (index + 1 < events.Count && ElementValue(events[index + 1], "Type") == "0")
                 {
-                    holdMs = ToIntSecondsAsMilliseconds(ElementValue(events[index + 1], "Number"));
+                    holdMs = ToMillisecondsFromSeconds(ElementValue(events[index + 1], "Number"));
                     index++;
                 }
 
@@ -603,10 +603,10 @@ public static class MacroConversionService
                 }
 
                 var makecode = ToInt(ElementValue(keyEvent, "Makecode"));
-                var holdMs = 0;
+                var holdMs = 0.0;
                 if (index + 1 < events.Count && ElementValue(events[index + 1], "Type") == "0")
                 {
-                    holdMs = ToIntSecondsAsMilliseconds(ElementValue(events[index + 1], "Number"));
+                    holdMs = ToMillisecondsFromSeconds(ElementValue(events[index + 1], "Number"));
                     index++;
                 }
 
@@ -914,7 +914,7 @@ public static class MacroConversionService
                     events.Add(RazerMouseEvent(button.Button, 0, events.Count));
                     if (button.Hold > TimeSpan.Zero)
                     {
-                        events.Add(RazerDelayEvent(ToMilliseconds(button.Hold)));
+                        events.Add(RazerDelayEvent(button.Hold.TotalMilliseconds));
                     }
 
                     events.Add(RazerMouseEvent(button.Button, 1, events.Count));
@@ -926,13 +926,13 @@ public static class MacroConversionService
                     events.Add(RazerKeyEvent(key.Key, 0, events.Count));
                     if (key.Hold > TimeSpan.Zero)
                     {
-                        events.Add(RazerDelayEvent(ToMilliseconds(key.Hold)));
+                        events.Add(RazerDelayEvent(key.Hold.TotalMilliseconds));
                     }
 
                     events.Add(RazerKeyEvent(key.Key, 1, events.Count));
                     break;
                 case WaitStep wait:
-                    events.Add(RazerDelayEvent(ToMilliseconds(wait.Duration)));
+                    events.Add(RazerDelayEvent(wait.Duration.TotalMilliseconds));
                     break;
                 case RepeatStep repeat:
                     events.Add(RazerLoopEvent(repeat.Count, 0));
@@ -1103,11 +1103,11 @@ public static class MacroConversionService
             new XElement("isPairing", false));
     }
 
-    private static XElement RazerDelayEvent(int ms)
+    private static XElement RazerDelayEvent(double ms)
     {
         return new XElement("MacroEvent",
             new XElement("Type", 0),
-            new XElement("Number", (ms / 1000.0).ToString("0.###", CultureInfo.InvariantCulture)),
+            new XElement("Number", (ms / 1000.0).ToString("0.######", CultureInfo.InvariantCulture)),
             new XElement("selected", false));
     }
 
@@ -1378,11 +1378,11 @@ public static class MacroConversionService
             : defaultValue;
     }
 
-    private static int ToIntSecondsAsMilliseconds(string? value)
+    private static double ToMillisecondsFromSeconds(string? value)
     {
         return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
-            ? (int)Math.Round(seconds * 1000, MidpointRounding.AwayFromZero)
-            : 0;
+            ? seconds * 1000
+            : 0.0;
     }
 
     private static int ToMilliseconds(TimeSpan duration)

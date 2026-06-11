@@ -48,6 +48,8 @@
 
 `key.text` sends Unicode text through SendInput Unicode packets. It is intended for imported text actions such as MacroConverter `keyboard.text` and QMacro `SayString`.
 
+Timing fields such as `holdMs`, `durationMs`, and `ms` accept fractional millisecond values. The scheduler converts them to QPC ticks, so imports such as Razer Synapse `0.00075` second delays can be preserved as `0.75` ms instead of being rounded to a whole millisecond.
+
 ### Mouse
 
 ```json

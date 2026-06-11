@@ -7,7 +7,7 @@ MacroHID is a Windows input macro project for legal local desktop automation. It
 - `.NET` solution: builds the core macro model, `.mcrx` parser/serializer, conversion library, input action compiler, SendInput runtime, latency probe, MacroRunner, and WPF studio.
 - Macro execution expands steps such as `key.tap`, `key.text`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled input actions.
 - `MacroRunner` can dry-run `.mcrx` files into an input action timeline, or submit those actions through `SendInput` with `--send`.
-- `MacroStudio` supports English, Simplified Chinese, and Traditional Chinese UI text with a runtime language selector.
+- `MacroStudio` supports English, Simplified Chinese, and Traditional Chinese UI text with a runtime language selector, and requests Administrator privileges on startup so it can automate elevated desktop apps.
 - Diagnostics probe the live visible-desktop pixel sampler and the SendInput backend.
 - MacroStudio has a built-in import/export panel for MacroHID `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro scripts. It does not bundle or launch the sibling Electron MacroConverter app.
 - The project is pure user-mode. It does not install a driver, does not use test signing, and does not require Secure Boot changes.
@@ -63,4 +63,4 @@ The repository includes `.github/workflows/ci.yml`.
 
 ## Scope Boundary
 
-MacroHID targets normal desktop applications and elevated local applications. To automate an elevated/admin application, run MacroStudio or MacroRunner as Administrator too. It does not include bypasses for anti-cheat, protected processes, secure desktop, UAC prompts, or other security boundaries.
+MacroHID targets normal desktop applications and elevated local applications. MacroStudio requests Administrator privileges by default; run MacroRunner as Administrator too when targeting elevated/admin applications. It does not include bypasses for anti-cheat, protected processes, secure desktop, UAC prompts, or other security boundaries.

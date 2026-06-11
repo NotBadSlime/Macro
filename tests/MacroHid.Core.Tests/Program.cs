@@ -10,6 +10,7 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers keyboard, mouse, wait, repeat, and pixel steps", McrxParserCoversBaselineSteps),
     ("MCRX parser covers wheel and consumer control steps", McrxParserCoversWheelAndConsumerSteps),
     ("MCRX parser covers key text steps", McrxParserCoversKeyTextSteps),
+    ("MCRX parser preserves fractional millisecond timing", McrxParserPreservesFractionalMillisecondTiming),
     ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
     ("MCRX parser defaults missing playback settings", McrxParserDefaultsMissingPlaybackSettings),
     ("MCRX parser rejects invalid playback settings", McrxParserRejectsInvalidPlaybackSettings),
@@ -28,8 +29,10 @@ var tests = new (string Name, Action Body)[]
     ("Playback executor checks cancellation before submitting delayed actions", PlaybackExecutorChecksCancellationBeforeDelayedActions),
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
+    ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
     ("Runtime diagnostics report SendInput availability from stats", RuntimeDiagnosticsReportSendInputAvailabilityFromStats),
     ("Embedded converter imports MacroConverter formats", EmbeddedConverterImportsMacroConverterFormats),
+    ("Embedded converter preserves Razer sub-millisecond timing", EmbeddedConverterPreservesRazerSubMillisecondTiming),
     ("Embedded converter exports MacroConverter formats", EmbeddedConverterExportsMacroConverterFormats),
     ("Embedded converter reports warnings for unsupported external features", EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures),
 };
@@ -267,6 +270,35 @@ static void McrxParserCoversKeyTextSteps()
 
     var text = Assert.IsType<TextStep>(document.Steps[0]);
     Assert.Equal("Hello 世界", text.Text);
+}
+
+static void McrxParserPreservesFractionalMillisecondTiming()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "fractional-timing",
+      "steps": [
+        { "type": "key.tap", "key": "A", "holdMs": 0.75 },
+        { "type": "wait", "ms": 0.5 },
+        { "type": "mouse.move", "mode": "relative", "x": 1, "y": 2, "durationMs": 1.25 }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+    var key = Assert.IsType<KeyStep>(document.Steps[0]);
+    var wait = Assert.IsType<WaitStep>(document.Steps[1]);
+    var move = Assert.IsType<MouseMoveStep>(document.Steps[2]);
+
+    Assert.Equal(TimeSpan.FromTicks(7_500), key.Hold);
+    Assert.Equal(TimeSpan.FromTicks(5_000), wait.Duration);
+    Assert.Equal(TimeSpan.FromTicks(12_500), move.Duration);
+
+    var serialized = McrxSerializer.Serialize(document);
+    Assert.Contains("\"holdMs\": 0.75", serialized);
+    Assert.Contains("\"ms\": 0.5", serialized);
+    Assert.Contains("\"durationMs\": 1.25", serialized);
 }
 
 static void McrxParserCoversPlaybackHotkeySettings()
@@ -512,6 +544,16 @@ static void LocalizationResourcesCoverPlaybackLabelInThreeLanguages()
     Assert.Equal("播放", LocalizationService.Get("Playback", new CultureInfo("zh-TW")));
 }
 
+static void MacroStudioManifestRequestsAdministratorByDefault()
+{
+    var manifestPath = Path.Combine("src", "ui", "MacroStudio", "app.manifest");
+    var projectPath = Path.Combine("src", "ui", "MacroStudio", "MacroStudio.csproj");
+
+    Assert.True(File.Exists(manifestPath));
+    Assert.Contains("level=\"requireAdministrator\"", File.ReadAllText(manifestPath));
+    Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
+}
+
 static void RuntimeDiagnosticsReportSendInputAvailabilityFromStats()
 {
     var present = RuntimeDiagnosticsSnapshot.FromInputStats(new InputSubmissionStats(
@@ -601,6 +643,35 @@ static void EmbeddedConverterImportsMacroConverterFormats()
     var repeat = Assert.IsType<RepeatStep>(razerResult.Document.Steps[0]);
     Assert.Equal(2, repeat.Count);
     Assert.IsType<MouseButtonStep>(repeat.Steps[0]);
+}
+
+static void EmbeddedConverterPreservesRazerSubMillisecondTiming()
+{
+    const string razer = """
+    <Macro>
+      <Name>Razer Precision</Name>
+      <MacroEvents>
+        <MacroEvent><Type>2</Type><MouseEvent><MouseButton>0</MouseButton><State>0</State></MouseEvent></MacroEvent>
+        <MacroEvent><Type>0</Type><Number>0.00075</Number></MacroEvent>
+        <MacroEvent><Type>2</Type><MouseEvent><MouseButton>0</MouseButton><State>1</State></MouseEvent></MacroEvent>
+        <MacroEvent><Type>0</Type><Number>0.00125</Number></MacroEvent>
+        <MacroEvent><Type>1</Type><KeyEvent><Makecode>65</Makecode><State>0</State></KeyEvent></MacroEvent>
+        <MacroEvent><Type>0</Type><Number>0.0005</Number></MacroEvent>
+        <MacroEvent><Type>1</Type><KeyEvent><Makecode>65</Makecode><State>1</State></KeyEvent></MacroEvent>
+      </MacroEvents>
+      <Version>4</Version>
+    </Macro>
+    """;
+
+    var import = MacroConversionService.ImportToMcrx(new MacroImportRequest(razer, "precision.xml"));
+
+    var click = Assert.IsType<MouseButtonStep>(import.Document.Steps[0]);
+    var wait = Assert.IsType<WaitStep>(import.Document.Steps[1]);
+    var key = Assert.IsType<KeyStep>(import.Document.Steps[2]);
+
+    Assert.Equal(TimeSpan.FromTicks(7_500), click.Hold);
+    Assert.Equal(TimeSpan.FromTicks(12_500), wait.Duration);
+    Assert.Equal(TimeSpan.FromTicks(5_000), key.Hold);
 }
 
 static void EmbeddedConverterExportsMacroConverterFormats()

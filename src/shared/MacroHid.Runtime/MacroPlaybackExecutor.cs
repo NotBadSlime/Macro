@@ -27,11 +27,11 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
             }
 
             var remainingUs = ToMicroseconds(remainingTicks, qpcFrequency);
-            if (remainingUs > 2_000)
+            if (remainingUs > 4_000)
             {
-                Thread.Sleep(Math.Max(0, (int)(remainingUs / 1_000) - 1));
+                Thread.Sleep(Math.Max(1, (int)(remainingUs / 1_000) - 2));
             }
-            else if (remainingUs > 200)
+            else if (remainingUs > 500)
             {
                 Thread.Yield();
             }
@@ -104,6 +104,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
 
         try
         {
+            using var timerResolution = TimerResolutionScope.TryBeginOneMillisecond();
             while (iterationsCompleted < iterationsTarget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -185,6 +186,36 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
         foreach (var control in Enum.GetValues<ConsumerControl>())
         {
             yield return new ConsumerInputAction(control, ButtonActionKind.Up);
+        }
+    }
+
+    private sealed class TimerResolutionScope : IDisposable
+    {
+        private readonly uint period;
+        private readonly bool active;
+
+        private TimerResolutionScope(uint period, bool active)
+        {
+            this.period = period;
+            this.active = active;
+        }
+
+        public static TimerResolutionScope TryBeginOneMillisecond()
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return new TimerResolutionScope(0, active: false);
+            }
+
+            return new TimerResolutionScope(1, RuntimeNativeMethods.timeBeginPeriod(1) == 0);
+        }
+
+        public void Dispose()
+        {
+            if (active)
+            {
+                RuntimeNativeMethods.timeEndPeriod(period);
+            }
         }
     }
 }

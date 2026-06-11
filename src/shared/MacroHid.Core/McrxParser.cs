@@ -110,7 +110,7 @@ public static class McrxParser
             "consumer.down" => ParseConsumer(stepElement, ButtonActionKind.Down),
             "consumer.up" => ParseConsumer(stepElement, ButtonActionKind.Up),
             "consumer.tap" => ParseConsumer(stepElement, ButtonActionKind.Click),
-            "wait" => new WaitStep(TimeSpan.FromMilliseconds(GetInt(stepElement, "ms", 0))),
+            "wait" => new WaitStep(TimeSpan.FromMilliseconds(GetDouble(stepElement, "ms", 0))),
             "repeat" => new RepeatStep(GetInt(stepElement, "count", 1), ParseSteps(stepElement.GetProperty("steps"))),
             "pixel.when" => ParsePixelWhen(stepElement),
             _ => throw new JsonException($"Unsupported macro step type '{type}'.")
@@ -133,7 +133,7 @@ public static class McrxParser
             kind,
             key,
             modifiers,
-            TimeSpan.FromMilliseconds(GetInt(stepElement, "holdMs", 0)));
+            TimeSpan.FromMilliseconds(GetDouble(stepElement, "holdMs", 0)));
     }
 
     private static MouseMoveStep ParseMouseMove(JsonElement stepElement)
@@ -152,7 +152,7 @@ public static class McrxParser
             mode,
             GetInt(stepElement, "x", 0),
             GetInt(stepElement, "y", 0),
-            TimeSpan.FromMilliseconds(GetInt(stepElement, "durationMs", 0)),
+            TimeSpan.FromMilliseconds(GetDouble(stepElement, "durationMs", 0)),
             buttons);
     }
 
@@ -161,7 +161,7 @@ public static class McrxParser
         return new MouseButtonStep(
             ParseEnum<MouseButton>(stepElement.GetProperty("button").GetString(), "mouse button"),
             kind,
-            TimeSpan.FromMilliseconds(GetInt(stepElement, "holdMs", 0)));
+            TimeSpan.FromMilliseconds(GetDouble(stepElement, "holdMs", 0)));
     }
 
     private static MouseWheelStep ParseMouseWheel(JsonElement stepElement)
@@ -177,7 +177,7 @@ public static class McrxParser
         return new ConsumerStep(
             ParseEnum<ConsumerControl>(stepElement.GetProperty("control").GetString(), "consumer control"),
             kind,
-            TimeSpan.FromMilliseconds(GetInt(stepElement, "holdMs", 0)));
+            TimeSpan.FromMilliseconds(GetDouble(stepElement, "holdMs", 0)));
     }
 
     private static PixelWhenStep ParsePixelWhen(JsonElement stepElement)
@@ -287,6 +287,11 @@ public static class McrxParser
     private static int GetInt(JsonElement element, string name, int defaultValue)
     {
         return element.TryGetProperty(name, out var property) ? property.GetInt32() : defaultValue;
+    }
+
+    private static double GetDouble(JsonElement element, string name, double defaultValue)
+    {
+        return element.TryGetProperty(name, out var property) ? property.GetDouble() : defaultValue;
     }
 
     private static string? GetString(JsonElement element, string name, string? defaultValue)

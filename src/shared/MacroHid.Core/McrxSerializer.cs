@@ -72,7 +72,7 @@ public static class McrxSerializer
             WaitStep wait => new JsonObject
             {
                 ["type"] = "wait",
-                ["ms"] = ToMilliseconds(wait.Duration)
+            ["ms"] = ToMillisecondsValue(wait.Duration)
             },
             RepeatStep repeat => new JsonObject
             {
@@ -114,7 +114,7 @@ public static class McrxSerializer
 
         if (step.Hold > TimeSpan.Zero)
         {
-            result["holdMs"] = ToMilliseconds(step.Hold);
+            result["holdMs"] = ToMillisecondsValue(step.Hold);
         }
 
         return result;
@@ -132,7 +132,7 @@ public static class McrxSerializer
 
         if (step.Duration > TimeSpan.Zero)
         {
-            result["durationMs"] = ToMilliseconds(step.Duration);
+            result["durationMs"] = ToMillisecondsValue(step.Duration);
         }
 
         AddButtons(result, step.Buttons);
@@ -154,7 +154,7 @@ public static class McrxSerializer
 
         if (step.Hold > TimeSpan.Zero)
         {
-            result["holdMs"] = ToMilliseconds(step.Hold);
+            result["holdMs"] = ToMillisecondsValue(step.Hold);
         }
 
         return result;
@@ -187,7 +187,7 @@ public static class McrxSerializer
 
         if (step.Hold > TimeSpan.Zero)
         {
-            result["holdMs"] = ToMilliseconds(step.Hold);
+            result["holdMs"] = ToMillisecondsValue(step.Hold);
         }
 
         return result;
@@ -229,8 +229,12 @@ public static class McrxSerializer
         target["buttons"] = array;
     }
 
-    private static int ToMilliseconds(TimeSpan duration)
+    private static JsonValue ToMillisecondsValue(TimeSpan duration)
     {
-        return (int)Math.Round(duration.TotalMilliseconds, MidpointRounding.AwayFromZero);
+        var milliseconds = Math.Round(duration.TotalMilliseconds, 4, MidpointRounding.AwayFromZero);
+        var wholeMilliseconds = Math.Round(milliseconds);
+        return Math.Abs(milliseconds - wholeMilliseconds) < 0.000_1
+            ? JsonValue.Create((int)wholeMilliseconds)!
+            : JsonValue.Create(milliseconds)!;
     }
 }

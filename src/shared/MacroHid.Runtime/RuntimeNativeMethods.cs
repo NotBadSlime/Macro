@@ -60,6 +60,12 @@ internal static partial class RuntimeNativeMethods
 
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int index);
+
+    [DllImport("winmm.dll")]
+    public static extern uint timeBeginPeriod(uint period);
+
+    [DllImport("winmm.dll")]
+    public static extern uint timeEndPeriod(uint period);
 }
 
 [StructLayout(LayoutKind.Sequential)]
