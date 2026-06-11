@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 
 namespace MacroHid.Core;
 
@@ -7,7 +8,8 @@ public static class McrxSerializer
 {
     private static readonly JsonSerializerOptions Options = new()
     {
-        WriteIndented = true
+        WriteIndented = true,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver()
     };
 
     public static string Serialize(MacroDocument document)

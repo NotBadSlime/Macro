@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace MacroHid.Core;
 
@@ -15,7 +16,8 @@ public sealed class MacroLibraryStore
 {
     private static readonly JsonSerializerOptions Options = new()
     {
-        WriteIndented = true
+        WriteIndented = true,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver()
     };
 
     private readonly string rootDirectory;

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -1218,7 +1219,7 @@ public partial class MainWindow : Window
         }
 
         root["playback"] = playback;
-        MacroEditor.Text = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        MacroEditor.Text = root.ToJsonString(CreateIndentedJsonOptions());
         ValidateCurrentMacro();
     }
 
@@ -1306,6 +1307,15 @@ public partial class MainWindow : Window
             PlaybackMode.HoldLoop => "holdLoop",
             PlaybackMode.FixedCount => "fixedCount",
             _ => "fixedCount"
+        };
+    }
+
+    private static JsonSerializerOptions CreateIndentedJsonOptions()
+    {
+        return new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
         };
     }
 

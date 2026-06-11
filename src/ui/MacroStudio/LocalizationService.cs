@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Resources;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace MacroStudio;
 
@@ -142,7 +143,11 @@ public static class LocalizationService
             var path = SettingsPath();
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var settings = new MacroStudioSettings(cultureName);
-            File.WriteAllText(path, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(path, JsonSerializer.Serialize(settings, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+            }));
         }
         catch (Exception)
         {

@@ -2,8 +2,21 @@ using MacroHid.Core;
 using MacroHid.Converter;
 using MacroHid.Runtime;
 using MacroStudio;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+
+if (Environment.GetEnvironmentVariable("MACROHID_JSON_REFLECTION_DISABLED_PROBE") == "1")
+{
+    AppContext.SetSwitch("System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault", false);
+    var probe = new MacroDocument(
+        1,
+        "json-probe",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromMilliseconds(0.5))]);
+    Console.WriteLine(McrxSerializer.Serialize(probe));
+    return 0;
+}
 
 var tests = new (string Name, Action Body)[]
 {
@@ -11,6 +24,7 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers wheel and consumer control steps", McrxParserCoversWheelAndConsumerSteps),
     ("MCRX parser covers key text steps", McrxParserCoversKeyTextSteps),
     ("MCRX parser preserves fractional millisecond timing", McrxParserPreservesFractionalMillisecondTiming),
+    ("MCRX serializer works when JSON reflection defaults are disabled", McrxSerializerWorksWhenJsonReflectionDefaultsAreDisabled),
     ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
     ("MCRX parser defaults missing playback settings", McrxParserDefaultsMissingPlaybackSettings),
     ("MCRX parser rejects invalid playback settings", McrxParserRejectsInvalidPlaybackSettings),
@@ -302,6 +316,40 @@ static void McrxParserPreservesFractionalMillisecondTiming()
     Assert.Contains("\"holdMs\": 0.75", serialized);
     Assert.Contains("\"ms\": 0.5", serialized);
     Assert.Contains("\"durationMs\": 1.25", serialized);
+}
+
+static void McrxSerializerWorksWhenJsonReflectionDefaultsAreDisabled()
+{
+    Assert.True(GetPrivateJsonOptions(typeof(McrxSerializer), "Options").TypeInfoResolver is not null);
+    Assert.True(GetPrivateJsonOptions(typeof(MacroLibraryStore), "Options").TypeInfoResolver is not null);
+
+    var processPath = Environment.ProcessPath
+        ?? throw new InvalidOperationException("Process path is not available.");
+    var startInfo = new ProcessStartInfo(processPath)
+    {
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false
+    };
+    startInfo.Environment["MACROHID_JSON_REFLECTION_DISABLED_PROBE"] = "1";
+
+    using var process = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("Failed to start JSON reflection probe process.");
+    var output = process.StandardOutput.ReadToEnd();
+    var error = process.StandardError.ReadToEnd();
+    process.WaitForExit(15_000);
+
+    Assert.Equal(0, process.ExitCode);
+    Assert.Contains("\"name\": \"json-probe\"", output);
+    Assert.Equal(string.Empty, error);
+}
+
+static JsonSerializerOptions GetPrivateJsonOptions(Type type, string fieldName)
+{
+    var field = type.GetField(fieldName, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+        ?? throw new InvalidOperationException($"Field {type.Name}.{fieldName} was not found.");
+    return (JsonSerializerOptions)(field.GetValue(null)
+        ?? throw new InvalidOperationException($"Field {type.Name}.{fieldName} is null."));
 }
 
 static void McrxParserCoversPlaybackHotkeySettings()
