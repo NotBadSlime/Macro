@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using MacroHid.Converter;
@@ -285,6 +286,75 @@ public partial class MainWindow : Window
         LocalizationService.SetLanguage(cultureName);
         ApplyLocalization();
         RefreshMacroLibraryList();
+    }
+
+    private void TopChromeBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (IsChromeInteractiveSource(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        if (e.ClickCount == 2)
+        {
+            ToggleWindowMaximize();
+            return;
+        }
+
+        if (e.LeftButton == MouseButtonState.Pressed)
+        {
+            try
+            {
+                DragMove();
+            }
+            catch (InvalidOperationException)
+            {
+                // DragMove can throw if Windows releases capture between the click and drag.
+            }
+        }
+    }
+
+    private void MinimizeWindow_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void MaximizeWindow_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleWindowMaximize();
+    }
+
+    private void CloseWindow_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    private void ToggleWindowMaximize()
+    {
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+    }
+
+    private static bool IsChromeInteractiveSource(DependencyObject? source)
+    {
+        return FindVisualParent<ButtonBase>(source) is not null
+            || FindVisualParent<ComboBox>(source) is not null
+            || FindVisualParent<TextBoxBase>(source) is not null;
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? source)
+        where T : DependencyObject
+    {
+        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+        }
+
+        return null;
     }
 
     private void InitializeMacroLibrary()

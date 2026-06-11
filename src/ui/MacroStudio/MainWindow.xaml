@@ -1,13 +1,16 @@
 <Window x:Class="MacroStudio.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="MacroHID Studio"
         Height="820"
         Width="1360"
         MinHeight="720"
         MinWidth="1180"
         Background="#202124"
-        FontFamily="Segoe UI">
+        FontFamily="Segoe UI"
+        ResizeMode="CanResize"
+        WindowStyle="None">
     <Window.Resources>
         <SolidColorBrush x:Key="PageBackgroundBrush" Color="#202124" />
         <SolidColorBrush x:Key="PanelBrush" Color="#111214" />
@@ -86,6 +89,32 @@
             <Setter Property="Background" Value="#3A2024" />
             <Setter Property="BorderBrush" Value="#664044" />
             <Setter Property="Foreground" Value="#FFE6E9" />
+        </Style>
+
+        <Style x:Key="WindowControlButton" TargetType="Button">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2B2E33" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style TargetType="Button" BasedOn="{StaticResource ToolButton}" />
@@ -240,12 +269,22 @@
         </DataTemplate>
     </Window.Resources>
 
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            ResizeBorderThickness="8"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
     <DockPanel>
-        <Border DockPanel.Dock="Top"
+        <Border x:Name="TopChromeBar"
+                DockPanel.Dock="Top"
                 Background="#17181A"
                 BorderBrush="{StaticResource PanelBorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="16,10">
+                Padding="16,10"
+                MouseLeftButtonDown="TopChromeBar_MouseLeftButtonDown">
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="MacroHID"
@@ -273,12 +312,25 @@
                             BorderBrush="{StaticResource PanelBorderBrush}"
                             BorderThickness="1"
                             CornerRadius="7"
-                            Padding="10,5">
+                            Padding="10,5"
+                            Margin="0,0,10,0">
                         <TextBlock x:Name="StatusText"
                                    Foreground="{StaticResource SecondaryTextBrush}"
                                    VerticalAlignment="Center"
                                    Text="Input backend ready" />
                     </Border>
+                    <Button x:Name="MinimizeWindowButton"
+                            Style="{StaticResource WindowControlButton}"
+                            Content="-"
+                            Click="MinimizeWindow_Click" />
+                    <Button x:Name="MaximizeWindowButton"
+                            Style="{StaticResource WindowControlButton}"
+                            Content="□"
+                            Click="MaximizeWindow_Click" />
+                    <Button x:Name="CloseWindowButton"
+                            Style="{StaticResource WindowControlButton}"
+                            Content="X"
+                            Click="CloseWindow_Click" />
                 </StackPanel>
             </DockPanel>
         </Border>

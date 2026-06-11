@@ -45,6 +45,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
+    ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("Runtime diagnostics report SendInput availability from stats", RuntimeDiagnosticsReportSendInputAvailabilityFromStats),
     ("Embedded converter imports MacroConverter formats", EmbeddedConverterImportsMacroConverterFormats),
     ("Embedded converter preserves Razer sub-millisecond timing", EmbeddedConverterPreservesRazerSubMillisecondTiming),
@@ -613,6 +614,20 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.True(File.Exists(manifestPath));
     Assert.Contains("level=\"requireAdministrator\"", File.ReadAllText(manifestPath));
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
+}
+
+static void MacroStudioUsesBorderlessCustomWindowChrome()
+{
+    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml"));
+    var codeBehind = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("WindowStyle=\"None\"", xaml);
+    Assert.Contains("WindowChrome.WindowChrome", xaml);
+    Assert.Contains("MinimizeWindowButton", xaml);
+    Assert.Contains("MaximizeWindowButton", xaml);
+    Assert.Contains("CloseWindowButton", xaml);
+    Assert.Contains("TopChromeBar_MouseLeftButtonDown", codeBehind);
+    Assert.Contains("ToggleWindowMaximize", codeBehind);
 }
 
 static void RuntimeDiagnosticsReportSendInputAvailabilityFromStats()
