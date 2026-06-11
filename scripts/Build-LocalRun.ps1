@@ -2,11 +2,6 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
 
-    [ValidateSet("x64")]
-    [string]$Platform = "x64",
-
-    [switch]$BuildNative,
-
     [switch]$Launch
 )
 
@@ -36,28 +31,12 @@ try {
     dotnet publish "src\tools\MacroRunner\MacroRunner.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $outputRoot "MacroRunner")
     dotnet publish "src\tools\LatencyProbe\LatencyProbe.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $outputRoot "LatencyProbe")
 
-    if ($BuildNative) {
-        & (Join-Path $PSScriptRoot "Build-Native.ps1") -Configuration $Configuration -Platform $Platform
-    }
-
     Copy-DirectoryIfExists (Join-Path $repoRoot "samples") (Join-Path $outputRoot "samples")
     Copy-DirectoryIfExists (Join-Path $repoRoot "docs") (Join-Path $outputRoot "docs")
     Copy-DirectoryIfExists (Join-Path $repoRoot "scripts") (Join-Path $outputRoot "scripts")
     $macroConverterDist = Join-Path (Split-Path -Parent $repoRoot) "MacroConverter\dist\MacroConverter-win32-x64"
     Copy-DirectoryIfExists $macroConverterDist (Join-Path $outputRoot "MacroConverter")
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $outputRoot -Force
-
-    $serviceOut = Join-Path $repoRoot "src\service\MacroEngineService\$Platform\$Configuration"
-    $driverOut = Join-Path $repoRoot "src\driver\MacroHidDriver\$Platform\$Configuration"
-    $driverPackage = Join-Path $driverOut "MacroHidDriver"
-    Copy-DirectoryIfExists $serviceOut (Join-Path $outputRoot "service")
-    Copy-DirectoryIfExists $driverPackage (Join-Path $outputRoot "driver")
-
-    $certPath = Join-Path $driverOut "MacroHidDriver.cer"
-    if (Test-Path $certPath) {
-        New-Item -ItemType Directory -Path (Join-Path $outputRoot "driver") -Force | Out-Null
-        Copy-Item -LiteralPath $certPath -Destination (Join-Path $outputRoot "driver") -Force
-    }
 
     $studioExe = Join-Path $outputRoot "MacroStudio\MacroStudio.exe"
     if (-not (Test-Path $studioExe)) {

@@ -4,11 +4,6 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
 
-    [ValidateSet("x64")]
-    [string]$Platform = "x64",
-
-    [switch]$SkipNativeBuild,
-
     [switch]$InstallInno
 )
 
@@ -38,15 +33,6 @@ function Find-InnoCompiler {
     }
 
     return $null
-}
-
-function Copy-Directory([string]$Source, [string]$Destination) {
-    if (-not (Test-Path $Source)) {
-        throw "Required directory was not found: $Source"
-    }
-
-    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
 }
 
 function Copy-DirectoryIfExists([string]$Source, [string]$Destination) {
@@ -88,25 +74,9 @@ try {
     dotnet publish "src\tools\MacroRunner\MacroRunner.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $inputRoot "MacroRunner")
     dotnet publish "src\tools\LatencyProbe\LatencyProbe.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $inputRoot "LatencyProbe")
 
-    if (-not $SkipNativeBuild) {
-        & (Join-Path $PSScriptRoot "Build-Native.ps1") -Configuration $Configuration -Platform $Platform
-    }
-
-    $serviceOut = Join-Path $repoRoot "src\service\MacroEngineService\$Platform\$Configuration"
-    $driverOut = Join-Path $repoRoot "src\driver\MacroHidDriver\$Platform\$Configuration"
-    $driverPackage = Join-Path $driverOut "MacroHidDriver"
-
-    Copy-Directory $serviceOut (Join-Path $inputRoot "service")
-    Copy-Directory $driverPackage (Join-Path $inputRoot "driver")
-
-    $certPath = Join-Path $driverOut "MacroHidDriver.cer"
-    if (Test-Path $certPath) {
-        Copy-Item -LiteralPath $certPath -Destination (Join-Path $inputRoot "driver") -Force
-    }
-
-    Copy-Directory (Join-Path $repoRoot "scripts") (Join-Path $inputRoot "scripts")
-    Copy-Directory (Join-Path $repoRoot "samples") (Join-Path $inputRoot "samples")
-    Copy-Directory (Join-Path $repoRoot "docs") (Join-Path $inputRoot "docs")
+    Copy-DirectoryIfExists (Join-Path $repoRoot "scripts") (Join-Path $inputRoot "scripts")
+    Copy-DirectoryIfExists (Join-Path $repoRoot "samples") (Join-Path $inputRoot "samples")
+    Copy-DirectoryIfExists (Join-Path $repoRoot "docs") (Join-Path $inputRoot "docs")
     $macroConverterDist = Join-Path (Split-Path -Parent $repoRoot) "MacroConverter\dist\MacroConverter-win32-x64"
     Copy-DirectoryIfExists $macroConverterDist (Join-Path $inputRoot "MacroConverter")
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $inputRoot -Force

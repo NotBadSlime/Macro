@@ -1,18 +1,16 @@
 # MacroHID
 
-MacroHID is a Windows automation project for legal local desktop workflows. It combines a virtual HID driver, a high-priority macro engine, a WPF editor, and latency diagnostics.
+MacroHID is a Windows input macro project for legal local desktop automation. It combines a .NET macro runtime, Windows `SendInput` submission, visible-desktop pixel sampling, a WPF editor, MacroConverter integration, and latency diagnostics.
 
 ## Current State
 
-- `.NET` solution: builds the core macro model, `.mcrx` parser, HID report encoder, latency probe, and WPF studio.
-- Macro execution plan: expands high-level steps such as `key.tap`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled HID reports.
-- `MacroRunner`: dry-runs `.mcrx` files into HID report timelines and can submit those reports to the MacroHID driver with `--send`.
-- `MacroStudio`: supports English, Simplified Chinese, and Traditional Chinese UI text with a runtime language selector; the selected language is saved under the current Windows user profile.
-- `MacroStudio` diagnostics now probe the live visible-desktop pixel sampler, MacroHID driver interface, and bundled MacroConverter availability instead of showing static placeholder text.
-- Installer: the Inno Setup package offers English, Simplified Chinese, and Traditional Chinese setup UI. Command-line tools currently keep English output.
-- MacroConverter integration: when a sibling `MacroConverter\dist\MacroConverter-win32-x64` build is present, local-run and installer builds include it and MacroStudio exposes an entry point to launch the full converter.
-- Native driver/service source: VHF/KMDF driver skeleton and C++ driver client are present under `src/driver` and `src/service`.
-- Local build environment: Visual Studio 2022 Build Tools and WDK 10.0.26100 are supported by the native build scripts.
+- `.NET` solution: builds the core macro model, `.mcrx` parser, input action compiler, SendInput runtime, latency probe, MacroRunner, and WPF studio.
+- Macro execution expands steps such as `key.tap`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled input actions.
+- `MacroRunner` can dry-run `.mcrx` files into an input action timeline, or submit those actions through `SendInput` with `--send`.
+- `MacroStudio` supports English, Simplified Chinese, and Traditional Chinese UI text with a runtime language selector.
+- Diagnostics probe the live visible-desktop pixel sampler, the SendInput backend, and bundled MacroConverter availability.
+- MacroConverter integration: when a sibling `MacroConverter\dist\MacroConverter-win32-x64` build is present, local-run and installer builds include it and MacroStudio exposes a launch entry.
+- The project is pure user-mode. It does not install a driver, does not use test signing, and does not require Secure Boot changes.
 
 ## Build and Test
 
@@ -24,10 +22,10 @@ dotnet run --project src\tools\MacroRunner\MacroRunner.csproj -- --macro samples
 dotnet run --project src\ui\MacroStudio\MacroStudio.csproj
 ```
 
-Native build:
+Submit a sample macro through SendInput:
 
 ```powershell
-.\scripts\Build-Native.ps1 -Configuration Release
+dotnet run --project src\tools\MacroRunner\MacroRunner.csproj -- --macro samples\baseline.mcrx --send --pixels skip
 ```
 
 Build the Inno Setup installer:
@@ -43,43 +41,25 @@ Build and launch a local framework-dependent verification folder:
 .\artifacts\local-run\MacroStudio\MacroStudio.exe
 ```
 
-Use `.\scripts\Build-LocalRun.ps1 -Configuration Release -Launch` to start MacroStudio immediately after publishing. This local run folder depends on the installed .NET 8 runtime and is meant for development verification without running the Inno Setup installer.
-
-Driver install and smoke test require Administrator PowerShell and Windows test signing:
-
-```powershell
-.\scripts\Install-TestDriverInteractive.ps1 -Configuration Release -EnableTestSigning
-# Reboot if the script asks for it, then run the install script again without -EnableTestSigning.
-.\scripts\Invoke-SmokeTest.ps1 -Send -Pixels skip
-```
-
-The interactive installer keeps PowerShell open on failure and writes a log under `C:\ProgramData\MacroHID\logs`. If Windows says the test-signing value is protected by Secure Boot policy, disable Secure Boot in UEFI/BIOS, boot Windows again, enable test-signing, reboot, and rerun the driver install shortcut.
-
-Installing the driver enables real virtual HID keyboard, mouse, wheel, side-button, and consumer-control submission through the MacroHID device. Without the driver, MacroStudio, MacroRunner dry-run, samples, and diagnostics still work, but macros cannot inject real virtual HID input and `MacroRunner --send` will report that the MacroHID device is missing.
+Use `.\scripts\Build-LocalRun.ps1 -Configuration Release -Launch` to start MacroStudio immediately after publishing. The local run folder depends on the installed .NET 8 runtime.
 
 ## GitHub Actions
 
 The repository includes `.github/workflows/ci.yml`.
 
-- The `.NET core, tools, and WPF` job builds `MacroHID.sln`, runs the core tests, runs a short `LatencyProbe` smoke test, and uploads `MacroStudio` plus `LatencyProbe` artifacts.
-- The `.NET core, tools, and WPF` job also runs a `MacroRunner` dry-run smoke test and uploads `MacroRunner`.
-- The `Native service and VHF driver` job runs on `windows-2022`, initializes MSBuild, verifies WDK/driver build tools, and builds the C++ service plus VHF/KMDF driver with `msbuild`.
+- The `.NET core, tools, and WPF` job builds `MacroHID.sln`, runs the core tests, runs a short `LatencyProbe` smoke test, runs a `MacroRunner` dry-run smoke test, and uploads `.NET` artifacts.
 - The `Installer` job builds `MacroHID-Setup-x64.exe` with Inno Setup and uploads it as an artifact.
-
-Use `windows-2022` instead of `windows-latest` for now so the CI environment stays aligned with Visual Studio 2022 and the WDK assumptions in this project.
 
 ## Project Layout
 
-- `src/shared/MacroHid.Core` - macro document model, parser, scheduler, HID report encoder, pixel condition helpers, latency statistics.
-- `src/shared/MacroHidProtocol` - shared C/C++ IOCTL protocol for user-mode service and kernel driver.
-- `src/driver/MacroHidDriver` - KMDF + Virtual HID Framework source driver skeleton.
-- `src/service/MacroEngineService` - C++ driver client and first smoke-test service entry.
-- `src/tools/LatencyProbe` - user-mode scheduler jitter and report encoding benchmark.
-- `src/tools/MacroRunner` - `.mcrx` dry-run and optional driver-send execution harness.
-- `src/ui/MacroStudio` - WPF macro editor and diagnostics shell.
+- `src/shared/MacroHid.Core` - macro document model, parser, scheduler, input action compiler, pixel condition helpers, and latency statistics.
+- `src/shared/MacroHid.Runtime` - SendInput backend, playback runtime, pixel sampler, diagnostics, and Win32 interop.
+- `src/tools/LatencyProbe` - user-mode scheduler jitter and input encoding benchmark.
+- `src/tools/MacroRunner` - `.mcrx` dry-run and SendInput execution harness.
+- `src/ui/MacroStudio` - WPF macro editor, hotkey playback, diagnostics, localization, and MacroConverter launch entry.
 - `samples` - sample `.mcrx` macros.
-- `installer` - Inno Setup script and installer notes.
+- `installer` - Inno Setup script and localized installer language files.
 
 ## Scope Boundary
 
-MacroHID targets normal desktop applications and elevated local applications. It does not include bypasses for anti-cheat, protected processes, secure desktop, or other security boundaries.
+MacroHID targets normal desktop applications and elevated local applications. To automate an elevated/admin application, run MacroStudio or MacroRunner as Administrator too. It does not include bypasses for anti-cheat, protected processes, secure desktop, UAC prompts, or other security boundaries.

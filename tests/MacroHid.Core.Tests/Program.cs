@@ -13,19 +13,18 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser rejects invalid playback settings", McrxParserRejectsInvalidPlaybackSettings),
     ("Sample baseline macro remains parseable", SampleBaselineMacroRemainsParseable),
     ("Scheduler expands repeats and applies waits with QPC ticks", SchedulerExpandsRepeatsAndAppliesWaits),
-    ("Report compiler expands hold actions into timed HID reports", ReportCompilerExpandsHoldActions),
-    ("Report compiler evaluates pixel branches before emitting reports", ReportCompilerEvaluatesPixelBranches),
-    ("Protocol constants match driver IOCTL contract", ProtocolConstantsMatchDriverIoctlContract),
-    ("HID report encoder covers keyboard, mouse, and consumer reports", HidReportEncoderCoversReports),
+    ("Input action compiler expands hold actions into timed actions", InputActionCompilerExpandsHoldActions),
+    ("Input action compiler evaluates pixel branches before emitting actions", InputActionCompilerEvaluatesPixelBranches),
+    ("SendInput encoder covers keyboard, mouse, wheel, and consumer input", SendInputEncoderCoversInputActions),
     ("Pixel conditions match expected colors within tolerance", PixelConditionsMatchWithinTolerance),
     ("Latency histogram computes p50 p95 p99 from microsecond samples", LatencyHistogramComputesPercentiles),
     ("Playback controller starts and stops toggle loop on trigger press", PlaybackControllerStopsToggleLoopOnTriggerPress),
     ("Playback controller runs fixed count once by default", PlaybackControllerRunsFixedCountOnceByDefault),
     ("Playback controller cancels hold loop when trigger is released", PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased),
-    ("Playback executor checks cancellation before submitting delayed reports", PlaybackExecutorChecksCancellationBeforeDelayedReports),
+    ("Playback executor checks cancellation before submitting delayed actions", PlaybackExecutorChecksCancellationBeforeDelayedActions),
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
-    ("Runtime diagnostics report driver availability from stats", RuntimeDiagnosticsReportDriverAvailabilityFromStats),
+    ("Runtime diagnostics report SendInput availability from stats", RuntimeDiagnosticsReportSendInputAvailabilityFromStats),
     ("MacroConverter integration finds sibling packaged executable", MacroConverterIntegrationFindsSiblingPackagedExecutable),
 };
 
@@ -136,7 +135,7 @@ static void SchedulerExpandsRepeatsAndAppliesWaits()
     Assert.Equal(HidKey.B, ((KeyStep)scheduled[2].Step).Key);
 }
 
-static void ReportCompilerExpandsHoldActions()
+static void InputActionCompilerExpandsHoldActions()
 {
     var document = new MacroDocument(
         Version: 1,
@@ -148,24 +147,24 @@ static void ReportCompilerExpandsHoldActions()
             new ConsumerStep(ConsumerControl.VolumeUp, ButtonActionKind.Click, TimeSpan.FromMilliseconds(4))
         ]);
 
-    var reports = MacroReportCompiler.Compile(document, startTick: 10_000, qpcFrequency: 1_000_000);
+    var actions = InputActionCompiler.Compile(document, startTick: 10_000, qpcFrequency: 1_000_000);
 
-    Assert.Equal(6, reports.Count);
-    Assert.Equal(10_000, reports[0].DueTick);
-    Assert.SequenceEqual([0x01, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00], reports[0].Report);
-    Assert.Equal(12_000, reports[1].DueTick);
-    Assert.SequenceEqual([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], reports[1].Report);
-    Assert.Equal(12_000, reports[2].DueTick);
-    Assert.SequenceEqual([0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], reports[2].Report);
-    Assert.Equal(15_000, reports[3].DueTick);
-    Assert.SequenceEqual([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], reports[3].Report);
-    Assert.Equal(15_000, reports[4].DueTick);
-    Assert.SequenceEqual([0x03, 0xE9, 0x00], reports[4].Report);
-    Assert.Equal(19_000, reports[5].DueTick);
-    Assert.SequenceEqual([0x03, 0x00, 0x00], reports[5].Report);
+    Assert.Equal(6, actions.Count);
+    Assert.Equal(10_000, actions[0].DueTick);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.LeftCtrl), actions[0].Action);
+    Assert.Equal(12_000, actions[1].DueTick);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Up, HidKey.A, HidModifier.LeftCtrl), actions[1].Action);
+    Assert.Equal(12_000, actions[2].DueTick);
+    Assert.Equal(new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Down), actions[2].Action);
+    Assert.Equal(15_000, actions[3].DueTick);
+    Assert.Equal(new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Up), actions[3].Action);
+    Assert.Equal(15_000, actions[4].DueTick);
+    Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Down), actions[4].Action);
+    Assert.Equal(19_000, actions[5].DueTick);
+    Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Up), actions[5].Action);
 }
 
-static void ReportCompilerEvaluatesPixelBranches()
+static void InputActionCompilerEvaluatesPixelBranches()
 {
     var condition = new PixelCondition(
         new PixelCoordinate(CoordinateScope.Screen, x: 5, y: 6),
@@ -182,19 +181,12 @@ static void ReportCompilerEvaluatesPixelBranches()
             ])
         ]);
 
-    var falseReports = MacroReportCompiler.Compile(document, 0, 1_000_000, _ => false);
-    var trueReports = MacroReportCompiler.Compile(document, 0, 1_000_000, _ => true);
+    var falseActions = InputActionCompiler.Compile(document, 0, 1_000_000, _ => false);
+    var trueActions = InputActionCompiler.Compile(document, 0, 1_000_000, _ => true);
 
-    Assert.Equal(0, falseReports.Count);
-    Assert.Equal(1, trueReports.Count);
-    Assert.SequenceEqual([0x01, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00], trueReports[0].Report);
-}
-
-static void ProtocolConstantsMatchDriverIoctlContract()
-{
-    Assert.Equal(0x80002004u, MacroHidProtocol.IoctlPing);
-    Assert.Equal(0x8000A008u, MacroHidProtocol.IoctlSubmitReport);
-    Assert.Equal(0x8000600Cu, MacroHidProtocol.IoctlGetStats);
+    Assert.Equal(0, falseActions.Count);
+    Assert.Equal(1, trueActions.Count);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.Enter, HidModifier.None), trueActions[0].Action);
 }
 
 static void SampleBaselineMacroRemainsParseable()
@@ -230,8 +222,10 @@ static void McrxParserCoversWheelAndConsumerSteps()
     var consumer = Assert.IsType<ConsumerStep>(document.Steps[1]);
     Assert.Equal(ConsumerControl.VolumeUp, consumer.Control);
 
-    Assert.SequenceEqual([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x02], HidReportEncoder.EncodeMouseWheel(wheel));
-    Assert.SequenceEqual([0x03, 0xE9, 0x00], HidReportEncoder.EncodeConsumer(consumer.Control));
+    var actions = InputActionCompiler.Compile(document, 0, 1_000_000);
+    Assert.Equal(new MouseWheelInputAction(-1, 2, MouseButton.None), actions[0].Action);
+    Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Down), actions[1].Action);
+    Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Up), actions[2].Action);
 }
 
 static void McrxParserCoversPlaybackHotkeySettings()
@@ -307,18 +301,38 @@ static void McrxParserRejectsInvalidPlaybackSettings()
     Assert.Throws<JsonException>(() => McrxParser.Parse(invalidTriggerJson));
 }
 
-static void HidReportEncoderCoversReports()
+static void SendInputEncoderCoversInputActions()
 {
-    var keyboard = HidReportEncoder.EncodeKeyboard(
-        new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.LeftCtrl | HidModifier.LeftShift, TimeSpan.Zero));
-    Assert.SequenceEqual([0x01, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00], keyboard);
+    var keyboard = SendInputEncoder.Encode(new KeyInputAction(
+        KeyActionKind.Down,
+        HidKey.A,
+        HidModifier.LeftCtrl | HidModifier.LeftShift));
+    Assert.Equal(3, keyboard.Count);
+    Assert.Equal(SendInputPacketKind.Keyboard, keyboard[0].Kind);
+    Assert.Equal(0xA2, keyboard[0].VirtualKey);
+    Assert.Equal(0xA0, keyboard[1].VirtualKey);
+    Assert.Equal(0x41, keyboard[2].VirtualKey);
 
-    var mouse = HidReportEncoder.EncodeMouseMove(
-        new MouseMoveStep(MouseMoveMode.Relative, 25, -10, TimeSpan.Zero, MouseButton.Left | MouseButton.X1));
-    Assert.SequenceEqual([0x02, 0x09, 0x19, 0x00, 0xF6, 0xFF, 0x00, 0x00], mouse);
+    var mouseMove = SendInputEncoder.Encode(new MouseMoveInputAction(MouseMoveMode.Relative, 25, -10, MouseButton.Left | MouseButton.X1));
+    Assert.Equal(1, mouseMove.Count);
+    Assert.Equal(SendInputPacketKind.Mouse, mouseMove[0].Kind);
+    Assert.Equal(25, mouseMove[0].MouseX);
+    Assert.Equal(-10, mouseMove[0].MouseY);
+    Assert.Equal(0x0001u, mouseMove[0].Flags);
 
-    var consumer = HidReportEncoder.EncodeConsumer(ConsumerControl.VolumeUp);
-    Assert.SequenceEqual([0x03, 0xE9, 0x00], consumer);
+    var button = SendInputEncoder.Encode(new MouseButtonInputAction(MouseButton.X1, ButtonActionKind.Down));
+    Assert.Equal(0x0080u, button[0].Flags);
+    Assert.Equal(0x0001u, button[0].MouseData);
+
+    var wheel = SendInputEncoder.Encode(new MouseWheelInputAction(-1, 2, MouseButton.None));
+    Assert.Equal(2, wheel.Count);
+    Assert.Equal(0x0800u, wheel[0].Flags);
+    Assert.Equal(unchecked((uint)-120), wheel[0].MouseData);
+    Assert.Equal(0x1000u, wheel[1].Flags);
+    Assert.Equal(240u, wheel[1].MouseData);
+
+    var consumer = SendInputEncoder.Encode(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Down));
+    Assert.Equal(0xAF, consumer[0].VirtualKey);
 }
 
 static void PixelConditionsMatchWithinTolerance()
@@ -407,13 +421,13 @@ static void PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased()
     Assert.Equal(PlaybackStatus.Idle, controller.Status);
 }
 
-static void PlaybackExecutorChecksCancellationBeforeDelayedReports()
+static void PlaybackExecutorChecksCancellationBeforeDelayedActions()
 {
     var document = new MacroDocument(
         1,
         "cancel",
         [new WaitStep(TimeSpan.FromMilliseconds(10)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
-    var sink = new RecordingReportSink();
+    var sink = new RecordingInputSink();
     using var cancellation = new CancellationTokenSource();
     var delay = new CancellingDelayStrategy(cancellation);
     var executor = new MacroPlaybackExecutor(sink, delay);
@@ -424,8 +438,7 @@ static void PlaybackExecutorChecksCancellationBeforeDelayedReports()
         cancellation.Token).GetAwaiter().GetResult();
 
     Assert.True(result.Cancelled);
-    byte[] keyDownAReport = [0x01, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00];
-    Assert.False(sink.Reports.Any(report => report.SequenceEqual(keyDownAReport)));
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
 }
 
 static void LocalizationNormalizesSupportedCultures()
@@ -442,21 +455,18 @@ static void LocalizationResourcesCoverPlaybackLabelInThreeLanguages()
     Assert.Equal("播放", LocalizationService.Get("Playback", new CultureInfo("zh-TW")));
 }
 
-static void RuntimeDiagnosticsReportDriverAvailabilityFromStats()
+static void RuntimeDiagnosticsReportSendInputAvailabilityFromStats()
 {
-    var missing = RuntimeDiagnosticsSnapshot.FromDriverStats(null);
-    Assert.False(missing.Driver.Available);
-    Assert.Contains("not found", missing.Driver.Detail);
-
-    var present = RuntimeDiagnosticsSnapshot.FromDriverStats(new MacroDriverStats(
-        ProtocolVersion: 1,
-        ReportsSubmitted: 7,
-        ReportsRejected: 2,
-        LastNtStatus: 0,
+    var present = RuntimeDiagnosticsSnapshot.FromInputStats(new InputSubmissionStats(
+        ActionsSubmitted: 7,
+        NativeInputsSubmitted: 12,
+        FailedSubmissions: 0,
+        LastWin32Error: 0,
         LastSubmitQpc: 1234));
-    Assert.True(present.Driver.Available);
-    Assert.Contains("submitted=7", present.Driver.Detail);
-    Assert.Contains("rejected=2", present.Driver.Detail);
+    Assert.True(present.InputBackend.Available);
+    Assert.Contains("SendInput", present.InputBackend.Detail);
+    Assert.Contains("actions=7", present.InputBackend.Detail);
+    Assert.Contains("nativeInputs=12", present.InputBackend.Detail);
 }
 
 static void MacroConverterIntegrationFindsSiblingPackagedExecutable()
@@ -570,22 +580,22 @@ sealed class ControlledPlaybackExecutor : IMacroPlaybackExecutor
 
     public void Complete()
     {
-        completion.TrySetResult(new PlaybackRunResult(PlaybackRunStatus.Completed, IterationsCompleted: 1, ReportsSubmitted: 0, Cancelled: false, DriverStats: null));
+        completion.TrySetResult(new PlaybackRunResult(PlaybackRunStatus.Completed, IterationsCompleted: 1, ActionsSubmitted: 0, Cancelled: false, InputStats: null));
     }
 }
 
-sealed class RecordingReportSink : IMacroReportSink
+sealed class RecordingInputSink : IMacroInputSink
 {
     public bool IsAvailable => true;
 
-    public List<byte[]> Reports { get; } = [];
+    public List<InputAction> Actions { get; } = [];
 
-    public void Submit(uint sequence, byte[] report)
+    public void Submit(uint sequence, InputAction action)
     {
-        Reports.Add(report.ToArray());
+        Actions.Add(action);
     }
 
-    public MacroDriverStats? GetStats()
+    public InputSubmissionStats? GetStats()
     {
         return null;
     }

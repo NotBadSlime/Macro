@@ -6,20 +6,20 @@ public sealed record RuntimeDiagnosticItem(bool Available, string Detail);
 
 public sealed record RuntimeDiagnosticsSnapshot(
     RuntimeDiagnosticItem PixelSampler,
-    RuntimeDiagnosticItem Driver)
+    RuntimeDiagnosticItem InputBackend)
 {
     public static RuntimeDiagnosticsSnapshot Collect()
     {
         return new RuntimeDiagnosticsSnapshot(
             PixelSampler: ProbePixelSampler(),
-            Driver: ProbeDriver());
+            InputBackend: ProbeInputBackend());
     }
 
-    public static RuntimeDiagnosticsSnapshot FromDriverStats(MacroDriverStats? stats)
+    public static RuntimeDiagnosticsSnapshot FromInputStats(InputSubmissionStats? stats)
     {
         return new RuntimeDiagnosticsSnapshot(
             PixelSampler: new RuntimeDiagnosticItem(true, "visible desktop sampler ready"),
-            Driver: CreateDriverItem(stats));
+            InputBackend: CreateInputBackendItem(stats));
     }
 
     private static RuntimeDiagnosticItem ProbePixelSampler()
@@ -36,25 +36,19 @@ public sealed record RuntimeDiagnosticsSnapshot(
         }
     }
 
-    private static RuntimeDiagnosticItem ProbeDriver()
+    private static RuntimeDiagnosticItem ProbeInputBackend()
     {
-        try
-        {
-            using var sink = DriverMacroReportSink.OpenFirst();
-            return CreateDriverItem(sink?.GetStats());
-        }
-        catch (Exception ex)
-        {
-            return new RuntimeDiagnosticItem(false, $"MacroHID driver error: {ex.Message}");
-        }
+        return OperatingSystem.IsWindows()
+            ? new RuntimeDiagnosticItem(true, "SendInput ready")
+            : new RuntimeDiagnosticItem(false, "SendInput is only available on Windows");
     }
 
-    private static RuntimeDiagnosticItem CreateDriverItem(MacroDriverStats? stats)
+    private static RuntimeDiagnosticItem CreateInputBackendItem(InputSubmissionStats? stats)
     {
         return stats is null
-            ? new RuntimeDiagnosticItem(false, "MacroHID device not found")
+            ? ProbeInputBackend()
             : new RuntimeDiagnosticItem(
                 true,
-                $"protocol={stats.ProtocolVersion} submitted={stats.ReportsSubmitted} rejected={stats.ReportsRejected} lastStatus=0x{stats.LastNtStatus:X8}");
+                $"SendInput actions={stats.ActionsSubmitted} nativeInputs={stats.NativeInputsSubmitted} failures={stats.FailedSubmissions} lastError={stats.LastWin32Error}");
     }
 }

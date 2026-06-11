@@ -42,12 +42,12 @@ public partial class MainWindow : Window
 
     private GlobalKeyboardHook? keyboardHook;
     private MacroPlaybackController? playbackController;
-    private DriverMacroReportSink? activeSink;
+    private readonly SendInputMacroSink inputSink = new();
     private bool listening;
     private bool capturingTrigger;
     private bool updatingLanguageComboBox;
     private MacroConverterStatus? converterStatus;
-    private string? statusResourceKey = "DriverOffline";
+    private string? statusResourceKey = "InputBackendReady";
     private string? statusPlainText;
     private object[] statusArgs = [];
     private string playbackStatusResourceKey = "PlaybackStatusIdle";
@@ -267,7 +267,7 @@ public partial class MainWindow : Window
 
             var actual = stopwatch.ElapsedTicks;
             histogram.RecordMicroseconds(Math.Abs(actual - nextTick) * 1_000_000 / Stopwatch.Frequency);
-            _ = HidReportEncoder.EncodeKeyboard(new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.Zero));
+            _ = SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None));
             nextTick += intervalTicks;
         }
 
@@ -329,7 +329,7 @@ public partial class MainWindow : Window
     {
         var diagnostics = RuntimeDiagnosticsSnapshot.Collect();
         PixelText.Text = LF("PixelSamplerStatus", diagnostics.PixelSampler.Detail);
-        DriverText.Text = LF("HidTransportStatus", diagnostics.Driver.Detail);
+        InputBackendText.Text = LF("InputBackendStatus", diagnostics.InputBackend.Detail);
         converterStatus = MacroConverterIntegration.Probe();
         RefreshConverterStatus();
     }
@@ -390,22 +390,13 @@ public partial class MainWindow : Window
                 throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
             }
 
-            activeSink?.Dispose();
-            activeSink = DriverMacroReportSink.OpenFirst();
-            if (activeSink is null)
-            {
-                SetPlaybackStatusResource("PlaybackStatusDriverMissing");
-                SetPlaybackResultResource("InstallDriverBeforeInput");
-                return;
-            }
-
             keyboardHook?.Dispose();
             keyboardHook = new GlobalKeyboardHook();
             keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
             keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
             keyboardHook.Start(document.Playback.Trigger);
 
-            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(activeSink));
+            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink));
             listening = true;
             SetPlaybackStatusResource("PlaybackStatusListeningWithTrigger", document.Playback.Trigger);
             SetPlaybackResultResource("HotkeyListenerStarted");
@@ -436,16 +427,7 @@ public partial class MainWindow : Window
         try
         {
             var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
-            activeSink?.Dispose();
-            activeSink = DriverMacroReportSink.OpenFirst();
-            if (activeSink is null)
-            {
-                SetPlaybackStatusResource("PlaybackStatusDriverMissing");
-                SetPlaybackResultResource("InstallDriverBeforeInput");
-                return;
-            }
-
-            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(activeSink));
+            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink));
             await playbackController.RunNowAsync();
             UpdatePlaybackStatus();
             _ = WatchPlaybackAsync(playbackController);
@@ -478,7 +460,6 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         keyboardHook?.Dispose();
-        activeSink?.Dispose();
         base.OnClosed(e);
     }
 
@@ -518,7 +499,7 @@ public partial class MainWindow : Window
             await Dispatcher.InvokeAsync(() =>
             {
                 SetPlaybackStatusResource(listening ? "PlaybackStatusListening" : PlaybackStatusResourceKey(controller.Status));
-                SetPlaybackResultResource("LastResultRunSummary", result.IterationsCompleted, result.ReportsSubmitted, result.Cancelled);
+                SetPlaybackResultResource("LastResultRunSummary", result.IterationsCompleted, result.ActionsSubmitted, result.Cancelled);
                 SetStatusResource(listening ? "Listening" : "Idle");
             });
         }
@@ -635,7 +616,7 @@ public partial class MainWindow : Window
             PlaybackStatus.Listening => "PlaybackStatusListening",
             PlaybackStatus.Running => "PlaybackStatusRunning",
             PlaybackStatus.Stopping => "PlaybackStatusStopping",
-            PlaybackStatus.DriverMissing => "PlaybackStatusDriverMissing",
+            PlaybackStatus.InputUnavailable => "PlaybackStatusInputUnavailable",
             PlaybackStatus.Error => "PlaybackStatusError",
             _ => "PlaybackStatusFormat"
         };

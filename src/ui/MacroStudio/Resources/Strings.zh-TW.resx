@@ -13,7 +13,7 @@
   <data name="Save" xml:space="preserve"><value>儲存</value></data>
   <data name="Validate" xml:space="preserve"><value>驗證</value></data>
   <data name="Probe" xml:space="preserve"><value>探測</value></data>
-  <data name="DriverOffline" xml:space="preserve"><value>驅動離線</value></data>
+  <data name="InputBackendReady" xml:space="preserve"><value>輸入後端就緒</value></data>
   <data name="Macro" xml:space="preserve"><value>巨集</value></data>
   <data name="Name" xml:space="preserve"><value>名稱</value></data>
   <data name="ScheduledSteps" xml:space="preserve"><value>排程步驟</value></data>
@@ -35,18 +35,17 @@
   <data name="PlaybackStatusRunning" xml:space="preserve"><value>播放：執行中</value></data>
   <data name="PlaybackStatusStopping" xml:space="preserve"><value>播放：停止中</value></data>
   <data name="PlaybackStatusFormat" xml:space="preserve"><value>播放：{0}</value></data>
-  <data name="PlaybackStatusDriverMissing" xml:space="preserve"><value>播放：缺少驅動</value></data>
+  <data name="PlaybackStatusInputUnavailable" xml:space="preserve"><value>播放：輸入後端不可用</value></data>
   <data name="PlaybackStatusError" xml:space="preserve"><value>播放：錯誤</value></data>
   <data name="LastResultNone" xml:space="preserve"><value>上次結果：無</value></data>
   <data name="LastResultPressTrigger" xml:space="preserve"><value>上次結果：請按觸發鍵或組合鍵</value></data>
   <data name="LastResultUnsupportedTriggerKey" xml:space="preserve"><value>上次結果：不支援的觸發鍵「{0}」</value></data>
   <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次結果：已擷取 {0}</value></data>
   <data name="ChooseTriggerBeforeListening" xml:space="preserve"><value>開始監聽前請選擇觸發鍵。</value></data>
-  <data name="InstallDriverBeforeInput" xml:space="preserve"><value>上次結果：傳送輸入前請先安裝 MacroHID 測試驅動</value></data>
   <data name="HotkeyListenerStarted" xml:space="preserve"><value>上次結果：熱鍵監聽已啟動</value></data>
   <data name="HotkeyListenerStopped" xml:space="preserve"><value>上次結果：熱鍵監聽已停止</value></data>
   <data name="LastResultMessage" xml:space="preserve"><value>上次結果：{0}</value></data>
-  <data name="LastResultRunSummary" xml:space="preserve"><value>上次結果：迭代={0} 報告={1} 已取消={2}</value></data>
+  <data name="LastResultRunSummary" xml:space="preserve"><value>上次結果：迭代={0} 動作={1} 已取消={2}</value></data>
   <data name="PlaybackCountWholeNumber" xml:space="preserve"><value>播放次數必須是整數。</value></data>
   <data name="PlaybackCountAtLeastOne" xml:space="preserve"><value>播放次數至少為 1。</value></data>
   <data name="Sequence" xml:space="preserve"><value>序列</value></data>
@@ -57,9 +56,9 @@
   <data name="ConverterStatusUnavailable" xml:space="preserve"><value>MacroConverter：未找到</value></data>
   <data name="ConverterOpenFailed" xml:space="preserve"><value>無法開啟 MacroConverter：{0}</value></data>
   <data name="PixelSamplerPending" xml:space="preserve"><value>像素取樣器：DXGI 後端待實作</value></data>
-  <data name="HidTransportPending" xml:space="preserve"><value>HID 傳輸：VHF 後端待連接</value></data>
+  <data name="InputBackendPending" xml:space="preserve"><value>輸入後端：SendInput 待就緒</value></data>
   <data name="PixelSamplerStatus" xml:space="preserve"><value>像素取樣器：{0}</value></data>
-  <data name="HidTransportStatus" xml:space="preserve"><value>HID 傳輸：{0}</value></data>
+  <data name="InputBackendStatus" xml:space="preserve"><value>輸入後端：{0}</value></data>
   <data name="MacroValid" xml:space="preserve"><value>巨集有效</value></data>
   <data name="MacroInvalid" xml:space="preserve"><value>巨集無效</value></data>
   <data name="PlaybackError" xml:space="preserve"><value>播放錯誤</value></data>

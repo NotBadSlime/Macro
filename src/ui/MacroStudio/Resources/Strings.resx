@@ -39,8 +39,8 @@
   <data name="Probe" xml:space="preserve">
     <value>Probe</value>
   </data>
-  <data name="DriverOffline" xml:space="preserve">
-    <value>Driver offline</value>
+  <data name="InputBackendReady" xml:space="preserve">
+    <value>Input backend ready</value>
   </data>
   <data name="Macro" xml:space="preserve">
     <value>Macro</value>
@@ -105,8 +105,8 @@
   <data name="PlaybackStatusFormat" xml:space="preserve">
     <value>Playback: {0}</value>
   </data>
-  <data name="PlaybackStatusDriverMissing" xml:space="preserve">
-    <value>Playback: Driver missing</value>
+  <data name="PlaybackStatusInputUnavailable" xml:space="preserve">
+    <value>Playback: Input backend unavailable</value>
   </data>
   <data name="PlaybackStatusError" xml:space="preserve">
     <value>Playback: Error</value>
@@ -126,9 +126,6 @@
   <data name="ChooseTriggerBeforeListening" xml:space="preserve">
     <value>Choose a trigger before listening.</value>
   </data>
-  <data name="InstallDriverBeforeInput" xml:space="preserve">
-    <value>Last result: install the MacroHID test driver before sending input</value>
-  </data>
   <data name="HotkeyListenerStarted" xml:space="preserve">
     <value>Last result: hotkey listener started</value>
   </data>
@@ -139,7 +136,7 @@
     <value>Last result: {0}</value>
   </data>
   <data name="LastResultRunSummary" xml:space="preserve">
-    <value>Last result: iterations={0} reports={1} cancelled={2}</value>
+    <value>Last result: iterations={0} actions={1} cancelled={2}</value>
   </data>
   <data name="PlaybackCountWholeNumber" xml:space="preserve">
     <value>Playback count must be a whole number.</value>
@@ -171,14 +168,14 @@
   <data name="PixelSamplerPending" xml:space="preserve">
     <value>Pixel sampler: DXGI backend pending</value>
   </data>
-  <data name="HidTransportPending" xml:space="preserve">
-    <value>HID transport: VHF backend pending</value>
+  <data name="InputBackendPending" xml:space="preserve">
+    <value>Input backend: SendInput pending</value>
   </data>
   <data name="PixelSamplerStatus" xml:space="preserve">
     <value>Pixel sampler: {0}</value>
   </data>
-  <data name="HidTransportStatus" xml:space="preserve">
-    <value>HID transport: {0}</value>
+  <data name="InputBackendStatus" xml:space="preserve">
+    <value>Input backend: {0}</value>
   </data>
   <data name="MacroValid" xml:space="preserve">
     <value>Macro valid</value>

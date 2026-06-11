@@ -13,9 +13,8 @@ The script publishes:
 - `MacroStudio`
 - `MacroRunner`
 - `LatencyProbe`
-- `MacroEngineService`
-- the test-signed MacroHID driver package
 - scripts, samples, and documentation
+- bundled `MacroConverter` when `..\MacroConverter\dist\MacroConverter-win32-x64` exists
 
 The installer is written to:
 
@@ -31,50 +30,14 @@ For development verification without creating or installing the setup package, u
 
 This creates `artifacts\local-run\MacroStudio\MacroStudio.exe` as a framework-dependent executable that uses the installed .NET 8 runtime.
 
-## Driver Option
+## Runtime Behavior
 
-The installer can be used without installing the driver. This is useful for editing macros, validating `.mcrx` files, running dry-runs, and inspecting diagnostics on machines that are not configured for test drivers.
+MacroHID is pure user-mode and submits input through Windows `SendInput`.
 
-Installing the driver enables the real MacroHID path:
+- No driver is installed.
+- No Windows test-signing mode is required.
+- Secure Boot does not need to be changed.
+- `MacroRunner --send` submits input directly through SendInput.
+- Diagnostics show the visible-desktop pixel sampler, SendInput backend, and MacroConverter status.
 
-- virtual HID keyboard reports
-- virtual HID mouse movement, buttons, and wheels
-- consumer-control/media reports
-- `MacroRunner --send`
-- driver submit/reject statistics
-- end-to-end latency measurements that include driver submission
-
-Without the driver:
-
-- `MacroStudio` still opens
-- `MacroRunner` dry-run still prints scheduled HID reports
-- `LatencyProbe` still measures user-mode scheduling
-- no real virtual HID input is submitted
-- `MacroRunner --send` fails with "MacroHID device not found"
-
-## Test Driver Requirements
-
-The current driver package is for development and test only. Installing it requires:
-
-- Administrator rights
-- Windows test-signing mode
-- Secure Boot disabled if Windows blocks test-signing mode
-
-For a production release, the driver must go through the Microsoft driver signing process. The installer can carry the production-signed package later without changing the app packaging model.
-
-## Driver Install Shortcut
-
-Use the Start menu shortcut named `Install MacroHID test driver` when installing the development driver after setup. The shortcut runs an interactive wrapper that:
-
-- asks for Administrator rights when needed
-- keeps the PowerShell window open on success or failure
-- writes a log under `C:\ProgramData\MacroHID\logs`
-- explains common test-signing and Secure Boot failures
-
-If the optional driver install step is selected on the last installer page, the same interactive wrapper is used. If Windows reports that the test-signing value is protected by Secure Boot policy, disable Secure Boot in UEFI/BIOS, boot Windows again, run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Program Files\MacroHID\scripts\Install-TestDriverInteractive.ps1" -EnableTestSigning -SkipBuild
-```
-
-Then reboot and run the Start menu shortcut again.
+To control an elevated/admin application, run MacroStudio or MacroRunner as Administrator so both processes are at the same integrity level. Secure desktop, UAC prompts, protected processes, and anti-cheat protected contexts are intentionally out of scope.

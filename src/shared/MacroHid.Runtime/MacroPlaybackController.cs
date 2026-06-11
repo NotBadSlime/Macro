@@ -8,14 +8,14 @@ public enum PlaybackStatus
     Listening,
     Running,
     Stopping,
-    DriverMissing,
+    InputUnavailable,
     Error
 }
 
 public enum PlaybackRunStatus
 {
     Completed,
-    DriverMissing,
+    InputUnavailable,
     Failed
 }
 
@@ -35,9 +35,9 @@ public sealed record PlaybackExecutionOptions(
 public sealed record PlaybackRunResult(
     PlaybackRunStatus Status,
     int IterationsCompleted,
-    int ReportsSubmitted,
+    int ActionsSubmitted,
     bool Cancelled,
-    MacroDriverStats? DriverStats);
+    InputSubmissionStats? InputStats);
 
 public interface IMacroPlaybackExecutor
 {
@@ -115,7 +115,7 @@ public sealed class MacroPlaybackController
     {
         lock (gate)
         {
-            return activeRun ?? Task.FromResult(new PlaybackRunResult(PlaybackRunStatus.Completed, 0, 0, Cancelled: false, DriverStats: null));
+            return activeRun ?? Task.FromResult(new PlaybackRunResult(PlaybackRunStatus.Completed, 0, 0, Cancelled: false, InputStats: null));
         }
     }
 
@@ -141,8 +141,8 @@ public sealed class MacroPlaybackController
             var result = await executor.RunAsync(document, options, cancellation.Token).ConfigureAwait(false);
             lock (gate)
             {
-                Status = result.Status == PlaybackRunStatus.DriverMissing
-                    ? PlaybackStatus.DriverMissing
+                Status = result.Status == PlaybackRunStatus.InputUnavailable
+                    ? PlaybackStatus.InputUnavailable
                     : PlaybackStatus.Idle;
                 activeCancellation = null;
             }

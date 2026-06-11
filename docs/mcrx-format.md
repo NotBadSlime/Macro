@@ -43,7 +43,7 @@
 { "type": "key.up", "key": "Enter" }
 ```
 
-`key` names map to HID Usage Page 0x07, including letters, numbers, function keys, navigation keys, keypad keys, international keys, language keys, and modifiers.
+`key` names use MacroHID's stable key names and are translated to Win32 input codes for the SendInput backend. Common letters, numbers, function keys, navigation keys, keypad keys, and modifiers are supported. Keys without a Win32 virtual-key equivalent are rejected at playback time with a clear error.
 
 ### Mouse
 
@@ -55,7 +55,7 @@
 { "type": "mouse.wheel", "vertical": -1, "horizontal": 0 }
 ```
 
-Mouse buttons cover `Left`, `Right`, `Middle`, `X1`, `X2`, `Button6`, `Button7`, and `Button8`.
+Mouse buttons cover `Left`, `Right`, `Middle`, `X1`, and `X2` through SendInput. `Button6`, `Button7`, and `Button8` remain parseable for format compatibility, but the SendInput backend rejects them because Windows does not expose those buttons through `SendInput`.
 
 ### Consumer Control
 
@@ -96,4 +96,4 @@ Mouse buttons cover `Left`, `Right`, `Middle`, `X1`, `X2`, `Button6`, `Button7`,
 }
 ```
 
-`scope` supports `screen` and `window`. First-phase parsing and scheduling are implemented; the DXGI sampler backend is the next native runtime component.
+`scope` supports `screen` and `window`. Runtime sampling uses visible desktop pixels; if a target window is covered, the sampled color is the visible desktop color at that coordinate.

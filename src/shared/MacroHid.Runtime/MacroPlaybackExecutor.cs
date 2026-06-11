@@ -48,27 +48,27 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
     }
 }
 
-public interface IMacroReportSink
+public interface IMacroInputSink
 {
     bool IsAvailable { get; }
 
-    void Submit(uint sequence, byte[] report);
+    void Submit(uint sequence, InputAction action);
 
-    MacroDriverStats? GetStats();
+    InputSubmissionStats? GetStats();
 }
 
 public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
 {
-    private readonly IMacroReportSink reportSink;
+    private readonly IMacroInputSink inputSink;
     private readonly IPlaybackDelayStrategy delayStrategy;
     private readonly Func<PixelCondition, bool> livePixelEvaluator;
 
     public MacroPlaybackExecutor(
-        IMacroReportSink reportSink,
+        IMacroInputSink inputSink,
         IPlaybackDelayStrategy? delayStrategy = null,
         Func<PixelCondition, bool>? livePixelEvaluator = null)
     {
-        this.reportSink = reportSink;
+        this.inputSink = inputSink;
         this.delayStrategy = delayStrategy ?? new QpcPlaybackDelayStrategy();
         this.livePixelEvaluator = livePixelEvaluator ?? ScreenPixelSampler.Matches;
     }
@@ -91,15 +91,15 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
             throw new ArgumentOutOfRangeException(nameof(options), "Playback count must be at least 1.");
         }
 
-        if (!reportSink.IsAvailable)
+        if (!inputSink.IsAvailable)
         {
-            return new PlaybackRunResult(PlaybackRunStatus.DriverMissing, 0, 0, Cancelled: false, DriverStats: null);
+            return new PlaybackRunResult(PlaybackRunStatus.InputUnavailable, 0, 0, Cancelled: false, InputStats: null);
         }
 
         RuntimeNativeMethods.QueryPerformanceFrequency(out var qpcFrequency);
         var iterationsTarget = options.Mode == PlaybackMode.FixedCount ? options.Count : int.MaxValue;
         var iterationsCompleted = 0;
-        var reportsSubmitted = 0;
+        var actionsSubmitted = 0;
         var sequence = 1u;
 
         try
@@ -107,20 +107,20 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
             while (iterationsCompleted < iterationsTarget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var reports = MacroReportCompiler.Compile(
+                var actions = InputActionCompiler.Compile(
                     document,
                     startTick: 0,
                     qpcFrequency,
                     GetPixelEvaluator(options.PixelMode));
                 RuntimeNativeMethods.QueryPerformanceCounter(out var iterationStartTick);
 
-                foreach (var report in reports)
+                foreach (var action in actions)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    delayStrategy.WaitUntil(iterationStartTick + report.DueTick, qpcFrequency, cancellationToken, options.NoWait);
+                    delayStrategy.WaitUntil(iterationStartTick + action.DueTick, qpcFrequency, cancellationToken, options.NoWait);
                     cancellationToken.ThrowIfCancellationRequested();
-                    reportSink.Submit(sequence++, report.Report);
-                    reportsSubmitted++;
+                    inputSink.Submit(sequence++, action.Action);
+                    actionsSubmitted++;
                 }
 
                 iterationsCompleted++;
@@ -129,19 +129,19 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
             return new PlaybackRunResult(
                 PlaybackRunStatus.Completed,
                 iterationsCompleted,
-                reportsSubmitted,
+                actionsSubmitted,
                 Cancelled: false,
-                reportSink.GetStats());
+                inputSink.GetStats());
         }
         catch (OperationCanceledException)
         {
-            SubmitSafeReleaseReports(ref sequence, ref reportsSubmitted);
+            SubmitSafeReleaseActions(ref sequence, ref actionsSubmitted);
             return new PlaybackRunResult(
                 PlaybackRunStatus.Completed,
                 iterationsCompleted,
-                reportsSubmitted,
+                actionsSubmitted,
                 Cancelled: true,
-                reportSink.GetStats());
+                inputSink.GetStats());
         }
     }
 
@@ -156,19 +156,35 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor
         };
     }
 
-    private void SubmitSafeReleaseReports(ref uint sequence, ref int reportsSubmitted)
+    private void SubmitSafeReleaseActions(ref uint sequence, ref int actionsSubmitted)
     {
-        foreach (var report in SafeReleaseReports())
+        foreach (var action in SafeReleaseActions())
         {
-            reportSink.Submit(sequence++, report);
-            reportsSubmitted++;
+            inputSink.Submit(sequence++, action);
+            actionsSubmitted++;
         }
     }
 
-    private static IEnumerable<byte[]> SafeReleaseReports()
+    private static IEnumerable<InputAction> SafeReleaseActions()
     {
-        yield return [HidReportEncoder.KeyboardReportId, 0, 0, 0, 0, 0, 0, 0, 0];
-        yield return [HidReportEncoder.MouseReportId, 0, 0, 0, 0, 0, 0, 0];
-        yield return [HidReportEncoder.ConsumerReportId, 0, 0];
+        yield return new KeyInputAction(
+            KeyActionKind.Up,
+            HidKey.None,
+            HidModifier.LeftCtrl
+                | HidModifier.LeftShift
+                | HidModifier.LeftAlt
+                | HidModifier.LeftGui
+                | HidModifier.RightCtrl
+                | HidModifier.RightShift
+                | HidModifier.RightAlt
+                | HidModifier.RightGui);
+        yield return new MouseButtonInputAction(
+            MouseButton.Left | MouseButton.Right | MouseButton.Middle | MouseButton.X1 | MouseButton.X2,
+            ButtonActionKind.Up);
+
+        foreach (var control in Enum.GetValues<ConsumerControl>())
+        {
+            yield return new ConsumerInputAction(control, ButtonActionKind.Up);
+        }
     }
 }

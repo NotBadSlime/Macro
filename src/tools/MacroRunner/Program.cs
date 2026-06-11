@@ -37,15 +37,15 @@ Func<PixelCondition, bool> pixelEvaluator = options.PixelMode switch
     PixelEvaluationMode.Live => ScreenPixelSampler.Matches,
     _ => throw new InvalidOperationException($"Unsupported pixel mode '{options.PixelMode}'.")
 };
-var reports = MacroReportCompiler.Compile(macro, startTick: 0, Stopwatch.Frequency, pixelEvaluator);
+var actions = InputActionCompiler.Compile(macro, startTick: 0, Stopwatch.Frequency, pixelEvaluator);
 
 Console.WriteLine("MacroHID MacroRunner");
 Console.WriteLine($"macro=\"{macro.Name}\" path=\"{Path.GetFullPath(options.MacroPath)}\"");
-Console.WriteLine($"reports={reports.Count} pixelMode={options.PixelMode} send={options.Send}");
+Console.WriteLine($"actions={actions.Count} pixelMode={options.PixelMode} send={options.Send}");
 
 if (options.DryRun)
 {
-    PrintDryRun(reports, Stopwatch.Frequency);
+    PrintDryRun(actions, Stopwatch.Frequency);
 }
 
 if (!options.Send)
@@ -63,13 +63,6 @@ catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
     Console.Error.WriteLine($"Warning: failed to raise priority: {ex.Message}");
 }
 
-using var driverSink = DriverMacroReportSink.OpenFirst();
-if (driverSink is null)
-{
-    Console.Error.WriteLine("MacroHID device not found. Install the test-signed driver before using --send.");
-    return 2;
-}
-
 using var cancellation = new CancellationTokenSource();
 Console.CancelKeyPress += (_, eventArgs) =>
 {
@@ -77,43 +70,56 @@ Console.CancelKeyPress += (_, eventArgs) =>
     cancellation.Cancel();
 };
 
-var executor = new MacroPlaybackExecutor(driverSink);
+var executor = new MacroPlaybackExecutor(new SendInputMacroSink());
 var runResult = await executor.RunAsync(
     macro,
     new PlaybackExecutionOptions(PlaybackMode.FixedCount, Count: 1, options.PixelMode, options.NoWait),
     cancellation.Token);
 
-if (runResult.Status == PlaybackRunStatus.DriverMissing)
+if (runResult.Status == PlaybackRunStatus.InputUnavailable)
 {
-    Console.Error.WriteLine("MacroHID device not found. Install the test-signed driver before using --send.");
+    Console.Error.WriteLine("SendInput backend is unavailable on this system.");
     return 2;
 }
 
-if (runResult.DriverStats is not null)
+if (runResult.InputStats is not null)
 {
     Console.WriteLine(
         string.Create(
             CultureInfo.InvariantCulture,
-            $"driverReportsSubmitted={runResult.DriverStats.ReportsSubmitted} driverReportsRejected={runResult.DriverStats.ReportsRejected} lastStatus=0x{runResult.DriverStats.LastNtStatus:X8}"));
+            $"inputActionsSubmitted={runResult.InputStats.ActionsSubmitted} nativeInputsSubmitted={runResult.InputStats.NativeInputsSubmitted} failures={runResult.InputStats.FailedSubmissions} lastError={runResult.InputStats.LastWin32Error}"));
 }
 
 Console.WriteLine(
     string.Create(
         CultureInfo.InvariantCulture,
-        $"execution iterations={runResult.IterationsCompleted} reports={runResult.ReportsSubmitted} cancelled={runResult.Cancelled}"));
+        $"execution iterations={runResult.IterationsCompleted} actions={runResult.ActionsSubmitted} cancelled={runResult.Cancelled}"));
 return runResult.Cancelled ? 130 : 0;
 
-static void PrintDryRun(IReadOnlyList<ScheduledHidReport> reports, long qpcFrequency)
+static void PrintDryRun(IReadOnlyList<ScheduledInputAction> actions, long qpcFrequency)
 {
-    for (var i = 0; i < reports.Count; i++)
+    for (var i = 0; i < actions.Count; i++)
     {
-        var report = reports[i];
-        var dueUs = ToMicroseconds(report.DueTick, qpcFrequency);
+        var action = actions[i];
+        var dueUs = ToMicroseconds(action.DueTick, qpcFrequency);
         Console.WriteLine(
             string.Create(
                 CultureInfo.InvariantCulture,
-                $"#{i + 1:000000} due={dueUs}us id=0x{report.ReportId:X2} bytes={Convert.ToHexString(report.Report)}"));
+                $"#{i + 1:000000} due={dueUs}us action=\"{DescribeAction(action.Action)}\""));
     }
+}
+
+static string DescribeAction(InputAction action)
+{
+    return action switch
+    {
+        KeyInputAction key => $"key.{key.Kind} key={key.Key} modifiers={key.Modifiers}",
+        MouseMoveInputAction move => $"mouse.move mode={move.Mode} x={move.X} y={move.Y} buttons={move.Buttons}",
+        MouseButtonInputAction button => $"mouse.button {button.Kind} button={button.Button}",
+        MouseWheelInputAction wheel => $"mouse.wheel vertical={wheel.Vertical} horizontal={wheel.Horizontal}",
+        ConsumerInputAction consumer => $"consumer.{consumer.Kind} control={consumer.Control}",
+        _ => action.GetType().Name
+    };
 }
 
 static long ToMicroseconds(long ticks, long qpcFrequency)
@@ -200,7 +206,7 @@ internal sealed record RunnerOptions(
             Defaults:
               --dry-run is enabled.
               --pixels skip keeps pixel.when branches deterministic unless live sampling is requested.
-              --send submits reports to the MacroHID driver after opening the device and pinging it.
+              --send submits input through the Windows SendInput backend.
               Press Ctrl+C while --send is running to request cancellation.
             """);
     }

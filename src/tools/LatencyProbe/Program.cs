@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MacroHid.Core;
+using MacroHid.Runtime;
 
 var iterations = ParseInt(args, "--iterations", 2_000);
 var intervalUs = ParseInt(args, "--interval-us", 1_000);
@@ -27,8 +28,8 @@ for (var i = -warmup; i < iterations; i++)
         histogram.RecordMicroseconds(deltaUs);
     }
 
-    // Exercise report encoding in the hot path so the probe resembles service submission work.
-    _ = HidReportEncoder.EncodeKeyboard(new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.Zero));
+    // Exercise SendInput encoding in the hot path so the probe resembles local submission work.
+    _ = SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None));
     nextTick += intervalTicks;
 }
 

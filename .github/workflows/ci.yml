@@ -2,9 +2,6 @@ name: Build
 
 on:
   push:
-    branches:
-      - main
-      - master
   pull_request:
   workflow_dispatch:
 
@@ -55,84 +52,6 @@ jobs:
           name: MacroHID-dotnet-${{ github.sha }}
           path: artifacts
 
-  native:
-    name: Native service and VHF driver
-    runs-on: windows-2022
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-        with:
-          msbuild-architecture: x64
-
-      - name: Ensure WDK and driver build tools
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $wdkBuild = "${env:ProgramFiles(x86)}\Windows Kits\10\build\10.0.26100.0"
-          if (-not (Test-Path $wdkBuild)) {
-            winget install --id Microsoft.WindowsWDK.10.0.26100 --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-          }
-
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-          if (-not $vsPath) {
-            throw "Visual Studio with MSBuild was not found."
-          }
-
-          $driverToolset = Join-Path $vsPath 'MSBuild\Microsoft\VC\v170\Platforms\x64\PlatformToolsets\WindowsKernelModeDriver10.0'
-          if (-not (Test-Path $driverToolset)) {
-            $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-            & $setup modify --installPath $vsPath --add Component.Microsoft.Windows.DriverKit.BuildTools --quiet --norestart --nocache
-            if ($LASTEXITCODE -ne 0) {
-              throw "Visual Studio DriverKit BuildTools install failed with exit code $LASTEXITCODE."
-            }
-          }
-
-          $spectreLibs = Get-ChildItem (Join-Path $vsPath 'VC\Tools\MSVC') -Directory -ErrorAction SilentlyContinue |
-            Where-Object { Test-Path (Join-Path $_.FullName 'lib\spectre\x64\vcruntime.lib') }
-          if (-not $spectreLibs) {
-            $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-            & $setup modify --installPath $vsPath --add Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64.Spectre --quiet --norestart --nocache
-            if ($LASTEXITCODE -ne 0) {
-              throw "Visual Studio Spectre libraries install failed with exit code $LASTEXITCODE."
-            }
-          }
-
-          if (-not (Test-Path $wdkBuild)) {
-            throw "WDK build folder was not found at $wdkBuild."
-          }
-          if (-not (Test-Path $driverToolset)) {
-            throw "WindowsKernelModeDriver10.0 toolset was not found at $driverToolset."
-          }
-
-      - name: Show Visual Studio environment
-        shell: pwsh
-        run: |
-          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-          msbuild -version
-
-      - name: Build native service
-        run: msbuild src\service\MacroEngineService\MacroEngineService.vcxproj /m /p:Configuration=Release /p:Platform=x64
-
-      - name: Build VHF driver
-        run: msbuild src\driver\MacroHidDriver\MacroHidDriver.vcxproj /m /p:Configuration=Release /p:Platform=x64
-
-      - name: Upload native artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: MacroHID-native-${{ github.sha }}
-          if-no-files-found: warn
-          path: |
-            src\service\MacroEngineService\x64\Release\*.exe
-            src\driver\MacroHidDriver\x64\Release\*.sys
-            src\driver\MacroHidDriver\x64\Release\*.inf
-            src\driver\MacroHidDriver\x64\Release\*.cat
-
   installer:
     name: Inno Setup installer
     runs-on: windows-2022
@@ -145,45 +64,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-        with:
-          msbuild-architecture: x64
-
-      - name: Ensure WDK and driver build tools
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $wdkBuild = "${env:ProgramFiles(x86)}\Windows Kits\10\build\10.0.26100.0"
-          if (-not (Test-Path $wdkBuild)) {
-            winget install --id Microsoft.WindowsWDK.10.0.26100 --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-          }
-
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-          if (-not $vsPath) {
-            throw "Visual Studio with MSBuild was not found."
-          }
-
-          $driverToolset = Join-Path $vsPath 'MSBuild\Microsoft\VC\v170\Platforms\x64\PlatformToolsets\WindowsKernelModeDriver10.0'
-          if (-not (Test-Path $driverToolset)) {
-            $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-            & $setup modify --installPath $vsPath --add Component.Microsoft.Windows.DriverKit.BuildTools --quiet --norestart --nocache
-            if ($LASTEXITCODE -ne 0) {
-              throw "Visual Studio DriverKit BuildTools install failed with exit code $LASTEXITCODE."
-            }
-          }
-
-          $spectreLibs = Get-ChildItem (Join-Path $vsPath 'VC\Tools\MSVC') -Directory -ErrorAction SilentlyContinue |
-            Where-Object { Test-Path (Join-Path $_.FullName 'lib\spectre\x64\vcruntime.lib') }
-          if (-not $spectreLibs) {
-            $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-            & $setup modify --installPath $vsPath --add Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64.Spectre --quiet --norestart --nocache
-            if ($LASTEXITCODE -ne 0) {
-              throw "Visual Studio Spectre libraries install failed with exit code $LASTEXITCODE."
-            }
-          }
 
       - name: Ensure Inno Setup
         shell: pwsh
