@@ -8,10 +8,38 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$vsDevCmd = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
 
-if (-not (Test-Path $vsDevCmd)) {
-    throw "VsDevCmd.bat was not found at $vsDevCmd. Install Visual Studio 2022 Build Tools with C++ and WDK build tools."
+function Find-VsDevCmd {
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswhere) {
+        $installationPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+        if ($installationPath) {
+            $candidate = Join-Path $installationPath "Common7\Tools\VsDevCmd.bat"
+            if (Test-Path $candidate) {
+                return (Resolve-Path $candidate).Path
+            }
+        }
+    }
+
+    $fallbacks = @(
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat",
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat",
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\Common7\Tools\VsDevCmd.bat",
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+    )
+
+    foreach ($candidate in $fallbacks) {
+        if ($candidate -and (Test-Path $candidate)) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+
+    return $null
+}
+
+$vsDevCmd = Find-VsDevCmd
+if (-not $vsDevCmd) {
+    throw "VsDevCmd.bat was not found. Install Visual Studio 2022 with C++, MSBuild, and WDK build tools."
 }
 
 $serviceProject = Join-Path $repoRoot "src\service\MacroEngineService\MacroEngineService.vcxproj"
