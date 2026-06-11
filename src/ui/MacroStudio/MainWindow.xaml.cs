@@ -46,6 +46,7 @@ public partial class MainWindow : Window
     private bool listening;
     private bool capturingTrigger;
     private bool updatingLanguageComboBox;
+    private MacroConverterStatus? converterStatus;
     private string? statusResourceKey = "DriverOffline";
     private string? statusPlainText;
     private object[] statusArgs = [];
@@ -62,6 +63,7 @@ public partial class MainWindow : Window
         ApplyLocalization();
         MacroEditor.Text = SampleMacro;
         ValidateCurrentMacro();
+        RefreshRuntimeDiagnostics();
     }
 
     private static string L(string key)
@@ -119,8 +121,8 @@ public partial class MainWindow : Window
         StopPlaybackButton.Content = L("Stop");
         SequenceGroupBox.Header = L("Sequence");
         DiagnosticsGroupBox.Header = L("Diagnostics");
-        PixelText.Text = L("PixelSamplerPending");
-        DriverText.Text = L("HidTransportPending");
+        ConverterGroupBox.Header = L("Converter");
+        OpenConverterButton.Content = L("OpenConverter");
 
         foreach (var item in LanguageComboBox.Items.OfType<ComboBoxItem>())
         {
@@ -145,6 +147,7 @@ public partial class MainWindow : Window
         }
 
         RefreshDynamicText();
+        RefreshRuntimeDiagnostics();
     }
 
     private void RefreshDynamicText()
@@ -269,6 +272,28 @@ public partial class MainWindow : Window
         }
 
         LatencyText.Text = histogram.Summary();
+        RefreshRuntimeDiagnostics();
+    }
+
+    private void OpenConverter_Click(object sender, RoutedEventArgs e)
+    {
+        converterStatus = MacroConverterIntegration.Probe();
+        RefreshConverterStatus();
+
+        if (converterStatus.ExecutablePath is null)
+        {
+            SetPlaybackResultResource("LastResultMessage", L("ConverterStatusUnavailable"));
+            return;
+        }
+
+        try
+        {
+            MacroConverterIntegration.Launch(converterStatus.ExecutablePath);
+        }
+        catch (Exception ex)
+        {
+            SetPlaybackResultResource("LastResultMessage", LF("ConverterOpenFailed", ex.Message));
+        }
     }
 
     private void ValidateCurrentMacro()
@@ -298,6 +323,24 @@ public partial class MainWindow : Window
             StepList.Items.Add(ex.Message);
             SetStatusResource("MacroInvalid");
         }
+    }
+
+    private void RefreshRuntimeDiagnostics()
+    {
+        var diagnostics = RuntimeDiagnosticsSnapshot.Collect();
+        PixelText.Text = LF("PixelSamplerStatus", diagnostics.PixelSampler.Detail);
+        DriverText.Text = LF("HidTransportStatus", diagnostics.Driver.Detail);
+        converterStatus = MacroConverterIntegration.Probe();
+        RefreshConverterStatus();
+    }
+
+    private void RefreshConverterStatus()
+    {
+        converterStatus ??= MacroConverterIntegration.Probe();
+        ConverterText.Text = converterStatus.Available
+            ? L("ConverterStatusAvailable")
+            : L("ConverterStatusUnavailable");
+        OpenConverterButton.IsEnabled = converterStatus.Available;
     }
 
     private void CaptureTrigger_Click(object sender, RoutedEventArgs e)

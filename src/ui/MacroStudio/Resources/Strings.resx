@@ -153,11 +153,32 @@
   <data name="Diagnostics" xml:space="preserve">
     <value>Diagnostics</value>
   </data>
+  <data name="Converter" xml:space="preserve">
+    <value>Converter</value>
+  </data>
+  <data name="OpenConverter" xml:space="preserve">
+    <value>Open Converter</value>
+  </data>
+  <data name="ConverterStatusAvailable" xml:space="preserve">
+    <value>MacroConverter: available</value>
+  </data>
+  <data name="ConverterStatusUnavailable" xml:space="preserve">
+    <value>MacroConverter: not found</value>
+  </data>
+  <data name="ConverterOpenFailed" xml:space="preserve">
+    <value>Could not open MacroConverter: {0}</value>
+  </data>
   <data name="PixelSamplerPending" xml:space="preserve">
     <value>Pixel sampler: DXGI backend pending</value>
   </data>
   <data name="HidTransportPending" xml:space="preserve">
     <value>HID transport: VHF backend pending</value>
+  </data>
+  <data name="PixelSamplerStatus" xml:space="preserve">
+    <value>Pixel sampler: {0}</value>
+  </data>
+  <data name="HidTransportStatus" xml:space="preserve">
+    <value>HID transport: {0}</value>
   </data>
   <data name="MacroValid" xml:space="preserve">
     <value>Macro valid</value>

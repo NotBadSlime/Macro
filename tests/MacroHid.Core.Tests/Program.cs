@@ -25,6 +25,8 @@ var tests = new (string Name, Action Body)[]
     ("Playback executor checks cancellation before submitting delayed reports", PlaybackExecutorChecksCancellationBeforeDelayedReports),
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
+    ("Runtime diagnostics report driver availability from stats", RuntimeDiagnosticsReportDriverAvailabilityFromStats),
+    ("MacroConverter integration finds sibling packaged executable", MacroConverterIntegrationFindsSiblingPackagedExecutable),
 };
 
 var failed = 0;
@@ -438,6 +440,46 @@ static void LocalizationResourcesCoverPlaybackLabelInThreeLanguages()
     Assert.Equal("Playback", LocalizationService.Get("Playback", new CultureInfo("en-US")));
     Assert.Equal("播放", LocalizationService.Get("Playback", new CultureInfo("zh-CN")));
     Assert.Equal("播放", LocalizationService.Get("Playback", new CultureInfo("zh-TW")));
+}
+
+static void RuntimeDiagnosticsReportDriverAvailabilityFromStats()
+{
+    var missing = RuntimeDiagnosticsSnapshot.FromDriverStats(null);
+    Assert.False(missing.Driver.Available);
+    Assert.Contains("not found", missing.Driver.Detail);
+
+    var present = RuntimeDiagnosticsSnapshot.FromDriverStats(new MacroDriverStats(
+        ProtocolVersion: 1,
+        ReportsSubmitted: 7,
+        ReportsRejected: 2,
+        LastNtStatus: 0,
+        LastSubmitQpc: 1234));
+    Assert.True(present.Driver.Available);
+    Assert.Contains("submitted=7", present.Driver.Detail);
+    Assert.Contains("rejected=2", present.Driver.Detail);
+}
+
+static void MacroConverterIntegrationFindsSiblingPackagedExecutable()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    var macroRoot = Path.Combine(root, "Macro");
+    var startDirectory = Path.Combine(macroRoot, "src", "ui", "MacroStudio", "bin", "Release", "net8.0-windows");
+    var converterExe = Path.Combine(root, "MacroConverter", "dist", "MacroConverter-win32-x64", "MacroConverter.exe");
+
+    Directory.CreateDirectory(startDirectory);
+    Directory.CreateDirectory(Path.GetDirectoryName(converterExe)!);
+    File.WriteAllText(converterExe, string.Empty);
+
+    try
+    {
+        var status = MacroConverterIntegration.Probe(startDirectory);
+        Assert.True(status.Available);
+        Assert.Equal(Path.GetFullPath(converterExe), status.ExecutablePath);
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 }
 
 static class Assert

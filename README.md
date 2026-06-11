@@ -8,7 +8,9 @@ MacroHID is a Windows automation project for legal local desktop workflows. It c
 - Macro execution plan: expands high-level steps such as `key.tap`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled HID reports.
 - `MacroRunner`: dry-runs `.mcrx` files into HID report timelines and can submit those reports to the MacroHID driver with `--send`.
 - `MacroStudio`: supports English, Simplified Chinese, and Traditional Chinese UI text with a runtime language selector; the selected language is saved under the current Windows user profile.
+- `MacroStudio` diagnostics now probe the live visible-desktop pixel sampler, MacroHID driver interface, and bundled MacroConverter availability instead of showing static placeholder text.
 - Installer: the Inno Setup package offers English, Simplified Chinese, and Traditional Chinese setup UI. Command-line tools currently keep English output.
+- MacroConverter integration: when a sibling `MacroConverter\dist\MacroConverter-win32-x64` build is present, local-run and installer builds include it and MacroStudio exposes an entry point to launch the full converter.
 - Native driver/service source: VHF/KMDF driver skeleton and C++ driver client are present under `src/driver` and `src/service`.
 - Local build environment: Visual Studio 2022 Build Tools and WDK 10.0.26100 are supported by the native build scripts.
 

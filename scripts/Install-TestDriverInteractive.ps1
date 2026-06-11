@@ -98,17 +98,17 @@ try {
         throw "Install-TestDriver.ps1 was not found next to this script."
     }
 
-    $installArgs = @(
-        "-Configuration", $Configuration,
-        "-Platform", $Platform
-    )
+    $installArgs = @{
+        Configuration = $Configuration
+        Platform = $Platform
+    }
 
     if ($SkipBuild) {
-        $installArgs += "-SkipBuild"
+        $installArgs.SkipBuild = $true
     }
 
     if ($EnableTestSigning) {
-        $installArgs += "-EnableTestSigning"
+        $installArgs.EnableTestSigning = $true
     }
 
     & $installer @installArgs

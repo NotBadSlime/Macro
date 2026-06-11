@@ -49,6 +49,15 @@ function Copy-Directory([string]$Source, [string]$Destination) {
     Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
 }
 
+function Copy-DirectoryIfExists([string]$Source, [string]$Destination) {
+    if (-not (Test-Path $Source)) {
+        return
+    }
+
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
+}
+
 function Remove-InstallerDebugArtifacts([string]$Root) {
     Get-ChildItem -Path $Root -Recurse -Include "*.pdb", "*.ilk" -File -ErrorAction SilentlyContinue |
         Remove-Item -Force
@@ -98,6 +107,8 @@ try {
     Copy-Directory (Join-Path $repoRoot "scripts") (Join-Path $inputRoot "scripts")
     Copy-Directory (Join-Path $repoRoot "samples") (Join-Path $inputRoot "samples")
     Copy-Directory (Join-Path $repoRoot "docs") (Join-Path $inputRoot "docs")
+    $macroConverterDist = Join-Path (Split-Path -Parent $repoRoot) "MacroConverter\dist\MacroConverter-win32-x64"
+    Copy-DirectoryIfExists $macroConverterDist (Join-Path $inputRoot "MacroConverter")
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $inputRoot -Force
     Remove-InstallerDebugArtifacts $inputRoot
 

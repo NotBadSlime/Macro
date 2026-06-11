@@ -9,7 +9,7 @@ public static class ScreenPixelSampler
         return TrySample(condition.Coordinate, out var sample) && condition.Matches(sample);
     }
 
-    private static bool TrySample(PixelCoordinate coordinate, out PixelSample sample)
+    public static bool TrySample(PixelCoordinate coordinate, out PixelSample sample)
     {
         sample = new PixelSample(coordinate.X, coordinate.Y, new RgbColor(0, 0, 0));
         var x = coordinate.X;

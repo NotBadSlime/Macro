@@ -64,6 +64,9 @@ chinesetrad.UninstallDriverShortcut=解除安裝 MacroHID 測試驅動
 english.DocumentationShortcut=Documentation
 chinesesimp.DocumentationShortcut=文档
 chinesetrad.DocumentationShortcut=文件
+english.MacroConverterShortcut=MacroConverter
+chinesesimp.MacroConverterShortcut=MacroConverter 宏转换器
+chinesetrad.MacroConverterShortcut=MacroConverter 巨集轉換器
 english.InstallDriverRun=Install MacroHID test driver
 chinesesimp.InstallDriverRun=安装 MacroHID 测试驱动
 chinesetrad.InstallDriverRun=安裝 MacroHID 測試驅動
@@ -84,10 +87,12 @@ Source: "{#SourceDir}\driver\*"; DestDir: "{app}\driver"; Flags: ignoreversion r
 Source: "{#SourceDir}\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceDir}\samples\*"; DestDir: "{app}\samples"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceDir}\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\MacroConverter\*"; DestDir: "{app}\MacroConverter"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\MacroStudio"; Filename: "{app}\MacroStudio\{#AppExeName}"
+Name: "{group}\{cm:MacroConverterShortcut}"; Filename: "{app}\MacroConverter\MacroConverter.exe"; Check: FileExists(ExpandConstant('{app}\MacroConverter\MacroConverter.exe'))
 Name: "{group}\{cm:MacroRunnerSampleShortcut}"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -Command ""& '{app}\MacroRunner\MacroRunner.exe' --macro '{app}\samples\baseline.mcrx' --pixels match"""; WorkingDir: "{app}"
 Name: "{group}\{cm:InstallDriverShortcut}"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriverInteractive.ps1"" -Configuration Release -SkipBuild"; WorkingDir: "{app}"
 Name: "{group}\{cm:UninstallDriverShortcut}"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -File ""{app}\scripts\Uninstall-TestDriver.ps1"""; WorkingDir: "{app}"
