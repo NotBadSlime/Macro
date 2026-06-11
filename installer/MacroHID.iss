@@ -36,10 +36,44 @@ InfoBeforeFile=DriverInstallNotes.txt
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimp"; MessagesFile: "compiler:Default.isl,Languages\ChineseSimplified.isl"
+Name: "chinesetrad"; MessagesFile: "compiler:Default.isl,Languages\ChineseTraditional.isl"
+
+[CustomMessages]
+english.CreateDesktopShortcut=Create a desktop shortcut for MacroStudio
+chinesesimp.CreateDesktopShortcut=创建 MacroStudio 桌面快捷方式
+chinesetrad.CreateDesktopShortcut=建立 MacroStudio 桌面捷徑
+english.ShortcutsGroup=Shortcuts:
+chinesesimp.ShortcutsGroup=快捷方式：
+chinesetrad.ShortcutsGroup=捷徑：
+english.InstallDriverTask=Attempt to install the MacroHID test driver after setup
+chinesesimp.InstallDriverTask=安装完成后尝试安装 MacroHID 测试驱动
+chinesetrad.InstallDriverTask=安裝完成後嘗試安裝 MacroHID 測試驅動
+english.DriverGroup=Driver:
+chinesesimp.DriverGroup=驱动：
+chinesetrad.DriverGroup=驅動：
+english.MacroRunnerSampleShortcut=MacroRunner dry-run sample
+chinesesimp.MacroRunnerSampleShortcut=MacroRunner 干运行示例
+chinesetrad.MacroRunnerSampleShortcut=MacroRunner 試跑範例
+english.InstallDriverShortcut=Install MacroHID test driver
+chinesesimp.InstallDriverShortcut=安装 MacroHID 测试驱动
+chinesetrad.InstallDriverShortcut=安裝 MacroHID 測試驅動
+english.UninstallDriverShortcut=Uninstall MacroHID test driver
+chinesesimp.UninstallDriverShortcut=卸载 MacroHID 测试驱动
+chinesetrad.UninstallDriverShortcut=解除安裝 MacroHID 測試驅動
+english.DocumentationShortcut=Documentation
+chinesesimp.DocumentationShortcut=文档
+chinesetrad.DocumentationShortcut=文件
+english.InstallDriverRun=Install MacroHID test driver
+chinesesimp.InstallDriverRun=安装 MacroHID 测试驱动
+chinesetrad.InstallDriverRun=安裝 MacroHID 測試驅動
+english.LaunchMacroStudio=Launch MacroStudio
+chinesesimp.LaunchMacroStudio=启动 MacroStudio
+chinesetrad.LaunchMacroStudio=啟動 MacroStudio
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut for MacroStudio"; GroupDescription: "Shortcuts:"; Flags: unchecked
-Name: "installdriver"; Description: "Attempt to install the MacroHID test driver after setup"; GroupDescription: "Driver:"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopShortcut}"; GroupDescription: "{cm:ShortcutsGroup}"; Flags: unchecked
+Name: "installdriver"; Description: "{cm:InstallDriverTask}"; GroupDescription: "{cm:DriverGroup}"; Flags: unchecked
 
 [Files]
 Source: "{#SourceDir}\MacroStudio\*"; DestDir: "{app}\MacroStudio"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -54,15 +88,15 @@ Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\MacroStudio"; Filename: "{app}\MacroStudio\{#AppExeName}"
-Name: "{group}\MacroRunner dry-run sample"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -Command ""& '{app}\MacroRunner\MacroRunner.exe' --macro '{app}\samples\baseline.mcrx' --pixels match"""; WorkingDir: "{app}"
-Name: "{group}\Install MacroHID test driver"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriverInteractive.ps1"" -Configuration Release -SkipBuild"; WorkingDir: "{app}"
-Name: "{group}\Uninstall MacroHID test driver"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -File ""{app}\scripts\Uninstall-TestDriver.ps1"""; WorkingDir: "{app}"
-Name: "{group}\Documentation"; Filename: "{app}\README.md"
+Name: "{group}\{cm:MacroRunnerSampleShortcut}"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -Command ""& '{app}\MacroRunner\MacroRunner.exe' --macro '{app}\samples\baseline.mcrx' --pixels match"""; WorkingDir: "{app}"
+Name: "{group}\{cm:InstallDriverShortcut}"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriverInteractive.ps1"" -Configuration Release -SkipBuild"; WorkingDir: "{app}"
+Name: "{group}\{cm:UninstallDriverShortcut}"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -File ""{app}\scripts\Uninstall-TestDriver.ps1"""; WorkingDir: "{app}"
+Name: "{group}\{cm:DocumentationShortcut}"; Filename: "{app}\README.md"
 Name: "{autodesktop}\MacroStudio"; Filename: "{app}\MacroStudio\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriverInteractive.ps1"" -Configuration Release -SkipBuild"; Description: "Install MacroHID test driver"; Flags: postinstall skipifsilent; Tasks: installdriver
-Filename: "{app}\MacroStudio\{#AppExeName}"; Description: "Launch MacroStudio"; Flags: nowait postinstall skipifsilent unchecked
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriverInteractive.ps1"" -Configuration Release -SkipBuild"; Description: "{cm:InstallDriverRun}"; Flags: postinstall skipifsilent; Tasks: installdriver
+Filename: "{app}\MacroStudio\{#AppExeName}"; Description: "{cm:LaunchMacroStudio}"; Flags: nowait postinstall skipifsilent unchecked
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Uninstall-TestDriver.ps1"""; Flags: runhidden; RunOnceId: "MacroHID.UninstallTestDriver"

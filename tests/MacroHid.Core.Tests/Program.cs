@@ -1,5 +1,7 @@
 using MacroHid.Core;
 using MacroHid.Runtime;
+using MacroStudio;
+using System.Globalization;
 using System.Text.Json;
 
 var tests = new (string Name, Action Body)[]
@@ -21,6 +23,8 @@ var tests = new (string Name, Action Body)[]
     ("Playback controller runs fixed count once by default", PlaybackControllerRunsFixedCountOnceByDefault),
     ("Playback controller cancels hold loop when trigger is released", PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased),
     ("Playback executor checks cancellation before submitting delayed reports", PlaybackExecutorChecksCancellationBeforeDelayedReports),
+    ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
+    ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
 };
 
 var failed = 0;
@@ -420,6 +424,20 @@ static void PlaybackExecutorChecksCancellationBeforeDelayedReports()
     Assert.True(result.Cancelled);
     byte[] keyDownAReport = [0x01, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00];
     Assert.False(sink.Reports.Any(report => report.SequenceEqual(keyDownAReport)));
+}
+
+static void LocalizationNormalizesSupportedCultures()
+{
+    Assert.Equal("zh-CN", LocalizationService.NormalizeCultureName(new CultureInfo("zh-Hans-CN")));
+    Assert.Equal("zh-TW", LocalizationService.NormalizeCultureName(new CultureInfo("zh-Hant-HK")));
+    Assert.Equal("en-US", LocalizationService.NormalizeCultureName(new CultureInfo("fr-FR")));
+}
+
+static void LocalizationResourcesCoverPlaybackLabelInThreeLanguages()
+{
+    Assert.Equal("Playback", LocalizationService.Get("Playback", new CultureInfo("en-US")));
+    Assert.Equal("播放", LocalizationService.Get("Playback", new CultureInfo("zh-CN")));
+    Assert.Equal("播放", LocalizationService.Get("Playback", new CultureInfo("zh-TW")));
 }
 
 static class Assert

@@ -45,27 +45,184 @@ public partial class MainWindow : Window
     private DriverMacroReportSink? activeSink;
     private bool listening;
     private bool capturingTrigger;
+    private bool updatingLanguageComboBox;
+    private string? statusResourceKey = "DriverOffline";
+    private string? statusPlainText;
+    private object[] statusArgs = [];
+    private string playbackStatusResourceKey = "PlaybackStatusIdle";
+    private object[] playbackStatusArgs = [];
+    private string playbackResultResourceKey = "LastResultNone";
+    private object[] playbackResultArgs = [];
 
     public MainWindow()
     {
         InitializeComponent();
+        LocalizationService.Initialize();
+        InitializeLanguageComboBox();
+        ApplyLocalization();
         MacroEditor.Text = SampleMacro;
         ValidateCurrentMacro();
+    }
+
+    private static string L(string key)
+    {
+        return LocalizationService.Get(key);
+    }
+
+    private static string LF(string key, params object[] args)
+    {
+        return LocalizationService.Format(key, args);
+    }
+
+    private void InitializeLanguageComboBox()
+    {
+        updatingLanguageComboBox = true;
+        LanguageComboBox.Items.Clear();
+
+        foreach (var language in LocalizationService.SupportedLanguages)
+        {
+            var item = new ComboBoxItem
+            {
+                Tag = language.CultureName,
+                Content = LocalizationService.Get(language.DisplayNameResourceKey)
+            };
+            LanguageComboBox.Items.Add(item);
+
+            if (string.Equals(language.CultureName, LocalizationService.CurrentCulture.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                LanguageComboBox.SelectedItem = item;
+            }
+        }
+
+        updatingLanguageComboBox = false;
+    }
+
+    private void ApplyLocalization()
+    {
+        Title = L("AppTitle");
+        LanguageLabelText.Text = L("Language");
+        OpenButton.Content = L("Open");
+        SaveButton.Content = L("Save");
+        ValidateButton.Content = L("Validate");
+        ProbeButton.Content = L("Probe");
+        MacroGroupBox.Header = L("Macro");
+        NameLabelText.Text = L("Name");
+        ScheduledStepsLabelText.Text = L("ScheduledSteps");
+        PlaybackGroupBox.Header = L("Playback");
+        TriggerLabelText.Text = L("Trigger");
+        CaptureTriggerButton.Content = L("Capture");
+        ModeLabelText.Text = L("Mode");
+        PlaybackCountLabelText.Text = L("Count");
+        StartListeningButton.Content = L("StartListening");
+        StopListeningButton.Content = L("StopListening");
+        RunNowButton.Content = L("RunNow");
+        StopPlaybackButton.Content = L("Stop");
+        SequenceGroupBox.Header = L("Sequence");
+        DiagnosticsGroupBox.Header = L("Diagnostics");
+        PixelText.Text = L("PixelSamplerPending");
+        DriverText.Text = L("HidTransportPending");
+
+        foreach (var item in LanguageComboBox.Items.OfType<ComboBoxItem>())
+        {
+            var cultureName = item.Tag?.ToString();
+            var language = LocalizationService.SupportedLanguages
+                .FirstOrDefault(candidate => string.Equals(candidate.CultureName, cultureName, StringComparison.OrdinalIgnoreCase));
+            if (language is not null)
+            {
+                item.Content = LocalizationService.Get(language.DisplayNameResourceKey);
+            }
+        }
+
+        foreach (var item in PlaybackModeBox.Items.OfType<ComboBoxItem>())
+        {
+            item.Content = item.Tag?.ToString() switch
+            {
+                "toggleLoop" => L("ModeToggleLoop"),
+                "holdLoop" => L("ModeHoldLoop"),
+                "fixedCount" => L("ModeFixedCount"),
+                _ => item.Content
+            };
+        }
+
+        RefreshDynamicText();
+    }
+
+    private void RefreshDynamicText()
+    {
+        StatusText.Text = statusPlainText ?? FormatResource(statusResourceKey, statusArgs);
+        PlaybackStatusText.Text = FormatResource(playbackStatusResourceKey, playbackStatusArgs);
+        PlaybackResultText.Text = FormatResource(playbackResultResourceKey, playbackResultArgs);
+    }
+
+    private void SetStatusResource(string key, params object[] args)
+    {
+        statusResourceKey = key;
+        statusPlainText = null;
+        statusArgs = args;
+        StatusText.Text = FormatResource(key, args);
+    }
+
+    private void SetStatusPlainText(string text)
+    {
+        statusResourceKey = null;
+        statusPlainText = text;
+        statusArgs = [];
+        StatusText.Text = text;
+    }
+
+    private void SetPlaybackStatusResource(string key, params object[] args)
+    {
+        playbackStatusResourceKey = key;
+        playbackStatusArgs = args;
+        PlaybackStatusText.Text = FormatResource(key, args);
+    }
+
+    private void SetPlaybackResultResource(string key, params object[] args)
+    {
+        playbackResultResourceKey = key;
+        playbackResultArgs = args;
+        PlaybackResultText.Text = FormatResource(key, args);
+    }
+
+    private static string FormatResource(string? key, object[] args)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return string.Empty;
+        }
+
+        return args.Length == 0 ? L(key) : LF(key, args);
+    }
+
+    private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (updatingLanguageComboBox)
+        {
+            return;
+        }
+
+        if ((LanguageComboBox.SelectedItem as ComboBoxItem)?.Tag is not string cultureName)
+        {
+            return;
+        }
+
+        LocalizationService.SetLanguage(cultureName);
+        ApplyLocalization();
     }
 
     private void OpenMacro_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "MacroHID macro (*.mcrx)|*.mcrx|JSON (*.json)|*.json|All files (*.*)|*.*",
-            Title = "Open macro"
+            Filter = L("MacroFileFilter"),
+            Title = L("OpenMacroTitle")
         };
 
         if (dialog.ShowDialog(this) == true)
         {
             MacroEditor.Text = File.ReadAllText(dialog.FileName);
             ValidateCurrentMacro();
-            StatusText.Text = Path.GetFileName(dialog.FileName);
+            SetStatusPlainText(Path.GetFileName(dialog.FileName));
         }
     }
 
@@ -73,8 +230,8 @@ public partial class MainWindow : Window
     {
         var dialog = new SaveFileDialog
         {
-            Filter = "MacroHID macro (*.mcrx)|*.mcrx|JSON (*.json)|*.json|All files (*.*)|*.*",
-            Title = "Save macro",
+            Filter = L("MacroFileFilter"),
+            Title = L("SaveMacroTitle"),
             DefaultExt = ".mcrx"
         };
 
@@ -82,7 +239,7 @@ public partial class MainWindow : Window
         {
             ApplyPlaybackSettingsToEditor();
             File.WriteAllText(dialog.FileName, MacroEditor.Text);
-            StatusText.Text = Path.GetFileName(dialog.FileName);
+            SetStatusPlainText(Path.GetFileName(dialog.FileName));
         }
     }
 
@@ -130,7 +287,7 @@ public partial class MainWindow : Window
                 StepList.Items.Add($"{step.DueTick}: {Describe(step.Step)}");
             }
 
-            StatusText.Text = "Macro valid";
+            SetStatusResource("MacroValid");
             SetPlaybackControls(document.Playback);
         }
         catch (Exception ex)
@@ -139,7 +296,7 @@ public partial class MainWindow : Window
             StepCountText.Text = "0";
             StepList.Items.Clear();
             StepList.Items.Add(ex.Message);
-            StatusText.Text = "Macro invalid";
+            SetStatusResource("MacroInvalid");
         }
     }
 
@@ -152,7 +309,7 @@ public partial class MainWindow : Window
         }
 
         capturingTrigger = true;
-        PlaybackResultText.Text = "Last result: press a trigger key or combination";
+        SetPlaybackResultResource("LastResultPressTrigger");
         AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureTrigger_KeyDown), true);
     }
 
@@ -167,7 +324,7 @@ public partial class MainWindow : Window
         var virtualKey = KeyInterop.VirtualKeyFromKey(key);
         if (!GlobalKeyboardHook.TryMapVirtualKeyToHidKey(virtualKey, out var hidKey))
         {
-            PlaybackResultText.Text = $"Last result: unsupported trigger key '{key}'";
+            SetPlaybackResultResource("LastResultUnsupportedTriggerKey", key);
             StopCapture();
             e.Handled = true;
             return;
@@ -175,7 +332,7 @@ public partial class MainWindow : Window
 
         var gesture = new HotkeyGesture(ReadCurrentModifiers(), hidKey);
         TriggerTextBox.Text = gesture.ToString();
-        PlaybackResultText.Text = $"Last result: captured {gesture}";
+        SetPlaybackResultResource("LastResultCapturedTrigger", gesture);
         StopCapture();
         e.Handled = true;
     }
@@ -187,15 +344,15 @@ public partial class MainWindow : Window
             var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
             if (document.Playback.Trigger is null)
             {
-                throw new InvalidOperationException("Choose a trigger before listening.");
+                throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
             }
 
             activeSink?.Dispose();
             activeSink = DriverMacroReportSink.OpenFirst();
             if (activeSink is null)
             {
-                PlaybackStatusText.Text = "Playback: Driver missing";
-                PlaybackResultText.Text = "Last result: install the MacroHID test driver before sending input";
+                SetPlaybackStatusResource("PlaybackStatusDriverMissing");
+                SetPlaybackResultResource("InstallDriverBeforeInput");
                 return;
             }
 
@@ -207,16 +364,16 @@ public partial class MainWindow : Window
 
             playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(activeSink));
             listening = true;
-            PlaybackStatusText.Text = $"Playback: Listening ({document.Playback.Trigger})";
-            PlaybackResultText.Text = "Last result: hotkey listener started";
-            StatusText.Text = "Listening";
+            SetPlaybackStatusResource("PlaybackStatusListeningWithTrigger", document.Playback.Trigger);
+            SetPlaybackResultResource("HotkeyListenerStarted");
+            SetStatusResource("Listening");
             await Task.CompletedTask;
         }
         catch (Exception ex)
         {
-            PlaybackStatusText.Text = "Playback: Error";
-            PlaybackResultText.Text = $"Last result: {ex.Message}";
-            StatusText.Text = "Playback error";
+            SetPlaybackStatusResource("PlaybackStatusError");
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
+            SetStatusResource("PlaybackError");
         }
     }
 
@@ -226,9 +383,9 @@ public partial class MainWindow : Window
         keyboardHook?.Dispose();
         keyboardHook = null;
         playbackController?.Stop();
-        PlaybackStatusText.Text = "Playback: Idle";
-        PlaybackResultText.Text = "Last result: hotkey listener stopped";
-        StatusText.Text = "Idle";
+        SetPlaybackStatusResource("PlaybackStatusIdle");
+        SetPlaybackResultResource("HotkeyListenerStopped");
+        SetStatusResource("Idle");
     }
 
     private async void RunNow_Click(object sender, RoutedEventArgs e)
@@ -240,8 +397,8 @@ public partial class MainWindow : Window
             activeSink = DriverMacroReportSink.OpenFirst();
             if (activeSink is null)
             {
-                PlaybackStatusText.Text = "Playback: Driver missing";
-                PlaybackResultText.Text = "Last result: install the MacroHID test driver before sending input";
+                SetPlaybackStatusResource("PlaybackStatusDriverMissing");
+                SetPlaybackResultResource("InstallDriverBeforeInput");
                 return;
             }
 
@@ -252,8 +409,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            PlaybackStatusText.Text = "Playback: Error";
-            PlaybackResultText.Text = $"Last result: {ex.Message}";
+            SetPlaybackStatusResource("PlaybackStatusError");
+            SetPlaybackResultResource("LastResultMessage", ex.Message);
         }
     }
 
@@ -317,18 +474,18 @@ public partial class MainWindow : Window
             var result = await controller.WhenIdleAsync();
             await Dispatcher.InvokeAsync(() =>
             {
-                PlaybackStatusText.Text = listening ? "Playback: Listening" : $"Playback: {controller.Status}";
-                PlaybackResultText.Text = $"Last result: iterations={result.IterationsCompleted} reports={result.ReportsSubmitted} cancelled={result.Cancelled}";
-                StatusText.Text = listening ? "Listening" : "Idle";
+                SetPlaybackStatusResource(listening ? "PlaybackStatusListening" : PlaybackStatusResourceKey(controller.Status));
+                SetPlaybackResultResource("LastResultRunSummary", result.IterationsCompleted, result.ReportsSubmitted, result.Cancelled);
+                SetStatusResource(listening ? "Listening" : "Idle");
             });
         }
         catch (Exception ex)
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                PlaybackStatusText.Text = "Playback: Error";
-                PlaybackResultText.Text = $"Last result: {ex.Message}";
-                StatusText.Text = "Playback error";
+                SetPlaybackStatusResource("PlaybackStatusError");
+                SetPlaybackResultResource("LastResultMessage", ex.Message);
+                SetStatusResource("PlaybackError");
             });
         }
     }
@@ -337,12 +494,12 @@ public partial class MainWindow : Window
     {
         if (playbackController is null)
         {
-            PlaybackStatusText.Text = listening ? "Playback: Listening" : "Playback: Idle";
+            SetPlaybackStatusResource(listening ? "PlaybackStatusListening" : "PlaybackStatusIdle");
             return;
         }
 
-        PlaybackStatusText.Text = $"Playback: {playbackController.Status}";
-        StatusText.Text = playbackController.Status.ToString();
+        SetPlaybackStatusResource(PlaybackStatusResourceKey(playbackController.Status));
+        SetStatusResource(StatusResourceKey(playbackController.Status));
     }
 
     private MacroDocument ParseDocumentWithPlaybackFromControls(bool applyToEditor)
@@ -387,12 +544,12 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(PlaybackCountTextBox.Text)
             && !int.TryParse(PlaybackCountTextBox.Text, out count))
         {
-            throw new InvalidOperationException("Playback count must be a whole number.");
+            throw new InvalidOperationException(L("PlaybackCountWholeNumber"));
         }
 
         if (count < 1)
         {
-            throw new InvalidOperationException("Playback count must be at least 1.");
+            throw new InvalidOperationException(L("PlaybackCountAtLeastOne"));
         }
 
         return new PlaybackSettings(trigger, mode, count);
@@ -401,7 +558,7 @@ public partial class MainWindow : Window
     private PlaybackMode GetSelectedPlaybackMode()
     {
         var selected = PlaybackModeBox.SelectedItem as ComboBoxItem;
-        var value = selected?.Content?.ToString() ?? "fixedCount";
+        var value = selected?.Tag?.ToString() ?? "fixedCount";
         return value switch
         {
             "toggleLoop" => PlaybackMode.ToggleLoop,
@@ -417,7 +574,7 @@ public partial class MainWindow : Window
         PlaybackCountTextBox.Text = settings.Count.ToString();
         foreach (var item in PlaybackModeBox.Items.OfType<ComboBoxItem>())
         {
-            if (string.Equals(item.Content?.ToString(), ToPlaybackModeText(settings.Mode), StringComparison.Ordinal))
+            if (string.Equals(item.Tag?.ToString(), ToPlaybackModeText(settings.Mode), StringComparison.Ordinal))
             {
                 PlaybackModeBox.SelectedItem = item;
                 break;
@@ -425,6 +582,31 @@ public partial class MainWindow : Window
         }
 
         PlaybackCountTextBox.IsEnabled = settings.Mode == PlaybackMode.FixedCount;
+    }
+
+    private static string PlaybackStatusResourceKey(PlaybackStatus status)
+    {
+        return status switch
+        {
+            PlaybackStatus.Idle => "PlaybackStatusIdle",
+            PlaybackStatus.Listening => "PlaybackStatusListening",
+            PlaybackStatus.Running => "PlaybackStatusRunning",
+            PlaybackStatus.Stopping => "PlaybackStatusStopping",
+            PlaybackStatus.DriverMissing => "PlaybackStatusDriverMissing",
+            PlaybackStatus.Error => "PlaybackStatusError",
+            _ => "PlaybackStatusFormat"
+        };
+    }
+
+    private static string StatusResourceKey(PlaybackStatus status)
+    {
+        return status switch
+        {
+            PlaybackStatus.Idle => "Idle",
+            PlaybackStatus.Listening => "Listening",
+            PlaybackStatus.Error => "PlaybackError",
+            _ => PlaybackStatusResourceKey(status)
+        };
     }
 
     private static string ToPlaybackModeText(PlaybackMode mode)

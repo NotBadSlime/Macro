@@ -23,12 +23,20 @@
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="MacroHID" Foreground="White" FontSize="19" FontWeight="SemiBold" Margin="0,0,18,0" />
-                    <Button Style="{StaticResource ToolbarButton}" Content="Open" Click="OpenMacro_Click" />
-                    <Button Style="{StaticResource ToolbarButton}" Content="Save" Click="SaveMacro_Click" />
-                    <Button Style="{StaticResource ToolbarButton}" Content="Validate" Click="ValidateMacro_Click" />
-                    <Button Style="{StaticResource ToolbarButton}" Content="Probe" Click="Probe_Click" />
+                    <Button x:Name="OpenButton" Style="{StaticResource ToolbarButton}" Content="Open" Click="OpenMacro_Click" />
+                    <Button x:Name="SaveButton" Style="{StaticResource ToolbarButton}" Content="Save" Click="SaveMacro_Click" />
+                    <Button x:Name="ValidateButton" Style="{StaticResource ToolbarButton}" Content="Validate" Click="ValidateMacro_Click" />
+                    <Button x:Name="ProbeButton" Style="{StaticResource ToolbarButton}" Content="Probe" Click="Probe_Click" />
                 </StackPanel>
-                <TextBlock DockPanel.Dock="Right" x:Name="StatusText" Foreground="#D1D5DB" VerticalAlignment="Center" Text="Driver offline" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="LanguageLabelText" Foreground="#D1D5DB" VerticalAlignment="Center" Margin="0,0,8,0" Text="Language" />
+                    <ComboBox x:Name="LanguageComboBox"
+                              Width="150"
+                              Height="30"
+                              Margin="0,0,18,0"
+                              SelectionChanged="LanguageComboBox_SelectionChanged" />
+                    <TextBlock x:Name="StatusText" Foreground="#D1D5DB" VerticalAlignment="Center" Text="Driver offline" />
+                </StackPanel>
             </DockPanel>
         </Border>
 
@@ -67,24 +75,24 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <GroupBox Header="Macro">
+                <GroupBox x:Name="MacroGroupBox" Header="Macro">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Name" Foreground="#4B5563" />
+                            <TextBlock x:Name="NameLabelText" Text="Name" Foreground="#4B5563" />
                             <TextBlock x:Name="MacroNameText" FontSize="20" FontWeight="SemiBold" Text="-" />
                         </StackPanel>
                         <StackPanel Grid.Column="1">
-                            <TextBlock Text="Scheduled Steps" Foreground="#4B5563" />
+                            <TextBlock x:Name="ScheduledStepsLabelText" Text="Scheduled Steps" Foreground="#4B5563" />
                             <TextBlock x:Name="StepCountText" FontSize="20" FontWeight="SemiBold" Text="0" />
                         </StackPanel>
                     </Grid>
                 </GroupBox>
 
-                <GroupBox Grid.Row="1" Header="Playback">
+                <GroupBox x:Name="PlaybackGroupBox" Grid.Row="1" Header="Playback">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -99,31 +107,31 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.ColumnSpan="3">
-                            <TextBlock Text="Trigger" Foreground="#4B5563" />
+                            <TextBlock x:Name="TriggerLabelText" Text="Trigger" Foreground="#4B5563" />
                             <DockPanel Margin="0,3,0,8">
-                                <Button DockPanel.Dock="Right" Width="78" Content="Capture" Click="CaptureTrigger_Click" />
+                                <Button x:Name="CaptureTriggerButton" DockPanel.Dock="Right" Width="78" Content="Capture" Click="CaptureTrigger_Click" />
                                 <TextBox x:Name="TriggerTextBox" Height="28" Margin="0,0,8,0" VerticalContentAlignment="Center" />
                             </DockPanel>
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Grid.Column="0">
-                            <TextBlock Text="Mode" Foreground="#4B5563" />
+                            <TextBlock x:Name="ModeLabelText" Text="Mode" Foreground="#4B5563" />
                             <ComboBox x:Name="PlaybackModeBox" Height="28" SelectionChanged="PlaybackModeBox_SelectionChanged">
-                                <ComboBoxItem Content="toggleLoop" />
-                                <ComboBoxItem Content="holdLoop" />
-                                <ComboBoxItem Content="fixedCount" IsSelected="True" />
+                                <ComboBoxItem Tag="toggleLoop" Content="toggleLoop" />
+                                <ComboBoxItem Tag="holdLoop" Content="holdLoop" />
+                                <ComboBoxItem Tag="fixedCount" Content="fixedCount" IsSelected="True" />
                             </ComboBox>
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="2">
-                            <TextBlock Text="Count" Foreground="#4B5563" />
+                            <TextBlock x:Name="PlaybackCountLabelText" Text="Count" Foreground="#4B5563" />
                             <TextBox x:Name="PlaybackCountTextBox" Height="28" Text="1" VerticalContentAlignment="Center" />
                         </StackPanel>
 
                         <WrapPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="0,10,0,0">
-                            <Button MinWidth="104" Height="30" Margin="0,0,8,8" Content="Start Listening" Click="StartListening_Click" />
-                            <Button MinWidth="104" Height="30" Margin="0,0,8,8" Content="Stop Listening" Click="StopListening_Click" />
-                            <Button MinWidth="78" Height="30" Margin="0,0,8,8" Content="Run Now" Click="RunNow_Click" />
-                            <Button MinWidth="64" Height="30" Margin="0,0,0,8" Content="Stop" Click="StopPlayback_Click" />
+                            <Button x:Name="StartListeningButton" MinWidth="104" Height="30" Margin="0,0,8,8" Content="Start Listening" Click="StartListening_Click" />
+                            <Button x:Name="StopListeningButton" MinWidth="104" Height="30" Margin="0,0,8,8" Content="Stop Listening" Click="StopListening_Click" />
+                            <Button x:Name="RunNowButton" MinWidth="78" Height="30" Margin="0,0,8,8" Content="Run Now" Click="RunNow_Click" />
+                            <Button x:Name="StopPlaybackButton" MinWidth="64" Height="30" Margin="0,0,0,8" Content="Stop" Click="StopPlayback_Click" />
                         </WrapPanel>
 
                         <StackPanel Grid.Row="3" Grid.ColumnSpan="3">
@@ -133,11 +141,11 @@
                     </Grid>
                 </GroupBox>
 
-                <GroupBox Grid.Row="2" Header="Sequence">
+                <GroupBox x:Name="SequenceGroupBox" Grid.Row="2" Header="Sequence">
                     <ListBox x:Name="StepList" FontFamily="Consolas" FontSize="13" />
                 </GroupBox>
 
-                <GroupBox Grid.Row="3" Header="Diagnostics">
+                <GroupBox x:Name="DiagnosticsGroupBox" Grid.Row="3" Header="Diagnostics">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />

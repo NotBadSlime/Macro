@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="AppTitle" xml:space="preserve"><value>MacroHID 工作室</value></data>
+  <data name="Language" xml:space="preserve"><value>語言</value></data>
+  <data name="English" xml:space="preserve"><value>英文</value></data>
+  <data name="SimplifiedChinese" xml:space="preserve"><value>簡體中文</value></data>
+  <data name="TraditionalChinese" xml:space="preserve"><value>繁體中文</value></data>
+  <data name="Open" xml:space="preserve"><value>開啟</value></data>
+  <data name="Save" xml:space="preserve"><value>儲存</value></data>
+  <data name="Validate" xml:space="preserve"><value>驗證</value></data>
+  <data name="Probe" xml:space="preserve"><value>探測</value></data>
+  <data name="DriverOffline" xml:space="preserve"><value>驅動離線</value></data>
+  <data name="Macro" xml:space="preserve"><value>巨集</value></data>
+  <data name="Name" xml:space="preserve"><value>名稱</value></data>
+  <data name="ScheduledSteps" xml:space="preserve"><value>排程步驟</value></data>
+  <data name="Playback" xml:space="preserve"><value>播放</value></data>
+  <data name="Trigger" xml:space="preserve"><value>觸發鍵</value></data>
+  <data name="Capture" xml:space="preserve"><value>擷取</value></data>
+  <data name="Mode" xml:space="preserve"><value>模式</value></data>
+  <data name="Count" xml:space="preserve"><value>次數</value></data>
+  <data name="ModeToggleLoop" xml:space="preserve"><value>按下循環</value></data>
+  <data name="ModeHoldLoop" xml:space="preserve"><value>按住循環</value></data>
+  <data name="ModeFixedCount" xml:space="preserve"><value>播放 N 次</value></data>
+  <data name="StartListening" xml:space="preserve"><value>開始監聽</value></data>
+  <data name="StopListening" xml:space="preserve"><value>停止監聽</value></data>
+  <data name="RunNow" xml:space="preserve"><value>立即執行</value></data>
+  <data name="Stop" xml:space="preserve"><value>停止</value></data>
+  <data name="PlaybackStatusIdle" xml:space="preserve"><value>播放：閒置</value></data>
+  <data name="PlaybackStatusListening" xml:space="preserve"><value>播放：監聽中</value></data>
+  <data name="PlaybackStatusListeningWithTrigger" xml:space="preserve"><value>播放：監聽中（{0}）</value></data>
+  <data name="PlaybackStatusRunning" xml:space="preserve"><value>播放：執行中</value></data>
+  <data name="PlaybackStatusStopping" xml:space="preserve"><value>播放：停止中</value></data>
+  <data name="PlaybackStatusFormat" xml:space="preserve"><value>播放：{0}</value></data>
+  <data name="PlaybackStatusDriverMissing" xml:space="preserve"><value>播放：缺少驅動</value></data>
+  <data name="PlaybackStatusError" xml:space="preserve"><value>播放：錯誤</value></data>
+  <data name="LastResultNone" xml:space="preserve"><value>上次結果：無</value></data>
+  <data name="LastResultPressTrigger" xml:space="preserve"><value>上次結果：請按觸發鍵或組合鍵</value></data>
+  <data name="LastResultUnsupportedTriggerKey" xml:space="preserve"><value>上次結果：不支援的觸發鍵「{0}」</value></data>
+  <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次結果：已擷取 {0}</value></data>
+  <data name="ChooseTriggerBeforeListening" xml:space="preserve"><value>開始監聽前請選擇觸發鍵。</value></data>
+  <data name="InstallDriverBeforeInput" xml:space="preserve"><value>上次結果：傳送輸入前請先安裝 MacroHID 測試驅動</value></data>
+  <data name="HotkeyListenerStarted" xml:space="preserve"><value>上次結果：熱鍵監聽已啟動</value></data>
+  <data name="HotkeyListenerStopped" xml:space="preserve"><value>上次結果：熱鍵監聽已停止</value></data>
+  <data name="LastResultMessage" xml:space="preserve"><value>上次結果：{0}</value></data>
+  <data name="LastResultRunSummary" xml:space="preserve"><value>上次結果：迭代={0} 報告={1} 已取消={2}</value></data>
+  <data name="PlaybackCountWholeNumber" xml:space="preserve"><value>播放次數必須是整數。</value></data>
+  <data name="PlaybackCountAtLeastOne" xml:space="preserve"><value>播放次數至少為 1。</value></data>
+  <data name="Sequence" xml:space="preserve"><value>序列</value></data>
+  <data name="Diagnostics" xml:space="preserve"><value>診斷</value></data>
+  <data name="PixelSamplerPending" xml:space="preserve"><value>像素取樣器：DXGI 後端待實作</value></data>
+  <data name="HidTransportPending" xml:space="preserve"><value>HID 傳輸：VHF 後端待連接</value></data>
+  <data name="MacroValid" xml:space="preserve"><value>巨集有效</value></data>
+  <data name="MacroInvalid" xml:space="preserve"><value>巨集無效</value></data>
+  <data name="PlaybackError" xml:space="preserve"><value>播放錯誤</value></data>
+  <data name="Idle" xml:space="preserve"><value>閒置</value></data>
+  <data name="Listening" xml:space="preserve"><value>監聽中</value></data>
+  <data name="OpenMacroTitle" xml:space="preserve"><value>開啟巨集</value></data>
+  <data name="SaveMacroTitle" xml:space="preserve"><value>儲存巨集</value></data>
+  <data name="MacroFileFilter" xml:space="preserve"><value>MacroHID 巨集 (*.mcrx)|*.mcrx|JSON (*.json)|*.json|所有檔案 (*.*)|*.*</value></data>
+</root>

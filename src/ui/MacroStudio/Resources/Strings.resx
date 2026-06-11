@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AppTitle" xml:space="preserve">
+    <value>MacroHID Studio</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="English" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="SimplifiedChinese" xml:space="preserve">
+    <value>Simplified Chinese</value>
+  </data>
+  <data name="TraditionalChinese" xml:space="preserve">
+    <value>Traditional Chinese</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Validate" xml:space="preserve">
+    <value>Validate</value>
+  </data>
+  <data name="Probe" xml:space="preserve">
+    <value>Probe</value>
+  </data>
+  <data name="DriverOffline" xml:space="preserve">
+    <value>Driver offline</value>
+  </data>
+  <data name="Macro" xml:space="preserve">
+    <value>Macro</value>
+  </data>
+  <data name="Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="ScheduledSteps" xml:space="preserve">
+    <value>Scheduled Steps</value>
+  </data>
+  <data name="Playback" xml:space="preserve">
+    <value>Playback</value>
+  </data>
+  <data name="Trigger" xml:space="preserve">
+    <value>Trigger</value>
+  </data>
+  <data name="Capture" xml:space="preserve">
+    <value>Capture</value>
+  </data>
+  <data name="Mode" xml:space="preserve">
+    <value>Mode</value>
+  </data>
+  <data name="Count" xml:space="preserve">
+    <value>Count</value>
+  </data>
+  <data name="ModeToggleLoop" xml:space="preserve">
+    <value>Toggle loop</value>
+  </data>
+  <data name="ModeHoldLoop" xml:space="preserve">
+    <value>Hold loop</value>
+  </data>
+  <data name="ModeFixedCount" xml:space="preserve">
+    <value>Fixed count</value>
+  </data>
+  <data name="StartListening" xml:space="preserve">
+    <value>Start Listening</value>
+  </data>
+  <data name="StopListening" xml:space="preserve">
+    <value>Stop Listening</value>
+  </data>
+  <data name="RunNow" xml:space="preserve">
+    <value>Run Now</value>
+  </data>
+  <data name="Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="PlaybackStatusIdle" xml:space="preserve">
+    <value>Playback: Idle</value>
+  </data>
+  <data name="PlaybackStatusListening" xml:space="preserve">
+    <value>Playback: Listening</value>
+  </data>
+  <data name="PlaybackStatusListeningWithTrigger" xml:space="preserve">
+    <value>Playback: Listening ({0})</value>
+  </data>
+  <data name="PlaybackStatusRunning" xml:space="preserve">
+    <value>Playback: Running</value>
+  </data>
+  <data name="PlaybackStatusStopping" xml:space="preserve">
+    <value>Playback: Stopping</value>
+  </data>
+  <data name="PlaybackStatusFormat" xml:space="preserve">
+    <value>Playback: {0}</value>
+  </data>
+  <data name="PlaybackStatusDriverMissing" xml:space="preserve">
+    <value>Playback: Driver missing</value>
+  </data>
+  <data name="PlaybackStatusError" xml:space="preserve">
+    <value>Playback: Error</value>
+  </data>
+  <data name="LastResultNone" xml:space="preserve">
+    <value>Last result: none</value>
+  </data>
+  <data name="LastResultPressTrigger" xml:space="preserve">
+    <value>Last result: press a trigger key or combination</value>
+  </data>
+  <data name="LastResultUnsupportedTriggerKey" xml:space="preserve">
+    <value>Last result: unsupported trigger key '{0}'</value>
+  </data>
+  <data name="LastResultCapturedTrigger" xml:space="preserve">
+    <value>Last result: captured {0}</value>
+  </data>
+  <data name="ChooseTriggerBeforeListening" xml:space="preserve">
+    <value>Choose a trigger before listening.</value>
+  </data>
+  <data name="InstallDriverBeforeInput" xml:space="preserve">
+    <value>Last result: install the MacroHID test driver before sending input</value>
+  </data>
+  <data name="HotkeyListenerStarted" xml:space="preserve">
+    <value>Last result: hotkey listener started</value>
+  </data>
+  <data name="HotkeyListenerStopped" xml:space="preserve">
+    <value>Last result: hotkey listener stopped</value>
+  </data>
+  <data name="LastResultMessage" xml:space="preserve">
+    <value>Last result: {0}</value>
+  </data>
+  <data name="LastResultRunSummary" xml:space="preserve">
+    <value>Last result: iterations={0} reports={1} cancelled={2}</value>
+  </data>
+  <data name="PlaybackCountWholeNumber" xml:space="preserve">
+    <value>Playback count must be a whole number.</value>
+  </data>
+  <data name="PlaybackCountAtLeastOne" xml:space="preserve">
+    <value>Playback count must be at least 1.</value>
+  </data>
+  <data name="Sequence" xml:space="preserve">
+    <value>Sequence</value>
+  </data>
+  <data name="Diagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="PixelSamplerPending" xml:space="preserve">
+    <value>Pixel sampler: DXGI backend pending</value>
+  </data>
+  <data name="HidTransportPending" xml:space="preserve">
+    <value>HID transport: VHF backend pending</value>
+  </data>
+  <data name="MacroValid" xml:space="preserve">
+    <value>Macro valid</value>
+  </data>
+  <data name="MacroInvalid" xml:space="preserve">
+    <value>Macro invalid</value>
+  </data>
+  <data name="PlaybackError" xml:space="preserve">
+    <value>Playback error</value>
+  </data>
+  <data name="Idle" xml:space="preserve">
+    <value>Idle</value>
+  </data>
+  <data name="Listening" xml:space="preserve">
+    <value>Listening</value>
+  </data>
+  <data name="OpenMacroTitle" xml:space="preserve">
+    <value>Open macro</value>
+  </data>
+  <data name="SaveMacroTitle" xml:space="preserve">
+    <value>Save macro</value>
+  </data>
+  <data name="MacroFileFilter" xml:space="preserve">
+    <value>MacroHID macro (*.mcrx)|*.mcrx|JSON (*.json)|*.json|All files (*.*)|*.*</value>
+  </data>
+</root>

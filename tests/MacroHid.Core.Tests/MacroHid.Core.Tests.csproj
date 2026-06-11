@@ -3,11 +3,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\shared\MacroHid.Core\MacroHid.Core.csproj" />
     <ProjectReference Include="..\..\src\shared\MacroHid.Runtime\MacroHid.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\ui\MacroStudio\MacroStudio.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
