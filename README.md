@@ -26,6 +26,12 @@ Native build:
 .\scripts\Build-Native.ps1 -Configuration Release
 ```
 
+Build the Inno Setup installer:
+
+```powershell
+.\scripts\Build-Installer.ps1 -Configuration Release
+```
+
 Driver install and smoke test require Administrator PowerShell and Windows test signing:
 
 ```powershell
@@ -34,6 +40,8 @@ Driver install and smoke test require Administrator PowerShell and Windows test 
 .\scripts\Invoke-SmokeTest.ps1 -Send -Pixels skip
 ```
 
+Installing the driver enables real virtual HID keyboard, mouse, wheel, side-button, and consumer-control submission through the MacroHID device. Without the driver, MacroStudio, MacroRunner dry-run, samples, and diagnostics still work, but macros cannot inject real virtual HID input and `MacroRunner --send` will report that the MacroHID device is missing.
+
 ## GitHub Actions
 
 The repository includes `.github/workflows/ci.yml`.
@@ -41,6 +49,7 @@ The repository includes `.github/workflows/ci.yml`.
 - The `.NET core, tools, and WPF` job builds `MacroHID.sln`, runs the core tests, runs a short `LatencyProbe` smoke test, and uploads `MacroStudio` plus `LatencyProbe` artifacts.
 - The `.NET core, tools, and WPF` job also runs a `MacroRunner` dry-run smoke test and uploads `MacroRunner`.
 - The `Native service and VHF driver` job runs on `windows-2022`, initializes MSBuild, verifies WDK/driver build tools, and builds the C++ service plus VHF/KMDF driver with `msbuild`.
+- The `Installer` job builds `MacroHID-Setup-x64.exe` with Inno Setup and uploads it as an artifact.
 
 Use `windows-2022` instead of `windows-latest` for now so the CI environment stays aligned with Visual Studio 2022 and the WDK assumptions in this project.
 
@@ -54,6 +63,7 @@ Use `windows-2022` instead of `windows-latest` for now so the CI environment sta
 - `src/tools/MacroRunner` - `.mcrx` dry-run and optional driver-send execution harness.
 - `src/ui/MacroStudio` - WPF macro editor and diagnostics shell.
 - `samples` - sample `.mcrx` macros.
+- `installer` - Inno Setup script and installer notes.
 
 ## Scope Boundary
 

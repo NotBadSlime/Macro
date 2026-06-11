@@ -1,5 +1,6 @@
 bin/
 obj/
+artifacts/
 src/**/x64/
 src/driver/MacroHidDriver/MacroHidDriver/
 src/service/MacroEngineService/MacroEng.*/

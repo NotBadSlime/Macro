@@ -56,14 +56,24 @@ elseif (-not (Test-TestSigningEnabled)) {
     throw "Windows test signing is not enabled. Run this script with -EnableTestSigning, reboot, then run it again."
 }
 
-if (-not $SkipBuild) {
+if (-not $SkipBuild -and (Test-Path (Join-Path $repoRoot "src\driver\MacroHidDriver\MacroHidDriver.vcxproj"))) {
     & (Join-Path $PSScriptRoot "Build-Native.ps1") -Configuration $Configuration -Platform $Platform
 }
 
-$driverOut = Join-Path $repoRoot "src\driver\MacroHidDriver\$Platform\$Configuration"
-$packageDir = Join-Path $driverOut "MacroHidDriver"
+$installedPackageDir = Join-Path $repoRoot "driver"
+$sourceDriverOut = Join-Path $repoRoot "src\driver\MacroHidDriver\$Platform\$Configuration"
+$sourcePackageDir = Join-Path $sourceDriverOut "MacroHidDriver"
+
+if (Test-Path (Join-Path $installedPackageDir "MacroHidDriver.inf")) {
+    $packageDir = $installedPackageDir
+    $certPath = Join-Path $installedPackageDir "MacroHidDriver.cer"
+}
+else {
+    $packageDir = $sourcePackageDir
+    $certPath = Join-Path $sourceDriverOut "MacroHidDriver.cer"
+}
+
 $infPath = Join-Path $packageDir "MacroHidDriver.inf"
-$certPath = Join-Path $driverOut "MacroHidDriver.cer"
 
 if (-not (Test-Path $infPath)) {
     throw "Driver package INF was not found at $infPath. Build the driver first."
