@@ -55,13 +55,13 @@ Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\MacroStudio"; Filename: "{app}\MacroStudio\{#AppExeName}"
 Name: "{group}\MacroRunner dry-run sample"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -Command ""& '{app}\MacroRunner\MacroRunner.exe' --macro '{app}\samples\baseline.mcrx' --pixels match"""; WorkingDir: "{app}"
-Name: "{group}\Install MacroHID test driver"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriver.ps1"" -Configuration Release -SkipBuild"; WorkingDir: "{app}"
+Name: "{group}\Install MacroHID test driver"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriverInteractive.ps1"" -Configuration Release -SkipBuild"; WorkingDir: "{app}"
 Name: "{group}\Uninstall MacroHID test driver"; Filename: "powershell.exe"; Parameters: "-NoExit -ExecutionPolicy Bypass -File ""{app}\scripts\Uninstall-TestDriver.ps1"""; WorkingDir: "{app}"
 Name: "{group}\Documentation"; Filename: "{app}\README.md"
 Name: "{autodesktop}\MacroStudio"; Filename: "{app}\MacroStudio\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriver.ps1"" -Configuration Release -SkipBuild"; Description: "Install MacroHID test driver"; Flags: postinstall skipifsilent; Tasks: installdriver
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-TestDriverInteractive.ps1"" -Configuration Release -SkipBuild"; Description: "Install MacroHID test driver"; Flags: postinstall skipifsilent; Tasks: installdriver
 Filename: "{app}\MacroStudio\{#AppExeName}"; Description: "Launch MacroStudio"; Flags: nowait postinstall skipifsilent unchecked
 
 [UninstallRun]

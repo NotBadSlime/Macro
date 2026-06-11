@@ -53,3 +53,20 @@ The current driver package is for development and test only. Installing it requi
 - Secure Boot disabled if Windows blocks test-signing mode
 
 For a production release, the driver must go through the Microsoft driver signing process. The installer can carry the production-signed package later without changing the app packaging model.
+
+## Driver Install Shortcut
+
+Use the Start menu shortcut named `Install MacroHID test driver` when installing the development driver after setup. The shortcut runs an interactive wrapper that:
+
+- asks for Administrator rights when needed
+- keeps the PowerShell window open on success or failure
+- writes a log under `C:\ProgramData\MacroHID\logs`
+- explains common test-signing and Secure Boot failures
+
+If the optional driver install step is selected on the last installer page, the same interactive wrapper is used. If Windows reports that the test-signing value is protected by Secure Boot policy, disable Secure Boot in UEFI/BIOS, boot Windows again, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Program Files\MacroHID\scripts\Install-TestDriverInteractive.ps1" -EnableTestSigning -SkipBuild
+```
+
+Then reboot and run the Start menu shortcut again.

@@ -35,10 +35,12 @@ Build the Inno Setup installer:
 Driver install and smoke test require Administrator PowerShell and Windows test signing:
 
 ```powershell
-.\scripts\Install-TestDriver.ps1 -Configuration Release -EnableTestSigning
+.\scripts\Install-TestDriverInteractive.ps1 -Configuration Release -EnableTestSigning
 # Reboot if the script asks for it, then run the install script again without -EnableTestSigning.
 .\scripts\Invoke-SmokeTest.ps1 -Send -Pixels skip
 ```
+
+The interactive installer keeps PowerShell open on failure and writes a log under `C:\ProgramData\MacroHID\logs`. If Windows says the test-signing value is protected by Secure Boot policy, disable Secure Boot in UEFI/BIOS, boot Windows again, enable test-signing, reboot, and rerun the driver install shortcut.
 
 Installing the driver enables real virtual HID keyboard, mouse, wheel, side-button, and consumer-control submission through the MacroHID device. Without the driver, MacroStudio, MacroRunner dry-run, samples, and diagnostics still work, but macros cannot inject real virtual HID input and `MacroRunner --send` will report that the MacroHID device is missing.
 

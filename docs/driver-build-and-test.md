@@ -38,10 +38,10 @@ After reboot, create a test certificate, sign the catalog, and install the drive
 The install script automates the normal development path:
 
 ```powershell
-.\scripts\Install-TestDriver.ps1 -Configuration Release -EnableTestSigning
+.\scripts\Install-TestDriverInteractive.ps1 -Configuration Release -EnableTestSigning
 ```
 
-If the script enables test signing, reboot Windows and run it again without `-EnableTestSigning`.
+The interactive installer asks for Administrator rights when needed, keeps the PowerShell window open, and writes a log under `C:\ProgramData\MacroHID\logs`. If the script enables test signing, reboot Windows and run it again without `-EnableTestSigning`.
 
 ## Install Smoke Test
 

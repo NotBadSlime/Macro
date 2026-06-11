@@ -48,8 +48,7 @@ if ($EnableTestSigning) {
     }
 
     if (-not (Test-TestSigningEnabled)) {
-        Write-Warning "Test signing was requested. Reboot Windows, then run this script again."
-        exit 10
+        throw "Test signing was requested. Reboot Windows, then run this script again."
     }
 }
 elseif (-not (Test-TestSigningEnabled)) {
@@ -106,4 +105,11 @@ else {
 
 Write-Host "MacroHID test driver install step finished."
 Write-Host "Smoke test:"
-Write-Host "  dotnet run --project src\tools\MacroRunner\MacroRunner.csproj -- --macro samples\baseline.mcrx --send --pixels skip"
+$installedRunner = Join-Path $repoRoot "MacroRunner\MacroRunner.exe"
+$installedSample = Join-Path $repoRoot "samples\baseline.mcrx"
+if ((Test-Path $installedRunner) -and (Test-Path $installedSample)) {
+    Write-Host "  & `"$installedRunner`" --macro `"$installedSample`" --send --pixels skip"
+}
+else {
+    Write-Host "  dotnet run --project src\tools\MacroRunner\MacroRunner.csproj -- --macro samples\baseline.mcrx --send --pixels skip"
+}
