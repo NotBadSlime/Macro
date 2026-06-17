@@ -1,0 +1,197 @@
+<UserControl x:Class="MacroStudio.Controls.StepEditorPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Style="{StaticResource PanelBorderStyle}" Padding="14">
+        <StackPanel>
+            <DockPanel Margin="0,0,0,12">
+                <TextBlock x:Name="StepEditorTitleText" Text="属性" Style="{StaticResource PanelTitle}" />
+                <Button x:Name="ApplyStepEditButton"
+                        DockPanel.Dock="Right"
+                        MinWidth="72"
+                        Content="应用"
+                        Click="ApplyStepEdit_Click" />
+            </DockPanel>
+            <TextBlock x:Name="StepEditorHintText"
+                       Text="选择一个步骤后可视化编辑。"
+                       Foreground="{DynamicResource SecondaryText}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,10" />
+
+            <StackPanel x:Name="StepEditorFieldsPanel">
+                <StackPanel x:Name="MacroEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="MacroTargetLabelText" Text="宏" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="MacroTargetBox" Height="30" IsEditable="True" />
+                </StackPanel>
+
+                <StackPanel x:Name="KeyboardEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="KeyLabelText" Text="键位" Style="{StaticResource FieldLabel}" />
+                    <DockPanel>
+                        <Button x:Name="CaptureStepKeyButton" DockPanel.Dock="Right" Width="78" Content="捕获" Click="CaptureStepKey_Click" />
+                        <TextBox x:Name="StepKeyBox" Height="30" Margin="0,0,8,0" />
+                    </DockPanel>
+                    <WrapPanel Margin="0,8,0,0">
+                        <CheckBox x:Name="StepCtrlBox" Content="Ctrl" Foreground="{DynamicResource PrimaryText}" Margin="0,0,12,0" />
+                        <CheckBox x:Name="StepShiftBox" Content="Shift" Foreground="{DynamicResource PrimaryText}" Margin="0,0,12,0" />
+                        <CheckBox x:Name="StepAltBox" Content="Alt" Foreground="{DynamicResource PrimaryText}" Margin="0,0,12,0" />
+                        <CheckBox x:Name="StepWinBox" Content="Win" Foreground="{DynamicResource PrimaryText}" />
+                    </WrapPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="ButtonEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="ActionKindLabelText" Text="动作" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="ActionKindBox" Height="30" IsEditable="True" />
+                </StackPanel>
+
+                <StackPanel x:Name="MouseButtonEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="MouseButtonLabelText" Text="鼠标按键" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="MouseButtonBox" Height="30" IsEditable="True" />
+                    <CheckBox x:Name="MouseButtonCoordinateEnabledBox"
+                              Content="指定坐标"
+                              Foreground="{DynamicResource PrimaryText}"
+                              Margin="0,8,0,0" />
+                    <StackPanel IsEnabled="{Binding IsChecked, ElementName=MouseButtonCoordinateEnabledBox}">
+                        <ComboBox x:Name="MouseButtonCoordinateModeBox" Height="30" Margin="0,8,0,0" IsEditable="True" />
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="MouseButtonXBox" Height="30" />
+                            <TextBox x:Name="MouseButtonYBox" Grid.Column="2" Height="30" />
+                        </Grid>
+                        <Button x:Name="PickMouseButtonCoordinateButton"
+                                Margin="0,8,0,0"
+                                MinWidth="118"
+                                Content="选择屏幕坐标..."
+                                Click="PickMouseButtonCoordinate_Click" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="MouseMoveEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="MoveModeLabelText" Text="移动模式" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="MoveModeBox" Height="30" IsEditable="True" />
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="MoveXBox" Height="30" />
+                        <TextBox x:Name="MoveYBox" Grid.Column="2" Height="30" />
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel x:Name="WheelEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="WheelLabelText" Text="滚轮" Style="{StaticResource FieldLabel}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="WheelVerticalBox" Height="30" />
+                        <TextBox x:Name="WheelHorizontalBox" Grid.Column="2" Height="30" />
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel x:Name="TimingEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="TimingLabelText" Text="时间（毫秒）" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="TimingMsBox" Height="30" />
+                </StackPanel>
+
+                <StackPanel x:Name="DelayEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="DelayModeLabelText" Text="延迟模式" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="DelayModeBox" Height="30" SelectionChanged="DelayModeBox_SelectionChanged" IsEditable="False">
+                        <ComboBoxItem Content="固定延迟" Tag="Fixed" />
+                        <ComboBoxItem Content="随机范围" Tag="Random" />
+                    </ComboBox>
+                    <StackPanel x:Name="DelayFixedPanel" Margin="0,8,0,0">
+                        <TextBlock x:Name="DelayFixedLabelText" Text="延迟（毫秒）" Style="{StaticResource FieldLabel}" />
+                        <TextBox x:Name="DelayMsBox" Height="30" />
+                    </StackPanel>
+                    <Grid x:Name="DelayRangePanel" Margin="0,8,0,0" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="DelayMinLabelText" Text="最小 ms" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="DelayMinMsBox" Height="30" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="DelayMaxLabelText" Text="最大 ms" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="DelayMaxMsBox" Height="30" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel x:Name="TextEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="TextActionLabelText" Text="文本" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="StepTextBox" Height="72" AcceptsReturn="True" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel x:Name="LoopEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="LoopCountLabelText" Text="循环次数" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="LoopCountBox" Height="30" />
+                </StackPanel>
+
+                <StackPanel x:Name="PixelEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="PixelLabelText" Text="像素条件" Style="{StaticResource FieldLabel}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="PixelXBox" Height="30" />
+                        <TextBox x:Name="PixelYBox" Grid.Column="2" Height="30" />
+                        <TextBox x:Name="PixelToleranceBox" Grid.Column="4" Height="30" />
+                    </Grid>
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="PixelRBox" Height="30" />
+                        <TextBox x:Name="PixelGBox" Grid.Column="2" Height="30" />
+                        <TextBox x:Name="PixelBBox" Grid.Column="4" Height="30" />
+                    </Grid>
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="PixelWindowStartBox" Height="30" />
+                        <TextBox x:Name="PixelWindowEndBox" Grid.Column="2" Height="30" />
+                        <TextBox x:Name="PixelPollBox" Grid.Column="4" Height="30" />
+                    </Grid>
+                    <DockPanel Margin="0,8,0,0">
+                        <Border x:Name="PixelColorPreview"
+                                DockPanel.Dock="Left"
+                                Width="34"
+                                Height="30"
+                                Background="#000000"
+                                BorderBrush="{DynamicResource PanelBorder}"
+                                BorderThickness="1"
+                                CornerRadius="6" />
+                        <Button x:Name="PickPixelColorButton"
+                                MinWidth="118"
+                                Margin="8,0,0,0"
+                                Content="取色"
+                                Click="PickPixelColor_Click" />
+                    </DockPanel>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

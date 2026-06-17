@@ -14,6 +14,7 @@ public static class McrxSerializer
 
     public static string Serialize(MacroDocument document)
     {
+        document = MacroStepNormalizer.Normalize(document);
         var root = new JsonObject
         {
             ["version"] = document.Version,
@@ -21,6 +22,11 @@ public static class McrxSerializer
             ["playback"] = SerializePlayback(document.Playback),
             ["steps"] = SerializeSteps(document.Steps)
         };
+
+        if (document.Conditions is { Count: > 0 } conditions)
+        {
+            root["conditions"] = SerializeConditions(conditions);
+        }
 
         return root.ToJsonString(Options);
     }
@@ -35,12 +41,22 @@ public static class McrxSerializer
                 PlaybackMode.HoldLoop => "holdLoop",
                 _ => "fixedCount"
             },
-            ["count"] = playback.Count
+            ["count"] = playback.Count,
+            ["precision"] = playback.Precision switch
+            {
+                PrecisionMode.Balanced => "balanced",
+                _ => "extremeDuringPlayback"
+            }
         };
 
         if (playback.Trigger is not null)
         {
             result["trigger"] = playback.Trigger.ToString();
+        }
+
+        if (!string.IsNullOrWhiteSpace(playback.ProcessFilter))
+        {
+            result["processFilter"] = playback.ProcessFilter.Trim();
         }
 
         return result;
@@ -71,11 +87,7 @@ public static class McrxSerializer
             MouseButtonStep button => SerializeMouseButton(button),
             MouseWheelStep wheel => SerializeMouseWheel(wheel),
             ConsumerStep consumer => SerializeConsumer(consumer),
-            WaitStep wait => new JsonObject
-            {
-                ["type"] = "wait",
-                ["ms"] = ToMillisecondsValue(wait.Duration)
-            },
+            WaitStep wait => SerializeWait(wait),
             RepeatStep repeat => new JsonObject
             {
                 ["type"] = "repeat",
@@ -164,6 +176,13 @@ public static class McrxSerializer
             result["holdMs"] = ToMillisecondsValue(step.Hold);
         }
 
+        if (step.HasCoordinate)
+        {
+            result["mode"] = (step.CoordinateMode ?? MouseMoveMode.Absolute).ToString().ToLowerInvariant();
+            result["x"] = step.X!.Value;
+            result["y"] = step.Y!.Value;
+        }
+
         return result;
     }
 
@@ -195,6 +214,26 @@ public static class McrxSerializer
         if (step.Hold > TimeSpan.Zero)
         {
             result["holdMs"] = ToMillisecondsValue(step.Hold);
+        }
+
+        return result;
+    }
+
+    private static JsonObject SerializeWait(WaitStep step)
+    {
+        var result = new JsonObject
+        {
+            ["type"] = "wait"
+        };
+
+        if (step.IsRandom && step.MaxDuration is { } max)
+        {
+            result["minMs"] = ToMillisecondsValue(step.MinDuration);
+            result["maxMs"] = ToMillisecondsValue(max);
+        }
+        else
+        {
+            result["ms"] = ToMillisecondsValue(step.Duration);
         }
 
         return result;
@@ -260,5 +299,91 @@ public static class McrxSerializer
         return Math.Abs(milliseconds - wholeMilliseconds) < 0.000_1
             ? JsonValue.Create((int)wholeMilliseconds)!
             : JsonValue.Create(milliseconds)!;
+    }
+
+    private static JsonArray SerializeConditions(IReadOnlyList<ConditionalDirective> conditions)
+    {
+        var result = new JsonArray();
+        foreach (var cond in conditions)
+            result.Add(SerializeCondition(cond));
+        return result;
+    }
+
+    private static JsonObject SerializeCondition(ConditionalDirective cond)
+    {
+        var obj = new JsonObject
+        {
+            ["id"] = cond.Id,
+            ["name"] = cond.Name,
+            ["startStep"] = cond.StartStepIndex,
+            ["endStep"] = cond.EndStepIndex,
+            ["type"] = cond.Condition.Type
+        };
+
+        if (!string.IsNullOrWhiteSpace(cond.StartStepPathText))
+            obj["startPath"] = cond.StartStepPathText;
+        if (!string.IsNullOrWhiteSpace(cond.EndStepPathText))
+            obj["endPath"] = cond.EndStepPathText;
+
+        SerializeConditionMatcher(obj, cond.Condition);
+
+        if (cond.WindowStart is { } windowStart)
+            obj["windowStartMs"] = ToMillisecondsValue(windowStart);
+        if (cond.WindowEnd is { } windowEnd)
+            obj["windowEndMs"] = ToMillisecondsValue(windowEnd);
+        if (cond.PollInterval is { } poll)
+            obj["pollMs"] = ToMillisecondsValue(poll);
+        if (cond.OnConflict != ConflictBehavior.Warn)
+            obj["onConflict"] = cond.OnConflict.ToString();
+        if (cond.ThenSteps.Count > 0)
+            obj["then"] = SerializeSteps(cond.ThenSteps);
+
+        return obj;
+    }
+
+    private static void SerializeConditionMatcher(JsonObject obj, IConditionMatcher matcher)
+    {
+        switch (matcher)
+        {
+            case PixelMatcher pixel:
+                obj["region"] = SerializeRegion(pixel.Region);
+                obj["r"] = pixel.Expected.R;
+                obj["g"] = pixel.Expected.G;
+                obj["b"] = pixel.Expected.B;
+                obj["tolerance"] = pixel.Tolerance;
+                break;
+            case TemplateMatcher template:
+                obj["region"] = SerializeRegion(template.Region);
+                obj["templateData"] = Convert.ToBase64String(template.TemplateImageData);
+                obj["threshold"] = template.Threshold;
+                break;
+            case PixelHashMatcher hash:
+                obj["region"] = SerializeRegion(hash.Region);
+                obj["referenceHash"] = Convert.ToBase64String(hash.ReferenceHash);
+                obj["similarity"] = hash.SimilarityThreshold;
+                break;
+            case TextMatcher text:
+                obj["region"] = SerializeRegion(text.Region);
+                obj["expectedText"] = text.ExpectedText;
+                obj["contains"] = text.Contains;
+                obj["language"] = text.Language;
+                break;
+        }
+    }
+
+    private static JsonObject SerializeRegion(ScreenRegion region)
+    {
+        return new JsonObject
+        {
+            ["topLeft"] = SerializePoint(region.TopLeft),
+            ["topRight"] = SerializePoint(region.TopRight),
+            ["bottomRight"] = SerializePoint(region.BottomRight),
+            ["bottomLeft"] = SerializePoint(region.BottomLeft)
+        };
+    }
+
+    private static JsonObject SerializePoint(ScreenPoint point)
+    {
+        return new JsonObject { ["x"] = point.X, ["y"] = point.Y };
     }
 }

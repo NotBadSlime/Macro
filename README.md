@@ -1,71 +1,95 @@
 # MacroHID
 
-MacroHID is a Windows input macro project for legal local desktop automation. It combines a .NET macro runtime, Windows `SendInput` submission, visible-desktop pixel sampling, a WPF editor, built-in macro conversion, and latency diagnostics.
+## 中文
 
-## Current State
+MacroHID 是一个面向 Windows 10/11 x64 的本机宏自动化工具。当前版本采用纯用户态 `SendInput` 路线，不安装驱动、不启用测试签名、不修改 Secure Boot；它适用于合法的本机桌面自动化、普通应用以及以同等权限运行的管理员应用。
 
-- `.NET` solution: builds the core macro model, `.mcrx` parser/serializer, conversion library, input action compiler, SendInput runtime, latency probe, MacroRunner, and WPF studio.
-- Macro execution expands steps such as `key.tap`, `key.text`, `mouse.click`, `consumer.tap`, waits, repeats, and pixel branches into scheduled input actions.
-- `MacroRunner` can dry-run `.mcrx` files into an input action timeline, or submit those actions through `SendInput` with `--send`.
-- `MacroStudio` includes a local macro database, a dark macro-workbench UI, draggable action templates for keyboard, mouse, delay, text, loop, and pixel steps, and macro-to-macro step insertion from the library.
-- `MacroStudio` supports English, Simplified Chinese, and Traditional Chinese UI text with a runtime language selector, and requests Administrator privileges on startup so it can automate elevated desktop apps.
-- Diagnostics probe the live visible-desktop pixel sampler and the SendInput backend.
-- MacroStudio has a built-in import/export panel for MacroHID `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro scripts. It does not bundle or launch the sibling Electron MacroConverter app.
-- The project is pure user-mode. It does not install a driver, does not use test signing, and does not require Secure Boot changes.
+### 主要能力
 
-## Build and Test
+- WPF 桌面编辑器 MacroStudio：宏数据库、IDEA 风格工具窗口、可视化序列、条件序列、MCRX JSON 面板、动作面板和播放控制。
+- 全局触发键：支持单键、组合键、Ctrl/Alt/Shift/Win、鼠标侧键，以及每个宏独立的播放模式和进程筛选。
+- 播放模式：按下切换循环、按住循环、播放 N 次，并支持执行中停止。
+- 指令覆盖：键盘按下/抬起、Unicode 文本、鼠标按下/抬起、坐标点击、相对/绝对移动、滚轮、水平滚轮、媒体键、延迟、随机延迟、循环、调用宏、像素条件。
+- 条件序列：一个宏包含基础序列和条件序列；基础序列直接执行，条件序列在播放后按像素/时间窗口等条件触发 then-actions。
+- 内置转换器：支持 MacroHID `.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、按键精灵/QMacro 的导入导出，不依赖外部 Electron 转换器。
+- 高精度用户态播放：播放期间启用高优先级、QPC 调度、高分辨率计时器、短窗口自旋、预编译输入批次和低 GC 干扰策略。
 
-```powershell
-dotnet build MacroHID.sln
-dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj
-dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj -- --iterations 2000 --interval-us 1000
-dotnet run --project src\tools\MacroRunner\MacroRunner.csproj -- --macro samples\baseline.mcrx --pixels match
-dotnet run --project src\ui\MacroStudio\MacroStudio.csproj
-```
-
-Submit a sample macro through SendInput:
+### 快速开始
 
 ```powershell
-dotnet run --project src\tools\MacroRunner\MacroRunner.csproj -- --macro samples\baseline.mcrx --send --pixels skip
+dotnet build MacroHID.sln --configuration Release
+dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release
+.\scripts\Build-LocalRun.ps1 -Configuration Release
+.\artifacts\local-run\MacroStudio\MacroStudio.exe
 ```
 
-Build the Inno Setup installer:
+构建安装包：
 
 ```powershell
 .\scripts\Build-Installer.ps1 -Configuration Release
 ```
 
-Build and launch a local framework-dependent verification folder:
+安装包输出到：
+
+```text
+artifacts\installer\MacroHID-Setup-x64.exe
+```
+
+### 文档
+
+- [安装说明](docs/installer.md)
+- [使用说明](docs/usage.md)
+- [精度说明](docs/precision.md)
+- [架构说明](docs/architecture.md)
+- [MCRX 格式](docs/mcrx-format.md)
+
+### 边界
+
+MacroHID 不绕过安全边界，不支持安全桌面、UAC 弹窗、反作弊保护、受保护进程或系统级输入隔离。要控制管理员权限窗口，请以管理员身份启动 MacroStudio 或 MacroRunner。
+
+## English
+
+MacroHID is a local Windows input macro tool for Windows 10/11 x64. The current version is fully user-mode and submits input through Windows `SendInput`; it does not install a driver, enable test-signing, or require Secure Boot changes. It is intended for legal local desktop automation, normal applications, and elevated applications running at the same integrity level.
+
+### Highlights
+
+- MacroStudio WPF editor: macro database, IDEA-style tool windows, visual sequence editing, condition sequences, MCRX JSON panel, action palette, and playback controls.
+- Global triggers: single keys, key chords, Ctrl/Alt/Shift/Win, mouse side buttons, per-macro playback mode, and optional foreground process filter.
+- Playback modes: toggle loop, hold loop, fixed N runs, and stop while running.
+- Step coverage: keyboard down/up, Unicode text, mouse down/up, coordinate clicks, relative/absolute movement, vertical/horizontal wheel, media keys, fixed/random waits, loops, macro calls, and pixel conditions.
+- Condition sequences: each macro has a base sequence and condition directives; the base sequence runs directly, while condition then-actions run only after their condition is met.
+- Built-in converter: imports/exports MacroHID `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro formats without launching the external Electron converter.
+- High-precision user-mode playback: during playback only, MacroHID raises priority, uses QPC scheduling, high-resolution timers, short-window spinning, precompiled input batches, and low-GC execution paths.
+
+### Quick Start
 
 ```powershell
+dotnet build MacroHID.sln --configuration Release
+dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release
 .\scripts\Build-LocalRun.ps1 -Configuration Release
 .\artifacts\local-run\MacroStudio\MacroStudio.exe
 ```
 
-Use `.\scripts\Build-LocalRun.ps1 -Configuration Release -Launch` to start MacroStudio immediately after publishing. The local run folder depends on the installed .NET 8 runtime.
+Build the installer:
 
-## GitHub Actions
+```powershell
+.\scripts\Build-Installer.ps1 -Configuration Release
+```
 
-The repository includes `.github/workflows/ci.yml`.
+The setup package is written to:
 
-- The `.NET core, tools, and WPF` job builds `MacroHID.sln`, runs the core tests, runs a short `LatencyProbe` smoke test, runs a `MacroRunner` dry-run smoke test, and uploads `.NET` artifacts.
-- The `Installer` job builds `MacroHID-Setup-x64.exe` with Inno Setup and uploads it as an artifact.
+```text
+artifacts\installer\MacroHID-Setup-x64.exe
+```
 
-## Project Layout
+### Documentation
 
-- `src/shared/MacroHid.Core` - macro document model, parser, scheduler, input action compiler, pixel condition helpers, and latency statistics.
-- `src/shared/MacroHid.Converter` - built-in import/export adapters for MacroHID, MacroConverter XML, Razer, Lua, XMouse, and QMacro formats.
-- `src/shared/MacroHid.Runtime` - SendInput backend, playback runtime, pixel sampler, diagnostics, and Win32 interop.
-- `src/tools/LatencyProbe` - user-mode scheduler jitter and input encoding benchmark.
-- `src/tools/MacroRunner` - `.mcrx` dry-run and SendInput execution harness.
-- `src/ui/MacroStudio` - WPF macro editor, hotkey playback, diagnostics, localization, and built-in import/export tools.
-- `samples` - sample `.mcrx` macros.
-- `installer` - Inno Setup script and localized installer language files.
+- [Installation](docs/installer.md)
+- [Usage Guide](docs/usage.md)
+- [Precision Notes](docs/precision.md)
+- [Architecture](docs/architecture.md)
+- [MCRX Format](docs/mcrx-format.md)
 
-## Macro Library
+### Scope
 
-MacroStudio stores its local macro database under `%APPDATA%\MacroHID\MacroLibrary`. Each macro is still saved as `.mcrx`, with `library.json` holding the library index, folder names, selection state, and updated timestamps. The editor can also open or save standalone `.mcrx` files for sharing.
-
-## Scope Boundary
-
-MacroHID targets normal desktop applications and elevated local applications. MacroStudio requests Administrator privileges by default; run MacroRunner as Administrator too when targeting elevated/admin applications. It does not include bypasses for anti-cheat, protected processes, secure desktop, UAC prompts, or other security boundaries.
+MacroHID does not bypass security boundaries. Secure desktop, UAC prompts, anti-cheat contexts, protected processes, and system-level input isolation are out of scope. To control elevated windows, run MacroStudio or MacroRunner as Administrator.

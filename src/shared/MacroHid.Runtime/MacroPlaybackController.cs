@@ -30,7 +30,8 @@ public sealed record PlaybackExecutionOptions(
     PlaybackMode Mode,
     int Count,
     PixelEvaluationMode PixelMode,
-    bool NoWait);
+    bool NoWait,
+    PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback);
 
 public sealed record PlaybackRunResult(
     PlaybackRunStatus Status,
@@ -126,7 +127,8 @@ public sealed class MacroPlaybackController
             document.Playback.Mode,
             document.Playback.Count,
             PixelEvaluationMode.Live,
-            NoWait: false);
+            NoWait: false,
+            document.Playback.Precision);
         Status = PlaybackStatus.Running;
 
         activeRun = RunAndResetAsync(options, activeCancellation);

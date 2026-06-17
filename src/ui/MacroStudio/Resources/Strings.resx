@@ -33,15 +33,6 @@
   <data name="Save" xml:space="preserve">
     <value>Save</value>
   </data>
-  <data name="Validate" xml:space="preserve">
-    <value>Validate</value>
-  </data>
-  <data name="Probe" xml:space="preserve">
-    <value>Probe</value>
-  </data>
-  <data name="InputBackendReady" xml:space="preserve">
-    <value>Input backend ready</value>
-  </data>
   <data name="Macro" xml:space="preserve">
     <value>Macro</value>
   </data>
@@ -56,6 +47,9 @@
   </data>
   <data name="Trigger" xml:space="preserve">
     <value>Trigger</value>
+  </data>
+  <data name="ProcessFilter" xml:space="preserve">
+    <value>Process Filter</value>
   </data>
   <data name="Capture" xml:space="preserve">
     <value>Capture</value>
@@ -150,21 +144,6 @@
   <data name="Sequence" xml:space="preserve">
     <value>Sequence</value>
   </data>
-  <data name="Diagnostics" xml:space="preserve">
-    <value>Diagnostics</value>
-  </data>
-  <data name="PixelSamplerPending" xml:space="preserve">
-    <value>Pixel sampler: DXGI backend pending</value>
-  </data>
-  <data name="InputBackendPending" xml:space="preserve">
-    <value>Input backend: SendInput pending</value>
-  </data>
-  <data name="PixelSamplerStatus" xml:space="preserve">
-    <value>Pixel sampler: {0}</value>
-  </data>
-  <data name="InputBackendStatus" xml:space="preserve">
-    <value>Input backend: {0}</value>
-  </data>
   <data name="MacroValid" xml:space="preserve">
     <value>Macro valid</value>
   </data>
@@ -253,6 +232,11 @@
   <data name="NewMacro" xml:space="preserve"><value>New</value></data>
   <data name="NewFolder" xml:space="preserve"><value>Folder</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>Duplicate</value></data>
+  <data name="Copy" xml:space="preserve"><value>Copy</value></data>
+  <data name="Paste" xml:space="preserve"><value>Paste</value></data>
+  <data name="Rename" xml:space="preserve"><value>Rename</value></data>
+  <data name="Undo" xml:space="preserve"><value>Undo</value></data>
+  <data name="ClearAll" xml:space="preserve"><value>Clear All</value></data>
   <data name="Delete" xml:space="preserve"><value>Delete</value></data>
   <data name="SaveLibrary" xml:space="preserve"><value>Save Library</value></data>
   <data name="Add" xml:space="preserve"><value>Add</value></data>
@@ -286,6 +270,16 @@
   <data name="SortRecentlyUpdated" xml:space="preserve"><value>Recently Updated</value></data>
   <data name="Ungrouped" xml:space="preserve"><value>Macros</value></data>
   <data name="Folder" xml:space="preserve"><value>Folder</value></data>
+  <data name="MacroMovedToRoot" xml:space="preserve"><value>Moved macro to root</value></data>
+  <data name="MacroMovedToFolder" xml:space="preserve"><value>Moved macro to folder: {0}</value></data>
+  <data name="FolderDeleted" xml:space="preserve"><value>Deleted folder: {0}</value></data>
+  <data name="MacroCopied" xml:space="preserve"><value>Copied macro: {0}</value></data>
+  <data name="FolderCopied" xml:space="preserve"><value>Copied folder: {0}</value></data>
+  <data name="ClipboardEmpty" xml:space="preserve"><value>Clipboard is empty</value></data>
+  <data name="MacroPasted" xml:space="preserve"><value>Pasted macro: {0}</value></data>
+  <data name="FolderPasted" xml:space="preserve"><value>Pasted folder: {0}</value></data>
+  <data name="MacroRenamed" xml:space="preserve"><value>Renamed macro: {0}</value></data>
+  <data name="FolderRenamed" xml:space="preserve"><value>Renamed folder: {0}</value></data>
   <data name="DropActionsHint" xml:space="preserve"><value>Drop actions here or choose an item from Add.</value></data>
   <data name="LibrarySaved" xml:space="preserve"><value>Macro library saved</value></data>
   <data name="DeleteMacroConfirm" xml:space="preserve"><value>Delete macro "{0}" from the local library?</value></data>
@@ -300,4 +294,21 @@
   <data name="TemplateMacro" xml:space="preserve"><value>macro</value></data>
   <data name="TemplateLoop" xml:space="preserve"><value>loop</value></data>
   <data name="TemplatePixel" xml:space="preserve"><value>pixel condition</value></data>
+  <data name="MoveModeRelative" xml:space="preserve"><value>Relative</value></data>
+  <data name="MoveModeAbsolute" xml:space="preserve"><value>Absolute</value></data>
+  <data name="DelayMode" xml:space="preserve"><value>Delay Mode</value></data>
+  <data name="DelayMinMs" xml:space="preserve"><value>Min ms</value></data>
+  <data name="DelayMaxMs" xml:space="preserve"><value>Max ms</value></data>
+  <data name="WorkspaceWindowMenu" xml:space="preserve"><value>Window</value></data>
+  <data name="WorkspaceShow" xml:space="preserve"><value>Show</value></data>
+  <data name="WorkspaceFloat" xml:space="preserve"><value>Float</value></data>
+  <data name="WorkspaceDock" xml:space="preserve"><value>Dock</value></data>
+  <data name="WorkspaceResetLayout" xml:space="preserve"><value>Reset layout</value></data>
+  <data name="WorkspacePanelLibrary" xml:space="preserve"><value>Macro Library</value></data>
+  <data name="WorkspacePanelSequence" xml:space="preserve"><value>Sequence</value></data>
+  <data name="WorkspacePanelConditions" xml:space="preserve"><value>Conditions</value></data>
+  <data name="WorkspacePanelActions" xml:space="preserve"><value>Action Panel</value></data>
+  <data name="WorkspacePanelPlayback" xml:space="preserve"><value>Playback</value></data>
+  <data name="WorkspaceLayoutReset" xml:space="preserve"><value>Workspace layout reset</value></data>
+  <data name="JsonApplied" xml:space="preserve"><value>JSON applied</value></data>
 </root>

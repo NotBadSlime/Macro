@@ -1,0 +1,38 @@
+<Window x:Class="MacroStudio.Controls.ScreenCoordinatePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="选择屏幕坐标"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="#44000000"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Cursor="Cross"
+        Loaded="PickerWindow_Loaded"
+        KeyDown="PickerWindow_KeyDown"
+        PreviewMouseLeftButtonDown="PickerWindow_PreviewMouseLeftButtonDown">
+    <Grid>
+        <Border HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="0,28,0,0"
+                Padding="18,12"
+                Background="{DynamicResource PanelBackground}"
+                BorderBrush="{DynamicResource PanelBorder}"
+                BorderThickness="1"
+                CornerRadius="14">
+            <StackPanel>
+                <TextBlock Text="点击目标位置"
+                           Foreground="{DynamicResource PrimaryText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="左键确认，Esc 取消"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="12"
+                           Margin="0,4,0,0"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

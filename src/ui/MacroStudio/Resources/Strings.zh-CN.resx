@@ -11,9 +11,6 @@
   <data name="TraditionalChinese" xml:space="preserve"><value>繁体中文</value></data>
   <data name="Open" xml:space="preserve"><value>打开</value></data>
   <data name="Save" xml:space="preserve"><value>保存</value></data>
-  <data name="Validate" xml:space="preserve"><value>验证</value></data>
-  <data name="Probe" xml:space="preserve"><value>探测</value></data>
-  <data name="InputBackendReady" xml:space="preserve"><value>输入后端就绪</value></data>
   <data name="Macro" xml:space="preserve"><value>宏</value></data>
   <data name="Name" xml:space="preserve"><value>名称</value></data>
   <data name="ScheduledSteps" xml:space="preserve"><value>计划步骤</value></data>
@@ -42,6 +39,7 @@
   <data name="LastResultPressTrigger" xml:space="preserve"><value>上次结果：请按触发键或组合键</value></data>
   <data name="LastResultUnsupportedTriggerKey" xml:space="preserve"><value>上次结果：不支持的触发键“{0}”</value></data>
   <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次结果：已捕获 {0}</value></data>
+  <data name="ProcessFilter" xml:space="preserve"><value>进程筛选</value></data>
   <data name="ChooseTriggerBeforeListening" xml:space="preserve"><value>开始监听前请选择触发键。</value></data>
   <data name="HotkeyListenerStarted" xml:space="preserve"><value>上次结果：热键监听已启动</value></data>
   <data name="HotkeyListenerStopped" xml:space="preserve"><value>上次结果：热键监听已停止</value></data>
@@ -50,11 +48,6 @@
   <data name="PlaybackCountWholeNumber" xml:space="preserve"><value>播放次数必须是整数。</value></data>
   <data name="PlaybackCountAtLeastOne" xml:space="preserve"><value>播放次数至少为 1。</value></data>
   <data name="Sequence" xml:space="preserve"><value>序列</value></data>
-  <data name="Diagnostics" xml:space="preserve"><value>诊断</value></data>
-  <data name="PixelSamplerPending" xml:space="preserve"><value>像素采样器：DXGI 后端待实现</value></data>
-  <data name="InputBackendPending" xml:space="preserve"><value>输入后端：SendInput 待就绪</value></data>
-  <data name="PixelSamplerStatus" xml:space="preserve"><value>像素采样器：{0}</value></data>
-  <data name="InputBackendStatus" xml:space="preserve"><value>输入后端：{0}</value></data>
   <data name="MacroValid" xml:space="preserve"><value>宏有效</value></data>
   <data name="MacroInvalid" xml:space="preserve"><value>宏无效</value></data>
   <data name="PlaybackError" xml:space="preserve"><value>播放错误</value></data>
@@ -87,6 +80,11 @@
   <data name="NewMacro" xml:space="preserve"><value>新建</value></data>
   <data name="NewFolder" xml:space="preserve"><value>文件夹</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>复制</value></data>
+  <data name="Copy" xml:space="preserve"><value>复制</value></data>
+  <data name="Paste" xml:space="preserve"><value>粘贴</value></data>
+  <data name="Rename" xml:space="preserve"><value>重命名</value></data>
+  <data name="Undo" xml:space="preserve"><value>撤回</value></data>
+  <data name="ClearAll" xml:space="preserve"><value>清空</value></data>
   <data name="Delete" xml:space="preserve"><value>删除</value></data>
   <data name="SaveLibrary" xml:space="preserve"><value>保存到库</value></data>
   <data name="Add" xml:space="preserve"><value>添加</value></data>
@@ -120,6 +118,16 @@
   <data name="SortRecentlyUpdated" xml:space="preserve"><value>最近更新</value></data>
   <data name="Ungrouped" xml:space="preserve"><value>宏</value></data>
   <data name="Folder" xml:space="preserve"><value>文件夹</value></data>
+  <data name="MacroMovedToRoot" xml:space="preserve"><value>已移动宏到根目录</value></data>
+  <data name="MacroMovedToFolder" xml:space="preserve"><value>已移动宏到文件夹：{0}</value></data>
+  <data name="FolderDeleted" xml:space="preserve"><value>已删除文件夹：{0}</value></data>
+  <data name="MacroCopied" xml:space="preserve"><value>已复制宏：{0}</value></data>
+  <data name="FolderCopied" xml:space="preserve"><value>已复制文件夹：{0}</value></data>
+  <data name="ClipboardEmpty" xml:space="preserve"><value>剪贴板为空</value></data>
+  <data name="MacroPasted" xml:space="preserve"><value>已粘贴宏：{0}</value></data>
+  <data name="FolderPasted" xml:space="preserve"><value>已粘贴文件夹：{0}</value></data>
+  <data name="MacroRenamed" xml:space="preserve"><value>已重命名宏：{0}</value></data>
+  <data name="FolderRenamed" xml:space="preserve"><value>已重命名文件夹：{0}</value></data>
   <data name="DropActionsHint" xml:space="preserve"><value>把动作拖到这里，或直接点击右侧添加项。</value></data>
   <data name="LibrarySaved" xml:space="preserve"><value>宏数据库已保存</value></data>
   <data name="DeleteMacroConfirm" xml:space="preserve"><value>从本地数据库删除宏“{0}”？</value></data>
@@ -134,4 +142,21 @@
   <data name="TemplateMacro" xml:space="preserve"><value>宏</value></data>
   <data name="TemplateLoop" xml:space="preserve"><value>循环</value></data>
   <data name="TemplatePixel" xml:space="preserve"><value>像素条件</value></data>
+  <data name="MoveModeRelative" xml:space="preserve"><value>相对</value></data>
+  <data name="MoveModeAbsolute" xml:space="preserve"><value>绝对</value></data>
+  <data name="DelayMode" xml:space="preserve"><value>延迟模式</value></data>
+  <data name="DelayMinMs" xml:space="preserve"><value>最小 ms</value></data>
+  <data name="DelayMaxMs" xml:space="preserve"><value>最大 ms</value></data>
+  <data name="WorkspaceWindowMenu" xml:space="preserve"><value>窗口</value></data>
+  <data name="WorkspaceShow" xml:space="preserve"><value>显示</value></data>
+  <data name="WorkspaceFloat" xml:space="preserve"><value>浮动</value></data>
+  <data name="WorkspaceDock" xml:space="preserve"><value>停靠</value></data>
+  <data name="WorkspaceResetLayout" xml:space="preserve"><value>重置布局</value></data>
+  <data name="WorkspacePanelLibrary" xml:space="preserve"><value>宏数据库</value></data>
+  <data name="WorkspacePanelSequence" xml:space="preserve"><value>序列</value></data>
+  <data name="WorkspacePanelConditions" xml:space="preserve"><value>条件序列</value></data>
+  <data name="WorkspacePanelActions" xml:space="preserve"><value>动作面板</value></data>
+  <data name="WorkspacePanelPlayback" xml:space="preserve"><value>播放控制</value></data>
+  <data name="WorkspaceLayoutReset" xml:space="preserve"><value>工作区布局已重置</value></data>
+  <data name="JsonApplied" xml:space="preserve"><value>JSON 已应用</value></data>
 </root>

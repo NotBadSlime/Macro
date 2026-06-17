@@ -1,0 +1,37 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <SolidColorBrush x:Key="PageBackground" Color="#EFF3F8" />
+    <SolidColorBrush x:Key="PanelBackground" Color="#F7F8FB" />
+    <SolidColorBrush x:Key="PanelRaised" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="PanelBorder" Color="#DDE4EE" />
+    <SolidColorBrush x:Key="PrimaryText" Color="#20242B" />
+    <SolidColorBrush x:Key="SecondaryText" Color="#68707D" />
+    <SolidColorBrush x:Key="Accent" Color="#2F80ED" />
+    <SolidColorBrush x:Key="AccentBlue" Color="#2388FF" />
+    <SolidColorBrush x:Key="AccentOrange" Color="#F59E0B" />
+    <SolidColorBrush x:Key="AccentPink" Color="#E85D9E" />
+    <SolidColorBrush x:Key="Danger" Color="#E5484D" />
+    <SolidColorBrush x:Key="Hover" Color="#EEF2F6" />
+    <SolidColorBrush x:Key="Selection" Color="#E5F0FF" />
+    <SolidColorBrush x:Key="SelectionBorder" Color="#72A8F8" />
+    <SolidColorBrush x:Key="ChromeBackground" Color="#F7F8FB" />
+    <SolidColorBrush x:Key="ChromeBorder" Color="#E2E8F2" />
+    <SolidColorBrush x:Key="ControlBackground" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="ControlBorder" Color="#D7DFEA" />
+    <SolidColorBrush x:Key="ScrollThumb" Color="#CAD2DD" />
+    <SolidColorBrush x:Key="ScrollThumbHover" Color="#AEB8C6" />
+    <SolidColorBrush x:Key="DisabledText" Color="#AEB5C0" />
+    <SolidColorBrush x:Key="Placeholder" Color="#9BA3AF" />
+    <SolidColorBrush x:Key="FocusRing" Color="#2F80ED" />
+    <SolidColorBrush x:Key="DangerHover" Color="#FFEDEE" />
+    <SolidColorBrush x:Key="PrimaryHover" Color="#1E6ED8" />
+    <SolidColorBrush x:Key="ShellSidebarBackground" Color="#F7F8FB" />
+    <SolidColorBrush x:Key="WorkbenchBackground" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="InspectorBackground" Color="#F9FAFC" />
+
+    <sys:Double x:Key="PanelShadowOpacity">0.04</sys:Double>
+    <sys:Double x:Key="PanelShadowBlur">20</sys:Double>
+
+</ResourceDictionary>

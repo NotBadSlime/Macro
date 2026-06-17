@@ -8,9 +8,27 @@ public sealed record MacroLibraryItem(
     string Name,
     string Folder,
     string FileName,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<string>? Aliases = null)
+{
+    public bool MatchesReference(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return false;
+        }
 
-public sealed record MacroLibrarySnapshot(IReadOnlyList<MacroLibraryItem> Items, string? SelectedMacroId);
+        var normalized = reference.Trim();
+        return string.Equals(Id, normalized, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Name, normalized, StringComparison.CurrentCultureIgnoreCase)
+            || (Aliases?.Any(alias => string.Equals(alias, normalized, StringComparison.OrdinalIgnoreCase)) == true);
+    }
+}
+
+public sealed record MacroLibrarySnapshot(
+    IReadOnlyList<MacroLibraryItem> Items,
+    string? SelectedMacroId,
+    IReadOnlyList<string> Folders);
 
 public sealed class MacroLibraryStore
 {
@@ -40,7 +58,7 @@ public sealed class MacroLibraryStore
     public MacroLibrarySnapshot Load()
     {
         var index = LoadIndex();
-        return new MacroLibrarySnapshot(index.Items.AsReadOnly(), index.SelectedMacroId);
+        return new MacroLibrarySnapshot(index.Items.AsReadOnly(), index.SelectedMacroId, index.Folders.AsReadOnly());
     }
 
     public MacroLibraryItem CreateMacro(string name, string? folder = null, IReadOnlyList<MacroStep>? steps = null)
@@ -49,7 +67,7 @@ public sealed class MacroLibraryStore
         return CreateMacro(document, folder);
     }
 
-    public MacroLibraryItem CreateMacro(MacroDocument document, string? folder = null)
+    public MacroLibraryItem CreateMacro(MacroDocument document, string? folder = null, IReadOnlyList<string>? aliases = null)
     {
         Directory.CreateDirectory(rootDirectory);
 
@@ -60,13 +78,28 @@ public sealed class MacroLibraryStore
             NormalizeName(document.Name),
             NormalizeFolder(folder),
             CreateFileName(document.Name, id),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            NormalizeAliases(aliases));
 
+        EnsureFolder(index, item.Folder);
         index.Items.Add(item);
         index.SelectedMacroId = item.Id;
         SaveDocumentFile(item, document with { Name = item.Name });
         SaveIndex(index);
         return item;
+    }
+
+    public void CreateFolder(string folder)
+    {
+        var normalized = NormalizeFolder(folder);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return;
+        }
+
+        var index = LoadIndex();
+        EnsureFolder(index, normalized);
+        SaveIndex(index);
     }
 
     public MacroDocument ReadMacro(string id)
@@ -92,6 +125,29 @@ public sealed class MacroLibraryStore
         };
         index.Items[itemIndex] = updated;
         index.SelectedMacroId = updated.Id;
+        SaveDocumentFile(updated, document with { Name = updated.Name });
+        SaveIndex(index);
+        return updated;
+    }
+
+    public MacroLibraryItem RenameMacro(string id, string newName)
+    {
+        var index = LoadIndex();
+        var itemIndex = index.Items.FindIndex(item => item.Id == id);
+        if (itemIndex < 0)
+        {
+            throw new KeyNotFoundException($"Macro '{id}' was not found.");
+        }
+
+        var updated = index.Items[itemIndex] with
+        {
+            Name = NormalizeName(newName),
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        index.Items[itemIndex] = updated;
+        index.SelectedMacroId = updated.Id;
+
+        var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(updated)));
         SaveDocumentFile(updated, document with { Name = updated.Name });
         SaveIndex(index);
         return updated;
@@ -130,14 +186,119 @@ public sealed class MacroLibraryStore
             throw new KeyNotFoundException($"Macro '{id}' was not found.");
         }
 
+        var normalizedFolder = NormalizeFolder(folder);
+        EnsureFolder(index, normalizedFolder);
         var updated = index.Items[itemIndex] with
         {
-            Folder = NormalizeFolder(folder),
+            Folder = normalizedFolder,
             UpdatedAt = DateTimeOffset.UtcNow
         };
         index.Items[itemIndex] = updated;
         SaveIndex(index);
         return updated;
+    }
+
+    public MacroLibraryItem AddAliasesToMacro(string id, IReadOnlyList<string> aliases)
+    {
+        var normalizedAliases = NormalizeAliases(aliases);
+        if (normalizedAliases.Count == 0)
+        {
+            return FindItem(LoadIndex(), id);
+        }
+
+        var index = LoadIndex();
+        var itemIndex = index.Items.FindIndex(item => item.Id == id);
+        if (itemIndex < 0)
+        {
+            throw new KeyNotFoundException($"Macro '{id}' was not found.");
+        }
+
+        var existing = index.Items[itemIndex];
+        var existingAliases = existing.Aliases ?? [];
+        var updated = existing with
+        {
+            Aliases = NormalizeAliases([.. existingAliases, .. normalizedAliases]),
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        index.Items[itemIndex] = updated;
+        SaveIndex(index);
+        return updated;
+    }
+
+    public void DeleteFolder(string folder, bool deleteMacros)
+    {
+        var normalized = NormalizeFolder(folder);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return;
+        }
+
+        var index = LoadIndex();
+        index.Folders.RemoveAll(candidate => string.Equals(candidate, normalized, StringComparison.Ordinal));
+
+        if (deleteMacros)
+        {
+            var removed = index.Items
+                .Where(item => string.Equals(item.Folder, normalized, StringComparison.Ordinal))
+                .ToList();
+            foreach (var item in removed)
+            {
+                var path = GetMacroPath(item);
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+
+            index.Items.RemoveAll(item => string.Equals(item.Folder, normalized, StringComparison.Ordinal));
+            if (index.SelectedMacroId is not null && removed.Any(item => item.Id == index.SelectedMacroId))
+            {
+                index.SelectedMacroId = index.Items.FirstOrDefault()?.Id;
+            }
+        }
+        else
+        {
+            for (var i = 0; i < index.Items.Count; i++)
+            {
+                if (string.Equals(index.Items[i].Folder, normalized, StringComparison.Ordinal))
+                {
+                    index.Items[i] = index.Items[i] with
+                    {
+                        Folder = string.Empty,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    };
+                }
+            }
+        }
+
+        SaveIndex(index);
+    }
+
+    public void RenameFolder(string oldFolder, string newFolder)
+    {
+        var oldName = NormalizeFolder(oldFolder);
+        var newName = NormalizeFolder(newFolder);
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || string.Equals(oldName, newName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var index = LoadIndex();
+        index.Folders.RemoveAll(folder => string.Equals(folder, oldName, StringComparison.Ordinal));
+        EnsureFolder(index, newName);
+        for (var i = 0; i < index.Items.Count; i++)
+        {
+            if (string.Equals(index.Items[i].Folder, oldName, StringComparison.Ordinal))
+            {
+                index.Items[i] = index.Items[i] with
+                {
+                    Folder = newName,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+            }
+        }
+
+        SaveIndex(index);
     }
 
     public void SetSelected(string? id)
@@ -163,6 +324,11 @@ public sealed class MacroLibraryStore
         var index = JsonSerializer.Deserialize<MacroLibraryIndex>(File.ReadAllText(indexPath), Options)
             ?? new MacroLibraryIndex();
         index.Items ??= [];
+        index.Folders ??= [];
+        foreach (var item in index.Items)
+        {
+            EnsureFolder(index, item.Folder);
+        }
         return index;
     }
 
@@ -199,6 +365,34 @@ public sealed class MacroLibraryStore
         return string.IsNullOrWhiteSpace(folder) ? string.Empty : folder.Trim();
     }
 
+    private static IReadOnlyList<string> NormalizeAliases(IReadOnlyList<string>? aliases)
+    {
+        if (aliases is null || aliases.Count == 0)
+        {
+            return [];
+        }
+
+        return aliases
+            .Select(alias => alias.Trim())
+            .Where(alias => !string.IsNullOrWhiteSpace(alias))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static void EnsureFolder(MacroLibraryIndex index, string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return;
+        }
+
+        if (!index.Folders.Contains(folder, StringComparer.Ordinal))
+        {
+            index.Folders.Add(folder);
+            index.Folders.Sort(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
     private static string CreateFileName(string name, string id)
     {
         var safeName = string.Join(
@@ -215,6 +409,8 @@ public sealed class MacroLibraryStore
     private sealed class MacroLibraryIndex
     {
         public List<MacroLibraryItem> Items { get; set; } = [];
+
+        public List<string> Folders { get; set; } = [];
 
         public string? SelectedMacroId { get; set; }
     }

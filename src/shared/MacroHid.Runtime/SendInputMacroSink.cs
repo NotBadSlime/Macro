@@ -9,7 +9,15 @@ public sealed record InputSubmissionStats(
     int NativeInputsSubmitted,
     int FailedSubmissions,
     int LastWin32Error,
-    long LastSubmitQpc);
+    long LastSubmitQpc,
+    long LastSubmitDurationMicroseconds = 0,
+    PlaybackTimingStats? Timing = null);
+
+public sealed record PlaybackTimingStats(
+    int Count,
+    long MinJitterMicroseconds,
+    long MaxJitterMicroseconds,
+    string Summary);
 
 public sealed class SendInputMacroSink : IMacroInputSink
 {
@@ -19,6 +27,8 @@ public sealed class SendInputMacroSink : IMacroInputSink
     private int failedSubmissions;
     private int lastWin32Error;
     private long lastSubmitQpc;
+    private long lastSubmitDurationMicroseconds;
+    private PlaybackTimingStats? timingStats;
 
     public bool IsAvailable => OperatingSystem.IsWindows();
 
@@ -29,28 +39,73 @@ public sealed class SendInputMacroSink : IMacroInputSink
             throw new PlatformNotSupportedException("SendInput is only available on Windows.");
         }
 
-        var packets = SendInputEncoder.Encode(action, SendInputEncoder.GetVirtualDesktopBounds());
+        SubmitPrepared(sequence, PreparedInputBatch.FromActions([action]));
+    }
+
+    public void SubmitBatch(uint startSequence, IReadOnlyList<InputAction> actions)
+    {
+        SubmitPrepared(startSequence, PreparedInputBatch.FromActions(actions));
+    }
+
+    public void SubmitPrepared(uint startSequence, PreparedInputBatch prepared)
+    {
+        if (!IsAvailable)
+        {
+            throw new PlatformNotSupportedException("SendInput is only available on Windows.");
+        }
+
+        RuntimeNativeMethods.QueryPerformanceFrequency(out var frequency);
         RuntimeNativeMethods.QueryPerformanceCounter(out var submitQpc);
 
-        if (packets.Count == 0)
+        if (prepared.NativeInputCount == 0)
         {
-            RecordSuccess(nativeInputCount: 0, submitQpc);
+            RuntimeNativeMethods.QueryPerformanceCounter(out var afterEmptySubmit);
+            lock (gate)
+            {
+                actionsSubmitted += prepared.ActionCount;
+                lastWin32Error = 0;
+                lastSubmitQpc = submitQpc;
+                lastSubmitDurationMicroseconds = ToMicroseconds(afterEmptySubmit - submitQpc, frequency);
+            }
             return;
         }
 
-        var inputs = packets.Select(ToNativeInput).ToArray();
         var sent = RuntimeNativeMethods.SendInput(
-            (uint)inputs.Length,
-            inputs,
-            Marshal.SizeOf<NativeInput>());
-        if (sent != inputs.Length)
+            (uint)prepared.NativeInputCount,
+            prepared.NativeInputs,
+            NativeInputSize.Value);
+        RuntimeNativeMethods.QueryPerformanceCounter(out var afterSubmit);
+        var durationUs = ToMicroseconds(afterSubmit - submitQpc, frequency);
+        if (sent != prepared.NativeInputCount)
         {
             var error = Marshal.GetLastWin32Error();
-            RecordFailure(submitQpc, error);
-            throw new Win32Exception(error, $"SendInput submitted {sent} of {inputs.Length} native inputs.");
+            lock (gate)
+            {
+                actionsSubmitted += prepared.ActionCount;
+                failedSubmissions++;
+                lastWin32Error = error;
+                lastSubmitQpc = submitQpc;
+                lastSubmitDurationMicroseconds = durationUs;
+            }
+            throw new Win32Exception(error, $"SendInput submitted {sent} of {prepared.NativeInputCount} native inputs (batch of {prepared.ActionCount} actions).");
         }
 
-        RecordSuccess(inputs.Length, submitQpc);
+        lock (gate)
+        {
+            actionsSubmitted += prepared.ActionCount;
+            nativeInputsSubmitted += prepared.NativeInputCount;
+            lastWin32Error = 0;
+            lastSubmitQpc = submitQpc;
+            lastSubmitDurationMicroseconds = durationUs;
+        }
+    }
+
+    public void SetTimingStats(PlaybackTimingStats timing)
+    {
+        lock (gate)
+        {
+            timingStats = timing;
+        }
     }
 
     public InputSubmissionStats? GetStats()
@@ -62,64 +117,19 @@ public sealed class SendInputMacroSink : IMacroInputSink
                 nativeInputsSubmitted,
                 failedSubmissions,
                 lastWin32Error,
-                lastSubmitQpc);
+                lastSubmitQpc,
+                lastSubmitDurationMicroseconds,
+                timingStats);
         }
     }
 
-    private void RecordSuccess(int nativeInputCount, long submitQpc)
+    private static long ToMicroseconds(long ticks, long frequency)
     {
-        lock (gate)
-        {
-            actionsSubmitted++;
-            nativeInputsSubmitted += nativeInputCount;
-            lastWin32Error = 0;
-            lastSubmitQpc = submitQpc;
-        }
+        return frequency <= 0 ? 0 : (long)Math.Round(ticks * 1_000_000.0 / frequency, MidpointRounding.AwayFromZero);
     }
 
-    private void RecordFailure(long submitQpc, int error)
+    private static class NativeInputSize
     {
-        lock (gate)
-        {
-            actionsSubmitted++;
-            failedSubmissions++;
-            lastWin32Error = error;
-            lastSubmitQpc = submitQpc;
-        }
-    }
-
-    private static NativeInput ToNativeInput(SendInputPacket packet)
-    {
-        if (packet.Kind == SendInputPacketKind.Keyboard)
-        {
-            return new NativeInput
-            {
-                Type = RuntimeNativeMethods.InputKeyboard,
-                Union = new NativeInputUnion
-                {
-                    Keyboard = new NativeKeyboardInput
-                    {
-                        VirtualKey = packet.VirtualKey,
-                        ScanCode = packet.ScanCode,
-                        Flags = packet.Flags
-                    }
-                }
-            };
-        }
-
-        return new NativeInput
-        {
-            Type = RuntimeNativeMethods.InputMouse,
-            Union = new NativeInputUnion
-            {
-                Mouse = new NativeMouseInput
-                {
-                    Dx = packet.MouseX,
-                    Dy = packet.MouseY,
-                    MouseData = packet.MouseData,
-                    Flags = packet.Flags
-                }
-            }
-        };
+        public static readonly int Value = Marshal.SizeOf<NativeInput>();
     }
 }

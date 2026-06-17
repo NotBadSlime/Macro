@@ -3,6 +3,20 @@ using MacroHid.Core;
 
 namespace MacroStudio;
 
+public sealed record HotkeyBinding(string Id, HotkeyGesture Gesture);
+
+public sealed class HotkeyTriggeredEventArgs : EventArgs
+{
+    public HotkeyTriggeredEventArgs(string id, HotkeyGesture gesture)
+    {
+        Id = id;
+        Gesture = gesture;
+    }
+
+    public string Id { get; }
+    public HotkeyGesture Gesture { get; }
+}
+
 public sealed class GlobalKeyboardHook : IDisposable
 {
     private const int WhKeyboardLl = 13;
@@ -22,10 +36,10 @@ public sealed class GlobalKeyboardHook : IDisposable
     private readonly LowLevelHookProc mouseHookProc;
     private readonly HashSet<int> pressedKeys = [];
     private readonly HashSet<MouseButton> pressedMouseButtons = [];
+    private readonly Dictionary<string, HotkeyGesture> gestures = [];
+    private readonly HashSet<string> triggersDown = [];
     private IntPtr hookHandle;
     private IntPtr mouseHookHandle;
-    private HotkeyGesture? gesture;
-    private bool triggerDown;
 
     public GlobalKeyboardHook()
     {
@@ -33,15 +47,35 @@ public sealed class GlobalKeyboardHook : IDisposable
         mouseHookProc = MouseHookCallback;
     }
 
-    public event EventHandler? TriggerPressed;
+    public event EventHandler<HotkeyTriggeredEventArgs>? TriggerPressed;
 
-    public event EventHandler? TriggerReleased;
+    public event EventHandler<HotkeyTriggeredEventArgs>? TriggerReleased;
 
     public void Start(HotkeyGesture trigger)
     {
+        Start([new HotkeyBinding(string.Empty, trigger)]);
+    }
+
+    public void Start(IEnumerable<HotkeyBinding> bindings)
+    {
         Stop();
-        gesture = trigger;
-        triggerDown = false;
+        var distinctBindings = bindings
+            .Select(binding => new HotkeyBinding(binding.Id ?? string.Empty, binding.Gesture))
+            .GroupBy(binding => binding.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
+        if (distinctBindings.Count == 0)
+        {
+            throw new InvalidOperationException("At least one hotkey binding is required.");
+        }
+
+        foreach (var binding in distinctBindings)
+        {
+            gestures[binding.Id] = binding.Gesture;
+        }
+
+        triggersDown.Clear();
         pressedKeys.Clear();
         pressedMouseButtons.Clear();
         hookHandle = SetWindowsHookEx(WhKeyboardLl, keyboardHookProc, IntPtr.Zero, 0);
@@ -72,7 +106,8 @@ public sealed class GlobalKeyboardHook : IDisposable
             mouseHookHandle = IntPtr.Zero;
         }
 
-        triggerDown = false;
+        gestures.Clear();
+        triggersDown.Clear();
         pressedKeys.Clear();
         pressedMouseButtons.Clear();
     }
@@ -144,7 +179,7 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && gesture is not null)
+        if (nCode >= 0 && gestures.Count > 0)
         {
             var message = wParam.ToInt32();
             var data = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
@@ -166,7 +201,7 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && gesture is not null)
+        if (nCode >= 0 && gestures.Count > 0)
         {
             var message = wParam.ToInt32();
             if (message is WmXButtonDown or WmXButtonUp)
@@ -193,59 +228,62 @@ public sealed class GlobalKeyboardHook : IDisposable
     private void HandleKeyDown(int virtualKey)
     {
         var wasAdded = pressedKeys.Add(virtualKey);
-        if (!wasAdded || gesture is null || triggerDown)
+        if (!wasAdded)
         {
             return;
         }
 
-        if (gesture.Key == HidKey.None
-            && gesture.MouseButton == MouseButton.None
-            && ModifiersMatch(gesture.Modifiers))
-        {
-            triggerDown = true;
-            TriggerPressed?.Invoke(this, EventArgs.Empty);
-            return;
-        }
-
-        if (TryMapVirtualKeyToHidKey(virtualKey, out var key) && key == gesture.Key && ModifiersMatch(gesture.Modifiers))
-        {
-            triggerDown = true;
-            TriggerPressed?.Invoke(this, EventArgs.Empty);
-        }
+        EvaluatePressedTriggers();
     }
 
     private void HandleKeyUp(int virtualKey)
     {
         pressedKeys.Remove(virtualKey);
-        if (triggerDown && gesture is not null && !GestureIsDown(gesture))
-        {
-            triggerDown = false;
-            TriggerReleased?.Invoke(this, EventArgs.Empty);
-        }
+        EvaluateReleasedTriggers();
     }
 
     private void HandleMouseDown(MouseButton button)
     {
         var wasAdded = pressedMouseButtons.Add(button);
-        if (!wasAdded || gesture is null || triggerDown)
+        if (!wasAdded)
         {
             return;
         }
 
-        if (gesture.MouseButton == button && ModifiersMatch(gesture.Modifiers))
-        {
-            triggerDown = true;
-            TriggerPressed?.Invoke(this, EventArgs.Empty);
-        }
+        EvaluatePressedTriggers();
     }
 
     private void HandleMouseUp(MouseButton button)
     {
         pressedMouseButtons.Remove(button);
-        if (triggerDown && gesture is not null && !GestureIsDown(gesture))
+        EvaluateReleasedTriggers();
+    }
+
+    private void EvaluatePressedTriggers()
+    {
+        foreach (var (id, currentGesture) in gestures)
         {
-            triggerDown = false;
-            TriggerReleased?.Invoke(this, EventArgs.Empty);
+            if (triggersDown.Contains(id) || !GestureIsDown(currentGesture))
+            {
+                continue;
+            }
+
+            triggersDown.Add(id);
+            TriggerPressed?.Invoke(this, new HotkeyTriggeredEventArgs(id, currentGesture));
+        }
+    }
+
+    private void EvaluateReleasedTriggers()
+    {
+        foreach (var id in triggersDown.ToList())
+        {
+            if (!gestures.TryGetValue(id, out var currentGesture) || GestureIsDown(currentGesture))
+            {
+                continue;
+            }
+
+            triggersDown.Remove(id);
+            TriggerReleased?.Invoke(this, new HotkeyTriggeredEventArgs(id, currentGesture));
         }
     }
 

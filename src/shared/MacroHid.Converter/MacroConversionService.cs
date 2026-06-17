@@ -23,6 +23,21 @@ public static class MacroConversionService
         return FormatInfos;
     }
 
+    public static bool TryGetRazerMacroGuid(string content, out string guid)
+    {
+        try
+        {
+            var root = XDocument.Parse(content).Root;
+            guid = ElementValue(root, "Guid").Trim();
+            return !string.IsNullOrWhiteSpace(guid);
+        }
+        catch
+        {
+            guid = string.Empty;
+            return false;
+        }
+    }
+
     public static MacroConversionFormat DetectFormat(string content, string? fileName = null)
     {
         var trimmed = content.TrimStart();
@@ -91,7 +106,7 @@ public static class MacroConversionService
             _ => throw new NotSupportedException($"Unsupported import format '{format}'.")
         };
 
-        return new MacroImportResult(document, format, diagnostics);
+        return new MacroImportResult(MacroStepNormalizer.Normalize(document), format, diagnostics);
     }
 
     public static MacroExportResult ExportFromMcrx(MacroDocument document, MacroConversionFormat targetFormat, string? sourceFileName = null)
@@ -633,6 +648,11 @@ public static class MacroConversionService
 
             if (type == "7")
             {
+                if (TryGetRazerModuleReferenceName(current, out var macroName))
+                {
+                    steps.Add(new MacroCallStep(macroName));
+                }
+
                 continue;
             }
 
@@ -1041,7 +1061,15 @@ public static class MacroConversionService
             var guid = ElementValue(item, "guid");
             if (string.IsNullOrWhiteSpace(guid) || !modules.TryGetValue(guid, out var module))
             {
-                diagnostics.Warning("razer.moduleMissing", $"Razer module '{guid}' was referenced but not provided.");
+                if (TryGetRazerModuleReferenceName(item, out _))
+                {
+                    expanded.Add(item);
+                }
+                else
+                {
+                    diagnostics.Warning("razer.moduleMissing", $"Razer module '{guid}' was referenced but not provided.");
+                }
+
                 continue;
             }
 
@@ -1055,6 +1083,70 @@ public static class MacroConversionService
         }
 
         return expanded;
+    }
+
+    private static bool TryGetRazerModuleReferenceName(XElement element, out string macroName)
+    {
+        string[] elementNames =
+        [
+            "MacroName",
+            "ModuleName",
+            "LinkedMacroName",
+            "SubMacroName",
+            "DisplayName",
+            "Name"
+        ];
+
+        foreach (var name in elementNames)
+        {
+            var value = FirstDescendantValue(element, name);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                macroName = value.Trim();
+                return true;
+            }
+        }
+
+        string[] attributeNames =
+        [
+            "macroName",
+            "moduleName",
+            "linkedMacroName",
+            "subMacroName",
+            "displayName",
+            "name"
+        ];
+
+        foreach (var name in attributeNames)
+        {
+            var value = element.Attributes()
+                .FirstOrDefault(attr => string.Equals(attr.Name.LocalName, name, StringComparison.OrdinalIgnoreCase))
+                ?.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                macroName = value.Trim();
+                return true;
+            }
+        }
+
+        var guid = ElementValue(element, "guid");
+        if (!string.IsNullOrWhiteSpace(guid))
+        {
+            macroName = guid.Trim();
+            return true;
+        }
+
+        macroName = string.Empty;
+        return false;
+    }
+
+    private static string FirstDescendantValue(XElement element, string localName)
+    {
+        return element
+            .Descendants()
+            .FirstOrDefault(descendant => string.Equals(descendant.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+            ?.Value
+            ?? string.Empty;
     }
 
     private static bool IsRazerMouseUp(XElement element, MouseButton button)

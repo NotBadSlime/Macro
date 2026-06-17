@@ -2,272 +2,18 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:controls="clr-namespace:MacroStudio.Controls"
         Title="MacroHID Studio"
-        Height="820"
-        Width="1360"
-        MinHeight="720"
-        MinWidth="1180"
-        Background="#F5F5F7"
+        Height="600"
+        Width="1120"
+        MinHeight="560"
+        MinWidth="1040"
+        Background="{DynamicResource PageBackground}"
         FontFamily="Segoe UI"
         ResizeMode="CanResize"
+        PreviewKeyDown="MainWindow_PreviewKeyDown"
+        PreviewMouseDown="MainWindow_PreviewMouseDown"
         WindowStyle="None">
-    <Window.Resources>
-        <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F5F5F7" />
-        <SolidColorBrush x:Key="PanelBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="PanelRaisedBrush" Color="#FBFBFD" />
-        <SolidColorBrush x:Key="PanelHoverBrush" Color="#EEF2F7" />
-        <SolidColorBrush x:Key="PanelBorderBrush" Color="#DADDE5" />
-        <SolidColorBrush x:Key="PrimaryTextBrush" Color="#1D1D1F" />
-        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#6E6E73" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#34C759" />
-        <SolidColorBrush x:Key="BlueAccentBrush" Color="#007AFF" />
-        <SolidColorBrush x:Key="OrangeAccentBrush" Color="#FF9500" />
-        <SolidColorBrush x:Key="PinkAccentBrush" Color="#FF2D55" />
-        <SolidColorBrush x:Key="DangerBrush" Color="#FF3B30" />
-
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-        </Style>
-
-        <Style TargetType="TextBox">
-            <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="CaretBrush" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Padding" Value="9,5" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
-
-        <Style TargetType="ComboBox">
-            <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Padding" Value="6,2" />
-        </Style>
-
-        <Style x:Key="ToolButton" TargetType="Button">
-            <Setter Property="MinWidth" Value="76" />
-            <Setter Property="Height" Value="32" />
-            <Setter Property="Padding" Value="12,0" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="BorderBrush" Value="#D5D9E2" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="7">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#F0F3F8" />
-                    <Setter Property="BorderBrush" Value="#C8CDD8" />
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Opacity" Value="0.45" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
-            <Setter Property="Foreground" Value="#FFFFFF" />
-            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-        </Style>
-
-        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
-            <Setter Property="Background" Value="#FFF2F2" />
-            <Setter Property="BorderBrush" Value="#FFD1D1" />
-            <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
-        </Style>
-
-        <Style x:Key="WindowControlButton" TargetType="Button">
-            <Setter Property="Width" Value="44" />
-            <Setter Property="Height" Value="34" />
-            <Setter Property="Margin" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#EDEEF2" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style TargetType="Button" BasedOn="{StaticResource ToolButton}" />
-
-        <Style x:Key="PanelTitle" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="FontSize" Value="16" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-
-        <Style x:Key="MutedText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
-            <Setter Property="FontSize" Value="12" />
-        </Style>
-
-        <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-            <Setter Property="Margin" Value="0,0,0,4" />
-        </Style>
-
-        <Style x:Key="PanelBorder" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="8" />
-        </Style>
-
-        <Style x:Key="ActionButton" TargetType="Button">
-            <Setter Property="Height" Value="48" />
-            <Setter Property="Margin" Value="0,0,0,8" />
-            <Setter Property="Padding" Value="10,0" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="7">
-                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#F5F7FA" />
-                    <Setter Property="BorderBrush" Value="#C8CDD8" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style TargetType="ListBox">
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
-        </Style>
-
-        <Style TargetType="ListBoxItem">
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="Margin" Value="4,3" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Root"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="Transparent"
-                                BorderThickness="1"
-                                CornerRadius="6">
-                            <ContentPresenter />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#F4F6FA" />
-                            </Trigger>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#EAF7EA" />
-                                <Setter TargetName="Root" Property="BorderBrush" Value="#34C759" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <DataTemplate x:Key="MacroEntryTemplate">
-            <Grid Margin="8,7">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="24" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Icon}"
-                           FontSize="15"
-                           Foreground="{Binding Accent}"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1">
-                    <TextBlock Text="{Binding Title}"
-                               FontWeight="{Binding Weight}"
-                               Foreground="{Binding TitleBrush}"
-                               TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding Subtitle}"
-                               Foreground="{StaticResource SecondaryTextBrush}"
-                               FontSize="11"
-                               TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-            </Grid>
-        </DataTemplate>
-
-        <DataTemplate x:Key="StepTemplate">
-            <Grid Margin="10,8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="36" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="86" />
-                </Grid.ColumnDefinitions>
-                <Border Width="26"
-                        Height="26"
-                        Background="{Binding AccentBrush}"
-                        CornerRadius="13"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Top">
-                    <TextBlock Text="{Binding Icon}"
-                               Foreground="#1D1D1F"
-                               FontSize="12"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                </Border>
-                <StackPanel Grid.Column="1">
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding Subtitle}"
-                               Foreground="{StaticResource SecondaryTextBrush}"
-                               FontSize="12"
-                               Margin="0,3,0,0"
-                               TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-                <TextBlock Grid.Column="2"
-                           Text="{Binding Badge}"
-                           Foreground="{StaticResource SecondaryTextBrush}"
-                           HorizontalAlignment="Right"
-                           VerticalAlignment="Top" />
-            </Grid>
-        </DataTemplate>
-    </Window.Resources>
 
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0"
@@ -277,572 +23,217 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
 
-    <DockPanel>
-        <Border x:Name="TopChromeBar"
-                DockPanel.Dock="Top"
-                Background="#FFFFFF"
-                BorderBrush="{StaticResource PanelBorderBrush}"
-                BorderThickness="0,0,0,1"
-                Padding="16,10"
-                MouseLeftButtonDown="TopChromeBar_MouseLeftButtonDown">
-            <DockPanel LastChildFill="False">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="MacroHID"
-                               Foreground="{StaticResource PrimaryTextBrush}"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Margin="0,0,16,0" />
-                    <Button x:Name="OpenButton" Content="Open" Click="OpenMacro_Click" />
-                    <Button x:Name="SaveButton" Content="Save" Click="SaveMacro_Click" />
-                    <Button x:Name="ValidateButton" Content="Validate" Click="ValidateMacro_Click" />
-                    <Button x:Name="ProbeButton" Content="Probe" Click="Probe_Click" />
-                </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="LanguageLabelText"
-                               Text="Language"
-                               Foreground="{StaticResource SecondaryTextBrush}"
-                               VerticalAlignment="Center"
-                               Margin="0,0,8,0" />
-                    <ComboBox x:Name="LanguageComboBox"
-                              Width="150"
-                              Height="30"
-                              Margin="0,0,14,0"
-                              SelectionChanged="LanguageComboBox_SelectionChanged" />
-                    <Border Background="#F5F7FA"
-                            BorderBrush="{StaticResource PanelBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="7"
-                            Padding="10,5"
-                            Margin="0,0,10,0">
-                        <TextBlock x:Name="StatusText"
-                                   Foreground="{StaticResource SecondaryTextBrush}"
-                                   VerticalAlignment="Center"
-                                   Text="Input backend ready" />
-                    </Border>
-                    <Button x:Name="MinimizeWindowButton"
-                            Style="{StaticResource WindowControlButton}"
-                            Content="-"
-                            Click="MinimizeWindow_Click" />
-                    <Button x:Name="MaximizeWindowButton"
-                            Style="{StaticResource WindowControlButton}"
-                            Content="□"
-                            Click="MaximizeWindow_Click" />
-                    <Button x:Name="CloseWindowButton"
-                            Style="{StaticResource WindowControlButton}"
-                            Content="X"
-                            Click="CloseWindow_Click" />
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <Grid Margin="14">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" MinWidth="260" />
-                <ColumnDefinition Width="14" />
-                <ColumnDefinition Width="*" MinWidth="480" />
-                <ColumnDefinition Width="14" />
-                <ColumnDefinition Width="340" MinWidth="320" />
-            </Grid.ColumnDefinitions>
-
-            <Border Grid.Column="0" Style="{StaticResource PanelBorder}" Padding="14">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Top">
-                        <TextBlock x:Name="LibraryTitleText" Style="{StaticResource PanelTitle}" Text="Macro Library" />
-                        <TextBox x:Name="MacroSearchBox"
-                                 Height="32"
-                                 Margin="0,12,0,8"
-                                 TextChanged="MacroSearchBox_TextChanged" />
-                        <ComboBox x:Name="LibrarySortBox"
-                                  Height="30"
-                                  Margin="0,0,0,10"
-                                  SelectionChanged="LibrarySortBox_SelectionChanged">
-                            <ComboBoxItem Tag="name" Content="Name A-Z" IsSelected="True" />
-                            <ComboBoxItem Tag="updated" Content="Recently Updated" />
-                        </ComboBox>
-                        <WrapPanel Margin="0,0,0,8">
-                            <Button x:Name="NewMacroButton" MinWidth="72" Content="New" Click="NewMacro_Click" />
-                            <Button x:Name="NewFolderButton" MinWidth="76" Content="Folder" Click="NewFolder_Click" />
-                            <Button x:Name="DuplicateMacroButton" MinWidth="86" Content="Duplicate" Click="DuplicateMacro_Click" />
-                            <Button x:Name="DeleteMacroButton" MinWidth="72" Content="Delete" Style="{StaticResource DangerButton}" Click="DeleteMacro_Click" />
-                        </WrapPanel>
+    <Border x:Name="AppShellRoot"
+            Background="{DynamicResource PageBackground}">
+        <DockPanel>
+            <Border x:Name="CommandBar"
+                    DockPanel.Dock="Top"
+                    Background="{DynamicResource ChromeBackground}"
+                    BorderBrush="{DynamicResource ChromeBorder}"
+                    BorderThickness="0,0,0,1"
+                    Padding="14,8"
+                    MouseLeftButtonDown="TopChromeBar_MouseLeftButtonDown">
+                <DockPanel LastChildFill="False">
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="MacroHID"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,14,0" />
+                        <Button x:Name="OpenButton"
+                                Style="{StaticResource CommandBarButton}"
+                                Content="打开"
+                                Click="OpenMacro_Click" />
+                        <Button x:Name="SaveButton"
+                                Style="{StaticResource CommandBarButton}"
+                                Content="保存"
+                                Click="SaveMacro_Click" />
+                        <Button x:Name="WindowMenuButton"
+                                Style="{StaticResource CommandBarButton}"
+                                Content="窗口"
+                                Click="WindowMenu_Click">
+                            <Button.ContextMenu>
+                                <ContextMenu x:Name="WindowMenuContext">
+                                    <MenuItem x:Name="ShowPanelsMenuItem" Header="显示">
+                                        <MenuItem x:Name="ShowLibraryMenuItem" Header="宏数据库" Tag="library" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                        <MenuItem x:Name="ShowSequenceMenuItem" Header="序列" Tag="sequence" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                        <MenuItem x:Name="ShowConditionMenuItem" Header="条件序列" Tag="conditions" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                        <MenuItem x:Name="ShowJsonMenuItem" Header="MCRX JSON" Tag="json" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                        <MenuItem x:Name="ShowActionMenuItem" Header="动作面板" Tag="actions" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                        <MenuItem x:Name="ShowPlaybackMenuItem" Header="播放控制" Tag="playback" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                    </MenuItem>
+                                    <MenuItem x:Name="FloatPanelsMenuItem" Header="浮动">
+                                        <MenuItem Header="宏数据库" Tag="library" Click="FloatPanel_Click" />
+                                        <MenuItem Header="序列" Tag="sequence" Click="FloatPanel_Click" />
+                                        <MenuItem Header="条件序列" Tag="conditions" Click="FloatPanel_Click" />
+                                        <MenuItem x:Name="FloatJsonMenuItem" Header="MCRX JSON" Tag="json" Click="FloatPanel_Click" />
+                                        <MenuItem Header="动作面板" Tag="actions" Click="FloatPanel_Click" />
+                                        <MenuItem Header="播放控制" Tag="playback" Click="FloatPanel_Click" />
+                                    </MenuItem>
+                                    <MenuItem x:Name="DockPanelsMenuItem" Header="停靠">
+                                        <MenuItem Header="宏数据库" Tag="library" Click="DockPanel_Click" />
+                                        <MenuItem Header="序列" Tag="sequence" Click="DockPanel_Click" />
+                                        <MenuItem Header="条件序列" Tag="conditions" Click="DockPanel_Click" />
+                                        <MenuItem x:Name="DockJsonMenuItem" Header="MCRX JSON" Tag="json" Click="DockPanel_Click" />
+                                        <MenuItem Header="动作面板" Tag="actions" Click="DockPanel_Click" />
+                                        <MenuItem Header="播放控制" Tag="playback" Click="DockPanel_Click" />
+                                    </MenuItem>
+                                    <Separator />
+                                    <MenuItem x:Name="ResetWorkspaceLayoutMenuItem" Header="重置布局" Click="ResetWorkspaceLayout_Click" />
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
                     </StackPanel>
-
-                    <ListBox x:Name="MacroListBox"
-                             ItemTemplate="{StaticResource MacroEntryTemplate}"
-                             SelectionChanged="MacroListBox_SelectionChanged"
-                             PreviewMouseMove="MacroListBox_PreviewMouseMove" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource PanelRaised}"
+                                BorderBrush="{DynamicResource PanelBorder}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="10,5"
+                                Margin="0,0,10,0">
+                            <TextBlock x:Name="StatusText"
+                                       Foreground="{DynamicResource SecondaryText}"
+                                       VerticalAlignment="Center"
+                                       Text="Input backend ready" />
+                        </Border>
+                        <TextBlock x:Name="LanguageLabelText"
+                                   Text="语言"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+                        <ComboBox x:Name="LanguageComboBox"
+                                  Width="142"
+                                  Height="32"
+                                  Margin="0,0,12,0"
+                                  SelectionChanged="LanguageComboBox_SelectionChanged" />
+                        <Button x:Name="ThemeToggleButton"
+                                Style="{StaticResource WindowControlButton}"
+                                Content="☀"
+                                Click="ThemeToggle_Click"
+                                ToolTip="Toggle theme" />
+                        <Button x:Name="MinimizeWindowButton"
+                                Style="{StaticResource WindowControlButton}"
+                                Content="-"
+                                Click="MinimizeWindow_Click" />
+                        <Button x:Name="MaximizeWindowButton"
+                                Style="{StaticResource WindowControlButton}"
+                                Content="□"
+                                Click="MaximizeWindow_Click" />
+                        <Button x:Name="CloseWindowButton"
+                                Style="{StaticResource CloseWindowButton}"
+                                Content="X"
+                                Click="CloseWindow_Click" />
+                    </StackPanel>
                 </DockPanel>
             </Border>
 
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+            <Grid x:Name="WorkspaceRoot" ClipToBounds="True">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="46" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-                <Border x:Name="MacroGroupBox"
-                        Style="{StaticResource PanelBorder}"
-                        Padding="14"
-                        Margin="0,0,0,12">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="220" />
-                        </Grid.ColumnDefinitions>
+                <Border x:Name="ToolWindowRail"
+                        Grid.Column="0"
+                        Background="{DynamicResource ChromeBackground}"
+                        BorderBrush="{DynamicResource ChromeBorder}"
+                        BorderThickness="0,0,1,0">
+                    <DockPanel Margin="4,8,4,8" LastChildFill="False">
+                        <StackPanel x:Name="ToolWindowBottomButtons"
+                                    DockPanel.Dock="Bottom"
+                                    VerticalAlignment="Bottom">
+                            <ToggleButton x:Name="LibraryToolButton"
+                                          Style="{StaticResource ToolWindowRailButton}"
+                                          Content="&#xE8B7;"
+                                          Tag="library"
+                                          ToolTip="宏数据库"
+                                          Click="WorkspaceToolButton_Click" />
+                            <ToggleButton x:Name="SequenceToolButton"
+                                          Style="{StaticResource ToolWindowRailButton}"
+                                          Content="&#xE8FD;"
+                                          Tag="sequence"
+                                          ToolTip="序列"
+                                          Click="WorkspaceToolButton_Click" />
+                            <ToggleButton x:Name="ConditionToolButton"
+                                          Style="{StaticResource ToolWindowRailButton}"
+                                          Content="&#xE9D9;"
+                                          Tag="conditions"
+                                          ToolTip="条件序列"
+                                          Click="WorkspaceToolButton_Click" />
+                            <ToggleButton x:Name="ActionToolButton"
+                                          Style="{StaticResource ToolWindowRailButton}"
+                                          Content="&#xE8A7;"
+                                          Tag="actions"
+                                          ToolTip="动作面板"
+                                          Click="WorkspaceToolButton_Click" />
+                            <ToggleButton x:Name="JsonToolButton"
+                                          Style="{StaticResource ToolWindowRailButton}"
+                                          Content="&#xE943;"
+                                          Tag="json"
+                                          ToolTip="MCRX JSON"
+                                          Click="WorkspaceToolButton_Click" />
+                            <ToggleButton x:Name="PlaybackToolButton"
+                                          Style="{StaticResource ToolWindowRailButton}"
+                                          Content="&#xE768;"
+                                          Tag="playback"
+                                          ToolTip="播放控制"
+                                          Click="WorkspaceToolButton_Click" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Grid x:Name="WorkbenchGrid" Margin="14,10,14,14" ClipToBounds="True" Grid.Column="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" MinWidth="200" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="500" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="420" MinWidth="340" />
+                    </Grid.ColumnDefinitions>
+
+                    <ContentControl x:Name="LibraryPanelHost" Grid.Column="0">
+                        <controls:MacroLibraryPanel x:Name="LibraryPanel" />
+                    </ContentControl>
+
+                    <controls:SmoothGridSplitter Grid.Column="1" />
+
+                    <ContentControl x:Name="SequencePanelHost" Grid.Column="2">
+                        <Border ClipToBounds="True">
+                            <controls:SequencePanel x:Name="SequencePanelControl"
+                                                    AutomationProperties.AutomationId="SequencePanelControl" />
+                        </Border>
+                    </ContentControl>
+
+                    <controls:SmoothGridSplitter Grid.Column="3" />
+
+                    <ScrollViewer x:Name="InspectorPanel"
+                                  AutomationProperties.AutomationId="ConditionSequenceColumn"
+                                  Grid.Column="4"
+                                  Background="{DynamicResource InspectorBackground}"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Panel.ZIndex="10">
                         <StackPanel>
-                            <TextBlock x:Name="NameLabelText" Text="Name" Style="{StaticResource FieldLabel}" />
-                            <TextBox x:Name="MacroNameBox"
-                                     Height="34"
-                                     FontSize="15"
-                                     LostFocus="MacroNameBox_LostFocus"
-                                     KeyDown="MacroNameBox_KeyDown" />
-                            <TextBlock x:Name="MacroNameText"
-                                       Text="-"
-                                       Foreground="{StaticResource SecondaryTextBrush}"
-                                       Margin="0,5,0,0"
-                                       FontSize="12" />
+                            <ContentControl x:Name="ConditionPanelHost">
+                                <controls:CollapsibleSection x:Name="ConditionSection" Header="条件序列" IsExpanded="True">
+                                    <controls:ConditionDirectivePanel x:Name="ConditionPanel" />
+                                </controls:CollapsibleSection>
+                            </ContentControl>
+                            <ContentControl x:Name="JsonPanelHost" Visibility="Collapsed">
+                                <controls:McrxJsonPanel x:Name="JsonPanel" />
+                            </ContentControl>
+                            <ContentControl x:Name="ActionPaletteHost">
+                                <controls:CollapsibleSection x:Name="ActionPaletteSection" Header="动作面板" IsExpanded="False">
+                                    <controls:ActionPalettePanel x:Name="ActionPalette" />
+                                </controls:CollapsibleSection>
+                            </ContentControl>
+                            <ContentControl x:Name="PlaybackPanelHost">
+                                <controls:CollapsibleSection x:Name="PlaybackSection" Header="播放控制" IsExpanded="False">
+                                    <controls:PlaybackPanel x:Name="PlaybackPanelControl" />
+                                </controls:CollapsibleSection>
+                            </ContentControl>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                            <TextBlock x:Name="ScheduledStepsLabelText" Text="Scheduled Steps" Style="{StaticResource FieldLabel}" />
-                            <TextBlock x:Name="StepCountText" Text="0" FontSize="24" FontWeight="SemiBold" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2" Margin="14,0,0,0">
-                            <TextBlock x:Name="DurationLabelText" Text="Duration" Style="{StaticResource FieldLabel}" />
-                            <TextBlock x:Name="DurationText" Text="0 ms" FontSize="24" FontWeight="SemiBold" />
-                        </StackPanel>
-                        <WrapPanel Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-                            <Button x:Name="SaveLibraryButton" Style="{StaticResource PrimaryButton}" MinWidth="96" Content="Save Library" Click="SaveLibrary_Click" />
-                            <Button x:Name="RunNowHeaderButton" MinWidth="86" Content="Run Now" Click="RunNow_Click" />
-                            <Button x:Name="StopHeaderButton" MinWidth="70" Content="Stop" Style="{StaticResource DangerButton}" Click="StopPlayback_Click" />
-                        </WrapPanel>
-                    </Grid>
-                </Border>
-
-                <Border x:Name="SequenceGroupBox"
-                        Grid.Row="1"
-                        Style="{StaticResource PanelBorder}"
-                        Padding="14">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <DockPanel Margin="0,0,0,10">
-                            <TextBlock x:Name="SequenceTitleText" Text="Sequence" Style="{StaticResource PanelTitle}" />
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                <Button x:Name="StepUpButton" MinWidth="52" Content="Up" Click="StepUp_Click" />
-                                <Button x:Name="StepDownButton" MinWidth="64" Content="Down" Click="StepDown_Click" />
-                                <Button x:Name="StepDeleteButton" MinWidth="72" Content="Delete" Style="{StaticResource DangerButton}" Click="StepDelete_Click" />
-                            </StackPanel>
-                        </DockPanel>
-                        <ListBox x:Name="StepList"
-                                 Grid.Row="1"
-                                 AllowDrop="True"
-                                 ItemTemplate="{StaticResource StepTemplate}"
-                                 SelectionChanged="StepList_SelectionChanged"
-                                 Drop="StepList_Drop" />
-                        <TextBlock x:Name="SelectedStepText"
-                                   Grid.Row="2"
-                                   Text="Drop actions here or choose an item from Add."
-                                   Foreground="{StaticResource SecondaryTextBrush}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,10,0,0" />
-                    </Grid>
-                </Border>
-
-                <Expander Grid.Row="2"
-                          x:Name="AdvancedJsonExpander"
-                          Header="MCRX JSON"
-                          Foreground="{StaticResource PrimaryTextBrush}"
-                          Background="{StaticResource PanelBrush}"
-                          BorderBrush="{StaticResource PanelBorderBrush}"
-                          BorderThickness="1"
-                          Margin="0,12,0,0"
-                          Padding="10">
-                    <TextBox x:Name="MacroEditor"
-                             Height="170"
-                             AcceptsReturn="True"
-                             AcceptsTab="True"
-                             FontFamily="Consolas"
-                             FontSize="13"
-                             HorizontalScrollBarVisibility="Auto"
-                             VerticalScrollBarVisibility="Auto"
-                             TextWrapping="NoWrap"
-                             Padding="10"
-                             BorderBrush="{StaticResource PanelBorderBrush}"
-                             Background="#FFFFFF" />
-                </Expander>
+                    </ScrollViewer>
+                </Grid>
             </Grid>
-
-            <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto">
-                <StackPanel>
-                    <Border x:Name="AddPanel"
-                            Style="{StaticResource PanelBorder}"
-                            Padding="14"
-                            Margin="0,0,0,12">
-                        <StackPanel>
-                            <TextBlock x:Name="AddTitleText" Text="Add" Style="{StaticResource PanelTitle}" Margin="0,0,0,12" />
-                            <Button x:Name="AddDelayButton" Tag="Delay" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="D" Foreground="{StaticResource SecondaryTextBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddDelayText" Grid.Column="1" Text="Delay" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <Button x:Name="AddKeyboardButton" Tag="Keyboard" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="K" Foreground="{StaticResource AccentBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddKeyboardText" Grid.Column="1" Text="Keyboard" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <Button x:Name="AddMouseButton" Tag="MouseButton" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="M" Foreground="{StaticResource OrangeAccentBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddMouseText" Grid.Column="1" Text="Mouse Button" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <Button x:Name="AddMouseMoveButton" Tag="MouseMove" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="XY" Foreground="{StaticResource OrangeAccentBrush}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddMouseMoveText" Grid.Column="1" Text="Mouse Move" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <Button x:Name="AddWheelButton" Tag="MouseWheel" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="W" Foreground="{StaticResource BlueAccentBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddWheelText" Grid.Column="1" Text="Wheel" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <Button x:Name="AddTextButton" Tag="Text" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="T" Foreground="{StaticResource BlueAccentBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddTextActionText" Grid.Column="1" Text="Text" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <Button x:Name="AddMacroButton" Tag="Macro" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="M" Foreground="{StaticResource AccentBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddMacroText" Grid.Column="1" Text="Macro" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <Button x:Name="AddLoopButton" Tag="Loop" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="R" Foreground="{StaticResource DangerBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddLoopText" Grid.Column="1" Text="Loop" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <Button x:Name="AddPixelButton" Tag="Pixel" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="P" Foreground="{StaticResource PinkAccentBrush}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="AddPixelText" Grid.Column="1" Text="Pixel Condition" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
-                            <TextBlock x:Name="AddMacroHintText"
-                                       Foreground="{StaticResource SecondaryTextBrush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,4,0,0"
-                                       Text="Drag another macro from the library into the sequence to copy its steps." />
-                        </StackPanel>
-                    </Border>
-
-                    <Border x:Name="StepEditorPanel"
-                            Style="{StaticResource PanelBorder}"
-                            Padding="14"
-                            Margin="0,0,0,12">
-                        <StackPanel>
-                            <DockPanel Margin="0,0,0,12">
-                                <TextBlock x:Name="StepEditorTitleText" Text="Step Properties" Style="{StaticResource PanelTitle}" />
-                                <Button x:Name="ApplyStepEditButton"
-                                        DockPanel.Dock="Right"
-                                        MinWidth="72"
-                                        Content="Apply"
-                                        Click="ApplyStepEdit_Click" />
-                            </DockPanel>
-                            <TextBlock x:Name="StepEditorHintText"
-                                       Text="Select a step to edit it visually."
-                                       Foreground="{StaticResource SecondaryTextBrush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,10" />
-
-                            <StackPanel x:Name="StepEditorFieldsPanel">
-                                <StackPanel x:Name="MacroEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="MacroTargetLabelText" Text="Macro" Style="{StaticResource FieldLabel}" />
-                                    <ComboBox x:Name="MacroTargetBox" Height="30" />
-                                </StackPanel>
-
-                                <StackPanel x:Name="KeyboardEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="KeyLabelText" Text="Key" Style="{StaticResource FieldLabel}" />
-                                    <DockPanel>
-                                        <Button x:Name="CaptureStepKeyButton" DockPanel.Dock="Right" Width="78" Content="Capture" Click="CaptureStepKey_Click" />
-                                        <TextBox x:Name="StepKeyBox" Height="30" Margin="0,0,8,0" />
-                                    </DockPanel>
-                                    <WrapPanel Margin="0,8,0,0">
-                                        <CheckBox x:Name="StepCtrlBox" Content="Ctrl" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,0,12,0" />
-                                        <CheckBox x:Name="StepShiftBox" Content="Shift" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,0,12,0" />
-                                        <CheckBox x:Name="StepAltBox" Content="Alt" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,0,12,0" />
-                                        <CheckBox x:Name="StepWinBox" Content="Win" Foreground="{StaticResource PrimaryTextBrush}" />
-                                    </WrapPanel>
-                                </StackPanel>
-
-                                <StackPanel x:Name="ButtonEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="ActionKindLabelText" Text="Action" Style="{StaticResource FieldLabel}" />
-                                    <ComboBox x:Name="ActionKindBox" Height="30" />
-                                </StackPanel>
-
-                                <StackPanel x:Name="MouseButtonEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="MouseButtonLabelText" Text="Mouse Button" Style="{StaticResource FieldLabel}" />
-                                    <ComboBox x:Name="MouseButtonBox" Height="30" />
-                                </StackPanel>
-
-                                <StackPanel x:Name="MouseMoveEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="MoveModeLabelText" Text="Move Mode" Style="{StaticResource FieldLabel}" />
-                                    <ComboBox x:Name="MoveModeBox" Height="30" />
-                                    <Grid Margin="0,8,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="8" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="MoveXBox" Height="30" />
-                                        <TextBox x:Name="MoveYBox" Grid.Column="2" Height="30" />
-                                    </Grid>
-                                </StackPanel>
-
-                                <StackPanel x:Name="WheelEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="WheelLabelText" Text="Wheel" Style="{StaticResource FieldLabel}" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="8" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="WheelVerticalBox" Height="30" />
-                                        <TextBox x:Name="WheelHorizontalBox" Grid.Column="2" Height="30" />
-                                    </Grid>
-                                </StackPanel>
-
-                                <StackPanel x:Name="TimingEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="TimingLabelText" Text="Timing (ms)" Style="{StaticResource FieldLabel}" />
-                                    <TextBox x:Name="TimingMsBox" Height="30" />
-                                </StackPanel>
-
-                                <StackPanel x:Name="TextEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="TextActionLabelText" Text="Text" Style="{StaticResource FieldLabel}" />
-                                    <TextBox x:Name="StepTextBox" Height="72" AcceptsReturn="True" TextWrapping="Wrap" />
-                                </StackPanel>
-
-                                <StackPanel x:Name="LoopEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="LoopCountLabelText" Text="Loop Count" Style="{StaticResource FieldLabel}" />
-                                    <TextBox x:Name="LoopCountBox" Height="30" />
-                                </StackPanel>
-
-                                <StackPanel x:Name="PixelEditPanel" Margin="0,0,0,10">
-                                    <TextBlock x:Name="PixelLabelText" Text="Pixel IF" Style="{StaticResource FieldLabel}" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="6" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="6" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="PixelXBox" Height="30" />
-                                        <TextBox x:Name="PixelYBox" Grid.Column="2" Height="30" />
-                                        <TextBox x:Name="PixelToleranceBox" Grid.Column="4" Height="30" />
-                                    </Grid>
-                                    <Grid Margin="0,8,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="6" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="6" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="PixelRBox" Height="30" />
-                                        <TextBox x:Name="PixelGBox" Grid.Column="2" Height="30" />
-                                        <TextBox x:Name="PixelBBox" Grid.Column="4" Height="30" />
-                                    </Grid>
-                                    <Grid Margin="0,8,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="6" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="6" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="PixelWindowStartBox" Height="30" />
-                                        <TextBox x:Name="PixelWindowEndBox" Grid.Column="2" Height="30" />
-                                        <TextBox x:Name="PixelPollBox" Grid.Column="4" Height="30" />
-                                    </Grid>
-                                    <DockPanel Margin="0,8,0,0">
-                                        <Border x:Name="PixelColorPreview"
-                                                DockPanel.Dock="Left"
-                                                Width="34"
-                                                Height="30"
-                                                Background="#000000"
-                                                BorderBrush="{StaticResource PanelBorderBrush}"
-                                                BorderThickness="1"
-                                                CornerRadius="6" />
-                                        <Button x:Name="PickPixelColorButton"
-                                                MinWidth="118"
-                                                Margin="8,0,0,0"
-                                                Content="Pick Color"
-                                                Click="PickPixelColor_Click" />
-                                    </DockPanel>
-                                </StackPanel>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-
-                    <Border x:Name="PlaybackGroupBox"
-                            Style="{StaticResource PanelBorder}"
-                            Padding="14"
-                            Margin="0,0,0,12">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="96" />
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock x:Name="PlaybackTitleText" Grid.ColumnSpan="3" Style="{StaticResource PanelTitle}" Text="Playback" Margin="0,0,0,12" />
-                            <StackPanel Grid.Row="1" Grid.ColumnSpan="3">
-                                <TextBlock x:Name="TriggerLabelText" Text="Trigger" Style="{StaticResource FieldLabel}" />
-                                <DockPanel Margin="0,0,0,8">
-                                    <Button x:Name="CaptureTriggerButton" DockPanel.Dock="Right" Width="78" Content="Capture" Click="CaptureTrigger_Click" />
-                                    <TextBox x:Name="TriggerTextBox" Height="30" Margin="0,0,8,0" />
-                                </DockPanel>
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="2" Grid.Column="0">
-                                <TextBlock x:Name="ModeLabelText" Text="Mode" Style="{StaticResource FieldLabel}" />
-                                <ComboBox x:Name="PlaybackModeBox" Height="30" SelectionChanged="PlaybackModeBox_SelectionChanged">
-                                    <ComboBoxItem Tag="toggleLoop" Content="toggleLoop" />
-                                    <ComboBoxItem Tag="holdLoop" Content="holdLoop" />
-                                    <ComboBoxItem Tag="fixedCount" Content="fixedCount" IsSelected="True" />
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel Grid.Row="2" Grid.Column="2">
-                                <TextBlock x:Name="PlaybackCountLabelText" Text="Count" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="PlaybackCountTextBox" Height="30" Text="1" />
-                            </StackPanel>
-
-                            <WrapPanel Grid.Row="3" Grid.ColumnSpan="3" Margin="0,12,0,0">
-                                <Button x:Name="StartListeningButton" MinWidth="110" Content="Start Listening" Click="StartListening_Click" />
-                                <Button x:Name="StopListeningButton" MinWidth="108" Content="Stop Listening" Click="StopListening_Click" />
-                                <Button x:Name="RunNowButton" MinWidth="82" Content="Run Now" Click="RunNow_Click" />
-                                <Button x:Name="StopPlaybackButton" MinWidth="64" Content="Stop" Style="{StaticResource DangerButton}" Click="StopPlayback_Click" />
-                                <TextBlock x:Name="PlaybackStatusText" Text="Playback: Idle" Margin="0,6,0,0" Width="300" />
-                                <TextBlock x:Name="PlaybackResultText" Text="Last result: none" Margin="0,4,0,0" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" Width="300" />
-                            </WrapPanel>
-                        </Grid>
-                    </Border>
-
-                    <Border x:Name="ConversionGroupBox"
-                            Style="{StaticResource PanelBorder}"
-                            Padding="14"
-                            Margin="0,0,0,12">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock x:Name="ConversionTitleText" Style="{StaticResource PanelTitle}" Text="Import / Export" Margin="0,0,0,12" />
-                            <WrapPanel Grid.Row="1">
-                                <Button x:Name="ImportMacroButton" MinWidth="78" Content="Import" Click="ImportMacro_Click" />
-                                <Button x:Name="ImportRazerModulesButton" MinWidth="112" Content="Razer Modules" Click="ImportRazerModules_Click" />
-                                <Button x:Name="ApplyImportButton" MinWidth="72" Content="Apply" Click="ApplyImport_Click" IsEnabled="False" />
-                            </WrapPanel>
-                            <Grid Grid.Row="2" Margin="0,4,0,0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="8" />
-                                    <ColumnDefinition Width="86" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock x:Name="ExportFormatLabelText" Text="Export Format" Style="{StaticResource FieldLabel}" />
-                                    <ComboBox x:Name="ExportFormatBox" Height="30" />
-                                </StackPanel>
-                                <Button x:Name="ExportMacroButton" Grid.Column="2" Height="30" Margin="0,18,0,0" Content="Export" Click="ExportMacro_Click" />
-                                <TextBlock x:Name="ConversionText"
-                                           Grid.Row="1"
-                                           Grid.ColumnSpan="3"
-                                           Text="Converter built in"
-                                           TextWrapping="Wrap"
-                                           Margin="0,10,0,0"
-                                           Foreground="{StaticResource SecondaryTextBrush}" />
-                            </Grid>
-                        </Grid>
-                    </Border>
-
-                    <Border x:Name="DiagnosticsGroupBox"
-                            Style="{StaticResource PanelBorder}"
-                            Padding="14">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock x:Name="DiagnosticsTitleText" Style="{StaticResource PanelTitle}" Text="Diagnostics" Margin="0,0,0,10" />
-                            <TextBlock Grid.Row="1" x:Name="LatencyText" Text="count=0 p50=0us p95=0us p99=0us" />
-                            <TextBlock Grid.Row="2" x:Name="PixelText" Text="Pixel sampler: DXGI backend pending" Margin="0,8,0,0" />
-                            <TextBlock Grid.Row="3" x:Name="InputBackendText" Text="Input backend: SendInput ready" Margin="0,8,0,0" />
-                        </Grid>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
-        </Grid>
-    </DockPanel>
+        </DockPanel>
+    </Border>
 </Window>

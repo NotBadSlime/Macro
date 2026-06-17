@@ -1,0 +1,92 @@
+<UserControl x:Class="MacroStudio.Controls.ActionPalettePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="2,0">
+            <TextBlock x:Name="AddTitleText" Text="添加" Style="{StaticResource PanelTitle}" Margin="0,0,0,12" />
+            <Button x:Name="AddDelayButton" Tag="Delay" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="D" Foreground="{DynamicResource SecondaryText}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddDelayText" Grid.Column="1" Text="延迟" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button x:Name="AddKeyboardButton" Tag="Keyboard" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="K" Foreground="{DynamicResource Accent}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddKeyboardText" Grid.Column="1" Text="键盘功能" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button x:Name="AddMouseButton" Tag="MouseButton" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="M" Foreground="{DynamicResource AccentOrange}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddMouseText" Grid.Column="1" Text="鼠标按键" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button x:Name="AddMouseMoveButton" Tag="MouseMove" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="XY" Foreground="{DynamicResource AccentOrange}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddMouseMoveText" Grid.Column="1" Text="鼠标移动" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button x:Name="AddWheelButton" Tag="MouseWheel" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="W" Foreground="{DynamicResource AccentBlue}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddWheelText" Grid.Column="1" Text="滚轮" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button x:Name="AddTextButton" Tag="Text" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="T" Foreground="{DynamicResource AccentBlue}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddTextActionText" Grid.Column="1" Text="文本功能" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button x:Name="AddMacroButton" Tag="Macro" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="M" Foreground="{DynamicResource Accent}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddMacroText" Grid.Column="1" Text="宏" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button x:Name="AddLoopButton" Tag="Loop" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="R" Foreground="{DynamicResource Danger}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddLoopText" Grid.Column="1" Text="循环" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <TextBlock x:Name="AddMacroHintText"
+                       Foreground="{DynamicResource SecondaryText}"
+                       TextWrapping="Wrap"
+                       Margin="0,4,0,0"
+                       Text="把左侧宏拖到序列里，可以复制它的步骤。" />
+    </StackPanel>
+</UserControl>

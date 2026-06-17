@@ -4,6 +4,10 @@ namespace MacroHid.Runtime;
 
 public static class ScreenPixelSampler
 {
+    private static readonly object CacheGate = new();
+    private static readonly Dictionary<string, IntPtr> WindowCache = new(StringComparer.Ordinal);
+    private static IntPtr desktopDc;
+
     public static bool Matches(PixelCondition condition)
     {
         return TrySample(condition.Coordinate, out var sample) && condition.Matches(sample);
@@ -22,9 +26,10 @@ public static class ScreenPixelSampler
                 return false;
             }
 
-            var window = RuntimeNativeMethods.FindWindowW(null, coordinate.WindowTitle);
+            var window = GetCachedWindow(coordinate.WindowTitle);
             if (window == IntPtr.Zero || !RuntimeNativeMethods.GetWindowRect(window, out var rect))
             {
+                DropCachedWindow(coordinate.WindowTitle);
                 return false;
             }
 
@@ -32,32 +37,76 @@ public static class ScreenPixelSampler
             y += rect.Top;
         }
 
-        var desktopDc = RuntimeNativeMethods.GetDC(IntPtr.Zero);
-        if (desktopDc == IntPtr.Zero)
+        var dc = GetDesktopDc();
+        if (dc == IntPtr.Zero)
         {
             return false;
         }
 
-        try
+        var colorRef = RuntimeNativeMethods.GetPixel(dc, x, y);
+        if (colorRef == RuntimeNativeMethods.ClrInvalid)
         {
-            var colorRef = RuntimeNativeMethods.GetPixel(desktopDc, x, y);
-            if (colorRef == RuntimeNativeMethods.ClrInvalid)
+            ResetDesktopDc();
+            return false;
+        }
+
+        sample = new PixelSample(
+            x,
+            y,
+            new RgbColor(
+                (byte)(colorRef & 0xFF),
+                (byte)((colorRef >> 8) & 0xFF),
+                (byte)((colorRef >> 16) & 0xFF)));
+        return true;
+    }
+
+    private static IntPtr GetDesktopDc()
+    {
+        lock (CacheGate)
+        {
+            if (desktopDc == IntPtr.Zero)
             {
-                return false;
+                desktopDc = RuntimeNativeMethods.GetDC(IntPtr.Zero);
             }
 
-            sample = new PixelSample(
-                x,
-                y,
-                new RgbColor(
-                    (byte)(colorRef & 0xFF),
-                    (byte)((colorRef >> 8) & 0xFF),
-                    (byte)((colorRef >> 16) & 0xFF)));
-            return true;
+            return desktopDc;
         }
-        finally
+    }
+
+    private static void ResetDesktopDc()
+    {
+        lock (CacheGate)
         {
-            RuntimeNativeMethods.ReleaseDC(IntPtr.Zero, desktopDc);
+            if (desktopDc != IntPtr.Zero)
+            {
+                RuntimeNativeMethods.ReleaseDC(IntPtr.Zero, desktopDc);
+                desktopDc = IntPtr.Zero;
+            }
+        }
+    }
+
+    private static IntPtr GetCachedWindow(string title)
+    {
+        lock (CacheGate)
+        {
+            if (!WindowCache.TryGetValue(title, out var window) || window == IntPtr.Zero)
+            {
+                window = RuntimeNativeMethods.FindWindowW(null, title);
+                if (window != IntPtr.Zero)
+                {
+                    WindowCache[title] = window;
+                }
+            }
+
+            return window;
+        }
+    }
+
+    private static void DropCachedWindow(string title)
+    {
+        lock (CacheGate)
+        {
+            WindowCache.Remove(title);
         }
     }
 }

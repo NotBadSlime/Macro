@@ -19,11 +19,34 @@ function Copy-DirectoryIfExists([string]$Source, [string]$Destination) {
     Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
 }
 
-if (Test-Path $outputRoot) {
-    Remove-Item -LiteralPath $outputRoot -Recurse -Force
+function New-CleanOutputRoot([string]$PreferredRoot) {
+    New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+
+    $candidates = @(
+        $PreferredRoot,
+        (Join-Path $artifactRoot "local-run-latest")
+    )
+
+    foreach ($candidate in $candidates) {
+        try {
+            if (Test-Path $candidate) {
+                Remove-Item -LiteralPath $candidate -Recurse -Force
+            }
+
+            New-Item -ItemType Directory -Path $candidate -Force | Out-Null
+            return $candidate
+        }
+        catch {
+            Write-Warning "Could not reset '$candidate': $($_.Exception.Message)"
+        }
+    }
+
+    $timestampedRoot = Join-Path $artifactRoot ("local-run-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+    New-Item -ItemType Directory -Path $timestampedRoot -Force | Out-Null
+    return $timestampedRoot
 }
 
-New-Item -ItemType Directory -Path $outputRoot | Out-Null
+$outputRoot = New-CleanOutputRoot $outputRoot
 
 Push-Location $repoRoot
 try {

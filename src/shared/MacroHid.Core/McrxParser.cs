@@ -19,8 +19,11 @@ public static class McrxParser
             ? ParsePlayback(playbackProperty)
             : PlaybackSettings.Default;
         var steps = ParseSteps(root.GetProperty("steps"));
+        var conditions = root.TryGetProperty("conditions", out var conditionsProperty)
+            ? ParseConditions(conditionsProperty)
+            : null;
 
-        return new MacroDocument(version, name, playback, steps);
+        return MacroStepNormalizer.Normalize(new MacroDocument(version, name, playback, steps, conditions));
     }
 
     private static PlaybackSettings ParsePlayback(JsonElement playbackElement)
@@ -35,13 +38,17 @@ public static class McrxParser
             : null;
         var mode = ParseEnum<PlaybackMode>(GetString(playbackElement, "mode", PlaybackSettings.Default.Mode.ToString()), "playback mode");
         var count = GetInt(playbackElement, "count", PlaybackSettings.Default.Count);
+        var processFilter = GetString(playbackElement, "processFilter", PlaybackSettings.Default.ProcessFilter) ?? string.Empty;
+        var precision = ParseEnum<PrecisionMode>(
+            GetString(playbackElement, "precision", PlaybackSettings.Default.Precision.ToString()),
+            "precision mode");
 
         if (count < 1)
         {
             throw new JsonException("'playback.count' must be at least 1.");
         }
 
-        return new PlaybackSettings(trigger, mode, count);
+        return new PlaybackSettings(trigger, mode, count, processFilter.Trim(), precision);
     }
 
     public static HotkeyGesture ParseHotkeyGesture(string? value)
@@ -122,7 +129,7 @@ public static class McrxParser
             "consumer.down" => ParseConsumer(stepElement, ButtonActionKind.Down),
             "consumer.up" => ParseConsumer(stepElement, ButtonActionKind.Up),
             "consumer.tap" => ParseConsumer(stepElement, ButtonActionKind.Click),
-            "wait" => new WaitStep(TimeSpan.FromMilliseconds(GetDouble(stepElement, "ms", 0))),
+            "wait" => ParseWait(stepElement),
             "repeat" => new RepeatStep(GetInt(stepElement, "count", 1), ParseSteps(stepElement.GetProperty("steps"))),
             "macro.call" => new MacroCallStep(GetString(stepElement, "macro", string.Empty) ?? string.Empty),
             "pixel.when" => ParsePixelWhen(stepElement),
@@ -171,10 +178,17 @@ public static class McrxParser
 
     private static MouseButtonStep ParseMouseButton(JsonElement stepElement, ButtonActionKind kind)
     {
+        var hasX = stepElement.TryGetProperty("x", out var xProperty);
+        var hasY = stepElement.TryGetProperty("y", out var yProperty);
         return new MouseButtonStep(
             ParseEnum<MouseButton>(stepElement.GetProperty("button").GetString(), "mouse button"),
             kind,
-            TimeSpan.FromMilliseconds(GetDouble(stepElement, "holdMs", 0)));
+            TimeSpan.FromMilliseconds(GetDouble(stepElement, "holdMs", 0)),
+            hasX && hasY
+                ? ParseEnum<MouseMoveMode>(GetString(stepElement, "mode", "absolute"), "mouse button coordinate mode")
+                : null,
+            hasX ? xProperty.GetInt32() : null,
+            hasY ? yProperty.GetInt32() : null);
     }
 
     private static MouseWheelStep ParseMouseWheel(JsonElement stepElement)
@@ -216,6 +230,28 @@ public static class McrxParser
             GetOptionalTimeSpan(stepElement, "windowStartMs"),
             GetOptionalTimeSpan(stepElement, "windowEndMs"),
             GetOptionalTimeSpan(stepElement, "pollIntervalMs"));
+    }
+
+    private static WaitStep ParseWait(JsonElement stepElement)
+    {
+        if (stepElement.TryGetProperty("minMs", out var minProperty)
+            || stepElement.TryGetProperty("maxMs", out _))
+        {
+            var minMs = minProperty.ValueKind != JsonValueKind.Undefined
+                ? minProperty.GetDouble()
+                : GetDouble(stepElement, "ms", 0);
+            var maxMs = GetDouble(stepElement, "maxMs", minMs);
+            if (maxMs < minMs)
+            {
+                throw new JsonException("'wait.maxMs' must be greater than or equal to 'wait.minMs'.");
+            }
+
+            return new WaitStep(
+                TimeSpan.FromMilliseconds(minMs),
+                TimeSpan.FromMilliseconds(maxMs));
+        }
+
+        return new WaitStep(TimeSpan.FromMilliseconds(GetDouble(stepElement, "ms", 0)));
     }
 
     private static HidKey ParseHidKey(string? value)
@@ -344,5 +380,174 @@ public static class McrxParser
     private static string? GetString(JsonElement element, string name, string? defaultValue)
     {
         return element.TryGetProperty(name, out var property) ? property.GetString() : defaultValue;
+    }
+
+    private static IReadOnlyList<ConditionalDirective> ParseConditions(JsonElement conditionsElement)
+    {
+        if (conditionsElement.ValueKind != JsonValueKind.Array)
+            throw new JsonException("'conditions' must be an array.");
+
+        var conditions = new List<ConditionalDirective>();
+        foreach (var elem in conditionsElement.EnumerateArray())
+            conditions.Add(ParseCondition(elem));
+        return conditions;
+    }
+
+    private static ConditionalDirective ParseCondition(JsonElement elem)
+    {
+        var id = GetString(elem, "id", null) ?? ConditionalDirective.NewId();
+        var name = GetString(elem, "name", null) ?? "Condition";
+        var startStep = GetInt(elem, "startStep", 0);
+        var endStep = GetInt(elem, "endStep", 0);
+        var onConflict = elem.TryGetProperty("onConflict", out var conflictProp)
+            ? ParseEnum<ConflictBehavior>(conflictProp.GetString(), "conflict behavior")
+            : ConflictBehavior.Warn;
+        var pollInterval = GetOptionalTimeSpan(elem, "pollMs");
+        var windowStart = GetOptionalTimeSpan(elem, "windowStartMs");
+        var windowEnd = GetOptionalTimeSpan(elem, "windowEndMs");
+        var startPath = ParseOptionalStepPath(elem, "startPath");
+        var endPath = ParseOptionalStepPath(elem, "endPath");
+        var thenSteps = elem.TryGetProperty("then", out var thenProp)
+            ? ParseSteps(thenProp)
+            : Array.Empty<MacroStep>();
+        var condition = ParseConditionMatcher(elem);
+
+        return new ConditionalDirective(
+            id,
+            name,
+            startStep,
+            endStep,
+            condition,
+            thenSteps,
+            onConflict,
+            pollInterval,
+            windowStart,
+            windowEnd,
+            startPath,
+            endPath);
+    }
+
+    private static IReadOnlyList<int>? ParseOptionalStepPath(JsonElement elem, string name)
+    {
+        if (!elem.TryGetProperty(name, out var property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.String)
+        {
+            var value = property.GetString();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            return ParseStepPathText(value);
+        }
+
+        if (property.ValueKind == JsonValueKind.Array)
+        {
+            var path = new List<int>();
+            foreach (var part in property.EnumerateArray())
+            {
+                var index = part.GetInt32();
+                if (index < 0)
+                {
+                    throw new JsonException($"'{name}' cannot contain negative indexes.");
+                }
+
+                path.Add(index);
+            }
+
+            return path.Count > 0 ? path : null;
+        }
+
+        throw new JsonException($"'{name}' must be a dot-separated string or an array of indexes.");
+    }
+
+    private static IReadOnlyList<int> ParseStepPathText(string value)
+    {
+        var parts = value.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var result = new List<int>(parts.Length);
+        foreach (var part in parts)
+        {
+            if (!int.TryParse(part, out var index) || index < 0)
+            {
+                throw new JsonException($"Unsupported step path '{value}'.");
+            }
+
+            result.Add(index);
+        }
+
+        if (result.Count == 0)
+        {
+            throw new JsonException($"Unsupported step path '{value}'.");
+        }
+
+        return result;
+    }
+
+    private static IConditionMatcher ParseConditionMatcher(JsonElement elem)
+    {
+        var type = GetString(elem, "type", "pixel") ?? "pixel";
+        var region = ParseScreenRegion(elem);
+
+        return type.ToLowerInvariant() switch
+        {
+            "pixel" => new PixelMatcher(
+                region,
+                new RgbColor(
+                    checked((byte)GetInt(elem, "r", 0)),
+                    checked((byte)GetInt(elem, "g", 0)),
+                    checked((byte)GetInt(elem, "b", 0))),
+                checked((byte)GetInt(elem, "tolerance", 10))),
+            "template" => new TemplateMatcher(
+                region,
+                ParseBase64(elem, "templateData"),
+                GetDouble(elem, "threshold", 0.85)),
+            "pixelHash" => new PixelHashMatcher(
+                region,
+                ParseBase64(elem, "referenceHash"),
+                GetDouble(elem, "similarity", 0.9)),
+            "text" => new TextMatcher(
+                region,
+                GetString(elem, "expectedText", "") ?? "",
+                !elem.TryGetProperty("contains", out var containsProp) || containsProp.GetBoolean(),
+                GetString(elem, "language", "ch") ?? "ch"),
+            _ => throw new JsonException($"Unsupported condition type '{type}'.")
+        };
+    }
+
+    private static ScreenRegion ParseScreenRegion(JsonElement elem)
+    {
+        if (elem.TryGetProperty("region", out var regionProp))
+        {
+            return new ScreenRegion(
+                ParseScreenPoint(regionProp, "topLeft"),
+                ParseScreenPoint(regionProp, "topRight"),
+                ParseScreenPoint(regionProp, "bottomRight"),
+                ParseScreenPoint(regionProp, "bottomLeft"));
+        }
+
+        var x = GetInt(elem, "x", 0);
+        var y = GetInt(elem, "y", 0);
+        return ScreenRegion.FromSinglePixel(x, y);
+    }
+
+    private static ScreenPoint ParseScreenPoint(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out var pointProp))
+            return new ScreenPoint(0, 0);
+        return new ScreenPoint(GetInt(pointProp, "x", 0), GetInt(pointProp, "y", 0));
+    }
+
+    private static byte[] ParseBase64(JsonElement elem, string name)
+    {
+        if (elem.TryGetProperty(name, out var prop) && prop.ValueKind == JsonValueKind.String)
+        {
+            var str = prop.GetString();
+            return string.IsNullOrEmpty(str) ? [] : Convert.FromBase64String(str);
+        }
+        return [];
     }
 }

@@ -37,7 +37,8 @@ public static class InputActionCompiler
         long startTick,
         long qpcFrequency,
         Func<PixelCondition, bool>? pixelEvaluator = null,
-        Func<string, MacroDocument?>? macroResolver = null)
+        Func<string, MacroDocument?>? macroResolver = null,
+        Func<WaitStep, TimeSpan>? waitDurationSampler = null)
     {
         if (qpcFrequency <= 0)
         {
@@ -46,7 +47,7 @@ public static class InputActionCompiler
 
         var actions = new List<ScheduledInputAction>();
         var elapsedTicks = 0L;
-        CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, ref elapsedTicks, depth: 0);
+        CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, ref elapsedTicks, depth: 0);
         return actions;
     }
 
@@ -57,6 +58,7 @@ public static class InputActionCompiler
         long qpcFrequency,
         Func<PixelCondition, bool>? pixelEvaluator,
         Func<string, MacroDocument?>? macroResolver,
+        Func<WaitStep, TimeSpan>? waitDurationSampler,
         ref long elapsedTicks,
         int depth)
     {
@@ -70,12 +72,12 @@ public static class InputActionCompiler
             switch (step)
             {
                 case WaitStep wait:
-                    elapsedTicks += ToTicks(wait.Duration, qpcFrequency);
+                    elapsedTicks += ToTicks(SampleWait(wait, waitDurationSampler), qpcFrequency);
                     break;
                 case RepeatStep repeat:
                     for (var i = 0; i < repeat.Count; i++)
                     {
-                        CompileSteps(repeat.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, ref elapsedTicks, depth);
+                        CompileSteps(repeat.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, ref elapsedTicks, depth);
                     }
 
                     break;
@@ -87,7 +89,7 @@ public static class InputActionCompiler
 
                     var document = macroResolver(macro.Macro)
                         ?? throw new InvalidOperationException($"Macro call target '{macro.Macro}' was not found.");
-                    CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, ref elapsedTicks, depth + 1);
+                    CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, ref elapsedTicks, depth + 1);
                     break;
                 case PixelWhenStep pixel:
                     if (pixel.WindowStart is { } windowStart)
@@ -101,7 +103,7 @@ public static class InputActionCompiler
 
                     if (pixelEvaluator?.Invoke(pixel.Condition) == true)
                     {
-                        CompileSteps(pixel.ThenSteps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, ref elapsedTicks, depth);
+                        CompileSteps(pixel.ThenSteps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, ref elapsedTicks, depth);
                     }
                     else if (pixel.WindowEnd is { } windowEnd)
                     {
@@ -163,6 +165,8 @@ public static class InputActionCompiler
         long qpcFrequency,
         ref long elapsedTicks)
     {
+        AddMouseButtonCoordinateAction(step, actions, startTick + elapsedTicks);
+
         if (step.Kind == ButtonActionKind.Click)
         {
             AddAction(actions, new MouseButtonInputAction(step.Button, ButtonActionKind.Down), startTick + elapsedTicks, step);
@@ -172,6 +176,23 @@ public static class InputActionCompiler
         }
 
         AddAction(actions, new MouseButtonInputAction(step.Button, step.Kind), startTick + elapsedTicks, step);
+    }
+
+    private static void AddMouseButtonCoordinateAction(
+        MouseButtonStep step,
+        List<ScheduledInputAction> actions,
+        long dueTick)
+    {
+        if (!step.HasCoordinate)
+        {
+            return;
+        }
+
+        AddAction(
+            actions,
+            new MouseMoveInputAction(step.CoordinateMode ?? MouseMoveMode.Absolute, step.X!.Value, step.Y!.Value),
+            dueTick,
+            step);
     }
 
     private static void CompileConsumer(
@@ -195,6 +216,25 @@ public static class InputActionCompiler
     private static void AddAction(List<ScheduledInputAction> actions, InputAction action, long dueTick, MacroStep sourceStep)
     {
         actions.Add(new ScheduledInputAction(action, dueTick, sourceStep));
+    }
+
+    private static TimeSpan SampleWait(WaitStep wait, Func<WaitStep, TimeSpan>? waitDurationSampler)
+    {
+        var sampled = waitDurationSampler?.Invoke(wait) ?? wait.Sample(Random.Shared);
+        if (wait.IsRandom && wait.MaxDuration is { } max)
+        {
+            if (sampled < wait.MinDuration)
+            {
+                return wait.MinDuration;
+            }
+
+            if (sampled > max)
+            {
+                return max;
+            }
+        }
+
+        return sampled < TimeSpan.Zero ? TimeSpan.Zero : sampled;
     }
 
     private static long ToTicks(TimeSpan duration, long qpcFrequency)

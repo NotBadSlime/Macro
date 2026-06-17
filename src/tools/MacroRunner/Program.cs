@@ -73,7 +73,7 @@ Console.CancelKeyPress += (_, eventArgs) =>
 var executor = new MacroPlaybackExecutor(new SendInputMacroSink());
 var runResult = await executor.RunAsync(
     macro,
-    new PlaybackExecutionOptions(PlaybackMode.FixedCount, Count: 1, options.PixelMode, options.NoWait),
+    new PlaybackExecutionOptions(PlaybackMode.FixedCount, Count: 1, options.PixelMode, options.NoWait, macro.Playback.Precision),
     cancellation.Token);
 
 if (runResult.Status == PlaybackRunStatus.InputUnavailable)
@@ -87,7 +87,7 @@ if (runResult.InputStats is not null)
     Console.WriteLine(
         string.Create(
             CultureInfo.InvariantCulture,
-            $"inputActionsSubmitted={runResult.InputStats.ActionsSubmitted} nativeInputsSubmitted={runResult.InputStats.NativeInputsSubmitted} failures={runResult.InputStats.FailedSubmissions} lastError={runResult.InputStats.LastWin32Error}"));
+            $"inputActionsSubmitted={runResult.InputStats.ActionsSubmitted} nativeInputsSubmitted={runResult.InputStats.NativeInputsSubmitted} failures={runResult.InputStats.FailedSubmissions} lastError={runResult.InputStats.LastWin32Error} submit={runResult.InputStats.LastSubmitDurationMicroseconds}us jitter={runResult.InputStats.Timing?.Summary ?? "n/a"}"));
 }
 
 Console.WriteLine(

@@ -1,0 +1,307 @@
+<UserControl x:Class="MacroStudio.Controls.ConditionDirectivePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:MacroStudio.Controls">
+    <UserControl.Resources>
+        <DataTemplate x:Key="ConditionThenStepTemplate">
+            <Border Style="{StaticResource SoftListItemBorder}"
+                    Padding="8,7"
+                    Margin="0,0,0,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="26" />
+                        <ColumnDefinition Width="18" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Icon}"
+                               FontSize="14"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding ActionIndicator}"
+                               Foreground="{DynamicResource SecondaryText}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding Title}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3"
+                               Text="{Binding Badge}"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="11"
+                               Margin="6,0,0,0"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ConditionItemTemplate">
+            <Grid Margin="10,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="4"
+                        CornerRadius="2"
+                        Background="{Binding ColorBrush}"
+                        VerticalAlignment="Stretch"
+                        Margin="0,0,8,0" />
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Description}"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="12"
+                               Margin="0,3,0,0"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding RangeBadge}"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="11"
+                               Margin="0,2,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding TypeIcon}"
+                               FontSize="16"
+                               VerticalAlignment="Center"
+                               Margin="0,0,6,0" />
+                    <Border Background="{Binding StatusBrush}"
+                            CornerRadius="8"
+                            Padding="8,3">
+                        <TextBlock Text="{Binding StatusText}"
+                                   FontSize="10"
+                                   Foreground="White" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StepChoiceLabelTemplate">
+            <TextBlock Text="{Binding Label}"
+                       TextTrimming="CharacterEllipsis" />
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <DockPanel Margin="2,0,2,10">
+            <TextBlock x:Name="ConditionSequenceTitleText"
+                       Text="条件列表"
+                       Style="{StaticResource PanelTitle}"
+                       DockPanel.Dock="Left" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="AddConditionButton"
+                        Content="+"
+                        Style="{StaticResource PrimaryButton}"
+                        MinWidth="44"
+                        Click="AddCondition_Click" />
+                <Button x:Name="DeleteConditionButton"
+                        Content="删"
+                        Style="{StaticResource DangerButton}"
+                        MinWidth="44"
+                        Click="DeleteCondition_Click" />
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Condition list -->
+        <Border Grid.Row="1" Style="{StaticResource PanelBorderStyle}" Padding="4" Margin="0">
+            <Grid>
+                <ListBox x:Name="ConditionList"
+                         AllowDrop="True"
+                         ItemTemplate="{StaticResource ConditionItemTemplate}"
+                         SelectionMode="Extended"
+                         SelectionChanged="ConditionList_SelectionChanged"
+                         PreviewMouseLeftButtonDown="ConditionList_PreviewMouseLeftButtonDown"
+                         PreviewMouseMove="ConditionList_PreviewMouseMove"
+                         PreviewMouseLeftButtonUp="ConditionList_PreviewMouseLeftButtonUp"
+                         LostMouseCapture="ConditionList_LostMouseCapture"
+                         DragOver="ConditionList_DragOver"
+                         Drop="ConditionList_Drop"
+                         HorizontalContentAlignment="Stretch"
+                         Background="Transparent"
+                         BorderThickness="0" />
+                <Border x:Name="ConditionSelectionRectangle"
+                        Panel.ZIndex="20"
+                        BorderBrush="{DynamicResource Accent}"
+                        BorderThickness="1"
+                        Background="#22007AFF"
+                        CornerRadius="6"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Visibility="Collapsed"
+                        IsHitTestVisible="False">
+                    <Border.RenderTransform>
+                        <TranslateTransform />
+                    </Border.RenderTransform>
+                </Border>
+                <TextBlock x:Name="EmptyConditionHintText"
+                           Text="暂无条件，点击 + 添加"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="12"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Margin="10"
+                           Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <!-- Editor section -->
+        <Border x:Name="EditorBorder"
+                Grid.Row="2"
+                Style="{StaticResource PanelBorderStyle}"
+                Padding="12"
+                Margin="0,10,0,0"
+                Visibility="Collapsed">
+            <Grid x:Name="EditorGrid" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Name -->
+                <StackPanel Margin="0,0,0,8">
+                    <TextBlock Text="名称" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="CondNameBox" Height="30" TextChanged="CondNameBox_TextChanged" />
+                </StackPanel>
+
+                <!-- Type selector -->
+                <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                    <TextBlock Text="条件类型" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="CondTypeCombo" Height="30" SelectionChanged="CondTypeCombo_SelectionChanged">
+                        <ComboBoxItem Content="像素颜色" Tag="pixel" />
+                        <ComboBoxItem Content="模板图像" Tag="template" />
+                        <ComboBoxItem Content="像素哈希" Tag="pixelHash" />
+                        <ComboBoxItem Content="文字识别 (OCR)" Tag="text" />
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Range -->
+                <StackPanel Grid.Row="2" Margin="0,0,0,8">
+                    <TextBlock Text="执行步骤范围" Style="{StaticResource FieldLabel}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="StartStepCombo"
+                                  Height="30"
+                                  ItemTemplate="{StaticResource StepChoiceLabelTemplate}"
+                                  SelectedValuePath="PathText"
+                                  SelectionChanged="StepRange_SelectionChanged" />
+                        <ComboBox x:Name="EndStepCombo"
+                                  Grid.Column="2"
+                                  Height="30"
+                                  ItemTemplate="{StaticResource StepChoiceLabelTemplate}"
+                                  SelectedValuePath="PathText"
+                                  SelectionChanged="StepRange_SelectionChanged" />
+                    </Grid>
+                    <TextBlock Text="选择时，左侧序列中对应步骤会变红。"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="11"
+                               Margin="0,4,0,0" />
+                </StackPanel>
+
+                <!-- Time window -->
+                <StackPanel Grid.Row="3" Margin="0,0,0,8">
+                    <TextBlock Text="触发后时间范围" Style="{StaticResource FieldLabel}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="WindowStartMsBox"
+                                 Height="28"
+                                 TextChanged="TimeWindowBox_TextChanged" />
+                        <TextBox x:Name="WindowEndMsBox"
+                                 Grid.Column="2"
+                                 Height="28"
+                                 TextChanged="TimeWindowBox_TextChanged" />
+                    </Grid>
+                    <TextBlock x:Name="TimeWindowErrorText"
+                               Text="时间范围无效"
+                               Foreground="{DynamicResource Danger}"
+                               FontSize="11"
+                               Margin="0,4,0,0"
+                               Visibility="Collapsed" />
+                    <TextBlock Text="单位 ms，从执行这个宏链的触发键按下时开始计时。"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="11"
+                               Margin="0,4,0,0" />
+                </StackPanel>
+
+                <!-- Region picker -->
+                <StackPanel Grid.Row="4" Margin="0,0,0,8">
+                    <TextBlock Text="屏幕区域" Style="{StaticResource FieldLabel}" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="RegionInfoText"
+                                   Text="未设置"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource SecondaryText}" />
+                        <Button x:Name="PickRegionButton"
+                                Content="选择区域"
+                                Margin="10,0,0,0"
+                                Click="PickRegion_Click" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Pixel-specific -->
+                <StackPanel x:Name="PixelOptionsPanel" Grid.Row="5" Margin="0,0,0,8">
+                    <TextBlock Text="颜色 (RGB)" Style="{StaticResource FieldLabel}" />
+                    <WrapPanel>
+                        <TextBox x:Name="ColorRBox" Width="50" Height="28" Margin="0,0,4,0" />
+                        <TextBox x:Name="ColorGBox" Width="50" Height="28" Margin="0,0,4,0" />
+                        <TextBox x:Name="ColorBBox" Width="50" Height="28" Margin="0,0,8,0" />
+                        <TextBlock Text="容差:" VerticalAlignment="Center" />
+                        <TextBox x:Name="ToleranceBox" Width="40" Height="28" Margin="4,0" />
+                        <Border x:Name="ColorPreview"
+                                Width="28" Height="28"
+                                CornerRadius="4"
+                                BorderBrush="{DynamicResource ControlBorder}"
+                                BorderThickness="1" />
+                        <Button x:Name="PickConditionColorButton"
+                                Content="取色"
+                                Height="28"
+                                MinWidth="54"
+                                Margin="8,0,0,0"
+                                Click="PickConditionColor_Click" />
+                    </WrapPanel>
+                </StackPanel>
+
+                <!-- Text matcher options -->
+                <StackPanel x:Name="TextOptionsPanel" Grid.Row="5" Margin="0,0,0,8" Visibility="Collapsed">
+                    <TextBlock Text="期望文字" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="ExpectedTextBox" Height="28" />
+                    <CheckBox x:Name="ContainsCheckBox" Content="包含匹配" IsChecked="True" Margin="0,6,0,0" />
+                </StackPanel>
+
+                <!-- Then actions -->
+                <StackPanel Grid.Row="6">
+                    <TextBlock Text="触发后执行" Style="{StaticResource FieldLabel}" />
+                    <Border MinHeight="260"
+                            MaxHeight="520"
+                            BorderBrush="{DynamicResource PanelBorder}"
+                            BorderThickness="1"
+                            CornerRadius="12"
+                            Padding="8"
+                            Margin="0,0,0,8">
+                        <local:StepSequencePanel x:Name="ThenActionSequence" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

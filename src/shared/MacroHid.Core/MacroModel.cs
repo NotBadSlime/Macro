@@ -1,16 +1,64 @@
 namespace MacroHid.Core;
 
-public sealed record MacroDocument(int Version, string Name, PlaybackSettings Playback, IReadOnlyList<MacroStep> Steps)
+public sealed record MacroDocument(
+    int Version,
+    string Name,
+    PlaybackSettings Playback,
+    IReadOnlyList<MacroStep> Steps,
+    IReadOnlyList<ConditionalDirective>? Conditions = null)
 {
     public MacroDocument(int Version, string Name, IReadOnlyList<MacroStep> Steps)
-        : this(Version, Name, PlaybackSettings.Default, Steps)
+        : this(Version, Name, PlaybackSettings.Default, Steps, null)
     {
     }
+
+    public IReadOnlyList<ConditionalDirective> EffectiveConditions =>
+        Conditions ?? Array.Empty<ConditionalDirective>();
 }
 
-public sealed record PlaybackSettings(HotkeyGesture? Trigger, PlaybackMode Mode, int Count)
+public sealed record PlaybackSettings(
+    HotkeyGesture? Trigger,
+    PlaybackMode Mode,
+    int Count,
+    string ProcessFilter = "",
+    PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback)
 {
-    public static PlaybackSettings Default { get; } = new(null, PlaybackMode.FixedCount, 1);
+    public static PlaybackSettings Default { get; } = new(
+        null,
+        PlaybackMode.FixedCount,
+        1,
+        string.Empty,
+        PrecisionMode.ExtremeDuringPlayback);
+}
+
+public static class PlaybackProcessFilter
+{
+    public static bool Matches(string? filter, string? processName)
+    {
+        if (string.IsNullOrWhiteSpace(filter))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return false;
+        }
+
+        var normalizedProcess = Normalize(processName);
+        return filter
+            .Split([',', ';', '|', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(Normalize)
+            .Any(candidate => string.Equals(candidate, normalizedProcess, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string Normalize(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? trimmed[..^4]
+            : trimmed;
+    }
 }
 
 public sealed record HotkeyGesture(HidModifier Modifiers, HidKey Key, MouseButton MouseButton = MouseButton.None)
@@ -58,6 +106,12 @@ public enum PlaybackMode
     FixedCount
 }
 
+public enum PrecisionMode
+{
+    Balanced,
+    ExtremeDuringPlayback
+}
+
 public abstract record MacroStep;
 
 public sealed record KeyStep(
@@ -78,7 +132,13 @@ public sealed record MouseMoveStep(
 public sealed record MouseButtonStep(
     MouseButton Button,
     ButtonActionKind Kind,
-    TimeSpan Hold) : MacroStep;
+    TimeSpan Hold,
+    MouseMoveMode? CoordinateMode = null,
+    int? X = null,
+    int? Y = null) : MacroStep
+{
+    public bool HasCoordinate => X.HasValue && Y.HasValue;
+}
 
 public sealed record MouseWheelStep(
     int Vertical,
@@ -90,7 +150,29 @@ public sealed record ConsumerStep(
     ButtonActionKind Kind,
     TimeSpan Hold) : MacroStep;
 
-public sealed record WaitStep(TimeSpan Duration) : MacroStep;
+public sealed record WaitStep(TimeSpan Duration, TimeSpan? MaxDuration = null) : MacroStep
+{
+    public TimeSpan MinDuration => Duration;
+    public bool IsRandom => MaxDuration is { } max && max > Duration;
+
+    public TimeSpan Sample(Random random)
+    {
+        if (!IsRandom || MaxDuration is not { } max)
+        {
+            return Duration;
+        }
+
+        var minTicks = Duration.Ticks;
+        var maxTicks = max.Ticks;
+        if (maxTicks <= minTicks)
+        {
+            return Duration;
+        }
+
+        var offset = (long)Math.Round(random.NextDouble() * (maxTicks - minTicks), MidpointRounding.AwayFromZero);
+        return TimeSpan.FromTicks(minTicks + offset);
+    }
+}
 
 public sealed record RepeatStep(int Count, IReadOnlyList<MacroStep> Steps) : MacroStep;
 

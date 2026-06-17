@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
@@ -9,1728 +7,716 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
-using MacroHid.Converter;
 using MacroHid.Core;
 using MacroHid.Runtime;
+using MacroStudio.Controls;
+using MacroStudio.Services;
 using Microsoft.Win32;
-using CoreMouseButton = MacroHid.Core.MouseButton;
 
 namespace MacroStudio;
 
 public partial class MainWindow : Window
 {
-    private const string ActionTemplateDragFormat = "MacroHID.ActionTemplate";
-    private const string MacroLibraryDragFormat = "MacroHID.MacroLibraryItem";
-
-    private const string SampleMacro = """
-    {
-      "version": 1,
-      "name": "baseline",
-      "steps": [
-        { "type": "key.tap", "key": "A", "modifiers": ["LeftCtrl"], "holdMs": 5 },
-        { "type": "mouse.move", "mode": "relative", "x": 25, "y": -10, "durationMs": 0 },
-        { "type": "mouse.wheel", "vertical": -1, "horizontal": 0 },
-        { "type": "consumer.tap", "control": "VolumeUp" },
-        { "type": "wait", "ms": 2 },
-        {
-          "type": "pixel.when",
-          "scope": "screen",
-          "x": 100,
-          "y": 200,
-          "r": 10,
-          "g": 20,
-          "b": 30,
-          "tolerance": 4,
-          "then": [
-            { "type": "key.down", "key": "Enter" }
-          ]
-        }
-      ]
-    }
-    """;
+    private readonly MacroLibraryStore libraryStore = new(MacroLibraryStore.GetDefaultRoot());
+    private readonly MacroEditorState editorState;
+    private readonly SendInputMacroSink inputSink = new();
+    private readonly ActionTemplateInsertGate actionTemplateInsertGate = new();
 
     private GlobalKeyboardHook? keyboardHook;
     private MacroPlaybackController? playbackController;
-    private readonly SendInputMacroSink inputSink = new();
+    private readonly Dictionary<string, MacroPlaybackController> listeningControllers = [];
+    private readonly Dictionary<string, string> listeningMacroNames = [];
+    private readonly Dictionary<string, string> listeningProcessFilters = [];
+    private readonly Dictionary<string, WorkspacePanelRegistration> workspacePanels = [];
+    private WorkspaceLayout workspaceLayout = new([]);
     private bool listening;
-    private bool capturingTrigger;
-    private bool capturingStepKey;
     private bool updatingLanguageComboBox;
-    private bool updatingStepEditor;
-    private MacroImportResult? pendingImport;
-    private string? pendingImportJson;
-    private List<AuxiliaryMacroFile> razerModuleFiles = [];
-    private readonly MacroLibraryStore libraryStore = new(MacroLibraryStore.GetDefaultRoot());
-    private MacroLibrarySnapshot librarySnapshot = new([], null);
-    private string? selectedMacroId;
-    private bool suppressMacroSelection;
-    private bool updatingMacroName;
-    private string? statusResourceKey = "InputBackendReady";
-    private string? statusPlainText;
-    private object[] statusArgs = [];
-    private string playbackStatusResourceKey = "PlaybackStatusIdle";
-    private object[] playbackStatusArgs = [];
-    private string playbackResultResourceKey = "LastResultNone";
-    private object[] playbackResultArgs = [];
+    private bool updatingWorkspaceMenu;
+    private bool syncingJsonPanel;
 
     public MainWindow()
     {
+        editorState = new MacroEditorState(libraryStore);
+
         InitializeComponent();
         LocalizationService.Initialize();
+
         InitializeLanguageComboBox();
-        InitializeExportFormatBox();
-        InitializeStepEditorControls();
+        InitializePanels();
+        InitializeWorkspacePanels();
         ApplyLocalization();
         InitializeMacroLibrary();
-        RefreshRuntimeDiagnostics();
     }
 
-    private static string L(string key)
+    private void InitializePanels()
     {
-        return LocalizationService.Get(key);
+        LibraryPanel.Initialize(editorState);
+        SequencePanelControl.Initialize(editorState);
+        ConditionPanel.Initialize(editorState);
+
+        LibraryPanel.MacroSelected += OnMacroSelected;
+        LibraryPanel.MacroCreated += OnMacroCreated;
+        LibraryPanel.MacroDuplicated += OnMacroDuplicated;
+        LibraryPanel.MacroDeleted += OnMacroDeleted;
+        LibraryPanel.ImportApplied += OnImportApplied;
+        LibraryPanel.DocumentRequested += () => GetDocumentWithPlayback();
+        LibraryPanel.ResultMessage += msg => SetStatus(msg);
+
+        SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
+        SequencePanelControl.RunNowRequested += OnRunNow;
+        SequencePanelControl.StopRequested += OnStopPlayback;
+        SequencePanelControl.StepSelectionChanged += OnStepSelectionChanged;
+        SequencePanelControl.ActionTemplateDropped += OnActionTemplateDropped;
+        SequencePanelControl.MacroLibraryDropped += OnMacroLibraryDropped;
+        SequencePanelControl.UndoApplied += OnSequenceUndoApplied;
+        SequencePanelControl.DocumentEdited += OnSequenceDocumentEdited;
+        SequencePanelControl.SequenceActivated += ConditionPanel.DeactivateThenActionSequence;
+        SequencePanelControl.EditorTextChanged += OnSequenceEditorTextChanged;
+
+        JsonPanel.EditorTextChanged += OnJsonPanelEditorTextChanged;
+        JsonPanel.ApplyJsonRequested += OnApplyJsonRequested;
+
+        ActionPalette.ActionClicked += OnActionPaletteClicked;
+
+        PlaybackPanelControl.StartListeningRequested += OnStartListening;
+        PlaybackPanelControl.StopListeningRequested += OnStopListening;
+        PlaybackPanelControl.RunNowRequested += OnRunNow;
+        PlaybackPanelControl.StopPlaybackRequested += OnStopPlayback;
+        PlaybackPanelControl.PlaybackSettingsEdited += OnPlaybackSettingsEdited;
+
+        ConditionPanel.ConditionSelectionChanged += OnConditionSelectionChanged;
+        ConditionPanel.ConditionsModified += OnConditionsModified;
+        ConditionPanel.PickRegionRequested += OnPickRegionRequested;
     }
 
-    private static string LF(string key, params object[] args)
+    private void InitializeWorkspacePanels()
     {
-        return LocalizationService.Format(key, args);
+        RegisterWorkspacePanel("library", WorkspaceTitle("WorkspacePanelLibrary"), LibraryPanelHost);
+        RegisterWorkspacePanel("sequence", WorkspaceTitle("WorkspacePanelSequence"), SequencePanelHost);
+        RegisterWorkspacePanel("conditions", WorkspaceTitle("WorkspacePanelConditions"), ConditionPanelHost);
+        RegisterWorkspacePanel("json", WorkspaceTitle("AdvancedJson"), JsonPanelHost);
+        RegisterWorkspacePanel("actions", WorkspaceTitle("WorkspacePanelActions"), ActionPaletteHost);
+        RegisterWorkspacePanel("playback", WorkspaceTitle("WorkspacePanelPlayback"), PlaybackPanelHost);
+
+        workspaceLayout = WorkspaceLayoutStore.Load();
+        ApplyWorkspaceLayout();
+        UpdateWorkspaceMenuChecks();
     }
 
-    private void InitializeLanguageComboBox()
+    private void RegisterWorkspacePanel(string id, string title, ContentControl host)
     {
-        updatingLanguageComboBox = true;
-        LanguageComboBox.Items.Clear();
-
-        foreach (var language in LocalizationService.SupportedLanguages)
+        if (host.Content is not FrameworkElement element)
         {
-            var item = new ComboBoxItem
-            {
-                Tag = language.CultureName,
-                Content = LocalizationService.Get(language.DisplayNameResourceKey)
-            };
-            LanguageComboBox.Items.Add(item);
-
-            if (string.Equals(language.CultureName, LocalizationService.CurrentCulture.Name, StringComparison.OrdinalIgnoreCase))
-            {
-                LanguageComboBox.SelectedItem = item;
-            }
+            throw new InvalidOperationException($"Workspace panel '{id}' has no content.");
         }
 
-        updatingLanguageComboBox = false;
+        workspacePanels[id] = new WorkspacePanelRegistration(id, title, host, element)
+        {
+            IsVisible = id != "json"
+        };
     }
 
-    private void InitializeExportFormatBox()
+    private void ApplyWorkspaceLayout()
     {
-        ExportFormatBox.Items.Clear();
-        foreach (var format in MacroConversionService.GetFormats().Where(item => item.CanExport))
+        foreach (var panel in workspacePanels.Values)
         {
-            var item = new ComboBoxItem
+            var layout = workspaceLayout.Panels.TryGetValue(panel.Id, out var saved)
+                ? saved
+                : GetDefaultWorkspacePanelLayout(panel.Id);
+
+            panel.IsVisible = layout.IsVisible;
+            panel.SavedLayout = layout;
+            if (layout.IsFloating)
             {
-                Tag = format.Format,
-                Content = format.Label
-            };
-            ExportFormatBox.Items.Add(item);
-            if (format.Format == MacroConversionFormat.MacroConverterXml)
-            {
-                ExportFormatBox.SelectedItem = item;
+                FloatWorkspacePanel(panel.Id, saveLayout: false);
             }
-        }
-
-        if (ExportFormatBox.SelectedItem is null && ExportFormatBox.Items.Count > 0)
-        {
-            ExportFormatBox.SelectedIndex = 0;
-        }
-    }
-
-    private void InitializeStepEditorControls()
-    {
-        FillEnumBox(ActionKindBox, ButtonActionKind.Click);
-        FillEnumBox(MouseButtonBox, CoreMouseButton.Left);
-        FillEnumBox(MoveModeBox, MouseMoveMode.Relative);
-        RefreshMacroTargetBox();
-        StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
-        ApplyStepEditButton.IsEnabled = false;
-    }
-
-    private static void FillEnumBox<TEnum>(ComboBox comboBox, TEnum selected)
-        where TEnum : struct, Enum
-    {
-        comboBox.Items.Clear();
-        foreach (var value in Enum.GetValues<TEnum>())
-        {
-            if (value.ToString() == "None")
+            else
             {
-                continue;
+                DockWorkspacePanel(panel.Id, saveLayout: false);
             }
 
-            var item = new ComboBoxItem
-            {
-                Tag = value,
-                Content = value.ToString()
-            };
-            comboBox.Items.Add(item);
-            if (EqualityComparer<TEnum>.Default.Equals(value, selected))
-            {
-                comboBox.SelectedItem = item;
-            }
+            ToggleWorkspacePanelVisibility(panel.Id, layout.IsVisible, saveLayout: false);
         }
     }
 
-    private void RefreshMacroTargetBox(string? selected = null)
+    private static WorkspacePanelLayout GetDefaultWorkspacePanelLayout(string id)
     {
-        if (MacroTargetBox is null)
+        return id == "json"
+            ? new WorkspacePanelLayout(IsVisible: false, Width: 720, Height: 520)
+            : new WorkspacePanelLayout(IsVisible: true);
+    }
+
+    private void WindowMenu_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateWorkspaceMenuChecks();
+        WindowMenuContext.PlacementTarget = WindowMenuButton;
+        WindowMenuContext.IsOpen = true;
+    }
+
+    private void WindowPanelVisibility_Click(object sender, RoutedEventArgs e)
+    {
+        if (updatingWorkspaceMenu) return;
+        if (sender is not MenuItem { Tag: string id } item) return;
+        ToggleWorkspacePanelVisibility(id, item.IsChecked);
+        e.Handled = true;
+    }
+
+    private void WorkspaceToolButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (updatingWorkspaceMenu) return;
+        if (sender is not ToggleButton { Tag: string id } item) return;
+        ToggleWorkspacePanelVisibility(id, item.IsChecked == true);
+        e.Handled = true;
+    }
+
+    private void FloatPanel_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string id }) return;
+        FloatWorkspacePanel(id);
+        e.Handled = true;
+    }
+
+    private void DockPanel_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string id }) return;
+        DockWorkspacePanel(id);
+        e.Handled = true;
+    }
+
+    private void ResetWorkspaceLayout_Click(object sender, RoutedEventArgs e)
+    {
+        ResetWorkspaceLayout();
+        e.Handled = true;
+    }
+
+    private void ToggleWorkspacePanelVisibility(string id, bool visible, bool saveLayout = true)
+    {
+        if (!workspacePanels.TryGetValue(id, out var panel)) return;
+
+        panel.IsVisible = visible;
+        if (panel.IsFloating)
         {
+            EnsureWorkspacePanelWindow(panel);
+            if (visible)
+            {
+                panel.Window!.Show();
+                panel.Window.Activate();
+            }
+            else
+            {
+                panel.Window!.Hide();
+            }
+        }
+        else
+        {
+            panel.DockHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        UpdateWorkspaceMenuChecks();
+        if (saveLayout)
+        {
+            SaveWorkspaceLayout();
+        }
+    }
+
+    private void FloatWorkspacePanel(string id, bool saveLayout = true)
+    {
+        if (!workspacePanels.TryGetValue(id, out var panel)) return;
+        EnsureWorkspacePanelWindow(panel);
+
+        if (!ReferenceEquals(panel.Window!.ContentHost.Content, panel.Element))
+        {
+            panel.DockHost.Content = null;
+            panel.Window.ContentHost.Content = panel.Element;
+        }
+
+        panel.IsFloating = true;
+        panel.IsVisible = true;
+        panel.DockHost.Visibility = Visibility.Collapsed;
+        RestoreFloatingBounds(panel);
+        panel.Window.Show();
+        panel.Window.Activate();
+        UpdateWorkspaceMenuChecks();
+        if (saveLayout)
+        {
+            SaveWorkspaceLayout();
+        }
+    }
+
+    private void DockWorkspacePanel(string id, bool saveLayout = true)
+    {
+        if (!workspacePanels.TryGetValue(id, out var panel)) return;
+
+        if (panel.Window is not null && ReferenceEquals(panel.Window.ContentHost.Content, panel.Element))
+        {
+            panel.Window.ContentHost.Content = null;
+            panel.Window.Hide();
+        }
+
+        if (!ReferenceEquals(panel.DockHost.Content, panel.Element))
+        {
+            panel.DockHost.Content = panel.Element;
+        }
+
+        panel.IsFloating = false;
+        panel.DockHost.Visibility = panel.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        UpdateWorkspaceMenuChecks();
+        if (saveLayout)
+        {
+            SaveWorkspaceLayout();
+        }
+    }
+
+    private void ResetWorkspaceLayout()
+    {
+        WorkspaceLayoutStore.Reset();
+        workspaceLayout = new([]);
+        foreach (var panel in workspacePanels.Values)
+        {
+            panel.SavedLayout = GetDefaultWorkspacePanelLayout(panel.Id);
+            panel.IsVisible = panel.SavedLayout.IsVisible;
+            DockWorkspacePanel(panel.Id, saveLayout: false);
+            ToggleWorkspacePanelVisibility(panel.Id, panel.IsVisible, saveLayout: false);
+        }
+
+        SaveWorkspaceLayout();
+        SetStatus(L("WorkspaceLayoutReset"));
+    }
+
+    private void EnsureWorkspacePanelWindow(WorkspacePanelRegistration panel)
+    {
+        if (panel.Window is not null)
+        {
+            panel.Window.SetTitle(panel.Title, L("WorkspaceDock"));
             return;
         }
 
-        var previous = selected ?? (MacroTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString();
-        MacroTargetBox.Items.Clear();
-        foreach (var item in libraryStore.Load().Items.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase))
+        panel.Window = new WorkspacePanelWindow(panel.Id, panel.Title)
         {
-            var comboItem = new ComboBoxItem
+            Owner = this
+        };
+        panel.Window.SetTitle(panel.Title, L("WorkspaceDock"));
+        panel.Window.DockRequested += (_, _) => DockWorkspacePanel(panel.Id);
+        panel.Window.HideRequested += (_, _) =>
+        {
+            panel.IsVisible = false;
+            UpdateWorkspaceMenuChecks();
+            SaveWorkspaceLayout();
+        };
+    }
+
+    private void RestoreFloatingBounds(WorkspacePanelRegistration panel)
+    {
+        if (panel.Window is null) return;
+        var layout = panel.SavedLayout ?? GetDefaultWorkspacePanelLayout(panel.Id);
+        panel.Window.Width = Math.Max(panel.Window.MinWidth, layout.Width);
+        panel.Window.Height = Math.Max(panel.Window.MinHeight, layout.Height);
+        panel.Window.Left = layout.Left;
+        panel.Window.Top = layout.Top;
+    }
+
+    private void SaveWorkspaceLayout()
+    {
+        var panels = new Dictionary<string, WorkspacePanelLayout>(StringComparer.OrdinalIgnoreCase);
+        foreach (var panel in workspacePanels.Values)
+        {
+            var current = panel.SavedLayout ?? GetDefaultWorkspacePanelLayout(panel.Id);
+            var left = current.Left;
+            var top = current.Top;
+            var width = current.Width;
+            var height = current.Height;
+
+            if (panel.Window is not null)
             {
-                Tag = item.Name,
-                Content = item.Name
-            };
-            MacroTargetBox.Items.Add(comboItem);
-            if (string.Equals(item.Name, previous, StringComparison.CurrentCultureIgnoreCase)
-                || string.Equals(item.Id, previous, StringComparison.OrdinalIgnoreCase))
-            {
-                MacroTargetBox.SelectedItem = comboItem;
+                left = panel.Window.Left;
+                top = panel.Window.Top;
+                width = panel.Window.Width;
+                height = panel.Window.Height;
             }
+
+            panel.SavedLayout = new WorkspacePanelLayout(panel.IsVisible, panel.IsFloating, left, top, width, height);
+            panels[panel.Id] = panel.SavedLayout;
+        }
+
+        workspaceLayout = new WorkspaceLayout(panels);
+        WorkspaceLayoutStore.Save(workspaceLayout);
+    }
+
+    private void UpdateWorkspaceMenuChecks()
+    {
+        updatingWorkspaceMenu = true;
+        SetShowMenuCheck(ShowLibraryMenuItem, "library");
+        SetShowMenuCheck(ShowSequenceMenuItem, "sequence");
+        SetShowMenuCheck(ShowConditionMenuItem, "conditions");
+        SetShowMenuCheck(ShowJsonMenuItem, "json");
+        SetShowMenuCheck(ShowActionMenuItem, "actions");
+        SetShowMenuCheck(ShowPlaybackMenuItem, "playback");
+        UpdateWorkspaceToolButtonStates();
+        updatingWorkspaceMenu = false;
+    }
+
+    private void SetShowMenuCheck(MenuItem item, string id)
+    {
+        item.IsChecked = workspacePanels.TryGetValue(id, out var panel) && panel.IsVisible;
+    }
+
+    private void UpdateWorkspaceToolButtonStates()
+    {
+        SetToolButtonCheck(LibraryToolButton, "library");
+        SetToolButtonCheck(SequenceToolButton, "sequence");
+        SetToolButtonCheck(ConditionToolButton, "conditions");
+        SetToolButtonCheck(JsonToolButton, "json");
+        SetToolButtonCheck(ActionToolButton, "actions");
+        SetToolButtonCheck(PlaybackToolButton, "playback");
+    }
+
+    private void SetToolButtonCheck(ToggleButton button, string id)
+    {
+        button.IsChecked = workspacePanels.TryGetValue(id, out var panel) && panel.IsVisible;
+    }
+
+    private static void SetWorkspaceToolButtonText(ToggleButton button, string title)
+    {
+        button.ToolTip = title;
+    }
+
+    private void SetWorkspacePanelTitle(string id, string title)
+    {
+        if (!workspacePanels.TryGetValue(id, out var panel)) return;
+        panel.Title = title;
+        if (panel.Window is not null)
+        {
+            panel.Window.SetTitle(title, L("WorkspaceDock"));
         }
     }
 
-    private void ApplyLocalization()
+    private void OnSequenceEditorTextChanged(string text)
     {
-        Title = L("AppTitle");
-        LanguageLabelText.Text = L("Language");
-        OpenButton.Content = L("Open");
-        SaveButton.Content = L("Save");
-        ValidateButton.Content = L("Validate");
-        ProbeButton.Content = L("Probe");
-        LibraryTitleText.Text = L("MacroLibrary");
-        NewMacroButton.Content = L("NewMacro");
-        NewFolderButton.Content = L("NewFolder");
-        DuplicateMacroButton.Content = L("DuplicateMacro");
-        DeleteMacroButton.Content = L("Delete");
-        SaveLibraryButton.Content = L("SaveLibrary");
-        RunNowHeaderButton.Content = L("RunNow");
-        StopHeaderButton.Content = L("Stop");
-        SequenceTitleText.Text = L("Sequence");
-        AddTitleText.Text = L("Add");
-        AddDelayText.Text = L("AddDelay");
-        AddKeyboardText.Text = L("AddKeyboard");
-        AddMouseText.Text = L("AddMouseButton");
-        AddMouseMoveText.Text = L("AddMouseMove");
-        AddWheelText.Text = L("AddWheel");
-        AddTextActionText.Text = L("AddText");
-        AddMacroText.Text = L("AddMacro");
-        AddLoopText.Text = L("AddLoop");
-        AddPixelText.Text = L("AddPixel");
-        AddMacroHintText.Text = L("AddMacroHint");
-        StepEditorTitleText.Text = L("StepProperties");
-        StepEditorHintText.Text = L("StepPropertiesHint");
-        ApplyStepEditButton.Content = L("Apply");
-        MacroTargetLabelText.Text = L("Macro");
-        KeyLabelText.Text = L("Key");
-        CaptureStepKeyButton.Content = L("Capture");
-        ActionKindLabelText.Text = L("Action");
-        MouseButtonLabelText.Text = L("AddMouseButton");
-        MoveModeLabelText.Text = L("MoveMode");
-        WheelLabelText.Text = L("AddWheel");
-        TimingLabelText.Text = L("TimingMs");
-        TextActionLabelText.Text = L("AddText");
-        LoopCountLabelText.Text = L("LoopCount");
-        PixelLabelText.Text = L("PixelIf");
-        PickPixelColorButton.Content = L("PickColor");
-        DurationLabelText.Text = L("Duration");
-        StepUpButton.Content = L("MoveUp");
-        StepDownButton.Content = L("MoveDown");
-        StepDeleteButton.Content = L("Delete");
-        NameLabelText.Text = L("Name");
-        ScheduledStepsLabelText.Text = L("ScheduledSteps");
-        PlaybackTitleText.Text = L("Playback");
-        TriggerLabelText.Text = L("Trigger");
-        CaptureTriggerButton.Content = L("Capture");
-        ModeLabelText.Text = L("Mode");
-        PlaybackCountLabelText.Text = L("Count");
-        StartListeningButton.Content = L("StartListening");
-        StopListeningButton.Content = L("StopListening");
-        RunNowButton.Content = L("RunNow");
-        StopPlaybackButton.Content = L("Stop");
-        DiagnosticsTitleText.Text = L("Diagnostics");
-        ConversionTitleText.Text = L("ImportExport");
-        ImportMacroButton.Content = L("ImportMacro");
-        ImportRazerModulesButton.Content = L("ImportRazerModules");
-        ApplyImportButton.Content = L("ApplyImport");
-        ExportFormatLabelText.Text = L("ExportFormat");
-        ExportMacroButton.Content = L("ExportMacro");
-        MacroSearchBox.ToolTip = L("SearchMacros");
-        AdvancedJsonExpander.Header = L("AdvancedJson");
+        if (syncingJsonPanel) return;
+        syncingJsonPanel = true;
+        JsonPanel.EditorText = text;
+        syncingJsonPanel = false;
+    }
 
-        foreach (var item in LibrarySortBox.Items.OfType<ComboBoxItem>())
+    private void OnJsonPanelEditorTextChanged(string text)
+    {
+        if (syncingJsonPanel) return;
+        TryApplyJsonTextToEditor(text, showStatus: false);
+    }
+
+    private void OnApplyJsonRequested()
+    {
+        TryApplyJsonTextToEditor(JsonPanel.EditorText, showStatus: true);
+    }
+
+    private bool TryApplyJsonTextToEditor(string text, bool showStatus)
+    {
+        try
         {
-            item.Content = item.Tag?.ToString() switch
-            {
-                "updated" => L("SortRecentlyUpdated"),
-                _ => L("SortName")
-            };
+            McrxParser.Parse(text);
+            syncingJsonPanel = true;
+            SequencePanelControl.EditorText = text;
+            syncingJsonPanel = false;
+            SequencePanelControl.ValidateCurrentMacro();
+            RefreshEditorAfterSequenceDocumentChange(showStatus ? L("JsonApplied") : null);
+            return true;
         }
-
-        foreach (var item in LanguageComboBox.Items.OfType<ComboBoxItem>())
+        catch (Exception ex)
         {
-            var cultureName = item.Tag?.ToString();
-            var language = LocalizationService.SupportedLanguages
-                .FirstOrDefault(candidate => string.Equals(candidate.CultureName, cultureName, StringComparison.OrdinalIgnoreCase));
-            if (language is not null)
+            syncingJsonPanel = false;
+            if (showStatus)
             {
-                item.Content = LocalizationService.Get(language.DisplayNameResourceKey);
+                SetStatus(ex.Message);
             }
+
+            return false;
         }
-
-        foreach (var item in PlaybackModeBox.Items.OfType<ComboBoxItem>())
-        {
-            item.Content = item.Tag?.ToString() switch
-            {
-                "toggleLoop" => L("ModeToggleLoop"),
-                "holdLoop" => L("ModeHoldLoop"),
-                "fixedCount" => L("ModeFixedCount"),
-                _ => item.Content
-            };
-        }
-
-        RefreshDynamicText();
-        RefreshRuntimeDiagnostics();
-        RefreshConversionText();
-    }
-
-    private void RefreshDynamicText()
-    {
-        StatusText.Text = statusPlainText ?? FormatResource(statusResourceKey, statusArgs);
-        PlaybackStatusText.Text = FormatResource(playbackStatusResourceKey, playbackStatusArgs);
-        PlaybackResultText.Text = FormatResource(playbackResultResourceKey, playbackResultArgs);
-    }
-
-    private void SetStatusResource(string key, params object[] args)
-    {
-        statusResourceKey = key;
-        statusPlainText = null;
-        statusArgs = args;
-        StatusText.Text = FormatResource(key, args);
-    }
-
-    private void SetStatusPlainText(string text)
-    {
-        statusResourceKey = null;
-        statusPlainText = text;
-        statusArgs = [];
-        StatusText.Text = text;
-    }
-
-    private void SetPlaybackStatusResource(string key, params object[] args)
-    {
-        playbackStatusResourceKey = key;
-        playbackStatusArgs = args;
-        PlaybackStatusText.Text = FormatResource(key, args);
-    }
-
-    private void SetPlaybackResultResource(string key, params object[] args)
-    {
-        playbackResultResourceKey = key;
-        playbackResultArgs = args;
-        PlaybackResultText.Text = FormatResource(key, args);
-    }
-
-    private static string FormatResource(string? key, object[] args)
-    {
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            return string.Empty;
-        }
-
-        return args.Length == 0 ? L(key) : LF(key, args);
-    }
-
-    private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (updatingLanguageComboBox)
-        {
-            return;
-        }
-
-        if ((LanguageComboBox.SelectedItem as ComboBoxItem)?.Tag is not string cultureName)
-        {
-            return;
-        }
-
-        LocalizationService.SetLanguage(cultureName);
-        ApplyLocalization();
-        RefreshMacroLibraryList();
-    }
-
-    private void TopChromeBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (IsChromeInteractiveSource(e.OriginalSource as DependencyObject))
-        {
-            return;
-        }
-
-        if (e.ClickCount == 2)
-        {
-            ToggleWindowMaximize();
-            return;
-        }
-
-        if (e.LeftButton == MouseButtonState.Pressed)
-        {
-            try
-            {
-                DragMove();
-            }
-            catch (InvalidOperationException)
-            {
-                // DragMove can throw if Windows releases capture between the click and drag.
-            }
-        }
-    }
-
-    private void MinimizeWindow_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState.Minimized;
-    }
-
-    private void MaximizeWindow_Click(object sender, RoutedEventArgs e)
-    {
-        ToggleWindowMaximize();
-    }
-
-    private void CloseWindow_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
-    }
-
-    private void ToggleWindowMaximize()
-    {
-        WindowState = WindowState == WindowState.Maximized
-            ? WindowState.Normal
-            : WindowState.Maximized;
-    }
-
-    private static bool IsChromeInteractiveSource(DependencyObject? source)
-    {
-        return FindVisualParent<ButtonBase>(source) is not null
-            || FindVisualParent<ComboBox>(source) is not null
-            || FindVisualParent<TextBoxBase>(source) is not null;
-    }
-
-    private static T? FindVisualParent<T>(DependencyObject? source)
-        where T : DependencyObject
-    {
-        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
-        {
-            if (current is T match)
-            {
-                return match;
-            }
-        }
-
-        return null;
     }
 
     private void InitializeMacroLibrary()
     {
-        librarySnapshot = libraryStore.Load();
-        if (librarySnapshot.Items.Count == 0)
+        editorState.ReloadLibrary();
+        if (editorState.LibrarySnapshot.Items.Count == 0)
         {
             libraryStore.CreateMacro(McrxParser.Parse(SampleMacro));
-            librarySnapshot = libraryStore.Load();
+            editorState.ReloadLibrary();
         }
 
-        selectedMacroId = librarySnapshot.SelectedMacroId ?? librarySnapshot.Items.FirstOrDefault()?.Id;
-        RefreshMacroLibraryList();
-        if (selectedMacroId is not null)
+        editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId
+            ?? editorState.LibrarySnapshot.Items.FirstOrDefault()?.Id;
+
+        LibraryPanel.RefreshList();
+
+        if (editorState.SelectedMacroId is not null)
         {
-            LoadMacroFromLibrary(selectedMacroId);
+            LoadMacroFromLibrary(editorState.SelectedMacroId);
         }
         else
         {
-            SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
+            SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
+            SequencePanelControl.ClearUndoHistory();
+            RefreshConditionStepChoices();
         }
-    }
-
-    private void RefreshMacroLibraryList()
-    {
-        librarySnapshot = libraryStore.Load();
-        var selectedId = selectedMacroId ?? librarySnapshot.SelectedMacroId;
-        var search = MacroSearchBox.Text.Trim();
-        var sortMode = (LibrarySortBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "name";
-        var items = librarySnapshot.Items.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            items = items.Where(item =>
-                item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase)
-                || item.Folder.Contains(search, StringComparison.CurrentCultureIgnoreCase));
-        }
-
-        items = sortMode == "updated"
-            ? items.OrderByDescending(item => item.UpdatedAt).ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
-            : items.OrderBy(item => string.IsNullOrWhiteSpace(item.Folder) ? L("Ungrouped") : item.Folder, StringComparer.CurrentCultureIgnoreCase)
-                .ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase);
-
-        suppressMacroSelection = true;
-        MacroListBox.Items.Clear();
-        var grouped = items
-            .GroupBy(item => string.IsNullOrWhiteSpace(item.Folder) ? L("Ungrouped") : item.Folder)
-            .OrderBy(group => group.Key, StringComparer.CurrentCultureIgnoreCase);
-
-        MacroLibraryListEntry? selectedEntry = null;
-        foreach (var group in grouped)
-        {
-            MacroListBox.Items.Add(MacroLibraryListEntry.Header(group.Key));
-            foreach (var item in group)
-            {
-                var entry = MacroLibraryListEntry.Macro(item);
-                MacroListBox.Items.Add(entry);
-                if (item.Id == selectedId)
-                {
-                    selectedEntry = entry;
-                }
-            }
-        }
-
-        MacroListBox.SelectedItem = selectedEntry;
-        suppressMacroSelection = false;
-        RefreshMacroTargetBox();
-    }
-
-    private void MacroSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        RefreshMacroLibraryList();
-    }
-
-    private void LibrarySortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (MacroListBox is not null)
-        {
-            RefreshMacroLibraryList();
-        }
-    }
-
-    private void MacroListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (suppressMacroSelection)
-        {
-            return;
-        }
-
-        if (MacroListBox.SelectedItem is not MacroLibraryListEntry { Item: { } item })
-        {
-            return;
-        }
-
-        selectedMacroId = item.Id;
-        libraryStore.SetSelected(item.Id);
-        LoadMacroFromLibrary(item.Id);
-    }
-
-    private void MacroListBox_PreviewMouseMove(object sender, MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed)
-        {
-            return;
-        }
-
-        if (MacroListBox.SelectedItem is not MacroLibraryListEntry { Item: { } item })
-        {
-            return;
-        }
-
-        DragDrop.DoDragDrop(MacroListBox, new DataObject(MacroLibraryDragFormat, item.Id), DragDropEffects.Copy);
     }
 
     private void LoadMacroFromLibrary(string id)
     {
         try
         {
-            selectedMacroId = id;
+            editorState.SelectedMacroId = id;
             var document = libraryStore.ReadMacro(id);
-            SetEditorDocument(document);
-            SetStatusPlainText(document.Name);
+            SequencePanelControl.SetEditorDocument(document);
+            SequencePanelControl.ClearUndoHistory();
+            PlaybackPanelControl.SetPlaybackControls(document.Playback);
+            RefreshConditionStepChoices();
+            ConditionPanel.LoadConditions(document.EffectiveConditions);
+            SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
+            CheckAndWarnConflicts(document);
+            SetStatus(document.Name);
         }
         catch (Exception ex)
         {
-            SetStatusPlainText(ex.Message);
+            SetStatus(ex.Message);
         }
     }
 
-    private void SetEditorDocument(MacroDocument document)
-    {
-        MacroEditor.Text = McrxSerializer.Serialize(document);
-        ValidateCurrentMacro();
-    }
+    private void OnMacroSelected(string id) => LoadMacroFromLibrary(id);
 
-    private void NewMacro_Click(object sender, RoutedEventArgs e)
+    private void OnMacroCreated(MacroLibraryItem item)
     {
-        var name = NextMacroName("Macro");
-        var item = libraryStore.CreateMacro(name);
-        selectedMacroId = item.Id;
-        RefreshMacroLibraryList();
+        editorState.SelectedMacroId = item.Id;
         LoadMacroFromLibrary(item.Id);
     }
 
-    private void NewFolder_Click(object sender, RoutedEventArgs e)
+    private void OnMacroDuplicated(string id)
     {
-        var folder = NextFolderName();
-        var item = libraryStore.CreateMacro(NextMacroName("Macro"), folder);
-        selectedMacroId = item.Id;
-        RefreshMacroLibraryList();
-        LoadMacroFromLibrary(item.Id);
-    }
-
-    private void DuplicateMacro_Click(object sender, RoutedEventArgs e)
-    {
-        if (selectedMacroId is null)
-        {
-            return;
-        }
-
         try
         {
-            var document = McrxParser.Parse(MacroEditor.Text);
-            libraryStore.SaveMacro(selectedMacroId, document);
-            var item = libraryStore.DuplicateMacro(selectedMacroId, $"{document.Name} Copy");
-            selectedMacroId = item.Id;
-            RefreshMacroLibraryList();
+            var document = SequencePanelControl.GetCurrentDocument();
+            libraryStore.SaveMacro(id, document);
+            var item = libraryStore.DuplicateMacro(id, $"{document.Name} Copy");
+            editorState.SelectedMacroId = item.Id;
+            LibraryPanel.RefreshList();
             LoadMacroFromLibrary(item.Id);
         }
         catch (Exception ex)
         {
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
+            SetStatus(ex.Message);
         }
     }
 
-    private void DeleteMacro_Click(object sender, RoutedEventArgs e)
+    private void OnMacroDeleted(string id)
     {
-        if (selectedMacroId is null)
-        {
-            return;
-        }
-
-        var name = MacroNameBox.Text.Trim();
+        var name = SequencePanelControl.MacroName;
         var result = MessageBox.Show(
             this,
-            LF("DeleteMacroConfirm", string.IsNullOrWhiteSpace(name) ? L("Macro") : name),
+            LocalizationService.Format("DeleteMacroConfirm", string.IsNullOrWhiteSpace(name) ? L("Macro") : name),
             L("Delete"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes)
-        {
-            return;
-        }
+        if (result != MessageBoxResult.Yes) return;
 
-        libraryStore.DeleteMacro(selectedMacroId);
-        librarySnapshot = libraryStore.Load();
-        selectedMacroId = librarySnapshot.SelectedMacroId;
-        RefreshMacroLibraryList();
-        if (selectedMacroId is not null)
-        {
-            LoadMacroFromLibrary(selectedMacroId);
-        }
+        libraryStore.DeleteMacro(id);
+        editorState.ReloadLibrary();
+        editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
+        LibraryPanel.RefreshList();
+
+        if (editorState.SelectedMacroId is not null)
+            LoadMacroFromLibrary(editorState.SelectedMacroId);
         else
         {
-            SetEditorDocument(new MacroDocument(1, NextMacroName("Macro"), PlaybackSettings.Default, []));
+            SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
+            SequencePanelControl.ClearUndoHistory();
+            RefreshConditionStepChoices();
         }
     }
 
-    private void SaveLibrary_Click(object sender, RoutedEventArgs e)
+    private void OnSaveLibrary()
     {
         try
         {
-            var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
-            MacroLibraryItem item;
-            if (selectedMacroId is null)
-            {
-                item = libraryStore.CreateMacro(document);
-            }
-            else
-            {
-                item = libraryStore.SaveMacro(selectedMacroId, document);
-            }
-
-            selectedMacroId = item.Id;
-            RefreshMacroLibraryList();
-            SetStatusResource("LibrarySaved");
+            AutoSaveCurrentMacro(updateStatus: false);
+            SetStatus(L("LibrarySaved"));
         }
         catch (Exception ex)
         {
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
-            SetStatusResource("MacroInvalid");
+            SetStatus(ex.Message);
         }
     }
 
-    private string NextMacroName(string prefix)
+    private void OnPlaybackSettingsEdited()
     {
-        var used = libraryStore.Load().Items.Select(item => item.Name).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-        for (var i = 1; i < 10_000; i++)
-        {
-            var candidate = $"{prefix} {i}";
-            if (!used.Contains(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return $"{prefix} {DateTime.Now:HHmmss}";
-    }
-
-    private string NextFolderName()
-    {
-        var used = libraryStore.Load().Items.Select(item => item.Folder).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-        for (var i = 1; i < 10_000; i++)
-        {
-            var candidate = $"{L("Folder")} {i}";
-            if (!used.Contains(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return $"{L("Folder")} {DateTime.Now:HHmmss}";
-    }
-
-    private void OpenMacro_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFileDialog
-        {
-            Filter = L("MacroFileFilter"),
-            Title = L("OpenMacroTitle")
-        };
-
-        if (dialog.ShowDialog(this) == true)
-        {
-            MacroEditor.Text = File.ReadAllText(dialog.FileName);
-            ValidateCurrentMacro();
-            SetStatusPlainText(Path.GetFileName(dialog.FileName));
-        }
-    }
-
-    private void SaveMacro_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new SaveFileDialog
-        {
-            Filter = L("MacroFileFilter"),
-            Title = L("SaveMacroTitle"),
-            DefaultExt = ".mcrx"
-        };
-
-        if (dialog.ShowDialog(this) == true)
-        {
-            ApplyPlaybackSettingsToEditor();
-            File.WriteAllText(dialog.FileName, MacroEditor.Text);
-            SetStatusPlainText(Path.GetFileName(dialog.FileName));
-        }
-    }
-
-    private void ValidateMacro_Click(object sender, RoutedEventArgs e)
-    {
-        ValidateCurrentMacro();
-    }
-
-    private void Probe_Click(object sender, RoutedEventArgs e)
-    {
-        var histogram = new LatencyHistogram();
-        var stopwatch = Stopwatch.StartNew();
-        var intervalTicks = Stopwatch.Frequency / 1_000;
-        var nextTick = stopwatch.ElapsedTicks + intervalTicks;
-
-        for (var i = 0; i < 250; i++)
-        {
-            while (stopwatch.ElapsedTicks < nextTick)
-            {
-                Thread.SpinWait(32);
-            }
-
-            var actual = stopwatch.ElapsedTicks;
-            histogram.RecordMicroseconds(Math.Abs(actual - nextTick) * 1_000_000 / Stopwatch.Frequency);
-            _ = SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None));
-            nextTick += intervalTicks;
-        }
-
-        LatencyText.Text = histogram.Summary();
-        RefreshRuntimeDiagnostics();
-    }
-
-    private void ImportMacro_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFileDialog
-        {
-            Filter = L("ConverterImportFileFilter"),
-            Title = L("ImportMacroTitle")
-        };
-
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
         try
         {
-            var content = File.ReadAllText(dialog.FileName);
-            pendingImport = MacroConversionService.ImportToMcrx(new MacroImportRequest(
-                content,
-                dialog.FileName,
-                MacroConversionFormat.Auto,
-                razerModuleFiles));
-            pendingImportJson = McrxSerializer.Serialize(pendingImport.Document);
-            ApplyImportButton.IsEnabled = true;
-            RefreshConversionText();
-            SetPlaybackResultResource("LastResultMessage", LF("ConversionImported", pendingImport.SourceFormat, pendingImport.Document.Steps.Count));
+            AutoSaveCurrentMacro(updateStatus: false);
         }
         catch (Exception ex)
         {
-            pendingImport = null;
-            pendingImportJson = null;
-            ApplyImportButton.IsEnabled = false;
-            ConversionText.Text = LF("ConversionImportFailed", ex.Message);
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
+            SetStatus(ex.Message);
         }
     }
 
-    private void ImportRazerModules_Click(object sender, RoutedEventArgs e)
+    private void AutoSaveCurrentMacro(bool updateStatus)
     {
-        var dialog = new OpenFileDialog
-        {
-            Filter = L("RazerModuleFileFilter"),
-            Title = L("ImportRazerModulesTitle"),
-            Multiselect = true
-        };
+        var document = GetDocumentWithPlayback();
+        MacroLibraryItem item;
+        if (editorState.SelectedMacroId is null)
+            item = libraryStore.CreateMacro(document);
+        else
+            item = libraryStore.SaveMacro(editorState.SelectedMacroId, document);
 
-        if (dialog.ShowDialog(this) != true)
+        editorState.SelectedMacroId = item.Id;
+        LibraryPanel.RefreshList();
+        if (updateStatus)
         {
+            SetStatus(L("LibrarySaved"));
+        }
+    }
+
+    private void OnStepSelectionChanged(int stepIndex)
+    {
+        editorState.SelectedStepIndex = stepIndex;
+    }
+
+    private void OnActionPaletteClicked(MacroActionTemplateKind kind)
+    {
+        if (!actionTemplateInsertGate.TryAccept(kind)) return;
+        if (ConditionPanel.TryInsertActionTemplateIntoActiveCondition(kind))
+        {
+            SetStatus(LocalizationService.Format("ActionInserted", L($"Template{kind}")));
             return;
         }
 
-        razerModuleFiles = dialog.FileNames
-            .Select(fileName => new AuxiliaryMacroFile(Path.GetFileName(fileName), File.ReadAllText(fileName)))
-            .ToList();
-        var importedCount = 0;
-        foreach (var file in razerModuleFiles)
-        {
-            try
-            {
-                var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(
-                    file.Content,
-                    file.FileName,
-                    MacroConversionFormat.RazerSynapseXml,
-                    []));
-                libraryStore.CreateMacro(imported.Document);
-                importedCount++;
-            }
-            catch
-            {
-                // Some Synapse module files only serve as references for a parent macro.
-            }
-        }
-
-        if (importedCount > 0)
-        {
-            RefreshMacroLibraryList();
-        }
-
-        RefreshConversionText();
-        SetPlaybackResultResource("LastResultMessage", LF("ConversionModulesImported", razerModuleFiles.Count, importedCount));
+        SequencePanelControl.InsertSteps(MacroActionTemplateFactory.CreateSteps(kind));
+        RefreshConditionStepChoices();
+        SetStatus(LocalizationService.Format("ActionInserted", L($"Template{kind}")));
     }
 
-    private void ApplyImport_Click(object sender, RoutedEventArgs e)
+    private void OnActionTemplateDropped(MacroActionTemplateKind kind, string parentPathText, int insertIndex)
     {
-        if (pendingImportJson is null || pendingImport is null)
-        {
-            return;
-        }
-
-        var item = libraryStore.CreateMacro(pendingImport.Document);
-        selectedMacroId = item.Id;
-        RefreshMacroLibraryList();
-        MacroEditor.Text = pendingImportJson;
-        ValidateCurrentMacro();
-        SetStatusResource("MacroValid");
-        SetPlaybackResultResource("LastResultMessage", L("ConversionApplied"));
+        if (!actionTemplateInsertGate.TryAccept(kind)) return;
+        SequencePanelControl.InsertStepsAtPath(MacroActionTemplateFactory.CreateSteps(kind), parentPathText, insertIndex);
+        RefreshConditionStepChoices();
     }
 
-    private void ExportMacro_Click(object sender, RoutedEventArgs e)
+    private void OnMacroLibraryDropped(string macroId, string parentPathText, int insertIndex)
     {
         try
         {
-            var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
-            var format = GetSelectedExportFormat();
-            var export = MacroConversionService.ExportFromMcrx(document, format);
-            var dialog = new SaveFileDialog
-            {
-                Filter = FormatFilter(format),
-                Title = L("ExportMacroTitle"),
-                DefaultExt = MacroConversionService.GetDefaultExtension(format),
-                FileName = export.FileName
-            };
-
-            if (dialog.ShowDialog(this) != true)
-            {
-                return;
-            }
-
-            File.WriteAllText(dialog.FileName, export.Output);
-            ConversionText.Text = FormatDiagnostics(export.Diagnostics);
-            SetPlaybackResultResource("LastResultMessage", LF("ConversionExported", Path.GetFileName(dialog.FileName)));
+            var document = libraryStore.ReadMacro(macroId);
+            SequencePanelControl.InsertStepsAtPath(document.Steps, parentPathText, insertIndex);
+            RefreshConditionStepChoices();
+            SetStatus(LocalizationService.Format("InsertedMacroSteps", document.Name, document.Steps.Count));
         }
         catch (Exception ex)
         {
-            ConversionText.Text = LF("ConversionExportFailed", ex.Message);
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
+            SetStatus(ex.Message);
         }
     }
 
-    private void ValidateCurrentMacro()
+    private async void OnStartListening()
     {
         try
         {
-            var document = McrxParser.Parse(MacroEditor.Text);
-            var scheduled = MacroScheduler.Compile(document, Stopwatch.GetTimestamp(), Stopwatch.Frequency);
-            var selectedStepIndex = StepList.SelectedItem is StepDisplayItem selectedStep ? selectedStep.Index : -1;
+            AutoSaveCurrentMacro(updateStatus: false);
 
-            MacroNameText.Text = document.Name;
-            updatingMacroName = true;
-            MacroNameBox.Text = document.Name;
-            updatingMacroName = false;
-            StepCountText.Text = scheduled.Count.ToString();
-            DurationText.Text = FormatDuration(EstimateDuration(document.Steps));
-            StepList.Items.Clear();
+            var bindings = new List<HotkeyBinding>();
+            var controllers = new Dictionary<string, MacroPlaybackController>(StringComparer.OrdinalIgnoreCase);
+            var macroNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var processFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            for (var i = 0; i < document.Steps.Count; i++)
+            foreach (var item in libraryStore.Load().Items)
             {
-                StepList.Items.Add(StepDisplayItem.FromStep(i, document.Steps[i], Describe(document.Steps[i]), FormatStepBadge(document.Steps[i])));
+                MacroDocument document;
+                try
+                {
+                    document = libraryStore.ReadMacro(item.Id);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (document.Playback.Trigger is not { } trigger)
+                {
+                    continue;
+                }
+
+                bindings.Add(new HotkeyBinding(item.Id, trigger));
+                controllers[item.Id] = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback));
+                macroNames[item.Id] = document.Name;
+                processFilters[item.Id] = document.Playback.ProcessFilter;
             }
 
-            if (selectedStepIndex >= 0 && selectedStepIndex < StepList.Items.Count)
-            {
-                StepList.SelectedIndex = selectedStepIndex;
-            }
-
-            RefreshSelectedStepText();
-            SetStatusResource("MacroValid");
-            SetPlaybackControls(document.Playback);
-        }
-        catch (Exception ex)
-        {
-            MacroNameText.Text = "-";
-            updatingMacroName = true;
-            MacroNameBox.Text = string.Empty;
-            updatingMacroName = false;
-            StepCountText.Text = "0";
-            DurationText.Text = "0 ms";
-            StepList.Items.Clear();
-            StepList.Items.Add(StepDisplayItem.Error(ex.Message));
-            SelectedStepText.Text = ex.Message;
-            SetStatusResource("MacroInvalid");
-        }
-    }
-
-    private void ActionPalette_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button)
-        {
-            AddTemplateFromTag(button.Tag?.ToString());
-        }
-    }
-
-    private void ActionPalette_PreviewMouseMove(object sender, MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed || sender is not Button button)
-        {
-            return;
-        }
-
-        if (button.Tag?.ToString() is not { Length: > 0 } tag)
-        {
-            return;
-        }
-
-        DragDrop.DoDragDrop(button, new DataObject(ActionTemplateDragFormat, tag), DragDropEffects.Copy);
-    }
-
-    private void StepList_Drop(object sender, DragEventArgs e)
-    {
-        try
-        {
-            if (e.Data.GetDataPresent(ActionTemplateDragFormat)
-                && e.Data.GetData(ActionTemplateDragFormat) is string template)
-            {
-                AddTemplateFromTag(template);
-                e.Handled = true;
-                return;
-            }
-
-            if (e.Data.GetDataPresent(MacroLibraryDragFormat)
-                && e.Data.GetData(MacroLibraryDragFormat) is string macroId)
-            {
-                var document = libraryStore.ReadMacro(macroId);
-                InsertSteps(document.Steps);
-                SetPlaybackResultResource("LastResultMessage", LF("InsertedMacroSteps", document.Name, document.Steps.Count));
-                e.Handled = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
-        }
-    }
-
-    private void StepList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        RefreshSelectedStepText();
-    }
-
-    private void StepUp_Click(object sender, RoutedEventArgs e)
-    {
-        MoveSelectedStep(-1);
-    }
-
-    private void StepDown_Click(object sender, RoutedEventArgs e)
-    {
-        MoveSelectedStep(1);
-    }
-
-    private void StepDelete_Click(object sender, RoutedEventArgs e)
-    {
-        if (StepList.SelectedItem is not StepDisplayItem { Index: >= 0 } selected)
-        {
-            return;
-        }
-
-        try
-        {
-            var document = McrxParser.Parse(MacroEditor.Text);
-            var steps = document.Steps.ToList();
-            if (selected.Index >= steps.Count)
-            {
-                return;
-            }
-
-            steps.RemoveAt(selected.Index);
-            SetEditorDocument(document with { Steps = steps });
-            if (steps.Count > 0)
-            {
-                StepList.SelectedIndex = Math.Min(selected.Index, steps.Count - 1);
-            }
-        }
-        catch (Exception ex)
-        {
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
-        }
-    }
-
-    private void MacroNameBox_LostFocus(object sender, RoutedEventArgs e)
-    {
-        ApplyMacroNameFromBox();
-    }
-
-    private void MacroNameBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter)
-        {
-            return;
-        }
-
-        ApplyMacroNameFromBox();
-        Keyboard.ClearFocus();
-        e.Handled = true;
-    }
-
-    private void AddTemplateFromTag(string? tag)
-    {
-        if (!Enum.TryParse<MacroActionTemplateKind>(tag, ignoreCase: true, out var kind))
-        {
-            return;
-        }
-
-        InsertSteps([MacroActionTemplateFactory.CreateStep(kind)]);
-        SetPlaybackResultResource("LastResultMessage", LF("ActionInserted", L($"Template{kind}")));
-    }
-
-    private void InsertSteps(IReadOnlyList<MacroStep> stepsToInsert)
-    {
-        if (stepsToInsert.Count == 0)
-        {
-            return;
-        }
-
-        var document = McrxParser.Parse(MacroEditor.Text);
-        var steps = document.Steps.ToList();
-        var insertAt = StepList.SelectedItem is StepDisplayItem { Index: >= 0 } selected
-            ? selected.Index + 1
-            : steps.Count;
-        steps.InsertRange(insertAt, stepsToInsert);
-        SetEditorDocument(document with { Steps = steps });
-        StepList.SelectedIndex = insertAt;
-    }
-
-    private void MoveSelectedStep(int offset)
-    {
-        if (StepList.SelectedItem is not StepDisplayItem { Index: >= 0 } selected)
-        {
-            return;
-        }
-
-        try
-        {
-            var document = McrxParser.Parse(MacroEditor.Text);
-            var steps = document.Steps.ToList();
-            var target = selected.Index + offset;
-            if (selected.Index < 0 || selected.Index >= steps.Count || target < 0 || target >= steps.Count)
-            {
-                return;
-            }
-
-            (steps[selected.Index], steps[target]) = (steps[target], steps[selected.Index]);
-            SetEditorDocument(document with { Steps = steps });
-            StepList.SelectedIndex = target;
-        }
-        catch (Exception ex)
-        {
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
-        }
-    }
-
-    private void ApplyMacroNameFromBox()
-    {
-        if (updatingMacroName)
-        {
-            return;
-        }
-
-        try
-        {
-            var document = McrxParser.Parse(MacroEditor.Text);
-            var name = string.IsNullOrWhiteSpace(MacroNameBox.Text) ? document.Name : MacroNameBox.Text.Trim();
-            if (string.Equals(document.Name, name, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            SetEditorDocument(document with { Name = name });
-        }
-        catch (Exception ex)
-        {
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
-        }
-    }
-
-    private void RefreshSelectedStepText()
-    {
-        SelectedStepText.Text = StepList.SelectedItem is StepDisplayItem { Index: >= 0 } selected
-            ? $"{selected.Title}: {selected.Subtitle}"
-            : L("DropActionsHint");
-        RefreshStepEditor();
-    }
-
-    private void RefreshStepEditor()
-    {
-        if (StepList.SelectedItem is not StepDisplayItem { Index: >= 0 } selected)
-        {
-            StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
-            ApplyStepEditButton.IsEnabled = false;
-            StepEditorHintText.Text = L("StepPropertiesHint");
-            return;
-        }
-
-        try
-        {
-            var document = McrxParser.Parse(MacroEditor.Text);
-            if (selected.Index >= document.Steps.Count)
-            {
-                return;
-            }
-
-            updatingStepEditor = true;
-            PopulateStepEditor(document.Steps[selected.Index]);
-            updatingStepEditor = false;
-            StepEditorFieldsPanel.Visibility = Visibility.Visible;
-            ApplyStepEditButton.IsEnabled = true;
-            StepEditorHintText.Text = $"{selected.Title}: {selected.Subtitle}";
-        }
-        catch (Exception ex)
-        {
-            StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
-            ApplyStepEditButton.IsEnabled = false;
-            StepEditorHintText.Text = ex.Message;
-        }
-    }
-
-    private void PopulateStepEditor(MacroStep step)
-    {
-        SetEditorPanels(
-            keyboard: step is KeyStep,
-            action: step is KeyStep or MouseButtonStep or ConsumerStep,
-            mouseButton: step is MouseButtonStep,
-            mouseMove: step is MouseMoveStep,
-            wheel: step is MouseWheelStep,
-            timing: step is KeyStep or MouseButtonStep or ConsumerStep or MouseMoveStep or WaitStep,
-            text: step is TextStep,
-            loop: step is RepeatStep,
-            macro: step is MacroCallStep,
-            pixel: step is PixelWhenStep);
-
-        switch (step)
-        {
-            case KeyStep key:
-                StepKeyBox.Text = key.Key.ToString();
-                SetModifierBoxes(key.Modifiers);
-                SetComboBox(ActionKindBox, key.Kind.ToString());
-                TimingMsBox.Text = FormatNumber(key.Hold.TotalMilliseconds);
-                break;
-            case MouseButtonStep button:
-                SetComboBox(MouseButtonBox, button.Button.ToString());
-                SetComboBox(ActionKindBox, button.Kind.ToString());
-                TimingMsBox.Text = FormatNumber(button.Hold.TotalMilliseconds);
-                break;
-            case MouseMoveStep move:
-                SetComboBox(MoveModeBox, move.Mode.ToString());
-                MoveXBox.Text = move.X.ToString();
-                MoveYBox.Text = move.Y.ToString();
-                TimingMsBox.Text = FormatNumber(move.Duration.TotalMilliseconds);
-                break;
-            case MouseWheelStep wheel:
-                WheelVerticalBox.Text = wheel.Vertical.ToString();
-                WheelHorizontalBox.Text = wheel.Horizontal.ToString();
-                break;
-            case WaitStep wait:
-                TimingMsBox.Text = FormatNumber(wait.Duration.TotalMilliseconds);
-                break;
-            case TextStep text:
-                StepTextBox.Text = text.Text;
-                break;
-            case RepeatStep repeat:
-                LoopCountBox.Text = repeat.Count.ToString();
-                break;
-            case MacroCallStep macro:
-                RefreshMacroTargetBox(macro.Macro);
-                break;
-            case PixelWhenStep pixel:
-                PixelXBox.Text = pixel.Condition.Coordinate.X.ToString();
-                PixelYBox.Text = pixel.Condition.Coordinate.Y.ToString();
-                PixelToleranceBox.Text = pixel.Condition.Tolerance.ToString();
-                PixelRBox.Text = pixel.Condition.Expected.R.ToString();
-                PixelGBox.Text = pixel.Condition.Expected.G.ToString();
-                PixelBBox.Text = pixel.Condition.Expected.B.ToString();
-                PixelWindowStartBox.Text = pixel.WindowStart is { } start ? FormatNumber(start.TotalMilliseconds) : string.Empty;
-                PixelWindowEndBox.Text = pixel.WindowEnd is { } end ? FormatNumber(end.TotalMilliseconds) : string.Empty;
-                PixelPollBox.Text = pixel.PollInterval is { } poll ? FormatNumber(poll.TotalMilliseconds) : string.Empty;
-                UpdatePixelPreview(pixel.Condition.Expected);
-                break;
-        }
-    }
-
-    private void SetEditorPanels(
-        bool keyboard,
-        bool action,
-        bool mouseButton,
-        bool mouseMove,
-        bool wheel,
-        bool timing,
-        bool text,
-        bool loop,
-        bool macro,
-        bool pixel)
-    {
-        KeyboardEditPanel.Visibility = ToVisibility(keyboard);
-        ButtonEditPanel.Visibility = ToVisibility(action);
-        MouseButtonEditPanel.Visibility = ToVisibility(mouseButton);
-        MouseMoveEditPanel.Visibility = ToVisibility(mouseMove);
-        WheelEditPanel.Visibility = ToVisibility(wheel);
-        TimingEditPanel.Visibility = ToVisibility(timing);
-        TextEditPanel.Visibility = ToVisibility(text);
-        LoopEditPanel.Visibility = ToVisibility(loop);
-        MacroEditPanel.Visibility = ToVisibility(macro);
-        PixelEditPanel.Visibility = ToVisibility(pixel);
-    }
-
-    private static Visibility ToVisibility(bool visible)
-    {
-        return visible ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void ApplyStepEdit_Click(object sender, RoutedEventArgs e)
-    {
-        if (updatingStepEditor || StepList.SelectedItem is not StepDisplayItem { Index: >= 0 } selected)
-        {
-            return;
-        }
-
-        try
-        {
-            var document = McrxParser.Parse(MacroEditor.Text);
-            var steps = document.Steps.ToList();
-            if (selected.Index >= steps.Count)
-            {
-                return;
-            }
-
-            steps[selected.Index] = BuildEditedStep(steps[selected.Index]);
-            SetEditorDocument(document with { Steps = steps });
-            StepList.SelectedIndex = selected.Index;
-            SetPlaybackResultResource("LastResultMessage", L("StepPropertiesApplied"));
-        }
-        catch (Exception ex)
-        {
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
-        }
-    }
-
-    private MacroStep BuildEditedStep(MacroStep current)
-    {
-        return current switch
-        {
-            KeyStep key => key with
-            {
-                Key = ParseHidKeyFromText(StepKeyBox.Text),
-                Kind = GetComboBoxEnum<KeyActionKind>(ActionKindBox),
-                Modifiers = ReadStepModifiers(),
-                Hold = TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))
-            },
-            MouseButtonStep button => button with
-            {
-                Button = GetComboBoxEnum<CoreMouseButton>(MouseButtonBox),
-                Kind = GetComboBoxEnum<ButtonActionKind>(ActionKindBox),
-                Hold = TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))
-            },
-            MouseMoveStep move => move with
-            {
-                Mode = GetComboBoxEnum<MouseMoveMode>(MoveModeBox),
-                X = ReadInt(MoveXBox.Text, 0),
-                Y = ReadInt(MoveYBox.Text, 0),
-                Duration = TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))
-            },
-            MouseWheelStep wheel => wheel with
-            {
-                Vertical = ReadInt(WheelVerticalBox.Text, 0),
-                Horizontal = ReadInt(WheelHorizontalBox.Text, 0)
-            },
-            WaitStep => new WaitStep(TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))),
-            TextStep => new TextStep(StepTextBox.Text),
-            RepeatStep repeat => repeat with { Count = Math.Max(1, ReadInt(LoopCountBox.Text, repeat.Count)) },
-            MacroCallStep => new MacroCallStep(ReadSelectedMacroName()),
-            PixelWhenStep pixel => BuildEditedPixelStep(pixel),
-            _ => current
-        };
-    }
-
-    private PixelWhenStep BuildEditedPixelStep(PixelWhenStep current)
-    {
-        var color = new RgbColor(
-            checked((byte)Math.Clamp(ReadInt(PixelRBox.Text, current.Condition.Expected.R), 0, 255)),
-            checked((byte)Math.Clamp(ReadInt(PixelGBox.Text, current.Condition.Expected.G), 0, 255)),
-            checked((byte)Math.Clamp(ReadInt(PixelBBox.Text, current.Condition.Expected.B), 0, 255)));
-        var condition = new PixelCondition(
-            new PixelCoordinate(
-                current.Condition.Coordinate.Scope,
-                ReadInt(PixelXBox.Text, current.Condition.Coordinate.X),
-                ReadInt(PixelYBox.Text, current.Condition.Coordinate.Y),
-                current.Condition.Coordinate.WindowTitle),
-            color,
-            checked((byte)Math.Clamp(ReadInt(PixelToleranceBox.Text, current.Condition.Tolerance), 0, 255)));
-        UpdatePixelPreview(color);
-        return current with
-        {
-            Condition = condition,
-            WindowStart = ReadOptionalTimeSpan(PixelWindowStartBox.Text),
-            WindowEnd = ReadOptionalTimeSpan(PixelWindowEndBox.Text),
-            PollInterval = ReadOptionalTimeSpan(PixelPollBox.Text)
-        };
-    }
-
-    private void CaptureStepKey_Click(object sender, RoutedEventArgs e)
-    {
-        if (capturingStepKey)
-        {
-            StopStepKeyCapture();
-            return;
-        }
-
-        capturingStepKey = true;
-        SetPlaybackResultResource("LastResultPressTrigger");
-        AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureStepKey_KeyDown), true);
-    }
-
-    private void CaptureStepKey_KeyDown(object sender, KeyEventArgs e)
-    {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (IsModifierKey(key))
-        {
-            return;
-        }
-
-        var virtualKey = KeyInterop.VirtualKeyFromKey(key);
-        if (GlobalKeyboardHook.TryMapVirtualKeyToHidKey(virtualKey, out var hidKey))
-        {
-            StepKeyBox.Text = hidKey.ToString();
-        }
-
-        StopStepKeyCapture();
-        e.Handled = true;
-    }
-
-    private void StopStepKeyCapture()
-    {
-        if (!capturingStepKey)
-        {
-            return;
-        }
-
-        capturingStepKey = false;
-        RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureStepKey_KeyDown));
-    }
-
-    private void PickPixelColor_Click(object sender, RoutedEventArgs e)
-    {
-        if (!TryPickScreenPixel(out var x, out var y, out var color))
-        {
-            SetPlaybackResultResource("LastResultMessage", L("PickColorFailed"));
-            return;
-        }
-
-        PixelXBox.Text = x.ToString();
-        PixelYBox.Text = y.ToString();
-        PixelRBox.Text = color.R.ToString();
-        PixelGBox.Text = color.G.ToString();
-        PixelBBox.Text = color.B.ToString();
-        UpdatePixelPreview(color);
-    }
-
-    private static bool TryPickScreenPixel(out int x, out int y, out RgbColor color)
-    {
-        x = 0;
-        y = 0;
-        color = new RgbColor(0, 0, 0);
-        if (!GetCursorPos(out var point))
-        {
-            return false;
-        }
-
-        var dc = GetDC(IntPtr.Zero);
-        if (dc == IntPtr.Zero)
-        {
-            return false;
-        }
-
-        try
-        {
-            var pixel = GetPixel(dc, point.X, point.Y);
-            if (pixel == 0xFFFF_FFFF)
-            {
-                return false;
-            }
-
-            x = point.X;
-            y = point.Y;
-            color = new RgbColor(
-                (byte)(pixel & 0xFF),
-                (byte)((pixel >> 8) & 0xFF),
-                (byte)((pixel >> 16) & 0xFF));
-            return true;
-        }
-        finally
-        {
-            _ = ReleaseDC(IntPtr.Zero, dc);
-        }
-    }
-
-    private void UpdatePixelPreview(RgbColor color)
-    {
-        PixelColorPreview.Background = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-    }
-
-    private string ReadSelectedMacroName()
-    {
-        return (MacroTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
-            ?? MacroTargetBox.Text.Trim();
-    }
-
-    private HidModifier ReadStepModifiers()
-    {
-        var modifiers = HidModifier.None;
-        if (StepCtrlBox.IsChecked == true)
-        {
-            modifiers |= HidModifier.LeftCtrl;
-        }
-
-        if (StepShiftBox.IsChecked == true)
-        {
-            modifiers |= HidModifier.LeftShift;
-        }
-
-        if (StepAltBox.IsChecked == true)
-        {
-            modifiers |= HidModifier.LeftAlt;
-        }
-
-        if (StepWinBox.IsChecked == true)
-        {
-            modifiers |= HidModifier.LeftGui;
-        }
-
-        return modifiers;
-    }
-
-    private void SetModifierBoxes(HidModifier modifiers)
-    {
-        StepCtrlBox.IsChecked = (modifiers & (HidModifier.LeftCtrl | HidModifier.RightCtrl)) != 0;
-        StepShiftBox.IsChecked = (modifiers & (HidModifier.LeftShift | HidModifier.RightShift)) != 0;
-        StepAltBox.IsChecked = (modifiers & (HidModifier.LeftAlt | HidModifier.RightAlt)) != 0;
-        StepWinBox.IsChecked = (modifiers & (HidModifier.LeftGui | HidModifier.RightGui)) != 0;
-    }
-
-    private static void SetComboBox(ComboBox comboBox, string value)
-    {
-        foreach (var item in comboBox.Items.OfType<ComboBoxItem>())
-        {
-            if (string.Equals(item.Tag?.ToString(), value, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(item.Content?.ToString(), value, StringComparison.OrdinalIgnoreCase))
-            {
-                comboBox.SelectedItem = item;
-                return;
-            }
-        }
-    }
-
-    private static TEnum GetComboBoxEnum<TEnum>(ComboBox comboBox)
-        where TEnum : struct, Enum
-    {
-        if (comboBox.SelectedItem is ComboBoxItem { Tag: TEnum value })
-        {
-            return value;
-        }
-
-        return Enum.TryParse<TEnum>(comboBox.Text, ignoreCase: true, out var parsed)
-            ? parsed
-            : Enum.GetValues<TEnum>()[0];
-    }
-
-    private static HidKey ParseHidKeyFromText(string value)
-    {
-        var text = value.Trim();
-        if (text.Length == 1 && char.IsDigit(text[0]))
-        {
-            text = $"D{text}";
-        }
-
-        if (!Enum.TryParse<HidKey>(text, ignoreCase: true, out var key) || key == HidKey.None)
-        {
-            throw new InvalidOperationException($"Unsupported key '{value}'.");
-        }
-
-        return key;
-    }
-
-    private static int ReadInt(string value, int defaultValue)
-    {
-        return int.TryParse(value.Trim(), out var parsed) ? parsed : defaultValue;
-    }
-
-    private static double ReadDouble(string value, double defaultValue)
-    {
-        return double.TryParse(value.Trim(), out var parsed) ? parsed : defaultValue;
-    }
-
-    private static TimeSpan? ReadOptionalTimeSpan(string value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : TimeSpan.FromMilliseconds(ReadDouble(value, 0));
-    }
-
-    private static string FormatNumber(double value)
-    {
-        return Math.Abs(value - Math.Round(value)) < 0.000_1
-            ? ((int)Math.Round(value)).ToString()
-            : value.ToString("0.####", LocalizationService.CurrentCulture);
-    }
-
-    private void RefreshRuntimeDiagnostics()
-    {
-        var diagnostics = RuntimeDiagnosticsSnapshot.Collect();
-        PixelText.Text = LF("PixelSamplerStatus", diagnostics.PixelSampler.Detail);
-        InputBackendText.Text = LF("InputBackendStatus", diagnostics.InputBackend.Detail);
-    }
-
-    private void RefreshConversionText()
-    {
-        if (pendingImport is null)
-        {
-            ConversionText.Text = razerModuleFiles.Count > 0
-                ? LF("ConversionModulesLoaded", razerModuleFiles.Count)
-                : L("ConversionReady");
-            return;
-        }
-
-        ConversionText.Text = LF("ConversionImported", pendingImport.SourceFormat, pendingImport.Document.Steps.Count)
-            + Environment.NewLine
-            + FormatDiagnostics(pendingImport.Diagnostics);
-    }
-
-    private MacroConversionFormat GetSelectedExportFormat()
-    {
-        return ExportFormatBox.SelectedItem is ComboBoxItem { Tag: MacroConversionFormat format }
-            ? format
-            : MacroConversionFormat.MacroConverterXml;
-    }
-
-    private static string FormatFilter(MacroConversionFormat format)
-    {
-        return MacroConversionService.GetFormats().FirstOrDefault(item => item.Format == format)?.FileDialogFilter
-            ?? "All files (*.*)|*.*";
-    }
-
-    private static string FormatDiagnostics(IReadOnlyList<MacroConversionDiagnostic> diagnostics)
-    {
-        if (diagnostics.Count == 0)
-        {
-            return L("ConversionDiagnosticsNone");
-        }
-
-        return string.Join(
-            Environment.NewLine,
-            diagnostics.Select(item => $"{item.Severity}: {item.Message}"));
-    }
-
-    private void CaptureTrigger_Click(object sender, RoutedEventArgs e)
-    {
-        if (capturingTrigger)
-        {
-            StopCapture();
-            return;
-        }
-
-        capturingTrigger = true;
-        TriggerTextBox.Text = string.Empty;
-        SetPlaybackResultResource("LastResultPressTrigger");
-        AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureTrigger_KeyDown), true);
-        AddHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureTrigger_KeyUp), true);
-        AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(CaptureTrigger_MouseDown), true);
-    }
-
-    private void CaptureTrigger_KeyDown(object sender, KeyEventArgs e)
-    {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (IsModifierKey(key))
-        {
-            TriggerTextBox.Text = new HotkeyGesture(ReadCurrentModifiers(), HidKey.None).ToString();
-            return;
-        }
-
-        var virtualKey = KeyInterop.VirtualKeyFromKey(key);
-        if (!GlobalKeyboardHook.TryMapVirtualKeyToHidKey(virtualKey, out var hidKey))
-        {
-            SetPlaybackResultResource("LastResultUnsupportedTriggerKey", key);
-            StopCapture();
-            e.Handled = true;
-            return;
-        }
-
-        var gesture = new HotkeyGesture(ReadCurrentModifiers(), hidKey);
-        TriggerTextBox.Text = gesture.ToString();
-        SetPlaybackResultResource("LastResultCapturedTrigger", gesture);
-        StopCapture();
-        e.Handled = true;
-    }
-
-    private void CaptureTrigger_KeyUp(object sender, KeyEventArgs e)
-    {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (!IsModifierKey(key))
-        {
-            return;
-        }
-
-        var modifier = ModifierFromKey(key) | ReadCurrentModifiers();
-        if (modifier == HidModifier.None)
-        {
-            return;
-        }
-
-        var gesture = new HotkeyGesture(modifier, HidKey.None);
-        TriggerTextBox.Text = gesture.ToString();
-        SetPlaybackResultResource("LastResultCapturedTrigger", gesture);
-        StopCapture();
-        e.Handled = true;
-    }
-
-    private void CaptureTrigger_MouseDown(object sender, MouseButtonEventArgs e)
-    {
-        var button = e.ChangedButton switch
-        {
-            System.Windows.Input.MouseButton.XButton1 => CoreMouseButton.X1,
-            System.Windows.Input.MouseButton.XButton2 => CoreMouseButton.X2,
-            _ => CoreMouseButton.None
-        };
-
-        if (button == CoreMouseButton.None)
-        {
-            return;
-        }
-
-        var gesture = new HotkeyGesture(ReadCurrentModifiers(), HidKey.None, button);
-        TriggerTextBox.Text = gesture.ToString();
-        SetPlaybackResultResource("LastResultCapturedTrigger", gesture);
-        StopCapture();
-        e.Handled = true;
-    }
-
-    private async void StartListening_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
-            if (document.Playback.Trigger is null)
-            {
+            if (bindings.Count == 0)
                 throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
-            }
 
             keyboardHook?.Dispose();
+            StopListeningControllers();
+
             keyboardHook = new GlobalKeyboardHook();
             keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
             keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
-            keyboardHook.Start(document.Playback.Trigger);
+            keyboardHook.Start(bindings);
 
-            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback));
+            foreach (var (id, controller) in controllers)
+            {
+                listeningControllers[id] = controller;
+            }
+
+            foreach (var (id, name) in macroNames)
+            {
+                listeningMacroNames[id] = name;
+            }
+
+            foreach (var (id, processFilter) in processFilters)
+            {
+                listeningProcessFilters[id] = processFilter;
+            }
+
+            playbackController = null;
             listening = true;
-            SetPlaybackStatusResource("PlaybackStatusListeningWithTrigger", document.Playback.Trigger);
-            SetPlaybackResultResource("HotkeyListenerStarted");
-            SetStatusResource("Listening");
+            PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({bindings.Count})");
+            SetStatus($"{L("Listening")} ({bindings.Count})");
             await Task.CompletedTask;
         }
         catch (Exception ex)
         {
-            SetPlaybackStatusResource("PlaybackStatusError");
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
-            SetStatusResource("PlaybackError");
+            PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
+            PlaybackPanelControl.SetPlaybackResult(ex.Message);
+            SetStatus(L("PlaybackError"));
         }
     }
 
-    private void StopListening_Click(object sender, RoutedEventArgs e)
+    private void OnStopListening()
     {
         listening = false;
         keyboardHook?.Dispose();
         keyboardHook = null;
+        StopListeningControllers();
         playbackController?.Stop();
-        SetPlaybackStatusResource("PlaybackStatusIdle");
-        SetPlaybackResultResource("HotkeyListenerStopped");
-        SetStatusResource("Idle");
+        PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusIdle"));
+        PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
+        SetStatus(L("Idle"));
     }
 
-    private async void RunNow_Click(object sender, RoutedEventArgs e)
+    private void StopListeningControllers()
+    {
+        foreach (var controller in listeningControllers.Values)
+        {
+            controller.Stop();
+        }
+
+        listeningControllers.Clear();
+        listeningMacroNames.Clear();
+        listeningProcessFilters.Clear();
+    }
+
+    private async void OnRunNow()
     {
         try
         {
-            var document = ParseDocumentWithPlaybackFromControls(applyToEditor: true);
+            var document = GetDocumentWithPlayback();
             playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback));
             await playbackController.RunNowAsync();
             UpdatePlaybackStatus();
@@ -1738,60 +724,164 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SetPlaybackStatusResource("PlaybackStatusError");
-            SetPlaybackResultResource("LastResultMessage", ex.Message);
+            PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
+            PlaybackPanelControl.SetPlaybackResult(ex.Message);
         }
     }
 
-    private void StopPlayback_Click(object sender, RoutedEventArgs e)
+    private void OnStopPlayback()
     {
         playbackController?.Stop();
+        foreach (var controller in listeningControllers.Values)
+        {
+            controller.Stop();
+        }
+
         UpdatePlaybackStatus();
         if (playbackController is not null)
-        {
             _ = WatchPlaybackAsync(playbackController);
-        }
     }
 
-    private void PlaybackModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void OnImportApplied(MacroDocument document)
     {
-        if (PlaybackCountTextBox is not null)
+        var item = libraryStore.CreateMacro(document);
+        editorState.SelectedMacroId = item.Id;
+        LibraryPanel.RefreshList();
+        SequencePanelControl.SetEditorDocument(document);
+        SequencePanelControl.ClearUndoHistory();
+        PlaybackPanelControl.SetPlaybackControls(document.Playback);
+        RefreshConditionStepChoices();
+        SetStatus(L("ConversionApplied"));
+    }
+
+    private void OnSequenceUndoApplied()
+    {
+        RefreshEditorAfterSequenceDocumentChange(L("Undo"));
+    }
+
+    private void OnSequenceDocumentEdited()
+    {
+        RefreshEditorAfterSequenceDocumentChange(null);
+    }
+
+    private void RefreshEditorAfterSequenceDocumentChange(string? status)
+    {
+        try
         {
-            PlaybackCountTextBox.IsEnabled = GetSelectedPlaybackMode() == PlaybackMode.FixedCount;
+            var document = SequencePanelControl.GetCurrentDocument();
+            RefreshConditionStepChoices();
+            ConditionPanel.LoadConditions(document.EffectiveConditions);
+            SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
+            OnStepSelectionChanged(SequencePanelControl.SelectedStepIndex);
+            CheckAndWarnConflicts(document);
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                SetStatus(status);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
         }
     }
 
-    protected override void OnClosed(EventArgs e)
+    private MacroDocument GetDocumentWithPlayback()
     {
-        keyboardHook?.Dispose();
-        base.OnClosed(e);
+        ApplyPlaybackSettingsToEditor();
+        return SequencePanelControl.GetCurrentDocument();
     }
 
-    private void KeyboardHook_TriggerPressed(object? sender, EventArgs e)
+    private void ApplyPlaybackSettingsToEditor()
+    {
+        var triggerText = PlaybackPanelControl.TriggerText;
+        var trigger = string.IsNullOrWhiteSpace(triggerText) ? null : McrxParser.ParseHotkeyGesture(triggerText);
+        var mode = PlaybackPanelControl.GetSelectedPlaybackMode();
+        if (!int.TryParse(PlaybackPanelControl.CountText, out var count) || count < 1) count = 1;
+        var processFilter = PlaybackPanelControl.ProcessFilterText;
+
+        var root = JsonNode.Parse(SequencePanelControl.EditorText)?.AsObject()
+            ?? throw new JsonException("Macro JSON root must be an object.");
+
+        var macroName = SequencePanelControl.MacroName;
+        if (!string.IsNullOrWhiteSpace(macroName))
+            root["name"] = macroName;
+
+        var playback = new JsonObject
+        {
+            ["mode"] = ToPlaybackModeText(mode),
+            ["count"] = count
+        };
+        if (trigger is not null) playback["trigger"] = trigger.ToString();
+        if (!string.IsNullOrWhiteSpace(processFilter)) playback["processFilter"] = processFilter;
+        root["playback"] = playback;
+
+        SequencePanelControl.EditorText = root.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+        });
+        SequencePanelControl.ValidateCurrentMacro();
+    }
+
+    private void RefreshConditionStepChoices()
+    {
+        try
+        {
+            ConditionPanel.SetStepChoices(SequencePanelControl.GetStepChoices());
+        }
+        catch
+        {
+            ConditionPanel.SetStepChoices([]);
+        }
+    }
+
+    private MacroDocument? ResolveMacroForPlayback(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        try
+        {
+            var current = SequencePanelControl.GetCurrentDocument();
+            if (string.Equals(current.Name, name, StringComparison.CurrentCultureIgnoreCase))
+                return current;
+        }
+        catch { }
+
+        var item = libraryStore.Load().Items.FirstOrDefault(candidate => candidate.MatchesReference(name));
+        return item is null ? null : libraryStore.ReadMacro(item.Id);
+    }
+
+    private void KeyboardHook_TriggerPressed(object? sender, HotkeyTriggeredEventArgs e)
     {
         _ = Dispatcher.InvokeAsync(async () =>
         {
-            if (playbackController is null)
+            if (!listeningControllers.TryGetValue(e.Id, out var controller)) return;
+            if (listeningProcessFilters.TryGetValue(e.Id, out var processFilter)
+                && !PlaybackProcessFilter.Matches(processFilter, ForegroundProcessService.GetForegroundProcessName()))
             {
                 return;
             }
 
-            await playbackController.TriggerPressedAsync();
+            playbackController = controller;
+            await controller.TriggerPressedAsync();
             UpdatePlaybackStatus();
-            _ = WatchPlaybackAsync(playbackController);
+            if (listeningMacroNames.TryGetValue(e.Id, out var macroName))
+            {
+                SetStatus(macroName);
+            }
+
+            _ = WatchPlaybackAsync(controller);
         });
     }
 
-    private void KeyboardHook_TriggerReleased(object? sender, EventArgs e)
+    private void KeyboardHook_TriggerReleased(object? sender, HotkeyTriggeredEventArgs e)
     {
         _ = Dispatcher.InvokeAsync(() =>
         {
-            playbackController?.TriggerReleased();
+            if (!listeningControllers.TryGetValue(e.Id, out var controller)) return;
+            controller.TriggerReleased();
+            playbackController = controller;
             UpdatePlaybackStatus();
-            if (playbackController is not null)
-            {
-                _ = WatchPlaybackAsync(playbackController);
-            }
+            _ = WatchPlaybackAsync(controller);
         });
     }
 
@@ -1802,18 +892,18 @@ public partial class MainWindow : Window
             var result = await controller.WhenIdleAsync();
             await Dispatcher.InvokeAsync(() =>
             {
-                SetPlaybackStatusResource(listening ? "PlaybackStatusListening" : PlaybackStatusResourceKey(controller.Status));
-                SetPlaybackResultResource("LastResultRunSummary", result.IterationsCompleted, result.ActionsSubmitted, result.Cancelled);
-                SetStatusResource(listening ? "Listening" : "Idle");
+                PlaybackPanelControl.SetPlaybackStatus(listening ? L("PlaybackStatusListening") : L("PlaybackStatusIdle"));
+                PlaybackPanelControl.SetPlaybackResult(LocalizationService.Format("LastResultRunSummary", result.IterationsCompleted, result.ActionsSubmitted, result.Cancelled));
+                SetStatus(listening ? L("Listening") : L("Idle"));
             });
         }
         catch (Exception ex)
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                SetPlaybackStatusResource("PlaybackStatusError");
-                SetPlaybackResultResource("LastResultMessage", ex.Message);
-                SetStatusResource("PlaybackError");
+                PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
+                PlaybackPanelControl.SetPlaybackResult(ex.Message);
+                SetStatus(L("PlaybackError"));
             });
         }
     }
@@ -1822,428 +912,359 @@ public partial class MainWindow : Window
     {
         if (playbackController is null)
         {
-            SetPlaybackStatusResource(listening ? "PlaybackStatusListening" : "PlaybackStatusIdle");
+            PlaybackPanelControl.SetPlaybackStatus(listening ? L("PlaybackStatusListening") : L("PlaybackStatusIdle"));
             return;
         }
 
-        SetPlaybackStatusResource(PlaybackStatusResourceKey(playbackController.Status));
-        SetStatusResource(StatusResourceKey(playbackController.Status));
+        PlaybackPanelControl.SetPlaybackStatus(L(PlaybackStatusResourceKey(playbackController.Status)));
+        SetStatus(L(StatusResourceKey(playbackController.Status)));
     }
 
-    private MacroDocument ParseDocumentWithPlaybackFromControls(bool applyToEditor)
+    private void SetStatus(string text) => StatusText.Text = text;
+
+    // --- Window chrome ---
+
+    private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (applyToEditor)
+        SequencePanelControl.CloseInlineStepEditorOnExternalPointerDown(e.OriginalSource as DependencyObject);
+        ConditionPanel.CloseInlineStepEditorOnExternalPointerDown(e.OriginalSource as DependencyObject);
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var modifiers = Keyboard.Modifiers;
+
+        if ((modifiers & ModifierKeys.Control) != 0
+            && key == Key.Z
+            && !IsTextEditingSource(e.OriginalSource as DependencyObject))
+        {
+            SequencePanelControl.UndoLastChange();
+            e.Handled = true;
+            return;
+        }
+
+        if (!IsTextEditingSource(e.OriginalSource as DependencyObject)
+            && ConditionPanel.HandleExplorerShortcut(key, modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (!IsTextEditingSource(e.OriginalSource as DependencyObject)
+            && SequencePanelControl.HandleExplorerShortcut(key, modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if ((modifiers & ModifierKeys.Control) != 0
+            && key == Key.Delete
+            && !IsTextEditingSource(e.OriginalSource as DependencyObject))
+        {
+            SequencePanelControl.ClearAllSteps();
+            e.Handled = true;
+        }
+    }
+
+    private void TopChromeBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (IsChromeInteractiveSource(e.OriginalSource as DependencyObject)) return;
+        if (e.ClickCount == 2) { ToggleMaximize(); return; }
+        if (e.LeftButton == MouseButtonState.Pressed)
+            try { DragMove(); } catch (InvalidOperationException) { }
+    }
+
+    private void MinimizeWindow_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void MaximizeWindow_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
+    private void ToggleMaximize() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    private void ThemeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeService.Toggle();
+        ThemeToggleButton.Content = ThemeService.CurrentTheme == AppTheme.Dark ? "☾" : "☀";
+    }
+
+    // --- File operations ---
+
+    private void OpenMacro_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = L("MacroFileFilter"), Title = L("OpenMacroTitle") };
+        if (dialog.ShowDialog(this) == true)
+        {
+            SequencePanelControl.EditorText = File.ReadAllText(dialog.FileName);
+            SequencePanelControl.ValidateCurrentMacro();
+            SequencePanelControl.ClearUndoHistory();
+            SetStatus(Path.GetFileName(dialog.FileName));
+        }
+    }
+
+    private void SaveMacro_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog { Filter = L("MacroFileFilter"), Title = L("SaveMacroTitle"), DefaultExt = ".mcrx" };
+        if (dialog.ShowDialog(this) == true)
         {
             ApplyPlaybackSettingsToEditor();
+            File.WriteAllText(dialog.FileName, SequencePanelControl.EditorText);
+            SetStatus(Path.GetFileName(dialog.FileName));
         }
-
-        return McrxParser.Parse(MacroEditor.Text);
     }
 
-    private MacroDocument? ResolveMacroForPlayback(string name)
+    // --- Language ---
+
+    private void InitializeLanguageComboBox()
     {
-        if (string.IsNullOrWhiteSpace(name))
+        updatingLanguageComboBox = true;
+        LanguageComboBox.Items.Clear();
+        foreach (var language in LocalizationService.SupportedLanguages)
         {
-            return null;
+            var item = new ComboBoxItem { Tag = language.CultureName, Content = LocalizationService.Get(language.DisplayNameResourceKey) };
+            LanguageComboBox.Items.Add(item);
+            if (string.Equals(language.CultureName, LocalizationService.CurrentCulture.Name, StringComparison.OrdinalIgnoreCase))
+                LanguageComboBox.SelectedItem = item;
+        }
+        updatingLanguageComboBox = false;
+    }
+
+    private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (updatingLanguageComboBox) return;
+        if ((LanguageComboBox.SelectedItem as ComboBoxItem)?.Tag is not string cultureName) return;
+        LocalizationService.SetLanguage(cultureName);
+        ApplyLocalization();
+        LibraryPanel.RefreshList();
+    }
+
+    private void ApplyLocalization()
+    {
+        Title = L("AppTitle");
+        LanguageLabelText.Text = L("Language");
+        OpenButton.Content = L("Open");
+        SaveButton.Content = L("Save");
+        WindowMenuButton.Content = L("WorkspaceWindowMenu");
+        ShowPanelsMenuItem.Header = L("WorkspaceShow");
+        FloatPanelsMenuItem.Header = L("WorkspaceFloat");
+        DockPanelsMenuItem.Header = L("WorkspaceDock");
+        ResetWorkspaceLayoutMenuItem.Header = L("WorkspaceResetLayout");
+
+        SetWorkspacePanelTitle("library", WorkspaceTitle("WorkspacePanelLibrary"));
+        SetWorkspacePanelTitle("sequence", WorkspaceTitle("WorkspacePanelSequence"));
+        SetWorkspacePanelTitle("conditions", WorkspaceTitle("WorkspacePanelConditions"));
+        SetWorkspacePanelTitle("json", WorkspaceTitle("AdvancedJson"));
+        SetWorkspacePanelTitle("actions", WorkspaceTitle("WorkspacePanelActions"));
+        SetWorkspacePanelTitle("playback", WorkspaceTitle("WorkspacePanelPlayback"));
+        ApplyWorkspaceMenuItemText();
+
+        updatingLanguageComboBox = true;
+        foreach (var item in LanguageComboBox.Items.OfType<ComboBoxItem>())
+        {
+            var cultureName = item.Tag?.ToString();
+            var language = LocalizationService.SupportedLanguages
+                .FirstOrDefault(c => string.Equals(c.CultureName, cultureName, StringComparison.OrdinalIgnoreCase));
+            if (language is not null) item.Content = LocalizationService.Get(language.DisplayNameResourceKey);
+        }
+        updatingLanguageComboBox = false;
+
+        LibraryPanel.ApplyLocalization();
+        SequencePanelControl.ApplyLocalization();
+        JsonPanel.ApplyLocalization();
+        ActionPalette.ApplyLocalization();
+        PlaybackPanelControl.ApplyLocalization();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        SaveWorkspaceLayout();
+        keyboardHook?.Dispose();
+        StopListeningControllers();
+        playbackController?.Stop();
+        foreach (var panel in workspacePanels.Values)
+        {
+            panel.Window?.ForceClose();
         }
 
+        base.OnClosed(e);
+    }
+
+    private void ApplyWorkspaceMenuItemText()
+    {
+        ShowLibraryMenuItem.Header = WorkspaceTitle("WorkspacePanelLibrary");
+        ShowSequenceMenuItem.Header = WorkspaceTitle("WorkspacePanelSequence");
+        ShowConditionMenuItem.Header = WorkspaceTitle("WorkspacePanelConditions");
+        ShowJsonMenuItem.Header = WorkspaceTitle("AdvancedJson");
+        ShowActionMenuItem.Header = WorkspaceTitle("WorkspacePanelActions");
+        ShowPlaybackMenuItem.Header = WorkspaceTitle("WorkspacePanelPlayback");
+        SetSubMenuHeaders(FloatPanelsMenuItem);
+        SetSubMenuHeaders(DockPanelsMenuItem);
+
+        ConditionSection.Header = WorkspaceTitle("WorkspacePanelConditions");
+        ActionPaletteSection.Header = WorkspaceTitle("WorkspacePanelActions");
+        PlaybackSection.Header = WorkspaceTitle("WorkspacePanelPlayback");
+
+        SetWorkspaceToolButtonText(LibraryToolButton, WorkspaceTitle("WorkspacePanelLibrary"));
+        SetWorkspaceToolButtonText(SequenceToolButton, WorkspaceTitle("WorkspacePanelSequence"));
+        SetWorkspaceToolButtonText(ConditionToolButton, WorkspaceTitle("WorkspacePanelConditions"));
+        SetWorkspaceToolButtonText(JsonToolButton, WorkspaceTitle("AdvancedJson"));
+        SetWorkspaceToolButtonText(ActionToolButton, WorkspaceTitle("WorkspacePanelActions"));
+        SetWorkspaceToolButtonText(PlaybackToolButton, WorkspaceTitle("WorkspacePanelPlayback"));
+    }
+
+    private void SetSubMenuHeaders(MenuItem parent)
+    {
+        foreach (var item in parent.Items.OfType<MenuItem>())
+        {
+            item.Header = item.Tag?.ToString() switch
+            {
+                "library" => WorkspaceTitle("WorkspacePanelLibrary"),
+                "sequence" => WorkspaceTitle("WorkspacePanelSequence"),
+                "conditions" => WorkspaceTitle("WorkspacePanelConditions"),
+                "json" => WorkspaceTitle("AdvancedJson"),
+                "actions" => WorkspaceTitle("WorkspacePanelActions"),
+                "playback" => WorkspaceTitle("WorkspacePanelPlayback"),
+                _ => item.Header
+            };
+        }
+    }
+
+    // --- Condition directive integration ---
+
+    private void OnConditionSelectionChanged(object? sender, ConditionSelectionChangedEventArgs e)
+    {
+        if (e.Directive != null)
+        {
+            SequencePanelControl.HighlightSingleCondition(e.Index, e.Directive, ConditionPanel.GetConditionColor(e.Index));
+        }
+        else
+        {
+            try
+            {
+                var doc = SequencePanelControl.GetCurrentDocument();
+                SequencePanelControl.SetConditionHighlights(doc.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
+            }
+            catch { SequencePanelControl.SetConditionHighlights(null); }
+        }
+    }
+
+    private void OnConditionsModified(object? sender, EventArgs e)
+    {
         try
         {
-            var current = McrxParser.Parse(MacroEditor.Text);
-            if (string.Equals(current.Name, name, StringComparison.CurrentCultureIgnoreCase))
-            {
-                return current;
-            }
+            var doc = SequencePanelControl.GetCurrentDocument();
+            var updated = doc with { Conditions = ConditionPanel.Conditions.ToList() };
+            SequencePanelControl.CaptureUndoSnapshot();
+            SequencePanelControl.SetEditorDocument(updated);
+            RefreshConditionStepChoices();
+            SequencePanelControl.SetConditionHighlights(updated.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
+            CheckAndWarnConflicts(updated);
         }
-        catch
+        catch (Exception ex)
         {
-            // The active editor document may be mid-edit; saved macros still remain resolvable.
+            SetStatus(ex.Message);
         }
-
-        var item = libraryStore.Load().Items.FirstOrDefault(candidate =>
-            string.Equals(candidate.Name, name, StringComparison.CurrentCultureIgnoreCase)
-            || string.Equals(candidate.Id, name, StringComparison.OrdinalIgnoreCase));
-        return item is null ? null : libraryStore.ReadMacro(item.Id);
     }
 
-    private void ApplyPlaybackSettingsToEditor()
+    private void OnPickRegionRequested(object? sender, EventArgs e)
     {
-        var settings = GetPlaybackSettingsFromControls();
-        var root = JsonNode.Parse(MacroEditor.Text)?.AsObject()
-            ?? throw new JsonException("Macro JSON root must be an object.");
-        var macroName = MacroNameBox.Text.Trim();
-        if (!string.IsNullOrWhiteSpace(macroName))
+        var region = ScreenRegionPicker.PickRegion(this);
+        if (region != null)
         {
-            root["name"] = macroName;
+            ConditionPanel.SetRegion(region);
+            SetStatus($"区域已选取: ({region.TopLeft.X},{region.TopLeft.Y}) ~ ({region.BottomRight.X},{region.BottomRight.Y})");
         }
+    }
 
-        var playback = new JsonObject
+    private void CheckAndWarnConflicts(MacroDocument document)
+    {
+        var warnings = ConflictDetector.DetectConflicts(document);
+        if (warnings.Count > 0)
         {
-            ["mode"] = ToPlaybackModeText(settings.Mode),
-            ["count"] = settings.Count
-        };
-
-        if (settings.Trigger is not null)
-        {
-            playback["trigger"] = settings.Trigger.ToString();
+            SetStatus($"⚠ {warnings.Count} 个按键冲突");
         }
-
-        root["playback"] = playback;
-        MacroEditor.Text = root.ToJsonString(CreateIndentedJsonOptions());
-        ValidateCurrentMacro();
     }
 
-    private PlaybackSettings GetPlaybackSettingsFromControls()
+    // --- Helpers ---
+
+    private static bool IsChromeInteractiveSource(DependencyObject? source)
     {
-        var triggerText = TriggerTextBox.Text.Trim();
-        var trigger = string.IsNullOrWhiteSpace(triggerText)
-            ? null
-            : McrxParser.ParseHotkeyGesture(triggerText);
-        var mode = GetSelectedPlaybackMode();
-        var count = 1;
-        if (!string.IsNullOrWhiteSpace(PlaybackCountTextBox.Text)
-            && !int.TryParse(PlaybackCountTextBox.Text, out count))
-        {
-            throw new InvalidOperationException(L("PlaybackCountWholeNumber"));
-        }
-
-        if (count < 1)
-        {
-            throw new InvalidOperationException(L("PlaybackCountAtLeastOne"));
-        }
-
-        return new PlaybackSettings(trigger, mode, count);
+        return FindVisualParent<ButtonBase>(source) is not null
+            || FindVisualParent<ComboBox>(source) is not null
+            || FindVisualParent<TextBoxBase>(source) is not null;
     }
 
-    private PlaybackMode GetSelectedPlaybackMode()
+    private static bool IsTextEditingSource(DependencyObject? source)
     {
-        var selected = PlaybackModeBox.SelectedItem as ComboBoxItem;
-        var value = selected?.Tag?.ToString() ?? "fixedCount";
-        return value switch
-        {
-            "toggleLoop" => PlaybackMode.ToggleLoop,
-            "holdLoop" => PlaybackMode.HoldLoop,
-            "fixedCount" => PlaybackMode.FixedCount,
-            _ => PlaybackMode.FixedCount
-        };
+        return FindVisualParent<TextBoxBase>(source) is not null
+            || FindVisualParent<PasswordBox>(source) is not null;
     }
 
-    private void SetPlaybackControls(PlaybackSettings settings)
+    private static T? FindVisualParent<T>(DependencyObject? source) where T : DependencyObject
     {
-        TriggerTextBox.Text = settings.Trigger?.ToString() ?? string.Empty;
-        PlaybackCountTextBox.Text = settings.Count.ToString();
-        foreach (var item in PlaybackModeBox.Items.OfType<ComboBoxItem>())
-        {
-            if (string.Equals(item.Tag?.ToString(), ToPlaybackModeText(settings.Mode), StringComparison.Ordinal))
-            {
-                PlaybackModeBox.SelectedItem = item;
-                break;
-            }
-        }
-
-        PlaybackCountTextBox.IsEnabled = settings.Mode == PlaybackMode.FixedCount;
+        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+            if (current is T match) return match;
+        return null;
     }
 
-    private static string PlaybackStatusResourceKey(PlaybackStatus status)
+    private static string PlaybackStatusResourceKey(PlaybackStatus status) => status switch
     {
-        return status switch
-        {
-            PlaybackStatus.Idle => "PlaybackStatusIdle",
-            PlaybackStatus.Listening => "PlaybackStatusListening",
-            PlaybackStatus.Running => "PlaybackStatusRunning",
-            PlaybackStatus.Stopping => "PlaybackStatusStopping",
-            PlaybackStatus.InputUnavailable => "PlaybackStatusInputUnavailable",
-            PlaybackStatus.Error => "PlaybackStatusError",
-            _ => "PlaybackStatusFormat"
-        };
-    }
+        PlaybackStatus.Idle => "PlaybackStatusIdle",
+        PlaybackStatus.Listening => "PlaybackStatusListening",
+        PlaybackStatus.Running => "PlaybackStatusRunning",
+        PlaybackStatus.Stopping => "PlaybackStatusStopping",
+        PlaybackStatus.InputUnavailable => "PlaybackStatusInputUnavailable",
+        PlaybackStatus.Error => "PlaybackStatusError",
+        _ => "PlaybackStatusFormat"
+    };
 
-    private static string StatusResourceKey(PlaybackStatus status)
+    private static string StatusResourceKey(PlaybackStatus status) => status switch
     {
-        return status switch
-        {
-            PlaybackStatus.Idle => "Idle",
-            PlaybackStatus.Listening => "Listening",
-            PlaybackStatus.Error => "PlaybackError",
-            _ => PlaybackStatusResourceKey(status)
-        };
-    }
+        PlaybackStatus.Idle => "Idle",
+        PlaybackStatus.Listening => "Listening",
+        PlaybackStatus.Error => "PlaybackError",
+        _ => PlaybackStatusResourceKey(status)
+    };
 
-    private static string ToPlaybackModeText(PlaybackMode mode)
+    private static string ToPlaybackModeText(PlaybackMode mode) => mode switch
     {
-        return mode switch
-        {
-            PlaybackMode.ToggleLoop => "toggleLoop",
-            PlaybackMode.HoldLoop => "holdLoop",
-            PlaybackMode.FixedCount => "fixedCount",
-            _ => "fixedCount"
-        };
-    }
+        PlaybackMode.ToggleLoop => "toggleLoop",
+        PlaybackMode.HoldLoop => "holdLoop",
+        _ => "fixedCount"
+    };
 
-    private static JsonSerializerOptions CreateIndentedJsonOptions()
-    {
-        return new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
-        };
-    }
+    private static string WorkspaceTitle(string key) => LocalizationService.Get(key);
+    private static string L(string key) => LocalizationService.Get(key);
 
-    private void StopCapture()
+    private sealed class WorkspacePanelRegistration
     {
-        if (!capturingTrigger)
+        public WorkspacePanelRegistration(string id, string title, ContentControl dockHost, FrameworkElement element)
         {
-            return;
+            Id = id;
+            Title = title;
+            DockHost = dockHost;
+            Element = element;
         }
 
-        capturingTrigger = false;
-        RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureTrigger_KeyDown));
-        RemoveHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureTrigger_KeyUp));
-        RemoveHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(CaptureTrigger_MouseDown));
+        public string Id { get; }
+        public string Title { get; set; }
+        public ContentControl DockHost { get; }
+        public FrameworkElement Element { get; }
+        public WorkspacePanelWindow? Window { get; set; }
+        public bool IsVisible { get; set; }
+        public bool IsFloating { get; set; }
+        public WorkspacePanelLayout? SavedLayout { get; set; }
     }
 
-    private static bool IsModifierKey(Key key)
+    private const string SampleMacro = """
     {
-        return key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
+      "version": 1,
+      "name": "baseline",
+      "steps": [
+        { "type": "key.tap", "key": "A", "modifiers": ["LeftCtrl"], "holdMs": 5 },
+        { "type": "mouse.move", "mode": "relative", "x": 25, "y": -10, "durationMs": 0 },
+        { "type": "mouse.wheel", "vertical": -1, "horizontal": 0 },
+        { "type": "consumer.tap", "control": "VolumeUp" },
+        { "type": "wait", "ms": 2 }
+      ]
     }
-
-    private static HidModifier ModifierFromKey(Key key)
-    {
-        return key switch
-        {
-            Key.LeftCtrl => HidModifier.LeftCtrl,
-            Key.RightCtrl => HidModifier.RightCtrl,
-            Key.LeftShift => HidModifier.LeftShift,
-            Key.RightShift => HidModifier.RightShift,
-            Key.LeftAlt => HidModifier.LeftAlt,
-            Key.RightAlt => HidModifier.RightAlt,
-            Key.LWin => HidModifier.LeftGui,
-            Key.RWin => HidModifier.RightGui,
-            _ => HidModifier.None
-        };
-    }
-
-    private static HidModifier ReadCurrentModifiers()
-    {
-        var modifiers = HidModifier.None;
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
-        {
-            modifiers |= HidModifier.LeftCtrl;
-        }
-
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-        {
-            modifiers |= HidModifier.LeftShift;
-        }
-
-        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0)
-        {
-            modifiers |= HidModifier.LeftAlt;
-        }
-
-        if ((Keyboard.Modifiers & ModifierKeys.Windows) != 0)
-        {
-            modifiers |= HidModifier.LeftGui;
-        }
-
-        return modifiers;
-    }
-
-    private static TimeSpan EstimateDuration(IReadOnlyList<MacroStep> steps)
-    {
-        var ticks = 0L;
-        foreach (var step in steps)
-        {
-            ticks += EstimateStepDuration(step).Ticks;
-        }
-
-        return TimeSpan.FromTicks(ticks);
-    }
-
-    private static TimeSpan EstimateStepDuration(MacroStep step)
-    {
-        return step switch
-        {
-            KeyStep key => key.Hold,
-            MouseMoveStep move => move.Duration,
-            MouseButtonStep button => button.Hold,
-            ConsumerStep consumer => consumer.Hold,
-            WaitStep wait => wait.Duration,
-            RepeatStep repeat => TimeSpan.FromTicks(EstimateDuration(repeat.Steps).Ticks * Math.Max(0, repeat.Count)),
-            PixelWhenStep pixel => EstimateDuration(pixel.ThenSteps),
-            _ => TimeSpan.Zero
-        };
-    }
-
-    private static string FormatDuration(TimeSpan duration)
-    {
-        if (duration.TotalSeconds >= 1)
-        {
-            return $"{duration.TotalSeconds:0.###} s";
-        }
-
-        return $"{duration.TotalMilliseconds:0.###} ms";
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Point
-    {
-        public int X;
-        public int Y;
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out Point lpPoint);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr GetDC(IntPtr hWnd);
-
-    [DllImport("gdi32.dll", SetLastError = true)]
-    private static extern uint GetPixel(IntPtr hdc, int nXPos, int nYPos);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
-
-    private static string FormatStepBadge(MacroStep step)
-    {
-        var duration = EstimateStepDuration(step);
-        return duration > TimeSpan.Zero ? FormatDuration(duration) : string.Empty;
-    }
-
-    private static string Describe(MacroStep step)
-    {
-        return step switch
-        {
-            KeyStep key => key.Modifiers == HidModifier.None
-                ? $"key.{key.Kind.ToString().ToLowerInvariant()} {key.Key}"
-                : $"key.{key.Kind.ToString().ToLowerInvariant()} {key.Modifiers}+{key.Key}",
-            TextStep text => $"key.text \"{TrimForDisplay(text.Text)}\"",
-            MouseMoveStep move => $"mouse.move {move.Mode} x={move.X} y={move.Y}",
-            MouseButtonStep button => $"mouse.{button.Kind.ToString().ToLowerInvariant()} {button.Button}",
-            MouseWheelStep wheel => $"mouse.wheel vertical={wheel.Vertical} horizontal={wheel.Horizontal}",
-            ConsumerStep consumer => $"consumer.{consumer.Kind.ToString().ToLowerInvariant()} {consumer.Control}",
-            MacroCallStep macro => $"macro.call {macro.Macro}",
-            RepeatStep repeat => $"repeat count={repeat.Count} steps={repeat.Steps.Count}",
-            PixelWhenStep pixel => DescribePixelCondition(pixel),
-            _ => step.GetType().Name
-        };
-    }
-
-    private static string DescribePixelCondition(PixelWhenStep pixel)
-    {
-        var condition = pixel.Condition;
-        var timeWindow = pixel.WindowStart is null && pixel.WindowEnd is null
-            ? string.Empty
-            : $" after {FormatOptionalMs(pixel.WindowStart, "0")}..{FormatOptionalMs(pixel.WindowEnd, "end")}ms";
-        return $"IF pixel {condition.Coordinate.Scope} x={condition.Coordinate.X} y={condition.Coordinate.Y} rgb({condition.Expected.R},{condition.Expected.G},{condition.Expected.B}) +/-{condition.Tolerance}{timeWindow} then {pixel.ThenSteps.Count} step(s)";
-    }
-
-    private static string FormatOptionalMs(TimeSpan? value, string fallback)
-    {
-        return value is { } time ? $"{time.TotalMilliseconds:0.###}" : fallback;
-    }
-
-    private static string TrimForDisplay(string value)
-    {
-        return value.Length <= 32 ? value : $"{value[..29]}...";
-    }
-}
-
-public sealed class MacroLibraryListEntry
-{
-    private static readonly Brush HeaderBrush = new SolidColorBrush(Color.FromRgb(110, 110, 115));
-    private static readonly Brush MacroBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
-    private static readonly Brush TextBrush = new SolidColorBrush(Color.FromRgb(29, 29, 31));
-
-    private MacroLibraryListEntry(MacroLibraryItem? item, string title, string subtitle, string icon, Brush accent, FontWeight weight, Brush titleBrush)
-    {
-        Item = item;
-        Title = title;
-        Subtitle = subtitle;
-        Icon = icon;
-        Accent = accent;
-        Weight = weight;
-        TitleBrush = titleBrush;
-    }
-
-    public MacroLibraryItem? Item { get; }
-
-    public string Title { get; }
-
-    public string Subtitle { get; }
-
-    public string Icon { get; }
-
-    public Brush Accent { get; }
-
-    public FontWeight Weight { get; }
-
-    public Brush TitleBrush { get; }
-
-    public static MacroLibraryListEntry Header(string title)
-    {
-        return new MacroLibraryListEntry(null, title, string.Empty, "F", HeaderBrush, FontWeights.SemiBold, HeaderBrush);
-    }
-
-    public static MacroLibraryListEntry Macro(MacroLibraryItem item)
-    {
-        var subtitle = item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
-        return new MacroLibraryListEntry(item, item.Name, subtitle, "M", MacroBrush, FontWeights.Normal, TextBrush);
-    }
-}
-
-public sealed class StepDisplayItem
-{
-    private static readonly Brush GreenBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
-    private static readonly Brush BlueBrush = new SolidColorBrush(Color.FromRgb(0, 122, 255));
-    private static readonly Brush OrangeBrush = new SolidColorBrush(Color.FromRgb(255, 149, 0));
-    private static readonly Brush PinkBrush = new SolidColorBrush(Color.FromRgb(255, 45, 85));
-    private static readonly Brush RedBrush = new SolidColorBrush(Color.FromRgb(255, 59, 48));
-    private static readonly Brush GrayBrush = new SolidColorBrush(Color.FromRgb(142, 142, 147));
-
-    private StepDisplayItem(int index, string icon, string title, string subtitle, string badge, Brush accentBrush)
-    {
-        Index = index;
-        Icon = icon;
-        Title = title;
-        Subtitle = subtitle;
-        Badge = badge;
-        AccentBrush = accentBrush;
-    }
-
-    public int Index { get; }
-
-    public string Icon { get; }
-
-    public string Title { get; }
-
-    public string Subtitle { get; }
-
-    public string Badge { get; }
-
-    public Brush AccentBrush { get; }
-
-    public static StepDisplayItem FromStep(int index, MacroStep step, string subtitle, string badge)
-    {
-        return step switch
-        {
-            KeyStep => new StepDisplayItem(index, "K", $"#{index + 1} Key", subtitle, badge, GreenBrush),
-            TextStep => new StepDisplayItem(index, "T", $"#{index + 1} Text", subtitle, badge, BlueBrush),
-            MouseMoveStep => new StepDisplayItem(index, "XY", $"#{index + 1} Move", subtitle, badge, OrangeBrush),
-            MouseButtonStep => new StepDisplayItem(index, "M", $"#{index + 1} Mouse", subtitle, badge, OrangeBrush),
-            MouseWheelStep => new StepDisplayItem(index, "W", $"#{index + 1} Wheel", subtitle, badge, BlueBrush),
-            ConsumerStep => new StepDisplayItem(index, "C", $"#{index + 1} Media", subtitle, badge, PinkBrush),
-            WaitStep => new StepDisplayItem(index, "D", $"#{index + 1} Delay", subtitle, badge, GrayBrush),
-            MacroCallStep => new StepDisplayItem(index, "M", $"#{index + 1} Macro", subtitle, badge, GreenBrush),
-            RepeatStep => new StepDisplayItem(index, "R", $"#{index + 1} Loop", subtitle, badge, RedBrush),
-            PixelWhenStep => new StepDisplayItem(index, "IF", $"#{index + 1} Pixel IF", subtitle, badge, PinkBrush),
-            _ => new StepDisplayItem(index, "?", $"#{index + 1} Step", subtitle, badge, GrayBrush)
-        };
-    }
-
-    public static StepDisplayItem Error(string message)
-    {
-        return new StepDisplayItem(-1, "!", "Invalid macro", message, string.Empty, RedBrush);
-    }
+    """;
 }

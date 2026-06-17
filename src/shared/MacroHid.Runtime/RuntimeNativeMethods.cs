@@ -30,6 +30,7 @@ internal static partial class RuntimeNativeMethods
     public const int SmCxVirtualScreen = 78;
     public const int SmCyVirtualScreen = 79;
     public const int ClrInvalid = -1;
+    public const int ThreadPriorityTimeCritical = 15;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -66,6 +67,32 @@ internal static partial class RuntimeNativeMethods
 
     [DllImport("winmm.dll")]
     public static extern uint timeEndPeriod(uint period);
+
+    [DllImport("ntdll.dll")]
+    public static extern int NtSetTimerResolution(uint DesiredResolution, bool SetResolution, out uint CurrentResolution);
+
+    [DllImport("ntdll.dll")]
+    public static extern int NtQueryTimerResolution(out uint MinimumResolution, out uint MaximumResolution, out uint CurrentResolution);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetProcessPriorityBoost(IntPtr hProcess, [MarshalAs(UnmanagedType.Bool)] bool disablePriorityBoost);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GetCurrentThread();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern UIntPtr SetThreadAffinityMask(IntPtr hThread, UIntPtr dwThreadAffinityMask);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern uint SetThreadIdealProcessor(IntPtr hThread, uint dwIdealProcessor);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetThreadPriority(IntPtr hThread, int nPriority);
 }
 
 [StructLayout(LayoutKind.Sequential)]

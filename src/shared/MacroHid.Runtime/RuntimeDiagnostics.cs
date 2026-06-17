@@ -49,6 +49,6 @@ public sealed record RuntimeDiagnosticsSnapshot(
             ? ProbeInputBackend()
             : new RuntimeDiagnosticItem(
                 true,
-                $"SendInput actions={stats.ActionsSubmitted} nativeInputs={stats.NativeInputsSubmitted} failures={stats.FailedSubmissions} lastError={stats.LastWin32Error}");
+                $"SendInput actions={stats.ActionsSubmitted} nativeInputs={stats.NativeInputsSubmitted} failures={stats.FailedSubmissions} lastError={stats.LastWin32Error} submit={stats.LastSubmitDurationMicroseconds}us jitter={stats.Timing?.Summary ?? "n/a"}");
     }
 }
