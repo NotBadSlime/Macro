@@ -25,6 +25,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 - `MacroStudio`：主编辑器和宏数据库。
 - `MacroRunner`：命令行运行器。
 - `LatencyProbe`：调度与提交延迟测试工具。
+- `MacroHid.NativePlayback.dll`：极限模式的用户态 x64 native 播放引擎，随 MacroStudio/MacroRunner/LatencyProbe 一起安装。
 - `samples`：示例 `.mcrx` 宏。
 - `docs`：安装、使用、精度、架构和格式说明。
 - 内置宏转换库：MacroHID、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro。
@@ -97,6 +98,7 @@ The setup package includes:
 - `MacroStudio`: the main editor and local macro database.
 - `MacroRunner`: command-line runner.
 - `LatencyProbe`: scheduler and submission latency probe.
+- `MacroHid.NativePlayback.dll`: the user-mode x64 native playback engine for Extreme mode, installed alongside MacroStudio, MacroRunner, and LatencyProbe.
 - `samples`: sample `.mcrx` macros.
 - `docs`: installation, usage, precision, architecture, and format documentation.
 - Built-in conversion libraries for MacroHID, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro.

@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using MacroHid.Core;
+using MacroHid.Runtime;
 using MacroStudio.Services;
 
 namespace MacroStudio.Controls;
@@ -18,6 +19,7 @@ public partial class ConditionDirectivePanel : UserControl
     private int selectedIndex = -1;
     private bool loadingEditor;
     private bool conditionBoxSelectionActive;
+    private bool suppressConditionSelectionChanged;
     private Point conditionBoxSelectionStartPoint;
     private readonly HashSet<int> conditionBoxSelectionBaseIndexes = [];
     private Point conditionDragStartPoint;
@@ -42,6 +44,10 @@ public partial class ConditionDirectivePanel : UserControl
     public ConditionDirectivePanel()
     {
         InitializeComponent();
+        OcrStatusText.Text = PaddleOcrBridge.DefaultStatusText;
+        PaddleOcrBridge.RecognitionCompleted += OnOcrRecognitionCompleted;
+        ThenActionPalette.ActionClicked += OnThenActionPaletteClicked;
+        ThenActionPalette.ApplyLocalization();
     }
 
     public IReadOnlyList<ConditionalDirective> Conditions => conditions;
@@ -102,6 +108,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void RefreshList()
     {
+        var restoreIndex = selectedIndex;
         var items = new List<ConditionDisplayItem>();
         for (int i = 0; i < conditions.Count; i++)
         {
@@ -117,24 +124,35 @@ public partial class ConditionDirectivePanel : UserControl
                 StatusText = "就绪"
             });
         }
-        ConditionList.ItemsSource = items;
+
+        suppressConditionSelectionChanged = true;
+        try
+        {
+            ConditionList.ItemsSource = items;
+            selectedIndex = ClampConditionIndex(restoreIndex);
+            ConditionList.SelectedIndex = selectedIndex >= 0 && selectedIndex < ConditionList.Items.Count
+                ? selectedIndex
+                : -1;
+        }
+        finally
+        {
+            suppressConditionSelectionChanged = false;
+        }
+
         EmptyConditionHintText.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static string DescribeMatcher(IConditionMatcher matcher) => matcher switch
     {
         PixelMatcher p => $"像素 ({p.Region.TopLeft.X},{p.Region.TopLeft.Y}) RGB=({p.Expected.R},{p.Expected.G},{p.Expected.B})",
-        TemplateMatcher => "模板图像匹配",
-        PixelHashMatcher => "像素哈希比对",
         TextMatcher t => $"文字: \"{t.ExpectedText}\"",
+        TemplateMatcher or PixelHashMatcher => "已移除的条件类型",
         _ => "未知条件"
     };
 
     private static string GetTypeIcon(string type) => type switch
     {
         "pixel" => "🎯",
-        "template" => "🖼",
-        "pixelHash" => "#",
         "text" => "T",
         _ => "?"
     };
@@ -165,16 +183,21 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ConditionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (suppressConditionSelectionChanged)
+        {
+            return;
+        }
+
         selectedIndex = ConditionList.SelectedIndex >= 0
             ? ConditionList.SelectedIndex
             : GetSelectedConditionIndexes().FirstOrDefault(-1);
-        if (selectedIndex >= 0 && selectedIndex < conditions.Count)
+        if (TryGetSelectedCondition(out var index, out var directive))
         {
-            LoadEditor(conditions[selectedIndex]);
+            LoadEditor(directive);
             EditorBorder.Visibility = Visibility.Visible;
             EditorGrid.Visibility = Visibility.Visible;
             ConditionSelectionChanged?.Invoke(this,
-                new ConditionSelectionChangedEventArgs(selectedIndex, conditions[selectedIndex]));
+                new ConditionSelectionChangedEventArgs(index, directive));
         }
         else
         {
@@ -658,9 +681,7 @@ public partial class ConditionDirectivePanel : UserControl
         var typeIndex = cond.Condition.Type switch
         {
             "pixel" => 0,
-            "template" => 1,
-            "pixelHash" => 2,
-            "text" => 3,
+            "text" => 1,
             _ => 0
         };
         CondTypeCombo.SelectedIndex = typeIndex;
@@ -701,23 +722,30 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void CondNameBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (loadingEditor || selectedIndex < 0 || selectedIndex >= conditions.Count) return;
-        var c = conditions[selectedIndex];
-        conditions[selectedIndex] = c with { Name = CondNameBox.Text };
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var c)) return;
+        conditions[editIndex] = c with { Name = CondNameBox.Text };
         ConditionsModified?.Invoke(this, EventArgs.Empty);
     }
 
     private void CondTypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (loadingEditor || selectedIndex < 0 || selectedIndex >= conditions.Count) return;
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition)) return;
         if (CondTypeCombo.SelectedItem is not ComboBoxItem item) return;
         var type = item.Tag?.ToString() ?? "pixel";
+        conditions[editIndex] = condition with
+        {
+            Condition = CreateMatcherForSelectedType(type, condition.Condition)
+        };
         UpdateTypeVisibility(type);
+        LoadEditor(conditions[editIndex]);
+        ConditionsModified?.Invoke(this, EventArgs.Empty);
+        ConditionSelectionChanged?.Invoke(this,
+            new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
     }
 
     private void StepRange_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (loadingEditor || selectedIndex < 0 || selectedIndex >= conditions.Count) return;
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var directive)) return;
         if (StartStepCombo.SelectedItem is not StepChoice startChoice
             || EndStepCombo.SelectedItem is not StepChoice endChoice)
         {
@@ -726,7 +754,6 @@ public partial class ConditionDirectivePanel : UserControl
 
         var start = startChoice.Index;
         var end = endChoice.Index;
-        var c = conditions[selectedIndex];
         if (end < start)
         {
             end = start;
@@ -738,7 +765,7 @@ public partial class ConditionDirectivePanel : UserControl
         }
 
         var effectiveEndChoice = EndStepCombo.SelectedItem is StepChoice selectedEnd ? selectedEnd : startChoice;
-        conditions[selectedIndex] = c with
+        conditions[editIndex] = directive with
         {
             StartStepIndex = start,
             EndStepIndex = end,
@@ -747,12 +774,12 @@ public partial class ConditionDirectivePanel : UserControl
         };
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
-            new ConditionSelectionChangedEventArgs(selectedIndex, conditions[selectedIndex]));
+            new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
     }
 
     private void TimeWindowBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (loadingEditor || selectedIndex < 0 || selectedIndex >= conditions.Count) return;
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var c)) return;
         if (!TryReadTimeWindow(out var windowStart, out var windowEnd))
         {
             SetTimeWindowValidity(false);
@@ -760,15 +787,14 @@ public partial class ConditionDirectivePanel : UserControl
         }
 
         SetTimeWindowValidity(true);
-        var c = conditions[selectedIndex];
-        conditions[selectedIndex] = c with
+        conditions[editIndex] = c with
         {
             WindowStart = windowStart,
             WindowEnd = windowEnd
         };
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
-            new ConditionSelectionChangedEventArgs(selectedIndex, conditions[selectedIndex]));
+            new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
     }
 
     private void PickRegion_Click(object sender, RoutedEventArgs e)
@@ -778,14 +804,15 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void PickConditionColor_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedIndex < 0 || selectedIndex >= conditions.Count) return;
-
-        var picker = new ScreenCoordinatePickerWindow
+        if (!TryGetSelectedCondition(out _, out var directive)) return;
+        if (directive.Condition is not PixelMatcher)
         {
-            Owner = Window.GetWindow(this)
-        };
+            return;
+        }
 
-        if (picker.ShowDialog() != true) return;
+        var picker = new ScreenCoordinatePickerWindow();
+
+        if (DialogOwnerService.ShowDialogSafe(picker, this) != true) return;
         if (!ScreenPixelSampler.TryReadPixel(picker.SelectedX, picker.SelectedY, out var color)) return;
 
         ApplyPickedConditionColor(picker.SelectedX, picker.SelectedY, color);
@@ -793,10 +820,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ApplyPickedConditionColor(int x, int y, RgbColor color)
     {
-        if (selectedIndex < 0 || selectedIndex >= conditions.Count) return;
-
-        var editIndex = selectedIndex;
-        var condition = conditions[editIndex];
+        if (!TryGetSelectedCondition(out var editIndex, out var condition)) return;
         var region = ScreenRegion.FromSinglePixel(x, y);
         var tolerance = condition.Condition is PixelMatcher pixel
             ? pixel.Tolerance
@@ -813,8 +837,72 @@ public partial class ConditionDirectivePanel : UserControl
         ToleranceBox.Text = tolerance.ToString();
         ColorPreview.Background = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
         RefreshList();
+        selectedIndex = editIndex;
         ConditionList.SelectedIndex = editIndex;
         LoadEditor(conditions[editIndex]);
+        ConditionsModified?.Invoke(this, EventArgs.Empty);
+        ConditionSelectionChanged?.Invoke(this,
+            new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
+    }
+
+    private void ColorRBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateSelectedMatcherFromEditor();
+    }
+
+    private void ExpectedTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateSelectedMatcherFromEditor();
+    }
+
+    private void ContainsCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        UpdateSelectedMatcherFromEditor();
+    }
+
+    private void UpdateSelectedMatcherFromEditor()
+    {
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition))
+        {
+            return;
+        }
+
+        var updatedMatcher = condition.Condition switch
+        {
+            PixelMatcher pixel => pixel with
+            {
+                Expected = new RgbColor(
+                    ReadByte(ColorRBox.Text, pixel.Expected.R),
+                    ReadByte(ColorGBox.Text, pixel.Expected.G),
+                    ReadByte(ColorBBox.Text, pixel.Expected.B)),
+                Tolerance = ReadByte(ToleranceBox.Text, pixel.Tolerance)
+            },
+            TextMatcher text => text with
+            {
+                ExpectedText = ExpectedTextBox.Text ?? string.Empty,
+                Contains = ContainsCheckBox.IsChecked != false
+            },
+            _ => condition.Condition
+        };
+
+        if (ReferenceEquals(updatedMatcher, condition.Condition)
+            || updatedMatcher.Equals(condition.Condition))
+        {
+            return;
+        }
+
+        conditions[editIndex] = condition with { Condition = updatedMatcher };
+        if (updatedMatcher is PixelMatcher updatedPixel)
+        {
+            ColorPreview.Background = new SolidColorBrush(Color.FromRgb(
+                updatedPixel.Expected.R,
+                updatedPixel.Expected.G,
+                updatedPixel.Expected.B));
+        }
+
+        RefreshList();
+        selectedIndex = editIndex;
+        ConditionList.SelectedIndex = editIndex;
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
             new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
@@ -839,6 +927,43 @@ public partial class ConditionDirectivePanel : UserControl
 
         ThenActionSequence.InsertSteps(MacroActionTemplateFactory.CreateSteps(kind));
         return true;
+    }
+
+    private void AddThenAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetSelectedCondition(out _, out _))
+        {
+            return;
+        }
+
+        thenActionSequenceActive = true;
+        ThenActionPalettePopup.IsOpen = true;
+    }
+
+    private void OnThenActionPaletteClicked(MacroActionTemplateKind kind)
+    {
+        if (!TryGetSelectedCondition(out _, out _))
+        {
+            ThenActionPalettePopup.IsOpen = false;
+            return;
+        }
+
+        thenActionSequenceActive = true;
+        ThenActionSequence.InsertSteps(MacroActionTemplateFactory.CreateSteps(kind));
+        ThenActionPalettePopup.IsOpen = false;
+    }
+
+    private void ThenActionTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem item
+            || item.Tag is not string tag
+            || !Enum.TryParse<MacroActionTemplateKind>(tag, ignoreCase: true, out var kind))
+        {
+            return;
+        }
+
+        thenActionSequenceActive = true;
+        ThenActionSequence.InsertSteps(MacroActionTemplateFactory.CreateSteps(kind));
     }
 
     public bool HandleExplorerShortcut(Key key, ModifierKeys modifiers)
@@ -879,16 +1004,35 @@ public partial class ConditionDirectivePanel : UserControl
         ThenActionSequence.CloseInlineStepEditorOnExternalPointerDown(source);
     }
 
+    private void OnOcrRecognitionCompleted(object? sender, OcrRecognitionResult result)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.InvokeAsync(() => UpdateOcrStatus(result));
+            return;
+        }
+
+        UpdateOcrStatus(result);
+    }
+
+    private void UpdateOcrStatus(OcrRecognitionResult result)
+    {
+        var recognizedText = string.IsNullOrWhiteSpace(result.Text) ? "空" : result.Text;
+        OcrStatusText.Text = result.Success
+            ? $"OCR {result.BackendName}: recognizedText={recognizedText}"
+            : $"OCR {result.BackendName}: {result.Error ?? "recognition empty"}; recognizedText={recognizedText}";
+    }
+
     private void OnThenActionSequenceStepsChanged()
     {
-        if (loadingEditor || selectedIndex < 0 || selectedIndex >= conditions.Count)
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition))
         {
             return;
         }
 
-        var editIndex = selectedIndex;
-        conditions[editIndex] = conditions[editIndex] with { ThenSteps = ThenActionSequence.Steps.ToList() };
+        conditions[editIndex] = condition with { ThenSteps = ThenActionSequence.Steps.ToList() };
         RefreshList();
+        selectedIndex = editIndex;
         ConditionList.SelectedIndex = editIndex;
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
@@ -919,19 +1063,76 @@ public partial class ConditionDirectivePanel : UserControl
 
     public void SetRegion(ScreenRegion region)
     {
-        if (selectedIndex < 0 || selectedIndex >= conditions.Count) return;
-        var c = conditions[selectedIndex];
+        if (!TryGetSelectedCondition(out var editIndex, out var c)) return;
         var newMatcher = c.Condition switch
         {
             PixelMatcher pm => (IConditionMatcher)(pm with { Region = region }),
-            TemplateMatcher tm => tm with { Region = region },
-            PixelHashMatcher hm => hm with { Region = region },
             TextMatcher txm => txm with { Region = region },
-            _ => c.Condition
+            _ => new PixelMatcher(region, new RgbColor(255, 0, 0), 10)
         };
-        conditions[selectedIndex] = c with { Condition = newMatcher };
-        LoadEditor(conditions[selectedIndex]);
+        conditions[editIndex] = c with { Condition = newMatcher };
+        RefreshList();
+        selectedIndex = editIndex;
+        ConditionList.SelectedIndex = editIndex;
+        LoadEditor(conditions[editIndex]);
         ConditionsModified?.Invoke(this, EventArgs.Empty);
+        ConditionSelectionChanged?.Invoke(this,
+            new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
+    }
+
+    private bool TryGetSelectedCondition(out int index, out ConditionalDirective directive)
+    {
+        index = selectedIndex;
+        if (index < 0 || index >= conditions.Count)
+        {
+            index = ConditionList.SelectedIndex;
+        }
+
+        if (index < 0 || index >= conditions.Count)
+        {
+            directive = default!;
+            return false;
+        }
+
+        selectedIndex = index;
+        directive = conditions[index];
+        return true;
+    }
+
+    private int ClampConditionIndex(int index)
+    {
+        if (conditions.Count == 0 || index < 0)
+        {
+            return -1;
+        }
+
+        return Math.Clamp(index, 0, conditions.Count - 1);
+    }
+
+    private static IConditionMatcher CreateMatcherForSelectedType(string type, IConditionMatcher current)
+    {
+        var region = GetMatcherRegion(current);
+        return type switch
+        {
+            "text" => current is TextMatcher text
+                ? text
+                : new TextMatcher(region, string.Empty, Contains: true),
+            _ => current is PixelMatcher pixel
+                ? pixel
+                : new PixelMatcher(region, new RgbColor(255, 0, 0), 10)
+        };
+    }
+
+    private static ScreenRegion GetMatcherRegion(IConditionMatcher matcher)
+    {
+        return matcher switch
+        {
+            PixelMatcher pixel => pixel.Region,
+            TemplateMatcher template => template.Region,
+            PixelHashMatcher hash => hash.Region,
+            TextMatcher text => text.Region,
+            _ => ScreenRegion.FromSinglePixel(0, 0)
+        };
     }
 
     private string DescribeRange(ConditionalDirective directive)
@@ -1019,6 +1220,13 @@ public partial class ConditionDirectivePanel : UserControl
         return Math.Abs(ms - Math.Round(ms)) < 0.0001
             ? ((int)Math.Round(ms)).ToString()
             : ms.ToString("0.####");
+    }
+
+    private static byte ReadByte(string value, byte fallback)
+    {
+        return byte.TryParse(value.Trim(), out var parsed)
+            ? parsed
+            : fallback;
     }
 
     private static T? FindVisualParent<T>(DependencyObject? source)

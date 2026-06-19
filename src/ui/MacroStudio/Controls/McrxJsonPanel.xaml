@@ -8,11 +8,7 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <DockPanel Margin="0,0,0,10">
-                <TextBlock x:Name="JsonTitleText"
-                           DockPanel.Dock="Left"
-                           Text="MCRX JSON"
-                           Style="{StaticResource PanelTitle}" />
+            <DockPanel x:Name="JsonApplyBar" Margin="0,0,0,10">
                 <Button x:Name="ApplyJsonButton"
                         DockPanel.Dock="Right"
                         MinWidth="72"

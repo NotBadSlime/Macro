@@ -94,11 +94,11 @@ public partial class StepSequencePanel : UserControl
     public void ApplyLocalization()
     {
         SequenceTitleText.Text = LocalizationService.Get("Sequence");
-        StepUndoButton.Content = LocalizationService.Get("Undo");
-        StepUpButton.Content = LocalizationService.Get("MoveUp");
-        StepDownButton.Content = LocalizationService.Get("MoveDown");
-        StepDeleteButton.Content = LocalizationService.Get("Delete");
-        StepClearButton.Content = LocalizationService.Get("ClearAll");
+        StepUndoText.Text = LocalizationService.Get("Undo");
+        StepUpText.Text = LocalizationService.Get("MoveUp");
+        StepDownText.Text = LocalizationService.Get("MoveDown");
+        StepDeleteText.Text = LocalizationService.Get("Delete");
+        StepClearText.Text = LocalizationService.Get("ClearAll");
         InlineStepEditor.ApplyLocalization();
     }
 

@@ -22,6 +22,9 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
       - name: Restore
         run: dotnet restore MacroHID.sln
 
@@ -30,6 +33,12 @@ jobs:
 
       - name: Run core tests
         run: dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release --no-build
+
+      - name: Build native playback engine
+        shell: pwsh
+        run: |
+          # src\native\MacroHid.NativePlayback\MacroHid.NativePlayback.vcxproj
+          .\scripts\Build-NativePlayback.ps1 -Configuration Release
 
       - name: Run latency probe smoke test
         run: dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj --configuration Release --no-build -- --iterations 250 --interval-us 1000
@@ -45,6 +54,14 @@ jobs:
 
       - name: Publish MacroRunner
         run: dotnet publish src\tools\MacroRunner\MacroRunner.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts\MacroRunner
+
+      - name: Copy native playback engine
+        shell: pwsh
+        run: |
+          $dll = 'src\native\MacroHid.NativePlayback\x64\Release\MacroHid.NativePlayback.dll'
+          foreach ($component in @('MacroStudio', 'MacroRunner', 'LatencyProbe')) {
+            Copy-Item -LiteralPath $dll -Destination (Join-Path 'artifacts' "$component\MacroHid.NativePlayback.dll") -Force
+          }
 
       - name: Upload .NET artifacts
         uses: actions/upload-artifact@v4
@@ -64,6 +81,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
       - name: Ensure Inno Setup
         shell: pwsh

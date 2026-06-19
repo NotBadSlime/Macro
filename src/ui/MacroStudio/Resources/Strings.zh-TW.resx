@@ -11,6 +11,8 @@
   <data name="TraditionalChinese" xml:space="preserve"><value>繁體中文</value></data>
   <data name="Open" xml:space="preserve"><value>開啟</value></data>
   <data name="Save" xml:space="preserve"><value>儲存</value></data>
+  <data name="OpenMacroFile" xml:space="preserve"><value>開啟巨集檔案</value></data>
+  <data name="SaveMacroAs" xml:space="preserve"><value>另存目前巨集</value></data>
   <data name="Macro" xml:space="preserve"><value>巨集</value></data>
   <data name="Name" xml:space="preserve"><value>名稱</value></data>
   <data name="ScheduledSteps" xml:space="preserve"><value>排程步驟</value></data>
@@ -23,8 +25,11 @@
   <data name="ModeToggleLoop" xml:space="preserve"><value>按下循環</value></data>
   <data name="ModeHoldLoop" xml:space="preserve"><value>按住循環</value></data>
   <data name="ModeFixedCount" xml:space="preserve"><value>播放 N 次</value></data>
+  <data name="ModeFixedCountSummary" xml:space="preserve"><value>播放 {0} 次</value></data>
   <data name="StartListening" xml:space="preserve"><value>開始監聽</value></data>
   <data name="StopListening" xml:space="preserve"><value>停止監聽</value></data>
+  <data name="StartListeningAll" xml:space="preserve"><value>一鍵監聽</value></data>
+  <data name="StopListeningAll" xml:space="preserve"><value>全部停止</value></data>
   <data name="RunNow" xml:space="preserve"><value>立即執行</value></data>
   <data name="Stop" xml:space="preserve"><value>停止</value></data>
   <data name="PlaybackStatusIdle" xml:space="preserve"><value>播放：閒置</value></data>
@@ -40,6 +45,8 @@
   <data name="LastResultUnsupportedTriggerKey" xml:space="preserve"><value>上次結果：不支援的觸發鍵「{0}」</value></data>
   <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次結果：已擷取 {0}</value></data>
   <data name="ProcessFilter" xml:space="preserve"><value>行程篩選</value></data>
+  <data name="AffinityMask" xml:space="preserve"><value>極限核心遮罩</value></data>
+  <data name="AffinityMaskHelp" xml:space="preserve"><value>僅極限模式生效：限制極限模式播放執行緒和 Native 引擎使用指定 CPU 核心，減少執行緒遷移抖動；留空則自動選擇。範例：0x1F。</value></data>
   <data name="ChooseTriggerBeforeListening" xml:space="preserve"><value>開始監聽前請選擇觸發鍵。</value></data>
   <data name="HotkeyListenerStarted" xml:space="preserve"><value>上次結果：熱鍵監聽已啟動</value></data>
   <data name="HotkeyListenerStopped" xml:space="preserve"><value>上次結果：熱鍵監聽已停止</value></data>
@@ -53,6 +60,8 @@
   <data name="PlaybackError" xml:space="preserve"><value>播放錯誤</value></data>
   <data name="Idle" xml:space="preserve"><value>閒置</value></data>
   <data name="Listening" xml:space="preserve"><value>監聽中</value></data>
+  <data name="AllProcesses" xml:space="preserve"><value>所有行程</value></data>
+  <data name="ListeningConflict" xml:space="preserve"><value>偵測到觸發鍵衝突，衝突巨集未啟動監聽。</value></data>
   <data name="OpenMacroTitle" xml:space="preserve"><value>開啟巨集</value></data>
   <data name="SaveMacroTitle" xml:space="preserve"><value>儲存巨集</value></data>
   <data name="MacroFileFilter" xml:space="preserve"><value>MacroHID 巨集 (*.mcrx)|*.mcrx|JSON (*.json)|*.json|所有檔案 (*.*)|*.*</value></data>
@@ -97,6 +106,15 @@
   <data name="AddMacro" xml:space="preserve"><value>巨集</value></data>
   <data name="AddLoop" xml:space="preserve"><value>循環</value></data>
   <data name="AddPixel" xml:space="preserve"><value>像素條件</value></data>
+  <data name="AddDelayHint" xml:space="preserve"><value>固定或隨機等待</value></data>
+  <data name="AddKeyboardHint" xml:space="preserve"><value>按下、抬起或輸入</value></data>
+  <data name="AddMouseButtonHint" xml:space="preserve"><value>點擊、按住與座標</value></data>
+  <data name="AddMouseMoveHint" xml:space="preserve"><value>相對或絕對移動</value></data>
+  <data name="AddWheelHint" xml:space="preserve"><value>垂直/水平滾動</value></data>
+  <data name="AddTextHint" xml:space="preserve"><value>傳送 Unicode 文字</value></data>
+  <data name="AddMacroActionHint" xml:space="preserve"><value>呼叫巨集資料庫項目</value></data>
+  <data name="AddLoopHint" xml:space="preserve"><value>重複一組步驟</value></data>
+  <data name="ActionPaletteDragHint" xml:space="preserve"><value>點擊新增，或拖到序列的目標位置。</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>把左側巨集拖到序列裡，可以複製它的步驟。</value></data>
   <data name="StepProperties" xml:space="preserve"><value>屬性</value></data>
   <data name="StepPropertiesHint" xml:space="preserve"><value>選擇一個步驟後可視化編輯。</value></data>
@@ -147,6 +165,11 @@
   <data name="DelayMode" xml:space="preserve"><value>延遲模式</value></data>
   <data name="DelayMinMs" xml:space="preserve"><value>最小 ms</value></data>
   <data name="DelayMaxMs" xml:space="preserve"><value>最大 ms</value></data>
+  <data name="GlobalRuntime" xml:space="preserve"><value>全域執行</value></data>
+  <data name="PrecisionMode" xml:space="preserve"><value>精度模式</value></data>
+  <data name="PrecisionBalanced" xml:space="preserve"><value>基礎</value></data>
+  <data name="PrecisionExtremeDuringPlayback" xml:space="preserve"><value>高效能</value></data>
+  <data name="PrecisionUltraLowJitter" xml:space="preserve"><value>極限</value></data>
   <data name="WorkspaceWindowMenu" xml:space="preserve"><value>視窗</value></data>
   <data name="WorkspaceShow" xml:space="preserve"><value>顯示</value></data>
   <data name="WorkspaceFloat" xml:space="preserve"><value>浮動</value></data>

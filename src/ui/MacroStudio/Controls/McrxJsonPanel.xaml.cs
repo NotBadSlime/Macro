@@ -35,7 +35,6 @@ public partial class McrxJsonPanel : UserControl
 
     public void ApplyLocalization()
     {
-        JsonTitleText.Text = LocalizationService.Get("AdvancedJson");
         ApplyJsonButton.Content = LocalizationService.Get("Apply");
     }
 

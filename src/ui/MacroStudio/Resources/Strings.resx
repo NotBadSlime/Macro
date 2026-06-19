@@ -33,6 +33,12 @@
   <data name="Save" xml:space="preserve">
     <value>Save</value>
   </data>
+  <data name="OpenMacroFile" xml:space="preserve">
+    <value>Open macro file</value>
+  </data>
+  <data name="SaveMacroAs" xml:space="preserve">
+    <value>Save current macro as</value>
+  </data>
   <data name="Macro" xml:space="preserve">
     <value>Macro</value>
   </data>
@@ -50,6 +56,12 @@
   </data>
   <data name="ProcessFilter" xml:space="preserve">
     <value>Process Filter</value>
+  </data>
+  <data name="AffinityMask" xml:space="preserve">
+    <value>Ultra affinity mask</value>
+  </data>
+  <data name="AffinityMaskHelp" xml:space="preserve">
+    <value>Only affects Extreme mode: limits playback threads and the native engine to selected CPU cores to reduce migration jitter. Leave empty for automatic selection. Example: 0x1F.</value>
   </data>
   <data name="Capture" xml:space="preserve">
     <value>Capture</value>
@@ -72,11 +84,20 @@
   <data name="ModeFixedCount" xml:space="preserve">
     <value>Fixed count</value>
   </data>
+  <data name="ModeFixedCountSummary" xml:space="preserve">
+    <value>Play {0} time(s)</value>
+  </data>
   <data name="StartListening" xml:space="preserve">
     <value>Start Listening</value>
   </data>
   <data name="StopListening" xml:space="preserve">
     <value>Stop Listening</value>
+  </data>
+  <data name="StartListeningAll" xml:space="preserve">
+    <value>Listen all</value>
+  </data>
+  <data name="StopListeningAll" xml:space="preserve">
+    <value>Stop all</value>
   </data>
   <data name="RunNow" xml:space="preserve">
     <value>Run Now</value>
@@ -141,6 +162,21 @@
   <data name="PlaybackCountAtLeastOne" xml:space="preserve">
     <value>Playback count must be at least 1.</value>
   </data>
+  <data name="PrecisionMode" xml:space="preserve">
+    <value>Precision Mode</value>
+  </data>
+  <data name="GlobalRuntime" xml:space="preserve">
+    <value>Global runtime</value>
+  </data>
+  <data name="PrecisionBalanced" xml:space="preserve">
+    <value>Basic</value>
+  </data>
+  <data name="PrecisionExtremeDuringPlayback" xml:space="preserve">
+    <value>High performance</value>
+  </data>
+  <data name="PrecisionUltraLowJitter" xml:space="preserve">
+    <value>Extreme</value>
+  </data>
   <data name="Sequence" xml:space="preserve">
     <value>Sequence</value>
   </data>
@@ -159,6 +195,8 @@
   <data name="Listening" xml:space="preserve">
     <value>Listening</value>
   </data>
+  <data name="AllProcesses" xml:space="preserve"><value>All processes</value></data>
+  <data name="ListeningConflict" xml:space="preserve"><value>Trigger conflict detected. Conflicting macros were not started.</value></data>
   <data name="OpenMacroTitle" xml:space="preserve">
     <value>Open macro</value>
   </data>
@@ -249,6 +287,15 @@
   <data name="AddMacro" xml:space="preserve"><value>Macro</value></data>
   <data name="AddLoop" xml:space="preserve"><value>Loop</value></data>
   <data name="AddPixel" xml:space="preserve"><value>Pixel Condition</value></data>
+  <data name="AddDelayHint" xml:space="preserve"><value>Fixed or random wait</value></data>
+  <data name="AddKeyboardHint" xml:space="preserve"><value>Press, release, or type</value></data>
+  <data name="AddMouseButtonHint" xml:space="preserve"><value>Click, hold, and coordinate</value></data>
+  <data name="AddMouseMoveHint" xml:space="preserve"><value>Relative or absolute move</value></data>
+  <data name="AddWheelHint" xml:space="preserve"><value>Vertical / horizontal scroll</value></data>
+  <data name="AddTextHint" xml:space="preserve"><value>Send Unicode text</value></data>
+  <data name="AddMacroActionHint" xml:space="preserve"><value>Call a library macro</value></data>
+  <data name="AddLoopHint" xml:space="preserve"><value>Repeat a group of steps</value></data>
+  <data name="ActionPaletteDragHint" xml:space="preserve"><value>Click to add, or drag to a target position in the sequence.</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>Drag another macro from the library into the sequence to copy its steps.</value></data>
   <data name="StepProperties" xml:space="preserve"><value>Properties</value></data>
   <data name="StepPropertiesHint" xml:space="preserve"><value>Select a step to edit it visually.</value></data>

@@ -11,6 +11,8 @@
   <data name="TraditionalChinese" xml:space="preserve"><value>繁体中文</value></data>
   <data name="Open" xml:space="preserve"><value>打开</value></data>
   <data name="Save" xml:space="preserve"><value>保存</value></data>
+  <data name="OpenMacroFile" xml:space="preserve"><value>打开宏文件</value></data>
+  <data name="SaveMacroAs" xml:space="preserve"><value>另存当前宏</value></data>
   <data name="Macro" xml:space="preserve"><value>宏</value></data>
   <data name="Name" xml:space="preserve"><value>名称</value></data>
   <data name="ScheduledSteps" xml:space="preserve"><value>计划步骤</value></data>
@@ -23,8 +25,11 @@
   <data name="ModeToggleLoop" xml:space="preserve"><value>按下循环</value></data>
   <data name="ModeHoldLoop" xml:space="preserve"><value>按住循环</value></data>
   <data name="ModeFixedCount" xml:space="preserve"><value>播放 N 次</value></data>
+  <data name="ModeFixedCountSummary" xml:space="preserve"><value>播放 {0} 次</value></data>
   <data name="StartListening" xml:space="preserve"><value>开始监听</value></data>
   <data name="StopListening" xml:space="preserve"><value>停止监听</value></data>
+  <data name="StartListeningAll" xml:space="preserve"><value>一键监听</value></data>
+  <data name="StopListeningAll" xml:space="preserve"><value>全部停止</value></data>
   <data name="RunNow" xml:space="preserve"><value>立即运行</value></data>
   <data name="Stop" xml:space="preserve"><value>停止</value></data>
   <data name="PlaybackStatusIdle" xml:space="preserve"><value>播放：空闲</value></data>
@@ -40,6 +45,8 @@
   <data name="LastResultUnsupportedTriggerKey" xml:space="preserve"><value>上次结果：不支持的触发键“{0}”</value></data>
   <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次结果：已捕获 {0}</value></data>
   <data name="ProcessFilter" xml:space="preserve"><value>进程筛选</value></data>
+  <data name="AffinityMask" xml:space="preserve"><value>极限核心掩码</value></data>
+  <data name="AffinityMaskHelp" xml:space="preserve"><value>仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。</value></data>
   <data name="ChooseTriggerBeforeListening" xml:space="preserve"><value>开始监听前请选择触发键。</value></data>
   <data name="HotkeyListenerStarted" xml:space="preserve"><value>上次结果：热键监听已启动</value></data>
   <data name="HotkeyListenerStopped" xml:space="preserve"><value>上次结果：热键监听已停止</value></data>
@@ -53,6 +60,8 @@
   <data name="PlaybackError" xml:space="preserve"><value>播放错误</value></data>
   <data name="Idle" xml:space="preserve"><value>空闲</value></data>
   <data name="Listening" xml:space="preserve"><value>监听中</value></data>
+  <data name="AllProcesses" xml:space="preserve"><value>所有进程</value></data>
+  <data name="ListeningConflict" xml:space="preserve"><value>检测到触发键冲突，冲突宏未启动监听。</value></data>
   <data name="OpenMacroTitle" xml:space="preserve"><value>打开宏</value></data>
   <data name="SaveMacroTitle" xml:space="preserve"><value>保存宏</value></data>
   <data name="MacroFileFilter" xml:space="preserve"><value>MacroHID 宏 (*.mcrx)|*.mcrx|JSON (*.json)|*.json|所有文件 (*.*)|*.*</value></data>
@@ -97,6 +106,15 @@
   <data name="AddMacro" xml:space="preserve"><value>宏</value></data>
   <data name="AddLoop" xml:space="preserve"><value>循环</value></data>
   <data name="AddPixel" xml:space="preserve"><value>像素条件</value></data>
+  <data name="AddDelayHint" xml:space="preserve"><value>固定或随机等待</value></data>
+  <data name="AddKeyboardHint" xml:space="preserve"><value>按下、抬起或输入</value></data>
+  <data name="AddMouseButtonHint" xml:space="preserve"><value>点击、按住与坐标</value></data>
+  <data name="AddMouseMoveHint" xml:space="preserve"><value>相对或绝对移动</value></data>
+  <data name="AddWheelHint" xml:space="preserve"><value>垂直/水平滚动</value></data>
+  <data name="AddTextHint" xml:space="preserve"><value>发送 Unicode 文本</value></data>
+  <data name="AddMacroActionHint" xml:space="preserve"><value>调用宏数据库条目</value></data>
+  <data name="AddLoopHint" xml:space="preserve"><value>重复一组步骤</value></data>
+  <data name="ActionPaletteDragHint" xml:space="preserve"><value>点击添加，或拖到序列的目标位置。</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>把左侧宏拖到序列里，可以复制它的步骤。</value></data>
   <data name="StepProperties" xml:space="preserve"><value>属性</value></data>
   <data name="StepPropertiesHint" xml:space="preserve"><value>选择一个步骤后可视化编辑。</value></data>
@@ -147,6 +165,11 @@
   <data name="DelayMode" xml:space="preserve"><value>延迟模式</value></data>
   <data name="DelayMinMs" xml:space="preserve"><value>最小 ms</value></data>
   <data name="DelayMaxMs" xml:space="preserve"><value>最大 ms</value></data>
+  <data name="GlobalRuntime" xml:space="preserve"><value>全局运行</value></data>
+  <data name="PrecisionMode" xml:space="preserve"><value>精度模式</value></data>
+  <data name="PrecisionBalanced" xml:space="preserve"><value>基础</value></data>
+  <data name="PrecisionExtremeDuringPlayback" xml:space="preserve"><value>高性能</value></data>
+  <data name="PrecisionUltraLowJitter" xml:space="preserve"><value>极限</value></data>
   <data name="WorkspaceWindowMenu" xml:space="preserve"><value>窗口</value></data>
   <data name="WorkspaceShow" xml:space="preserve"><value>显示</value></data>
   <data name="WorkspaceFloat" xml:space="preserve"><value>浮动</value></data>

@@ -86,8 +86,9 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="ConditionListRow" Height="180" MinHeight="96" />
+            <RowDefinition Height="8" />
+            <RowDefinition x:Name="ConditionEditorRow" Height="*" MinHeight="260" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -152,14 +153,29 @@
             </Grid>
         </Border>
 
+        <GridSplitter x:Name="ConditionListEditorSplitter"
+                      Grid.Row="2"
+                      Height="8"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"
+                      Background="Transparent"
+                      Cursor="SizeNS"
+                      ResizeDirection="Rows"
+                      ResizeBehavior="PreviousAndNext"
+                      Style="{StaticResource AnimatedDockSplitterStyle}" />
+
         <!-- Editor section -->
-        <Border x:Name="EditorBorder"
-                Grid.Row="2"
-                Style="{StaticResource PanelBorderStyle}"
-                Padding="12"
-                Margin="0,10,0,0"
-                Visibility="Collapsed">
-            <Grid x:Name="EditorGrid" Visibility="Collapsed">
+        <ScrollViewer x:Name="ConditionEditorScrollViewer"
+                      Grid.Row="3"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      CanContentScroll="False">
+            <Border x:Name="EditorBorder"
+                    Style="{StaticResource PanelBorderStyle}"
+                    Padding="12"
+                    Margin="0,10,0,0"
+                    Visibility="Collapsed">
+                <Grid x:Name="EditorGrid" Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -181,8 +197,6 @@
                     <TextBlock Text="条件类型" Style="{StaticResource FieldLabel}" />
                     <ComboBox x:Name="CondTypeCombo" Height="30" SelectionChanged="CondTypeCombo_SelectionChanged">
                         <ComboBoxItem Content="像素颜色" Tag="pixel" />
-                        <ComboBoxItem Content="模板图像" Tag="template" />
-                        <ComboBoxItem Content="像素哈希" Tag="pixelHash" />
                         <ComboBoxItem Content="文字识别 (OCR)" Tag="text" />
                     </ComboBox>
                 </StackPanel>
@@ -262,11 +276,11 @@
                 <StackPanel x:Name="PixelOptionsPanel" Grid.Row="5" Margin="0,0,0,8">
                     <TextBlock Text="颜色 (RGB)" Style="{StaticResource FieldLabel}" />
                     <WrapPanel>
-                        <TextBox x:Name="ColorRBox" Width="50" Height="28" Margin="0,0,4,0" />
-                        <TextBox x:Name="ColorGBox" Width="50" Height="28" Margin="0,0,4,0" />
-                        <TextBox x:Name="ColorBBox" Width="50" Height="28" Margin="0,0,8,0" />
+                        <TextBox x:Name="ColorRBox" Width="50" Height="28" Margin="0,0,4,0" TextChanged="ColorRBox_TextChanged" />
+                        <TextBox x:Name="ColorGBox" Width="50" Height="28" Margin="0,0,4,0" TextChanged="ColorRBox_TextChanged" />
+                        <TextBox x:Name="ColorBBox" Width="50" Height="28" Margin="0,0,8,0" TextChanged="ColorRBox_TextChanged" />
                         <TextBlock Text="容差:" VerticalAlignment="Center" />
-                        <TextBox x:Name="ToleranceBox" Width="40" Height="28" Margin="4,0" />
+                        <TextBox x:Name="ToleranceBox" Width="40" Height="28" Margin="4,0" TextChanged="ColorRBox_TextChanged" />
                         <Border x:Name="ColorPreview"
                                 Width="28" Height="28"
                                 CornerRadius="4"
@@ -284,14 +298,51 @@
                 <!-- Text matcher options -->
                 <StackPanel x:Name="TextOptionsPanel" Grid.Row="5" Margin="0,0,0,8" Visibility="Collapsed">
                     <TextBlock Text="期望文字" Style="{StaticResource FieldLabel}" />
-                    <TextBox x:Name="ExpectedTextBox" Height="28" />
-                    <CheckBox x:Name="ContainsCheckBox" Content="包含匹配" IsChecked="True" Margin="0,6,0,0" />
+                    <TextBox x:Name="ExpectedTextBox" Height="28" TextChanged="ExpectedTextBox_TextChanged" />
+                    <CheckBox x:Name="ContainsCheckBox" Content="包含匹配" IsChecked="True" Margin="0,6,0,0"
+                              Checked="ContainsCheckBox_Changed"
+                              Unchecked="ContainsCheckBox_Changed" />
+                    <TextBlock x:Name="OcrStatusText"
+                               Margin="0,6,0,0"
+                               TextWrapping="Wrap"
+                               FontSize="11"
+                               Foreground="{DynamicResource SecondaryText}" />
                 </StackPanel>
 
                 <!-- Then actions -->
                 <StackPanel Grid.Row="6">
-                    <TextBlock Text="触发后执行" Style="{StaticResource FieldLabel}" />
-                    <Border MinHeight="260"
+                    <DockPanel Margin="0,0,0,6">
+                        <TextBlock Text="触发后执行" Style="{StaticResource FieldLabel}" DockPanel.Dock="Left" />
+                        <Button x:Name="AddThenActionButton"
+                                Content="+"
+                                Style="{StaticResource PrimaryButton}"
+                                MinWidth="36"
+                                Height="30"
+                                DockPanel.Dock="Right"
+                                HorizontalAlignment="Right"
+                                Click="AddThenAction_Click" />
+                    </DockPanel>
+                    <Popup x:Name="ThenActionPalettePopup"
+                           PlacementTarget="{Binding ElementName=AddThenActionButton}"
+                           Placement="Bottom"
+                           StaysOpen="False"
+                           AllowsTransparency="True"
+                           PopupAnimation="Fade">
+                        <Border Width="340"
+                                MaxHeight="560"
+                                Padding="10"
+                                Background="{DynamicResource PanelBackground}"
+                                BorderBrush="{DynamicResource PanelBorder}"
+                                BorderThickness="1"
+                                CornerRadius="16">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <local:ActionPalettePanel x:Name="ThenActionPalette" />
+                            </ScrollViewer>
+                        </Border>
+                    </Popup>
+                    <Border x:Name="ThenActionSequenceHost"
+                            MinHeight="260"
                             MaxHeight="520"
                             BorderBrush="{DynamicResource PanelBorder}"
                             BorderThickness="1"
@@ -301,7 +352,8 @@
                         <local:StepSequencePanel x:Name="ThenActionSequence" />
                     </Border>
                 </StackPanel>
-            </Grid>
-        </Border>
+                </Grid>
+            </Border>
+        </ScrollViewer>
     </Grid>
 </UserControl>

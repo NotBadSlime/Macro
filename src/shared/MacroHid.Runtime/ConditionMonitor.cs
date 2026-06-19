@@ -70,6 +70,25 @@ public sealed class ConditionMonitor : IDisposable
         cts.Cancel();
     }
 
+    public void CompleteAfterCurrentEvaluation()
+    {
+        active = false;
+    }
+
+    public void WaitForTriggeredCompletion(CancellationToken cancellationToken)
+    {
+        if (monitorThread is null)
+        {
+            return;
+        }
+
+        while (monitorThread.IsAlive)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            monitorThread.Join(TimeSpan.FromMilliseconds(10));
+        }
+    }
+
     private void PollLoop(CancellationToken cancellationToken)
     {
         using var precisionContext = PrecisionPlaybackContext.Enter(PrecisionMode.ExtremeDuringPlayback);
@@ -176,13 +195,24 @@ public sealed class ConditionMonitor : IDisposable
     private long EffectiveFrequency() => qpcFrequency > 0 ? qpcFrequency : clock.Frequency;
 }
 
-public sealed class CompositeConditionEvaluator : IConditionEvaluator
+public sealed class CompositeConditionEvaluator : IConditionEvaluator, IDisposable
 {
     private readonly Func<PixelCondition, bool> pixelEvaluator;
+    private readonly Func<TemplateMatcher, bool> templateEvaluator;
+    private readonly Func<PixelHashMatcher, bool> pixelHashEvaluator;
+    private readonly Func<TextMatcher, bool> textEvaluator;
+    private readonly Lazy<PaddleOcrBridge> ocrBridge = new(() => new PaddleOcrBridge());
 
-    public CompositeConditionEvaluator(Func<PixelCondition, bool>? pixelEvaluator = null)
+    public CompositeConditionEvaluator(
+        Func<PixelCondition, bool>? pixelEvaluator = null,
+        Func<TemplateMatcher, bool>? templateEvaluator = null,
+        Func<PixelHashMatcher, bool>? pixelHashEvaluator = null,
+        Func<TextMatcher, bool>? textEvaluator = null)
     {
         this.pixelEvaluator = pixelEvaluator ?? ScreenPixelSampler.Matches;
+        this.templateEvaluator = templateEvaluator ?? EvaluateTemplate;
+        this.pixelHashEvaluator = pixelHashEvaluator ?? EvaluatePixelHash;
+        this.textEvaluator = textEvaluator ?? EvaluateText;
     }
 
     public bool Evaluate(IConditionMatcher matcher)
@@ -190,9 +220,9 @@ public sealed class CompositeConditionEvaluator : IConditionEvaluator
         return matcher switch
         {
             PixelMatcher pixel => EvaluatePixel(pixel),
-            TemplateMatcher => false,   // placeholder for screen capture engine
-            PixelHashMatcher => false,  // placeholder for hash engine
-            TextMatcher => false,       // placeholder for OCR engine
+            TemplateMatcher template => templateEvaluator(template),
+            PixelHashMatcher hash => pixelHashEvaluator(hash),
+            TextMatcher text => textEvaluator(text),
             _ => false
         };
     }
@@ -204,5 +234,43 @@ public sealed class CompositeConditionEvaluator : IConditionEvaluator
             pixel.Expected,
             pixel.Tolerance);
         return pixelEvaluator(condition);
+    }
+
+    private static bool EvaluateTemplate(TemplateMatcher template)
+    {
+        if (template.TemplateImageData.Length == 0)
+        {
+            return false;
+        }
+
+        return TemplateMatchEngine.Matches(template.Region, template.TemplateImageData, template.Threshold);
+    }
+
+    private static bool EvaluatePixelHash(PixelHashMatcher hash)
+    {
+        if (hash.ReferenceHash.Length == 0)
+        {
+            return false;
+        }
+
+        return PixelHashEngine.Matches(hash.Region, hash.ReferenceHash, hash.SimilarityThreshold);
+    }
+
+    private bool EvaluateText(TextMatcher text)
+    {
+        if (string.IsNullOrWhiteSpace(text.ExpectedText) || !ocrBridge.Value.IsAvailable)
+        {
+            return false;
+        }
+
+        return ocrBridge.Value.ContainsText(text.Region, text.ExpectedText, text.Contains, text.Language);
+    }
+
+    public void Dispose()
+    {
+        if (ocrBridge.IsValueCreated)
+        {
+            ocrBridge.Value.Dispose();
+        }
     }
 }

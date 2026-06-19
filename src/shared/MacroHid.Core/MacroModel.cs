@@ -21,14 +21,57 @@ public sealed record PlaybackSettings(
     PlaybackMode Mode,
     int Count,
     string ProcessFilter = "",
-    PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback)
+    PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback,
+    string AffinityMask = "")
 {
     public static PlaybackSettings Default { get; } = new(
         null,
         PlaybackMode.FixedCount,
         1,
         string.Empty,
-        PrecisionMode.ExtremeDuringPlayback);
+        PrecisionMode.ExtremeDuringPlayback,
+        string.Empty);
+}
+
+public static class PlaybackAffinityMask
+{
+    public static bool TryParse(string? value, out ulong mask)
+    {
+        mask = 0;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        try
+        {
+            mask = trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                ? Convert.ToUInt64(trimmed[2..], 16)
+                : Convert.ToUInt64(trimmed, 10);
+            return mask != 0 && mask <= long.MaxValue;
+        }
+        catch
+        {
+            mask = 0;
+            return false;
+        }
+    }
+
+    public static string NormalizeOrThrow(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        if (!TryParse(value, out var mask))
+        {
+            throw new FormatException("Playback affinity mask must be a non-zero 64-bit hex or decimal CPU mask.");
+        }
+
+        return $"0x{mask:X}";
+    }
 }
 
 public static class PlaybackProcessFilter
@@ -61,8 +104,36 @@ public static class PlaybackProcessFilter
     }
 }
 
-public sealed record HotkeyGesture(HidModifier Modifiers, HidKey Key, MouseButton MouseButton = MouseButton.None)
+public sealed class HotkeyGesture : IEquatable<HotkeyGesture>
 {
+    public HotkeyGesture(HidModifier modifiers, HidKey key, MouseButton mouseButton = MouseButton.None)
+        : this(
+            modifiers,
+            key == HidKey.None ? [] : [key],
+            mouseButton == MouseButton.None ? [] : [mouseButton])
+    {
+    }
+
+    public HotkeyGesture(
+        HidModifier modifiers,
+        IEnumerable<HidKey>? keys,
+        IEnumerable<MouseButton>? mouseButtons = null)
+    {
+        Modifiers = modifiers;
+        Keys = NormalizeKeys(keys);
+        MouseButtons = NormalizeMouseButtons(mouseButtons);
+    }
+
+    public HidModifier Modifiers { get; }
+
+    public HidKey Key => Keys.Count > 0 ? Keys[0] : HidKey.None;
+
+    public MouseButton MouseButton => MouseButtons.Count > 0 ? MouseButtons[0] : MacroHid.Core.MouseButton.None;
+
+    public IReadOnlyList<HidKey> Keys { get; }
+
+    public IReadOnlyList<MouseButton> MouseButtons { get; }
+
     public override string ToString()
     {
         var parts = new List<string>();
@@ -86,16 +157,63 @@ public sealed record HotkeyGesture(HidModifier Modifiers, HidKey Key, MouseButto
             parts.Add("Win");
         }
 
-        if (Key != HidKey.None)
+        foreach (var button in MouseButtons)
         {
-            parts.Add(Key.ToString());
+            parts.Add(button.ToString());
         }
-        else if (MouseButton != MouseButton.None)
+
+        foreach (var key in Keys)
         {
-            parts.Add(MouseButton.ToString());
+            parts.Add(key.ToString());
         }
 
         return string.Join("+", parts);
+    }
+
+    public bool Equals(HotkeyGesture? other)
+    {
+        return other is not null
+            && Modifiers == other.Modifiers
+            && Keys.SequenceEqual(other.Keys)
+            && MouseButtons.SequenceEqual(other.MouseButtons);
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is HotkeyGesture other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Modifiers);
+        foreach (var key in Keys)
+        {
+            hash.Add(key);
+        }
+
+        foreach (var button in MouseButtons)
+        {
+            hash.Add(button);
+        }
+
+        return hash.ToHashCode();
+    }
+
+    private static IReadOnlyList<HidKey> NormalizeKeys(IEnumerable<HidKey>? keys)
+    {
+        return (keys ?? [])
+            .Where(key => key != HidKey.None)
+            .Distinct()
+            .ToArray();
+    }
+
+    private static IReadOnlyList<MouseButton> NormalizeMouseButtons(IEnumerable<MouseButton>? buttons)
+    {
+        return (buttons ?? [])
+            .Where(button => button != MouseButton.None)
+            .Distinct()
+            .ToArray();
     }
 }
 
@@ -109,7 +227,39 @@ public enum PlaybackMode
 public enum PrecisionMode
 {
     Balanced,
-    ExtremeDuringPlayback
+    ExtremeDuringPlayback,
+    UltraLowJitter
+}
+
+public sealed record PrecisionModeProfile(
+    PrecisionMode Mode,
+    string StableName,
+    int TargetJitterMicroseconds,
+    bool UsesNativeEngine);
+
+public static class PrecisionModeProfiles
+{
+    public static PrecisionModeProfile ForMode(PrecisionMode mode)
+    {
+        return mode switch
+        {
+            PrecisionMode.Balanced => new PrecisionModeProfile(
+                mode,
+                StableName: "basic",
+                TargetJitterMicroseconds: 500,
+                UsesNativeEngine: false),
+            PrecisionMode.UltraLowJitter => new PrecisionModeProfile(
+                mode,
+                StableName: "extreme",
+                TargetJitterMicroseconds: 100,
+                UsesNativeEngine: true),
+            _ => new PrecisionModeProfile(
+                PrecisionMode.ExtremeDuringPlayback,
+                StableName: "highPerformance",
+                TargetJitterMicroseconds: 250,
+                UsesNativeEngine: false)
+        };
+    }
 }
 
 public abstract record MacroStep;

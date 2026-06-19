@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using MacroHid.Runtime;
 using MacroStudio.Services;
 
 namespace MacroStudio;
@@ -23,12 +24,22 @@ public partial class App : Application
         {
             ThemeService.Initialize();
             Log("ThemeService OK");
+            var runtimePrecision = RuntimePrecisionSettingsStore.Load();
+            NativePlaybackWarmup.QueueWarmUpForPrecision(
+                runtimePrecision.Precision,
+                runtimePrecision.AffinityMask);
         }
         catch (Exception ex)
         {
             Log($"ThemeService FAILED: {ex.Message}");
-            MessageBox.Show($"Theme init failed:\n{ex.Message}");
+            DialogOwnerService.MessageBoxSafe(null, $"Theme init failed:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        NativePlaybackWarmup.Shutdown();
+        base.OnExit(e);
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
@@ -36,7 +47,7 @@ public partial class App : Application
         var inner = e.Exception;
         while (inner.InnerException != null) inner = inner.InnerException;
         Log($"[UI ERROR] {inner.GetType().Name}: {inner.Message}\nStack (first 5):\n{string.Join("\n", inner.StackTrace?.Split('\n').Take(5) ?? [])}");
-        MessageBox.Show($"UI Error:\n{inner.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        DialogOwnerService.MessageBoxSafe(null, $"UI Error:\n{inner.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
 

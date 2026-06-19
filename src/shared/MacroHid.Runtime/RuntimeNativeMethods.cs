@@ -31,6 +31,14 @@ internal static partial class RuntimeNativeMethods
     public const int SmCyVirtualScreen = 79;
     public const int ClrInvalid = -1;
     public const int ThreadPriorityTimeCritical = 15;
+    public const uint CREATE_WAITABLE_TIMER_HIGH_RESOLUTION = 0x00000002;
+    public const uint CreateWaitableTimerHighResolution = 0x00000002;
+    public const uint TimerAllAccess = 0x001F0003;
+    public const uint WaitObject0 = 0x00000000;
+    public const int ProcessPowerThrottling = 4;
+    public const uint ProcessPowerThrottlingCurrentVersion = 1;
+    public const uint ProcessPowerThrottlingExecutionSpeed = 0x00000001;
+    public const uint ProcessPowerThrottlingIgnoreTimerResolution = 0x00000004;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -79,6 +87,10 @@ internal static partial class RuntimeNativeMethods
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetProcessPriorityBoost(IntPtr hProcess, [MarshalAs(UnmanagedType.Bool)] out bool disablePriorityBoost);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetProcessPriorityBoost(IntPtr hProcess, [MarshalAs(UnmanagedType.Bool)] bool disablePriorityBoost);
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -93,6 +105,74 @@ internal static partial class RuntimeNativeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetThreadPriority(IntPtr hThread, int nPriority);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetThreadPriorityBoost(IntPtr hThread, [MarshalAs(UnmanagedType.Bool)] out bool disablePriorityBoost);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetThreadPriorityBoost(IntPtr hThread, [MarshalAs(UnmanagedType.Bool)] bool disablePriorityBoost);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr CreateWaitableTimerExW(
+        IntPtr lpTimerAttributes,
+        string? lpTimerName,
+        uint dwFlags,
+        uint dwDesiredAccess);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWaitableTimerEx(
+        IntPtr hTimer,
+        ref long lpDueTime,
+        int lPeriod,
+        IntPtr pfnCompletionRoutine,
+        IntPtr lpArgToCompletionRoutine,
+        IntPtr wakeContext,
+        uint tolerableDelay);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetProcessInformation(
+        IntPtr hProcess,
+        int processInformationClass,
+        ref ProcessPowerThrottlingState processInformation,
+        uint processInformationSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetProcessInformation(
+        IntPtr hProcess,
+        int processInformationClass,
+        ref ProcessPowerThrottlingState processInformation,
+        uint processInformationSize);
+
+    [DllImport("avrt.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr AvSetMmThreadCharacteristicsW(string taskName, out uint taskIndex);
+
+    [DllImport("avrt.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AvSetMmThreadPriority(IntPtr avrtHandle, int priority);
+
+    [DllImport("avrt.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AvRevertMmThreadCharacteristics(IntPtr avrtHandle);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct ProcessPowerThrottlingState
+{
+    public uint Version;
+    public uint ControlMask;
+    public uint StateMask;
 }
 
 [StructLayout(LayoutKind.Sequential)]

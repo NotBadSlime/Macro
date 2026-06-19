@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MacroHid.Core;
 using MacroHid.Runtime;
 using MacroStudio.Controls;
@@ -21,6 +22,8 @@ public partial class MainWindow : Window
     private readonly MacroEditorState editorState;
     private readonly SendInputMacroSink inputSink = new();
     private readonly ActionTemplateInsertGate actionTemplateInsertGate = new();
+    private readonly DispatcherTimer autoSaveTimer;
+    private RuntimePrecisionSettings runtimePrecisionSettings = RuntimePrecisionSettingsStore.Load();
 
     private GlobalKeyboardHook? keyboardHook;
     private MacroPlaybackController? playbackController;
@@ -28,24 +31,48 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, string> listeningMacroNames = [];
     private readonly Dictionary<string, string> listeningProcessFilters = [];
     private readonly Dictionary<string, WorkspacePanelRegistration> workspacePanels = [];
-    private WorkspaceLayout workspaceLayout = new([]);
+    private readonly HashSet<string> pendingFloatingPanelIds = [];
+    private WorkspaceLayout workspaceLayout = new([], WorkspaceLayoutStore.CurrentVersion);
     private bool listening;
     private bool updatingLanguageComboBox;
     private bool updatingWorkspaceMenu;
     private bool syncingJsonPanel;
+    private bool workspaceContentRendered;
+    private string activeRightToolPanelId = "actions";
+
+    private sealed record ListeningCandidate(
+        MacroLibraryItem Item,
+        MacroDocument Document,
+        HotkeyGesture Trigger,
+        string ProcessFilter);
 
     public MainWindow()
     {
         editorState = new MacroEditorState(libraryStore);
 
         InitializeComponent();
+        autoSaveTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(450)
+        };
+        autoSaveTimer.Tick += (_, _) => PerformDebouncedAutoSave();
+        ContentRendered += MainWindow_ContentRendered;
         LocalizationService.Initialize();
+        ConfigureWorkspaceDockHost();
 
         InitializeLanguageComboBox();
         InitializePanels();
+        LibraryPanel.SetRuntimePrecisionControls(runtimePrecisionSettings);
+        WarmUpRuntimePrecision();
         InitializeWorkspacePanels();
         ApplyLocalization();
         InitializeMacroLibrary();
+    }
+
+    private void MainWindow_ContentRendered(object? sender, EventArgs e)
+    {
+        workspaceContentRendered = true;
+        RestorePendingFloatingPanels();
     }
 
     private void InitializePanels()
@@ -61,6 +88,9 @@ public partial class MainWindow : Window
         LibraryPanel.ImportApplied += OnImportApplied;
         LibraryPanel.DocumentRequested += () => GetDocumentWithPlayback();
         LibraryPanel.ResultMessage += msg => SetStatus(msg);
+        LibraryPanel.StartListeningAllRequested += OnStartListening;
+        LibraryPanel.StopListeningAllRequested += OnStopListening;
+        LibraryPanel.PrecisionSettingsEdited += OnPrecisionSettingsEdited;
 
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
         SequencePanelControl.RunNowRequested += OnRunNow;
@@ -89,61 +119,167 @@ public partial class MainWindow : Window
         ConditionPanel.PickRegionRequested += OnPickRegionRequested;
     }
 
+    private void ConfigureWorkspaceDockHost()
+    {
+        DockHost.AttachRegions(
+            LeftDockColumn,
+            RightDockColumn,
+            BottomDockRow,
+            LeftDockSplitter,
+            RightDockSplitter,
+            BottomDockSplitter,
+            LeftDockContent,
+            RightDockContent,
+            BottomDockContent);
+        DockHost.DockSizeChanged += (_, _) =>
+        {
+            SaveDockSizes();
+            SaveWorkspaceLayout();
+        };
+        DockHost.BottomResizeRequested += (_, _) => OpenBottomRegionForResize();
+    }
+
     private void InitializeWorkspacePanels()
     {
-        RegisterWorkspacePanel("library", WorkspaceTitle("WorkspacePanelLibrary"), LibraryPanelHost);
-        RegisterWorkspacePanel("sequence", WorkspaceTitle("WorkspacePanelSequence"), SequencePanelHost);
-        RegisterWorkspacePanel("conditions", WorkspaceTitle("WorkspacePanelConditions"), ConditionPanelHost);
-        RegisterWorkspacePanel("json", WorkspaceTitle("AdvancedJson"), JsonPanelHost);
-        RegisterWorkspacePanel("actions", WorkspaceTitle("WorkspacePanelActions"), ActionPaletteHost);
-        RegisterWorkspacePanel("playback", WorkspaceTitle("WorkspacePanelPlayback"), PlaybackPanelHost);
+        RegisterWorkspacePanel("library", WorkspaceTitle("WorkspacePanelLibrary"), LibraryToolChrome, LibraryPanelHost, WorkspaceDockRegion.Left, 260, 0);
+        RegisterWorkspacePanel("sequence", WorkspaceTitle("WorkspacePanelSequence"), SequenceToolChrome, SequencePanelHost, WorkspaceDockRegion.Center, 0, 0);
+        RegisterWorkspacePanel("conditions", WorkspaceTitle("WorkspacePanelConditions"), ConditionToolChrome, ConditionPanelHost, WorkspaceDockRegion.Right, 390, 0, defaultIsVisible: false);
+        RegisterWorkspacePanel("actions", WorkspaceTitle("WorkspacePanelActions"), ActionPaletteToolChrome, ActionPaletteHost, WorkspaceDockRegion.Right, 390, 1);
+        RegisterWorkspacePanel("playback", WorkspaceTitle("WorkspacePanelPlayback"), PlaybackToolChrome, PlaybackPanelHost, WorkspaceDockRegion.Right, 390, 2);
+        RegisterWorkspacePanel("json", WorkspaceTitle("AdvancedJson"), JsonToolChrome, JsonPanelHost, WorkspaceDockRegion.Bottom, 230, 0, defaultIsVisible: false);
 
         workspaceLayout = WorkspaceLayoutStore.Load();
+        ApplyDockSizes();
         ApplyWorkspaceLayout();
         UpdateWorkspaceMenuChecks();
     }
 
-    private void RegisterWorkspacePanel(string id, string title, ContentControl host)
+    private void RegisterWorkspacePanel(
+        string id,
+        string title,
+        FrameworkElement dockContainer,
+        ContentControl host,
+        WorkspaceDockRegion defaultDockRegion,
+        double defaultDockedSize,
+        int defaultOrder,
+        bool defaultIsVisible = true)
     {
         if (host.Content is not FrameworkElement element)
         {
             throw new InvalidOperationException($"Workspace panel '{id}' has no content.");
         }
 
-        workspacePanels[id] = new WorkspacePanelRegistration(id, title, host, element)
+        workspacePanels[id] = new WorkspacePanelRegistration(id, title, dockContainer, host, element, defaultDockRegion, defaultDockedSize, defaultOrder, defaultIsVisible)
         {
-            IsVisible = id != "json"
+            IsVisible = defaultIsVisible,
+            DockRegion = defaultDockRegion
         };
     }
 
     private void ApplyWorkspaceLayout()
     {
+        var layoutNeedsSave = workspaceLayout.Version < WorkspaceLayoutStore.CurrentVersion;
         foreach (var panel in workspacePanels.Values)
         {
-            var layout = workspaceLayout.Panels.TryGetValue(panel.Id, out var saved)
+            var rawLayout = workspaceLayout.Panels.TryGetValue(panel.Id, out var saved)
                 ? saved
                 : GetDefaultWorkspacePanelLayout(panel.Id);
+            var layout = NormalizeWorkspacePanelLayout(panel, rawLayout, workspaceLayout.Version, out var layoutChanged);
+            layoutNeedsSave |= layoutChanged;
 
             panel.IsVisible = layout.IsVisible;
             panel.SavedLayout = layout;
-            if (layout.IsFloating)
+            panel.DockRegion = layout.DockRegion;
+            if (layout.DockRegion == WorkspaceDockRegion.Floating)
             {
-                FloatWorkspacePanel(panel.Id, saveLayout: false);
+                QueueFloatingWorkspacePanel(panel.Id);
             }
             else
             {
                 DockWorkspacePanel(panel.Id, saveLayout: false);
+                ToggleWorkspacePanelVisibility(panel.Id, layout.IsVisible, saveLayout: false);
             }
+        }
 
-            ToggleWorkspacePanelVisibility(panel.Id, layout.IsVisible, saveLayout: false);
+        ApplyDockRegionVisibility();
+        if (layoutNeedsSave)
+        {
+            SaveWorkspaceLayout();
         }
     }
 
-    private static WorkspacePanelLayout GetDefaultWorkspacePanelLayout(string id)
+    private void ApplyDockSizes()
     {
-        return id == "json"
-            ? new WorkspacePanelLayout(IsVisible: false, Width: 720, Height: 520)
-            : new WorkspacePanelLayout(IsVisible: true);
+        DockHost.ApplyDockSizes(workspaceLayout.DockSizes ?? new WorkspaceDockSizes());
+    }
+
+    private void SaveDockSizes()
+    {
+        workspaceLayout = workspaceLayout with { DockSizes = DockHost.CaptureDockSizes() };
+    }
+
+    private WorkspacePanelLayout NormalizeWorkspacePanelLayout(
+        WorkspacePanelRegistration panel,
+        WorkspacePanelLayout layout,
+        int layoutVersion,
+        out bool changed)
+    {
+        changed = false;
+        var dockRegion = layout.DockRegion;
+        var isVisible = layout.IsVisible;
+        var dockedSize = layout.DockedSize;
+        var order = layout.Order;
+
+        if (layoutVersion < WorkspaceLayoutStore.CurrentVersion)
+        {
+            dockRegion = panel.DefaultDockRegion;
+            isVisible = panel.DefaultIsVisible;
+            dockedSize = panel.DefaultDockedSize;
+            order = panel.DefaultOrder;
+            changed = true;
+        }
+
+        if (dockRegion != WorkspaceDockRegion.Floating && dockRegion != panel.DefaultDockRegion)
+        {
+            dockRegion = panel.DefaultDockRegion;
+            changed = true;
+        }
+
+        if (dockedSize <= 0 && panel.DefaultDockedSize > 0)
+        {
+            dockedSize = panel.DefaultDockedSize;
+            changed = true;
+        }
+
+        if (order != panel.DefaultOrder && layoutVersion < WorkspaceLayoutStore.CurrentVersion)
+        {
+            order = panel.DefaultOrder;
+            changed = true;
+        }
+
+        return layout with
+        {
+            IsVisible = isVisible,
+            DockRegion = dockRegion,
+            DockedSize = dockedSize,
+            Order = order
+        };
+    }
+
+    private WorkspacePanelLayout GetDefaultWorkspacePanelLayout(string id)
+    {
+        if (!workspacePanels.TryGetValue(id, out var panel))
+        {
+            return new WorkspacePanelLayout();
+        }
+
+        return new WorkspacePanelLayout(
+            IsVisible: panel.DefaultIsVisible,
+            DockRegion: panel.DefaultDockRegion,
+            DockedSize: panel.DefaultDockedSize,
+            Order: panel.DefaultOrder,
+            IsPinned: true,
+            FloatingBounds: new WorkspaceFloatingBounds(120, 120, 720, 520));
     }
 
     private void WindowMenu_Click(object sender, RoutedEventArgs e)
@@ -189,16 +325,45 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void FloatPanelFromHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string id })
+        {
+            FloatWorkspacePanel(id);
+            e.Handled = true;
+        }
+    }
+
+    private void CloseWorkspacePanel_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string id })
+        {
+            ToggleWorkspacePanelVisibility(id, false);
+            e.Handled = true;
+        }
+    }
+
     private void ToggleWorkspacePanelVisibility(string id, bool visible, bool saveLayout = true)
     {
         if (!workspacePanels.TryGetValue(id, out var panel)) return;
 
+        if (visible && string.Equals(id, "json", StringComparison.OrdinalIgnoreCase))
+        {
+            RefreshJsonPanelText();
+        }
+
         panel.IsVisible = visible;
+        if (visible && panel.DockRegion == WorkspaceDockRegion.Right && !panel.IsFloating)
+        {
+            activeRightToolPanelId = id;
+        }
+
         if (panel.IsFloating)
         {
             EnsureWorkspacePanelWindow(panel);
             if (visible)
             {
+                DialogOwnerService.AssignOwnerIfShown(panel.Window!, this);
                 panel.Window!.Show();
                 panel.Window.Activate();
             }
@@ -209,9 +374,10 @@ public partial class MainWindow : Window
         }
         else
         {
-            panel.DockHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            panel.DockContainer.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        ApplyDockRegionVisibility();
         UpdateWorkspaceMenuChecks();
         if (saveLayout)
         {
@@ -222,6 +388,22 @@ public partial class MainWindow : Window
     private void FloatWorkspacePanel(string id, bool saveLayout = true)
     {
         if (!workspacePanels.TryGetValue(id, out var panel)) return;
+        if (string.Equals(id, "json", StringComparison.OrdinalIgnoreCase))
+        {
+            RefreshJsonPanelText();
+        }
+
+        if (!workspaceContentRendered)
+        {
+            QueueFloatingWorkspacePanel(id);
+            if (saveLayout)
+            {
+                SaveWorkspaceLayout();
+            }
+
+            return;
+        }
+
         EnsureWorkspacePanelWindow(panel);
 
         if (!ReferenceEquals(panel.Window!.ContentHost.Content, panel.Element))
@@ -231,11 +413,14 @@ public partial class MainWindow : Window
         }
 
         panel.IsFloating = true;
+        panel.DockRegion = WorkspaceDockRegion.Floating;
         panel.IsVisible = true;
-        panel.DockHost.Visibility = Visibility.Collapsed;
+        panel.DockContainer.Visibility = Visibility.Collapsed;
         RestoreFloatingBounds(panel);
+        DialogOwnerService.AssignOwnerIfShown(panel.Window!, this);
         panel.Window.Show();
         panel.Window.Activate();
+        ApplyDockRegionVisibility();
         UpdateWorkspaceMenuChecks();
         if (saveLayout)
         {
@@ -259,7 +444,16 @@ public partial class MainWindow : Window
         }
 
         panel.IsFloating = false;
-        panel.DockHost.Visibility = panel.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        pendingFloatingPanelIds.Remove(id);
+        panel.DockRegion = ResolveDockRegion(panel);
+        ApplyWorkspaceDockRegion(panel, panel.DockRegion);
+        if (panel.DockRegion == WorkspaceDockRegion.Right)
+        {
+            activeRightToolPanelId = panel.Id;
+        }
+
+        panel.DockContainer.Visibility = panel.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        ApplyDockRegionVisibility();
         UpdateWorkspaceMenuChecks();
         if (saveLayout)
         {
@@ -270,7 +464,9 @@ public partial class MainWindow : Window
     private void ResetWorkspaceLayout()
     {
         WorkspaceLayoutStore.Reset();
-        workspaceLayout = new([]);
+        activeRightToolPanelId = "actions";
+        workspaceLayout = new([], WorkspaceLayoutStore.CurrentVersion, new WorkspaceDockSizes());
+        ApplyDockSizes();
         foreach (var panel in workspacePanels.Values)
         {
             panel.SavedLayout = GetDefaultWorkspacePanelLayout(panel.Id);
@@ -288,13 +484,12 @@ public partial class MainWindow : Window
         if (panel.Window is not null)
         {
             panel.Window.SetTitle(panel.Title, L("WorkspaceDock"));
+            DialogOwnerService.AssignOwnerIfShown(panel.Window!, this);
             return;
         }
 
-        panel.Window = new WorkspacePanelWindow(panel.Id, panel.Title)
-        {
-            Owner = this
-        };
+        panel.Window = new WorkspacePanelWindow(panel.Id, panel.Title);
+        DialogOwnerService.AssignOwnerIfShown(panel.Window!, this);
         panel.Window.SetTitle(panel.Title, L("WorkspaceDock"));
         panel.Window.DockRequested += (_, _) => DockWorkspacePanel(panel.Id);
         panel.Window.HideRequested += (_, _) =>
@@ -309,37 +504,283 @@ public partial class MainWindow : Window
     {
         if (panel.Window is null) return;
         var layout = panel.SavedLayout ?? GetDefaultWorkspacePanelLayout(panel.Id);
-        panel.Window.Width = Math.Max(panel.Window.MinWidth, layout.Width);
-        panel.Window.Height = Math.Max(panel.Window.MinHeight, layout.Height);
-        panel.Window.Left = layout.Left;
-        panel.Window.Top = layout.Top;
+        var bounds = layout.FloatingBounds ?? new WorkspaceFloatingBounds();
+        var width = ClampFinite(bounds.Width, panel.Window.MinWidth, SystemParameters.VirtualScreenWidth);
+        var height = ClampFinite(bounds.Height, panel.Window.MinHeight, SystemParameters.VirtualScreenHeight);
+        var minLeft = SystemParameters.VirtualScreenLeft;
+        var minTop = SystemParameters.VirtualScreenTop;
+        var maxLeft = minLeft + Math.Max(0, SystemParameters.VirtualScreenWidth - width);
+        var maxTop = minTop + Math.Max(0, SystemParameters.VirtualScreenHeight - height);
+        panel.Window.Width = width;
+        panel.Window.Height = height;
+        panel.Window.Left = ClampFinite(bounds.Left, minLeft, maxLeft);
+        panel.Window.Top = ClampFinite(bounds.Top, minTop, maxTop);
+    }
+
+    private void QueueFloatingWorkspacePanel(string id)
+    {
+        if (!workspacePanels.TryGetValue(id, out var panel)) return;
+
+        panel.IsFloating = true;
+        panel.DockRegion = WorkspaceDockRegion.Floating;
+        panel.DockContainer.Visibility = Visibility.Collapsed;
+        pendingFloatingPanelIds.Add(id);
+
+        if (workspaceContentRendered)
+        {
+            RestorePendingFloatingPanels();
+        }
+    }
+
+    private void RestorePendingFloatingPanels()
+    {
+        foreach (var id in pendingFloatingPanelIds.ToList())
+        {
+            if (!workspacePanels.TryGetValue(id, out var panel))
+            {
+                pendingFloatingPanelIds.Remove(id);
+                continue;
+            }
+
+            if (panel.IsVisible)
+            {
+                FloatWorkspacePanel(id, saveLayout: false);
+            }
+            else
+            {
+                panel.IsFloating = true;
+                panel.DockRegion = WorkspaceDockRegion.Floating;
+                panel.DockContainer.Visibility = Visibility.Collapsed;
+            }
+
+            pendingFloatingPanelIds.Remove(id);
+        }
+
+        ApplyDockRegionVisibility();
+        UpdateWorkspaceMenuChecks();
+    }
+
+    private static double ClampFinite(double value, double min, double max)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            return min;
+
+        return Math.Clamp(value, min, Math.Max(min, max));
+    }
+
+    private WorkspaceDockRegion ResolveDockRegion(WorkspacePanelRegistration panel)
+    {
+        var saved = panel.SavedLayout?.DockRegion ?? panel.DefaultDockRegion;
+        return saved == WorkspaceDockRegion.Floating ? panel.DefaultDockRegion : saved;
+    }
+
+    private void ApplyWorkspaceDockRegion(WorkspacePanelRegistration panel, WorkspaceDockRegion region)
+    {
+        if (region == WorkspaceDockRegion.Floating)
+        {
+            return;
+        }
+
+        var target = GetDockTarget(region);
+        if (!ReferenceEquals(panel.DockContainer.Parent, target))
+        {
+            DetachFromParent(panel.DockContainer);
+            target.Children.Add(panel.DockContainer);
+        }
+
+        panel.DockRegion = region;
+        panel.IsFloating = false;
+        SortDockRegion(target);
+        ApplyDockRegionVisibility();
+    }
+
+    private Panel GetDockTarget(WorkspaceDockRegion region) => region switch
+    {
+        WorkspaceDockRegion.Left => LeftDockContent,
+        WorkspaceDockRegion.Center => CenterDockContent,
+        WorkspaceDockRegion.Bottom => BottomDockContent,
+        _ => RightToolDeck
+    };
+
+    private static void DetachFromParent(FrameworkElement element)
+    {
+        if (element.Parent is Panel panel)
+        {
+            panel.Children.Remove(element);
+        }
+        else if (element.Parent is ContentControl contentControl)
+        {
+            contentControl.Content = null;
+        }
+    }
+
+    private void SortDockRegion(Panel target)
+    {
+        var ordered = target.Children
+            .OfType<FrameworkElement>()
+            .OrderBy(GetWorkspacePanelOrder)
+            .ToList();
+
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var currentIndex = target.Children.IndexOf(ordered[i]);
+            if (currentIndex != i)
+            {
+                target.Children.RemoveAt(currentIndex);
+                target.Children.Insert(i, ordered[i]);
+            }
+        }
+    }
+
+    private int GetWorkspacePanelOrder(FrameworkElement element)
+    {
+        return workspacePanels.Values.FirstOrDefault(p => ReferenceEquals(p.DockContainer, element))?.SavedLayout?.Order
+            ?? workspacePanels.Values.FirstOrDefault(p => ReferenceEquals(p.DockContainer, element))?.DefaultOrder
+            ?? 0;
+    }
+
+    private void RightToolButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton { Tag: string id })
+        {
+            SelectRightToolPanel(id);
+            e.Handled = true;
+        }
+    }
+
+    private void SelectRightToolPanel(string id)
+    {
+        if (!workspacePanels.TryGetValue(id, out var panel) || panel.DockRegion != WorkspaceDockRegion.Right)
+            return;
+
+        if (!panel.IsVisible)
+        {
+            panel.IsVisible = true;
+        }
+
+        activeRightToolPanelId = id;
+        ApplyDockRegionVisibility();
+        UpdateWorkspaceMenuChecks();
+        SaveWorkspaceLayout();
+    }
+
+    private void ApplyRightToolPanelVisibility()
+    {
+        var visibleRightPanels = workspacePanels.Values
+            .Where(panel => panel.IsVisible && !panel.IsFloating && panel.DockRegion == WorkspaceDockRegion.Right)
+            .OrderBy(panel => panel.SavedLayout?.Order ?? panel.DefaultOrder)
+            .ToList();
+
+        if (visibleRightPanels.Count > 0 && visibleRightPanels.All(panel => panel.Id != activeRightToolPanelId))
+        {
+            activeRightToolPanelId = visibleRightPanels[0].Id;
+        }
+
+        foreach (var panel in workspacePanels.Values.Where(panel => panel.DockRegion == WorkspaceDockRegion.Right && !panel.IsFloating))
+        {
+            panel.DockContainer.Visibility = panel.IsVisible && panel.Id == activeRightToolPanelId
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        SetRightToolButtonState(ConditionRightToolButton, "conditions");
+        SetRightToolButtonState(ActionRightToolButton, "actions");
+        SetRightToolButtonState(PlaybackRightToolButton, "playback");
+    }
+
+    private void SetRightToolButtonState(ToggleButton button, string id)
+    {
+        if (!workspacePanels.TryGetValue(id, out var panel))
+            return;
+
+        var visible = panel.IsVisible && !panel.IsFloating && panel.DockRegion == WorkspaceDockRegion.Right;
+        button.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        button.IsChecked = visible && string.Equals(activeRightToolPanelId, id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ApplyDockRegionVisibility()
+    {
+        var leftVisible = HasVisibleDockedPanel(WorkspaceDockRegion.Left);
+        var rightVisible = HasVisibleDockedPanel(WorkspaceDockRegion.Right);
+        var bottomVisible = HasVisibleDockedPanel(WorkspaceDockRegion.Bottom);
+
+        ApplyRightToolPanelVisibility();
+        DockHost.SetRegionVisible(WorkspaceDockRegion.Left, leftVisible);
+        DockHost.SetRegionVisible(WorkspaceDockRegion.Right, rightVisible);
+        DockHost.SetRegionVisible(WorkspaceDockRegion.Bottom, bottomVisible);
+        BottomDockSplitterRow.Height = new GridLength(12);
+    }
+
+    private void OpenBottomRegionForResize()
+    {
+        if (!workspacePanels.TryGetValue("json", out var panel))
+            return;
+
+        if (panel.IsFloating)
+        {
+            DockWorkspacePanel(panel.Id, saveLayout: false);
+        }
+
+        ToggleWorkspacePanelVisibility(panel.Id, true, saveLayout: false);
+        SaveWorkspaceLayout();
+    }
+
+    private bool HasVisibleDockedPanel(WorkspaceDockRegion region)
+    {
+        return workspacePanels.Values.Any(panel =>
+            panel.IsVisible
+            && !panel.IsFloating
+            && panel.DockRegion == region);
+    }
+
+    private double GetDockedSize(WorkspaceDockRegion region, double fallback)
+    {
+        return workspacePanels.Values
+            .Where(panel => panel.DockRegion == region)
+            .Select(panel => panel.SavedLayout?.DockedSize ?? panel.DefaultDockedSize)
+            .FirstOrDefault(size => size > 0) is var size && size > 0
+                ? size
+                : fallback;
     }
 
     private void SaveWorkspaceLayout()
     {
         var panels = new Dictionary<string, WorkspacePanelLayout>(StringComparer.OrdinalIgnoreCase);
+        var dockSizes = DockHost.CaptureDockSizes();
         foreach (var panel in workspacePanels.Values)
         {
             var current = panel.SavedLayout ?? GetDefaultWorkspacePanelLayout(panel.Id);
-            var left = current.Left;
-            var top = current.Top;
-            var width = current.Width;
-            var height = current.Height;
+            var bounds = current.FloatingBounds ?? new WorkspaceFloatingBounds();
+            var dockedSize = GetCurrentDockedSize(panel);
 
             if (panel.Window is not null)
             {
-                left = panel.Window.Left;
-                top = panel.Window.Top;
-                width = panel.Window.Width;
-                height = panel.Window.Height;
+                bounds = new WorkspaceFloatingBounds(panel.Window.Left, panel.Window.Top, panel.Window.Width, panel.Window.Height);
             }
 
-            panel.SavedLayout = new WorkspacePanelLayout(panel.IsVisible, panel.IsFloating, left, top, width, height);
+            panel.SavedLayout = new WorkspacePanelLayout(
+                panel.IsVisible,
+                panel.DockRegion,
+                dockedSize,
+                current.Order,
+                current.IsPinned,
+                bounds);
             panels[panel.Id] = panel.SavedLayout;
         }
 
-        workspaceLayout = new WorkspaceLayout(panels);
+        workspaceLayout = new WorkspaceLayout(panels, WorkspaceLayoutStore.CurrentVersion, dockSizes);
         WorkspaceLayoutStore.Save(workspaceLayout);
+    }
+
+    private double GetCurrentDockedSize(WorkspacePanelRegistration panel)
+    {
+        return panel.DockRegion switch
+        {
+            WorkspaceDockRegion.Left => Math.Max(0, LeftDockColumn.ActualWidth),
+            WorkspaceDockRegion.Right => Math.Max(0, RightDockColumn.ActualWidth),
+            WorkspaceDockRegion.Bottom => Math.Max(0, BottomDockRow.ActualHeight),
+            _ => panel.SavedLayout?.DockedSize ?? panel.DefaultDockedSize
+        };
     }
 
     private void UpdateWorkspaceMenuChecks()
@@ -396,6 +837,21 @@ public partial class MainWindow : Window
         syncingJsonPanel = true;
         JsonPanel.EditorText = text;
         syncingJsonPanel = false;
+    }
+
+    private void RefreshJsonPanelText()
+    {
+        if (syncingJsonPanel) return;
+
+        try
+        {
+            syncingJsonPanel = true;
+            JsonPanel.EditorText = SequencePanelControl.EditorText;
+        }
+        finally
+        {
+            syncingJsonPanel = false;
+        }
     }
 
     private void OnJsonPanelEditorTextChanged(string text)
@@ -508,7 +964,7 @@ public partial class MainWindow : Window
     private void OnMacroDeleted(string id)
     {
         var name = SequencePanelControl.MacroName;
-        var result = MessageBox.Show(
+        var result = DialogOwnerService.MessageBoxSafe(
             this,
             LocalizationService.Format("DeleteMacroConfirm", string.IsNullOrWhiteSpace(name) ? L("Macro") : name),
             L("Delete"),
@@ -548,12 +1004,55 @@ public partial class MainWindow : Window
     {
         try
         {
-            AutoSaveCurrentMacro(updateStatus: false);
+            ScheduleAutoSave();
         }
         catch (Exception ex)
         {
             SetStatus(ex.Message);
         }
+    }
+
+    private void OnPrecisionSettingsEdited()
+    {
+        try
+        {
+            runtimePrecisionSettings = ReadRuntimePrecisionSettingsFromPanel();
+            RuntimePrecisionSettingsStore.Save(runtimePrecisionSettings);
+            WarmUpRuntimePrecision();
+            RestartListeningWithCurrentSettings();
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
+        }
+    }
+
+    private RuntimePrecisionSettings ReadRuntimePrecisionSettingsFromPanel()
+    {
+        var precision = LibraryPanel.GetSelectedPrecisionMode();
+        var affinityMask = PlaybackAffinityMask.NormalizeOrThrow(LibraryPanel.AffinityMaskText);
+        return new RuntimePrecisionSettings(precision, affinityMask);
+    }
+
+    private void WarmUpRuntimePrecision()
+    {
+        NativePlaybackWarmup.QueueWarmUpForPrecision(
+            runtimePrecisionSettings.Precision,
+            runtimePrecisionSettings.AffinityMask);
+    }
+
+    private void RestartListeningWithCurrentSettings()
+    {
+        if (!listening)
+        {
+            return;
+        }
+
+        listening = false;
+        keyboardHook?.Dispose();
+        keyboardHook = null;
+        StopListeningControllers();
+        OnStartListening();
     }
 
     private void AutoSaveCurrentMacro(bool updateStatus)
@@ -567,9 +1066,30 @@ public partial class MainWindow : Window
 
         editorState.SelectedMacroId = item.Id;
         LibraryPanel.RefreshList();
+        RefreshLibraryListeningState();
         if (updateStatus)
         {
             SetStatus(L("LibrarySaved"));
+        }
+    }
+
+    private void ScheduleAutoSave()
+    {
+        autoSaveTimer.Stop();
+        autoSaveTimer.Start();
+    }
+
+    private void PerformDebouncedAutoSave()
+    {
+        autoSaveTimer.Stop();
+        try
+        {
+            AutoSaveCurrentMacro(updateStatus: false);
+            RestartListeningWithCurrentSettings();
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
         }
     }
 
@@ -624,28 +1144,25 @@ public partial class MainWindow : Window
             var controllers = new Dictionary<string, MacroPlaybackController>(StringComparer.OrdinalIgnoreCase);
             var macroNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var processFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var item in libraryStore.Load().Items)
+            var candidates = BuildListeningCandidates();
+            var conflicts = FindListeningConflicts(candidates);
+            if (conflicts.Count > 0)
             {
-                MacroDocument document;
-                try
-                {
-                    document = libraryStore.ReadMacro(item.Id);
-                }
-                catch
-                {
-                    continue;
-                }
+                RefreshLibraryListeningState(conflicts);
+                throw new InvalidOperationException(FormatListeningConflictMessage(conflicts));
+            }
 
-                if (document.Playback.Trigger is not { } trigger)
-                {
-                    continue;
-                }
-
-                bindings.Add(new HotkeyBinding(item.Id, trigger));
-                controllers[item.Id] = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback));
+            foreach (var candidate in candidates)
+            {
+                var item = candidate.Item;
+                var document = candidate.Document;
+                bindings.Add(new HotkeyBinding(item.Id, candidate.Trigger));
+                var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
+                var options = CreatePlaybackOptions(document);
+                executor.Prepare(document, options);
+                controllers[item.Id] = new MacroPlaybackController(document, executor, options);
                 macroNames[item.Id] = document.Name;
-                processFilters[item.Id] = document.Playback.ProcessFilter;
+                processFilters[item.Id] = candidate.ProcessFilter;
             }
 
             if (bindings.Count == 0)
@@ -676,6 +1193,7 @@ public partial class MainWindow : Window
 
             playbackController = null;
             listening = true;
+            RefreshLibraryListeningState();
             PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({bindings.Count})");
             SetStatus($"{L("Listening")} ({bindings.Count})");
             await Task.CompletedTask;
@@ -685,6 +1203,7 @@ public partial class MainWindow : Window
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
             SetStatus(L("PlaybackError"));
+            RefreshLibraryListeningState();
         }
     }
 
@@ -695,6 +1214,7 @@ public partial class MainWindow : Window
         keyboardHook = null;
         StopListeningControllers();
         playbackController?.Stop();
+        RefreshLibraryListeningState();
         PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusIdle"));
         PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
         SetStatus(L("Idle"));
@@ -705,6 +1225,7 @@ public partial class MainWindow : Window
         foreach (var controller in listeningControllers.Values)
         {
             controller.Stop();
+            controller.Dispose();
         }
 
         listeningControllers.Clear();
@@ -712,12 +1233,147 @@ public partial class MainWindow : Window
         listeningProcessFilters.Clear();
     }
 
+    private List<ListeningCandidate> BuildListeningCandidates()
+    {
+        var candidates = new List<ListeningCandidate>();
+        foreach (var item in libraryStore.Load().Items)
+        {
+            MacroDocument document;
+            try
+            {
+                document = libraryStore.ReadMacro(item.Id);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (document.Playback.Trigger is not { } trigger)
+            {
+                continue;
+            }
+
+            candidates.Add(new ListeningCandidate(
+                item,
+                document,
+                trigger,
+                document.Playback.ProcessFilter ?? string.Empty));
+        }
+
+        return candidates;
+    }
+
+    private IReadOnlyList<(ListeningCandidate Left, ListeningCandidate Right)> FindListeningConflicts(
+        IReadOnlyList<ListeningCandidate> candidates)
+    {
+        var conflicts = new List<(ListeningCandidate Left, ListeningCandidate Right)>();
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            for (var j = i + 1; j < candidates.Count; j++)
+            {
+                var left = candidates[i];
+                var right = candidates[j];
+                if (string.Equals(left.Trigger.ToString(), right.Trigger.ToString(), StringComparison.OrdinalIgnoreCase)
+                    && ProcessFiltersOverlap(left.ProcessFilter, right.ProcessFilter))
+                {
+                    conflicts.Add((left, right));
+                }
+            }
+        }
+
+        return conflicts;
+    }
+
+    private static bool ProcessFiltersOverlap(string? left, string? right)
+    {
+        var leftParts = NormalizeProcessFilterParts(left);
+        var rightParts = NormalizeProcessFilterParts(right);
+        if (leftParts.Count == 0 || rightParts.Count == 0)
+        {
+            return true;
+        }
+
+        return leftParts.Overlaps(rightParts);
+    }
+
+    private static HashSet<string> NormalizeProcessFilterParts(string? value)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return result;
+        }
+
+        foreach (var token in value.Split([',', ';', '|', '\r', '\n', '\t', ' '], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var normalized = token.Trim();
+            if (normalized.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = normalized[..^4];
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalized))
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result;
+    }
+
+    private void RefreshLibraryListeningState(
+        IReadOnlyList<(ListeningCandidate Left, ListeningCandidate Right)>? conflicts = null)
+    {
+        var candidates = BuildListeningCandidates();
+        conflicts ??= FindListeningConflicts(candidates);
+        var conflictIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (left, right) in conflicts)
+        {
+            conflictIds.Add(left.Item.Id);
+            conflictIds.Add(right.Item.Id);
+        }
+
+        var states = new Dictionary<string, MacroLibraryListenState>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in candidates)
+        {
+            states[candidate.Item.Id] = new MacroLibraryListenState(
+                listeningControllers.ContainsKey(candidate.Item.Id),
+                conflictIds.Contains(candidate.Item.Id),
+                candidate.Trigger.ToString(),
+                FormatPlaybackModeSummary(candidate.Document.Playback),
+                string.IsNullOrWhiteSpace(candidate.ProcessFilter) ? L("AllProcesses") : candidate.ProcessFilter);
+        }
+
+        LibraryPanel.SetListeningStates(states);
+    }
+
+    private static string FormatPlaybackModeSummary(PlaybackSettings playback) => playback.Mode switch
+    {
+        PlaybackMode.ToggleLoop => LocalizationService.Get("ModeToggleLoop"),
+        PlaybackMode.HoldLoop => LocalizationService.Get("ModeHoldLoop"),
+        PlaybackMode.FixedCount => LocalizationService.Format("ModeFixedCountSummary", playback.Count),
+        _ => playback.Mode.ToString()
+    };
+
+    private static string FormatListeningConflictMessage(
+        IReadOnlyList<(ListeningCandidate Left, ListeningCandidate Right)> conflicts)
+    {
+        var lines = conflicts
+            .Take(8)
+            .Select(pair => $"{pair.Left.Document.Name} / {pair.Right.Document.Name}: {pair.Left.Trigger}");
+        return $"{LocalizationService.Get("ListeningConflict")}\n{string.Join("\n", lines)}";
+    }
+
     private async void OnRunNow()
     {
         try
         {
             var document = GetDocumentWithPlayback();
-            playbackController = new MacroPlaybackController(document, new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback));
+            playbackController?.Dispose();
+            var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
+            var options = CreatePlaybackOptions(document);
+            executor.Prepare(document, options);
+            playbackController = new MacroPlaybackController(document, executor, options);
             await playbackController.RunNowAsync();
             UpdatePlaybackStatus();
             _ = WatchPlaybackAsync(playbackController);
@@ -727,6 +1383,17 @@ public partial class MainWindow : Window
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
         }
+    }
+
+    private PlaybackExecutionOptions CreatePlaybackOptions(MacroDocument document)
+    {
+        return new PlaybackExecutionOptions(
+            document.Playback.Mode,
+            document.Playback.Count,
+            PixelEvaluationMode.Live,
+            NoWait: false,
+            runtimePrecisionSettings.Precision,
+            runtimePrecisionSettings.AffinityMask);
     }
 
     private void OnStopPlayback()
@@ -747,6 +1414,7 @@ public partial class MainWindow : Window
         var item = libraryStore.CreateMacro(document);
         editorState.SelectedMacroId = item.Id;
         LibraryPanel.RefreshList();
+        RefreshLibraryListeningState();
         SequencePanelControl.SetEditorDocument(document);
         SequencePanelControl.ClearUndoHistory();
         PlaybackPanelControl.SetPlaybackControls(document.Playback);
@@ -774,6 +1442,7 @@ public partial class MainWindow : Window
             SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             OnStepSelectionChanged(SequencePanelControl.SelectedStepIndex);
             CheckAndWarnConflicts(document);
+            ScheduleAutoSave();
             if (!string.IsNullOrWhiteSpace(status))
             {
                 SetStatus(status);
@@ -788,7 +1457,32 @@ public partial class MainWindow : Window
     private MacroDocument GetDocumentWithPlayback()
     {
         ApplyPlaybackSettingsToEditor();
-        return SequencePanelControl.GetCurrentDocument();
+        var document = SequencePanelControl.GetCurrentDocument();
+        var merged = document with { Conditions = ConditionPanel.Conditions.ToList() };
+        if (!ConditionsMatch(document.EffectiveConditions, merged.EffectiveConditions))
+        {
+            SequencePanelControl.SetEditorDocument(merged);
+        }
+
+        return merged;
+    }
+
+    private static bool ConditionsMatch(IReadOnlyList<ConditionalDirective> first, IReadOnlyList<ConditionalDirective> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < first.Count; i++)
+        {
+            if (!Equals(first[i], second[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void ApplyPlaybackSettingsToEditor()
@@ -991,7 +1685,7 @@ public partial class MainWindow : Window
     private void OpenMacro_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = L("MacroFileFilter"), Title = L("OpenMacroTitle") };
-        if (dialog.ShowDialog(this) == true)
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) == true)
         {
             SequencePanelControl.EditorText = File.ReadAllText(dialog.FileName);
             SequencePanelControl.ValidateCurrentMacro();
@@ -1003,7 +1697,7 @@ public partial class MainWindow : Window
     private void SaveMacro_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new SaveFileDialog { Filter = L("MacroFileFilter"), Title = L("SaveMacroTitle"), DefaultExt = ".mcrx" };
-        if (dialog.ShowDialog(this) == true)
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) == true)
         {
             ApplyPlaybackSettingsToEditor();
             File.WriteAllText(dialog.FileName, SequencePanelControl.EditorText);
@@ -1040,8 +1734,8 @@ public partial class MainWindow : Window
     {
         Title = L("AppTitle");
         LanguageLabelText.Text = L("Language");
-        OpenButton.Content = L("Open");
-        SaveButton.Content = L("Save");
+        OpenButton.Content = L("OpenMacroFile");
+        SaveButton.Content = L("SaveMacroAs");
         WindowMenuButton.Content = L("WorkspaceWindowMenu");
         ShowPanelsMenuItem.Header = L("WorkspaceShow");
         FloatPanelsMenuItem.Header = L("WorkspaceFloat");
@@ -1098,9 +1792,12 @@ public partial class MainWindow : Window
         SetSubMenuHeaders(FloatPanelsMenuItem);
         SetSubMenuHeaders(DockPanelsMenuItem);
 
-        ConditionSection.Header = WorkspaceTitle("WorkspacePanelConditions");
-        ActionPaletteSection.Header = WorkspaceTitle("WorkspacePanelActions");
-        PlaybackSection.Header = WorkspaceTitle("WorkspacePanelPlayback");
+        LibraryToolTitle.Text = WorkspaceTitle("WorkspacePanelLibrary");
+        SequenceToolTitle.Text = WorkspaceTitle("WorkspacePanelSequence");
+        ConditionToolTitle.Text = WorkspaceTitle("WorkspacePanelConditions");
+        ActionPaletteToolTitle.Text = WorkspaceTitle("WorkspacePanelActions");
+        PlaybackToolTitle.Text = WorkspaceTitle("WorkspacePanelPlayback");
+        JsonToolTitle.Text = WorkspaceTitle("AdvancedJson");
 
         SetWorkspaceToolButtonText(LibraryToolButton, WorkspaceTitle("WorkspacePanelLibrary"));
         SetWorkspaceToolButtonText(SequenceToolButton, WorkspaceTitle("WorkspacePanelSequence"));
@@ -1157,6 +1854,7 @@ public partial class MainWindow : Window
             RefreshConditionStepChoices();
             SequencePanelControl.SetConditionHighlights(updated.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             CheckAndWarnConflicts(updated);
+            ScheduleAutoSave();
         }
         catch (Exception ex)
         {
@@ -1231,26 +1929,53 @@ public partial class MainWindow : Window
         _ => "fixedCount"
     };
 
+    private static string ToPrecisionModeText(PrecisionMode mode) => mode switch
+    {
+        PrecisionMode.Balanced => "balanced",
+        PrecisionMode.UltraLowJitter => "ultraLowJitter",
+        _ => "extremeDuringPlayback"
+    };
+
     private static string WorkspaceTitle(string key) => LocalizationService.Get(key);
     private static string L(string key) => LocalizationService.Get(key);
 
     private sealed class WorkspacePanelRegistration
     {
-        public WorkspacePanelRegistration(string id, string title, ContentControl dockHost, FrameworkElement element)
+        public WorkspacePanelRegistration(
+            string id,
+            string title,
+            FrameworkElement dockContainer,
+            ContentControl dockHost,
+            FrameworkElement element,
+            WorkspaceDockRegion defaultDockRegion,
+            double defaultDockedSize,
+            int defaultOrder,
+            bool defaultIsVisible)
         {
             Id = id;
             Title = title;
+            DockContainer = dockContainer;
             DockHost = dockHost;
             Element = element;
+            DefaultDockRegion = defaultDockRegion;
+            DefaultDockedSize = defaultDockedSize;
+            DefaultOrder = defaultOrder;
+            DefaultIsVisible = defaultIsVisible;
         }
 
         public string Id { get; }
         public string Title { get; set; }
+        public FrameworkElement DockContainer { get; }
         public ContentControl DockHost { get; }
         public FrameworkElement Element { get; }
+        public WorkspaceDockRegion DefaultDockRegion { get; }
+        public double DefaultDockedSize { get; }
+        public int DefaultOrder { get; }
+        public bool DefaultIsVisible { get; }
         public WorkspacePanelWindow? Window { get; set; }
         public bool IsVisible { get; set; }
         public bool IsFloating { get; set; }
+        public WorkspaceDockRegion DockRegion { get; set; }
         public WorkspacePanelLayout? SavedLayout { get; set; }
     }
 

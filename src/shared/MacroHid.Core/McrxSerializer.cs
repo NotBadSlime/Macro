@@ -41,13 +41,18 @@ public static class McrxSerializer
                 PlaybackMode.HoldLoop => "holdLoop",
                 _ => "fixedCount"
             },
-            ["count"] = playback.Count,
-            ["precision"] = playback.Precision switch
+            ["count"] = playback.Count
+        };
+
+        if (playback.Precision != PlaybackSettings.Default.Precision)
+        {
+            result["precision"] = playback.Precision switch
             {
                 PrecisionMode.Balanced => "balanced",
+                PrecisionMode.UltraLowJitter => "ultraLowJitter",
                 _ => "extremeDuringPlayback"
-            }
-        };
+            };
+        }
 
         if (playback.Trigger is not null)
         {
@@ -57,6 +62,11 @@ public static class McrxSerializer
         if (!string.IsNullOrWhiteSpace(playback.ProcessFilter))
         {
             result["processFilter"] = playback.ProcessFilter.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(playback.AffinityMask))
+        {
+            result["affinityMask"] = PlaybackAffinityMask.NormalizeOrThrow(playback.AffinityMask);
         }
 
         return result;

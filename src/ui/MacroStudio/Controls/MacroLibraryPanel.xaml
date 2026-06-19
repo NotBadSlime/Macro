@@ -15,6 +15,10 @@
                            VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1">
                     <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding Title}"
                                    FontWeight="{Binding Weight}"
                                    Foreground="{Binding TitleBrush}"
@@ -30,6 +34,17 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
+                        <Border Grid.Column="1"
+                                Background="{Binding ListeningBadgeBrush}"
+                                CornerRadius="9"
+                                Padding="7,2"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding ListeningBadgeVisibility}">
+                            <TextBlock Text="{Binding ListeningBadgeText}"
+                                       Foreground="White"
+                                       FontSize="10" />
+                        </Border>
                         <TextBox x:Name="RenameTextBox"
                                  MinHeight="24"
                                  Margin="-4,-3,0,-2"
@@ -83,6 +98,61 @@
                 <Border Height="1"
                         Margin="0,2,0,10"
                         Background="{DynamicResource PanelBorder}" />
+                <TextBlock x:Name="GlobalRuntimeTitleText"
+                           Text="全局运行"
+                           Style="{StaticResource FieldLabel}"
+                           Margin="0,0,0,8" />
+                <TextBlock x:Name="PrecisionModeLabelText"
+                           Text="精度模式"
+                           Style="{StaticResource FieldLabel}" />
+                <ComboBox x:Name="PrecisionModeBox"
+                          Height="30"
+                          Margin="0,0,0,8"
+                          SelectionChanged="PrecisionModeBox_SelectionChanged">
+                    <ComboBoxItem Tag="balanced" Content="基础" />
+                    <ComboBoxItem Tag="extremeDuringPlayback" Content="高性能" IsSelected="True" />
+                    <ComboBoxItem Tag="ultraLowJitter" Content="极限" />
+                </ComboBox>
+                <TextBlock x:Name="AffinityMaskLabelText"
+                           Text="极限核心掩码"
+                           Style="{StaticResource FieldLabel}" />
+                <TextBox x:Name="AffinityMaskBox"
+                         Height="30"
+                         TextChanged="RuntimePrecision_TextChanged"
+                         ToolTip="仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。" />
+                <TextBlock x:Name="AffinityMaskHelpText"
+                           Text="仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="10"
+                           TextWrapping="Wrap"
+                           Margin="0,4,0,10" />
+                <Border Height="1"
+                        Margin="0,2,0,10"
+                        Background="{DynamicResource PanelBorder}" />
+                <TextBlock x:Name="ListeningTitleText"
+                           Text="监听"
+                           Style="{StaticResource FieldLabel}"
+                           Margin="0,0,0,8" />
+                <Grid x:Name="ListenAllButtonsGrid" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="StartAllListeningButton"
+                            Grid.Column="0"
+                            MinWidth="0"
+                            Content="一键监听"
+                            Click="StartAllListening_Click" />
+                    <Button x:Name="StopAllListeningButton"
+                            Grid.Column="2"
+                            MinWidth="0"
+                            Content="停止监听"
+                            Click="StopAllListening_Click" />
+                </Grid>
+                <Border Height="1"
+                        Margin="0,2,0,10"
+                        Background="{DynamicResource PanelBorder}" />
                 <TextBlock x:Name="ImportExportTitleText"
                            Text="导入 / 导出"
                            Style="{StaticResource FieldLabel}"
@@ -117,6 +187,9 @@
 
             <TreeView x:Name="MacroTreeView"
                       ItemTemplate="{StaticResource MacroTreeNodeTemplate}"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.CanContentScroll="False"
                       SelectedItemChanged="MacroTreeView_SelectedItemChanged"
                       PreviewMouseMove="MacroTreeView_PreviewMouseMove"
                       PreviewMouseRightButtonDown="MacroTreeView_PreviewMouseRightButtonDown"

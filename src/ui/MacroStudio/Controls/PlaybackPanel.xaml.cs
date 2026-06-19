@@ -1,8 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using MacroHid.Core;
 using MacroHid.Runtime;
+using MacroStudio.Services;
 
 namespace MacroStudio.Controls;
 
@@ -10,6 +12,9 @@ public partial class PlaybackPanel : UserControl
 {
     private bool capturingTrigger;
     private bool updatingPlaybackControls;
+    private readonly DispatcherTimer triggerCaptureCommitTimer;
+    private readonly List<HidKey> capturedTriggerKeys = [];
+    private readonly List<MacroHid.Core.MouseButton> capturedTriggerMouseButtons = [];
 
     public event Action? StartListeningRequested;
     public event Action? StopListeningRequested;
@@ -20,6 +25,11 @@ public partial class PlaybackPanel : UserControl
     public PlaybackPanel()
     {
         InitializeComponent();
+        triggerCaptureCommitTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(450)
+        };
+        triggerCaptureCommitTimer.Tick += (_, _) => CommitTriggerCapture();
     }
 
     public string TriggerText => TriggerTextBox.Text.Trim();
@@ -55,6 +65,7 @@ public partial class PlaybackPanel : UserControl
                     break;
                 }
             }
+
             PlaybackCountTextBox.IsEnabled = settings.Mode == PlaybackMode.FixedCount;
         }
         finally
@@ -96,6 +107,7 @@ public partial class PlaybackPanel : UserControl
                 _ => item.Content
             };
         }
+
     }
 
     private void CaptureTrigger_Click(object sender, RoutedEventArgs e)
@@ -107,6 +119,8 @@ public partial class PlaybackPanel : UserControl
         }
 
         capturingTrigger = true;
+        capturedTriggerKeys.Clear();
+        capturedTriggerMouseButtons.Clear();
         updatingPlaybackControls = true;
         TriggerTextBox.Text = string.Empty;
         updatingPlaybackControls = false;
@@ -120,7 +134,7 @@ public partial class PlaybackPanel : UserControl
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (IsModifierKey(key))
         {
-            TriggerTextBox.Text = new HotkeyGesture(ReadCurrentModifiers(), HidKey.None).ToString();
+            UpdateTriggerCapturePreview(ReadCurrentModifiers());
             return;
         }
 
@@ -132,10 +146,13 @@ public partial class PlaybackPanel : UserControl
             return;
         }
 
-        var gesture = new HotkeyGesture(ReadCurrentModifiers(), hidKey);
-        TriggerTextBox.Text = gesture.ToString();
-        StopCapture();
-        NotifyPlaybackSettingsEdited();
+        if (!capturedTriggerKeys.Contains(hidKey))
+        {
+            capturedTriggerKeys.Add(hidKey);
+        }
+
+        UpdateTriggerCapturePreview(ReadCurrentModifiers());
+        ScheduleTriggerCaptureCommit();
         e.Handled = true;
     }
 
@@ -147,10 +164,11 @@ public partial class PlaybackPanel : UserControl
         var modifier = ModifierFromKey(key) | ReadCurrentModifiers();
         if (modifier == HidModifier.None) return;
 
-        var gesture = new HotkeyGesture(modifier, HidKey.None);
-        TriggerTextBox.Text = gesture.ToString();
-        StopCapture();
-        NotifyPlaybackSettingsEdited();
+        if (capturedTriggerKeys.Count == 0 && capturedTriggerMouseButtons.Count == 0)
+        {
+            TriggerTextBox.Text = new HotkeyGesture(modifier, HidKey.None).ToString();
+            CommitTriggerCapture();
+        }
         e.Handled = true;
     }
 
@@ -165,10 +183,13 @@ public partial class PlaybackPanel : UserControl
 
         if (button == MacroHid.Core.MouseButton.None) return;
 
-        var gesture = new HotkeyGesture(ReadCurrentModifiers(), HidKey.None, button);
-        TriggerTextBox.Text = gesture.ToString();
-        StopCapture();
-        NotifyPlaybackSettingsEdited();
+        if (!capturedTriggerMouseButtons.Contains(button))
+        {
+            capturedTriggerMouseButtons.Add(button);
+        }
+
+        UpdateTriggerCapturePreview(ReadCurrentModifiers());
+        ScheduleTriggerCaptureCommit();
         e.Handled = true;
     }
 
@@ -176,9 +197,46 @@ public partial class PlaybackPanel : UserControl
     {
         if (!capturingTrigger) return;
         capturingTrigger = false;
+        triggerCaptureCommitTimer.Stop();
         RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureTrigger_KeyDown));
         RemoveHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureTrigger_KeyUp));
         RemoveHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(CaptureTrigger_MouseDown));
+    }
+
+    private void UpdateTriggerCapturePreview(HidModifier modifiers)
+    {
+        updatingPlaybackControls = true;
+        try
+        {
+            TriggerTextBox.Text = new HotkeyGesture(ReadCurrentModifiers(), capturedTriggerKeys, capturedTriggerMouseButtons).ToString();
+        }
+        finally
+        {
+            updatingPlaybackControls = false;
+        }
+    }
+
+    private void ScheduleTriggerCaptureCommit()
+    {
+        triggerCaptureCommitTimer.Stop();
+        triggerCaptureCommitTimer.Start();
+    }
+
+    private void CommitTriggerCapture()
+    {
+        if (!capturingTrigger)
+        {
+            triggerCaptureCommitTimer.Stop();
+            return;
+        }
+
+        triggerCaptureCommitTimer.Stop();
+        var currentText = TriggerTextBox.Text.Trim();
+        StopCapture();
+        if (!string.IsNullOrWhiteSpace(currentText))
+        {
+            NotifyPlaybackSettingsEdited();
+        }
     }
 
     private void PlaybackModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

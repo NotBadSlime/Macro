@@ -44,6 +44,31 @@ function Copy-DirectoryIfExists([string]$Source, [string]$Destination) {
     Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
 }
 
+function Copy-NativePlaybackDll([string]$DllPath, [string]$DestinationRoot) {
+    foreach ($component in @("MacroStudio", "MacroRunner", "LatencyProbe")) {
+        $destination = Join-Path $DestinationRoot $component
+        New-Item -ItemType Directory -Path $destination -Force | Out-Null
+        Copy-Item -LiteralPath $DllPath -Destination (Join-Path $destination "MacroHid.NativePlayback.dll") -Force
+    }
+}
+
+function Copy-WindowsOcrServer([string]$SourceRoot, [string]$DestinationRoot) {
+    foreach ($component in @("MacroStudio", "MacroRunner")) {
+        $destination = Join-Path $DestinationRoot $component
+        New-Item -ItemType Directory -Path $destination -Force | Out-Null
+        Copy-Item -Path (Join-Path $SourceRoot "*") -Destination $destination -Recurse -Force
+    }
+}
+
+function Assert-WindowsOcrServerCopied([string]$DestinationRoot) {
+    foreach ($component in @("MacroStudio", "MacroRunner")) {
+        $exe = Join-Path (Join-Path $DestinationRoot $component) "WindowsOcrServer.exe"
+        if (-not (Test-Path $exe)) {
+            throw "WindowsOcrServer.exe was not copied for ${component}: $exe"
+        }
+    }
+}
+
 function Remove-InstallerDebugArtifacts([string]$Root) {
     Get-ChildItem -Path $Root -Recurse -Include "*.pdb", "*.ilk" -File -ErrorAction SilentlyContinue |
         Remove-Item -Force
@@ -70,9 +95,16 @@ New-Item -ItemType Directory -Path $inputRoot, $outputRoot | Out-Null
 
 Push-Location $repoRoot
 try {
+    $nativeDll = & (Join-Path $PSScriptRoot "Build-NativePlayback.ps1") -Configuration $Configuration | Select-Object -Last 1
+
     dotnet publish "src\ui\MacroStudio\MacroStudio.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $inputRoot "MacroStudio")
     dotnet publish "src\tools\MacroRunner\MacroRunner.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $inputRoot "MacroRunner")
     dotnet publish "src\tools\LatencyProbe\LatencyProbe.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $inputRoot "LatencyProbe")
+    $ocrServerOutput = Join-Path $inputRoot "WindowsOcrServer"
+    dotnet publish "src\tools\WindowsOcrServer\WindowsOcrServer.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output $ocrServerOutput
+    Copy-NativePlaybackDll $nativeDll $inputRoot
+    Copy-WindowsOcrServer $ocrServerOutput $inputRoot
+    Assert-WindowsOcrServerCopied $inputRoot
 
     Copy-DirectoryIfExists (Join-Path $repoRoot "scripts") (Join-Path $inputRoot "scripts")
     Copy-DirectoryIfExists (Join-Path $repoRoot "samples") (Join-Path $inputRoot "samples")

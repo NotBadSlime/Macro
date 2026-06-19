@@ -42,13 +42,16 @@ public static class McrxParser
         var precision = ParseEnum<PrecisionMode>(
             GetString(playbackElement, "precision", PlaybackSettings.Default.Precision.ToString()),
             "precision mode");
+        var affinityMask = playbackElement.TryGetProperty("affinityMask", out var affinityMaskElement)
+            ? PlaybackAffinityMask.NormalizeOrThrow(GetScalarString(affinityMaskElement))
+            : PlaybackSettings.Default.AffinityMask;
 
         if (count < 1)
         {
             throw new JsonException("'playback.count' must be at least 1.");
         }
 
-        return new PlaybackSettings(trigger, mode, count, processFilter.Trim(), precision);
+        return new PlaybackSettings(trigger, mode, count, processFilter.Trim(), precision, affinityMask);
     }
 
     public static HotkeyGesture ParseHotkeyGesture(string? value)
@@ -59,8 +62,8 @@ public static class McrxParser
         }
 
         var modifiers = HidModifier.None;
-        HidKey? key = null;
-        MouseButton mouseButton = MouseButton.None;
+        var keys = new List<HidKey>();
+        var mouseButtons = new List<MouseButton>();
         foreach (var rawPart in value.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (TryParseModifier(rawPart, out var modifier))
@@ -71,29 +74,26 @@ public static class McrxParser
 
             if (TryParseTriggerMouseButton(rawPart, out var parsedMouseButton))
             {
-                if (mouseButton != MouseButton.None || key is not null)
+                if (!mouseButtons.Contains(parsedMouseButton))
                 {
-                    throw new JsonException($"Playback trigger '{value}' contains more than one non-modifier key or mouse button.");
+                    mouseButtons.Add(parsedMouseButton);
                 }
-
-                mouseButton = parsedMouseButton;
                 continue;
             }
 
-            if (key is not null)
+            var parsedKey = ParseHidKey(rawPart);
+            if (!keys.Contains(parsedKey))
             {
-                throw new JsonException($"Playback trigger '{value}' contains more than one non-modifier key.");
+                keys.Add(parsedKey);
             }
-
-            key = ParseHidKey(rawPart);
         }
 
-        if (key is null && mouseButton == MouseButton.None && modifiers == HidModifier.None)
+        if (keys.Count == 0 && mouseButtons.Count == 0 && modifiers == HidModifier.None)
         {
             throw new JsonException($"Playback trigger '{value}' must include a key, mouse button, or modifier.");
         }
 
-        return new HotkeyGesture(modifiers, key ?? HidKey.None, mouseButton);
+        return new HotkeyGesture(modifiers, keys, mouseButtons);
     }
 
     private static IReadOnlyList<MacroStep> ParseSteps(JsonElement stepsElement)
@@ -380,6 +380,17 @@ public static class McrxParser
     private static string? GetString(JsonElement element, string name, string? defaultValue)
     {
         return element.TryGetProperty(name, out var property) ? property.GetString() : defaultValue;
+    }
+
+    private static string? GetScalarString(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.GetRawText(),
+            JsonValueKind.Null => null,
+            _ => throw new JsonException("Expected a string or number value.")
+        };
     }
 
     private static IReadOnlyList<ConditionalDirective> ParseConditions(JsonElement conditionsElement)

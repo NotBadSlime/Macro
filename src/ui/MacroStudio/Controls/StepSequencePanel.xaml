@@ -130,15 +130,51 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <DockPanel x:Name="ToolbarPanel" Margin="4,0,4,8">
-            <TextBlock x:Name="SequenceTitleText" Text="序列" Style="{StaticResource PanelTitle}" />
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button x:Name="StepUndoButton" MinWidth="58" Content="撤回" Click="StepUndo_Click" IsEnabled="False" />
-                <Button x:Name="StepUpButton" MinWidth="52" Content="上移" Click="StepUp_Click" />
-                <Button x:Name="StepDownButton" MinWidth="64" Content="下移" Click="StepDown_Click" />
-                <Button x:Name="StepDeleteButton" MinWidth="72" Content="删除" Style="{StaticResource DangerButton}" Click="StepDelete_Click" />
-                <Button x:Name="StepClearButton" MinWidth="72" Content="清空" Style="{StaticResource DangerButton}" Click="StepClear_Click" />
-            </StackPanel>
+        <DockPanel x:Name="ToolbarPanel" Margin="4,0,4,10" LastChildFill="True">
+            <Border x:Name="SequenceToolbarGroup"
+                    DockPanel.Dock="Right"
+                    Padding="4"
+                    Background="{DynamicResource ControlBackground}"
+                    BorderBrush="{DynamicResource ControlBorder}"
+                    BorderThickness="1"
+                    CornerRadius="14">
+                <StackPanel x:Name="SequenceToolbarButtonStrip" Orientation="Horizontal">
+                    <Button x:Name="StepUndoButton"
+                            Style="{StaticResource SequenceToolbarIconButton}"
+                            Content="&#xE7A7;"
+                            ToolTip="{Binding Text, ElementName=StepUndoText}"
+                            Click="StepUndo_Click"
+                            IsEnabled="False" />
+                    <Button x:Name="StepUpButton"
+                            Style="{StaticResource SequenceToolbarIconButton}"
+                            Content="&#xE74A;"
+                            ToolTip="{Binding Text, ElementName=StepUpText}"
+                            Click="StepUp_Click" />
+                    <Button x:Name="StepDownButton"
+                            Style="{StaticResource SequenceToolbarIconButton}"
+                            Content="&#xE74B;"
+                            ToolTip="{Binding Text, ElementName=StepDownText}"
+                            Click="StepDown_Click" />
+                    <Button x:Name="StepDeleteButton"
+                            Style="{StaticResource SequenceToolbarDangerIconButton}"
+                            Content="&#xE74D;"
+                            ToolTip="{Binding Text, ElementName=StepDeleteText}"
+                            Click="StepDelete_Click" />
+                    <Button x:Name="StepClearButton"
+                            Style="{StaticResource SequenceToolbarDangerIconButton}"
+                            Content="&#xE894;"
+                            ToolTip="{Binding Text, ElementName=StepClearText}"
+                            Click="StepClear_Click" />
+                </StackPanel>
+            </Border>
+            <Grid>
+                <TextBlock x:Name="SequenceTitleText" Text="序列" Style="{StaticResource PanelTitle}" />
+                <TextBlock x:Name="StepUndoText" Text="撤回" Visibility="Collapsed" />
+                <TextBlock x:Name="StepUpText" Text="上移" Visibility="Collapsed" />
+                <TextBlock x:Name="StepDownText" Text="下移" Visibility="Collapsed" />
+                <TextBlock x:Name="StepDeleteText" Text="删除" Visibility="Collapsed" />
+                <TextBlock x:Name="StepClearText" Text="清空" Visibility="Collapsed" />
+            </Grid>
         </DockPanel>
 
         <Grid Grid.Row="1">
@@ -159,7 +195,7 @@
                     Panel.ZIndex="20"
                     BorderBrush="{DynamicResource Accent}"
                     BorderThickness="1"
-                    Background="#22007AFF"
+                    Background="{StaticResource SelectionBandBrush}"
                     CornerRadius="6"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Top"
@@ -170,6 +206,7 @@
                 </Border.RenderTransform>
             </Border>
             <Border x:Name="DropIndicator"
+                    Tag="{StaticResource DropIndicatorPulseStoryboard}"
                     Panel.ZIndex="30"
                     Height="4"
                     Margin="10,0"

@@ -40,6 +40,23 @@ public static class InputActionCompiler
         Func<string, MacroDocument?>? macroResolver = null,
         Func<WaitStep, TimeSpan>? waitDurationSampler = null)
     {
+        return CompileWithDuration(
+            document,
+            startTick,
+            qpcFrequency,
+            pixelEvaluator,
+            macroResolver,
+            waitDurationSampler).Actions;
+    }
+
+    public static (IReadOnlyList<ScheduledInputAction> Actions, long DurationTicks) CompileWithDuration(
+        MacroDocument document,
+        long startTick,
+        long qpcFrequency,
+        Func<PixelCondition, bool>? pixelEvaluator = null,
+        Func<string, MacroDocument?>? macroResolver = null,
+        Func<WaitStep, TimeSpan>? waitDurationSampler = null)
+    {
         if (qpcFrequency <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(qpcFrequency), "QPC frequency must be positive.");
@@ -48,7 +65,7 @@ public static class InputActionCompiler
         var actions = new List<ScheduledInputAction>();
         var elapsedTicks = 0L;
         CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, ref elapsedTicks, depth: 0);
-        return actions;
+        return (actions, Math.Max(0, elapsedTicks));
     }
 
     private static void CompileSteps(

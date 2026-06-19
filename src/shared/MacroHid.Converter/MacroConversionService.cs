@@ -583,60 +583,30 @@ public static class MacroConversionService
             if (type == "2" && current.Element("MouseEvent") is { } mouse)
             {
                 var state = ToInt(ElementValue(mouse, "State", "-1"), -1);
-                if (state != 0)
+                if (state is not 0 and not 1)
                 {
                     continue;
                 }
 
                 var button = RazerMouseButton(ToInt(ElementValue(mouse, "MouseButton")));
-                var holdMs = 0.0;
-                if (index + 1 < events.Count && ElementValue(events[index + 1], "Type") == "0")
-                {
-                    holdMs = ToMillisecondsFromSeconds(ElementValue(events[index + 1], "Number"));
-                    index++;
-                }
-
-                if (index + 1 < events.Count && IsRazerMouseUp(events[index + 1], button))
-                {
-                    index++;
-                }
-                else
-                {
-                    diagnostics.Warning("razer.mouseReleaseMissing", "Razer mouse down event had no matching release; imported as a click.");
-                }
-
-                steps.Add(new MouseButtonStep(button, ButtonActionKind.Click, TimeSpan.FromMilliseconds(holdMs)));
+                var kind = state == 0 ? ButtonActionKind.Down : ButtonActionKind.Up;
+                steps.Add(new MouseButtonStep(button, kind, TimeSpan.Zero));
                 continue;
             }
 
             if (type == "1" && current.Element("KeyEvent") is { } keyEvent)
             {
                 var state = ToInt(ElementValue(keyEvent, "State", "-1"), -1);
-                if (state != 0)
+                if (state is not 0 and not 1)
                 {
                     continue;
                 }
 
                 var makecode = ToInt(ElementValue(keyEvent, "Makecode"));
-                var holdMs = 0.0;
-                if (index + 1 < events.Count && ElementValue(events[index + 1], "Type") == "0")
-                {
-                    holdMs = ToMillisecondsFromSeconds(ElementValue(events[index + 1], "Number"));
-                    index++;
-                }
-
-                if (index + 1 < events.Count && IsRazerKeyUp(events[index + 1], makecode))
-                {
-                    index++;
-                }
-                else
-                {
-                    diagnostics.Warning("razer.keyReleaseMissing", $"Razer key makecode {makecode} had no matching release; imported as a tap.");
-                }
-
                 if (TryParseKey(KeyNameFromMakecode(makecode), out var key, out var modifiers))
                 {
-                    steps.Add(new KeyStep(KeyActionKind.Tap, key, modifiers, TimeSpan.FromMilliseconds(holdMs)));
+                    var kind = state == 0 ? KeyActionKind.Down : KeyActionKind.Up;
+                    steps.Add(new KeyStep(kind, key, modifiers, TimeSpan.Zero));
                 }
                 else
                 {

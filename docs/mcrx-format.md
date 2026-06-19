@@ -13,7 +13,8 @@
     "mode": "fixedCount",
     "count": 1,
     "processFilter": "notepad.exe",
-    "precision": "extremeDuringPlayback"
+    "precision": "extremeDuringPlayback",
+    "affinityMask": "0x1F"
   },
   "steps": [],
   "conditions": []
@@ -26,7 +27,8 @@
 - `mode`：`fixedCount`、`toggleLoop`、`holdLoop`。
 - `count`：`fixedCount` 的播放次数，最小为 1。
 - `processFilter`：可选。前台进程筛选，支持逗号、分号、竖线或换行分隔。
-- `precision`：`extremeDuringPlayback` 或 `balanced`。默认是 `extremeDuringPlayback`。
+- `precision`：`balanced`、`extremeDuringPlayback` 或 `ultraLowJitter`。UI 中分别显示为基础（0.5ms 目标）、高性能（0.25ms 目标）、极限（0.1ms 目标）。默认是 `extremeDuringPlayback`。
+- `affinityMask`：可选。仅建议在 `ultraLowJitter` 极限模式下使用，例如 `0x1F`。它会在播放期间临时限制进程可用 CPU 核心，并配合 native standby 预热，用于避开本机更容易产生调度尖峰的核心组合。可用 `scripts\Tune-LatencyAffinity.ps1` 生成推荐值。
 
 ### 基础步骤 steps
 
@@ -129,9 +131,9 @@
 支持的条件类型：
 
 - `pixel`：颜色匹配。
-- `template`：模板匹配，使用 `templateData` base64 和 `threshold`。
-- `pixelHash`：像素哈希匹配，使用 `referenceHash` base64 和 `similarity`。
 - `text`：文字识别匹配，使用 `expectedText`、`contains` 和 `language`。
+
+兼容说明：旧文件中的 `template` 和 `pixelHash` 仍可被解析，但 MacroStudio 不再提供新建或编辑入口；打开后建议转换为 `pixel` 或 `text` 条件。
 
 ## English
 
@@ -146,7 +148,8 @@
     "mode": "fixedCount",
     "count": 1,
     "processFilter": "notepad.exe",
-    "precision": "extremeDuringPlayback"
+    "precision": "extremeDuringPlayback",
+    "affinityMask": "0x1F"
   },
   "steps": [],
   "conditions": []
@@ -159,7 +162,8 @@
 - `mode`: `fixedCount`, `toggleLoop`, or `holdLoop`.
 - `count`: run count for `fixedCount`, minimum 1.
 - `processFilter`: optional foreground process filter, separated by commas, semicolons, pipes, or new lines.
-- `precision`: `extremeDuringPlayback` or `balanced`. Default is `extremeDuringPlayback`.
+- `precision`: `balanced`, `extremeDuringPlayback`, or `ultraLowJitter`. The UI labels are Basic (0.5ms target), High Performance (0.25ms target), and Extreme (0.1ms target). The default is `extremeDuringPlayback`.
+- `affinityMask`: optional and mainly intended for `ultraLowJitter`, for example `0x1F`. During playback it temporarily restricts the process to the selected CPU cores and works with native standby warm-up to avoid local core groups that produce larger scheduler spikes. Use `scripts\Tune-LatencyAffinity.ps1` to find a recommended value.
 
 ### Base steps
 
@@ -262,6 +266,6 @@ The recommended condition model is the top-level `conditions` array. Each condit
 Supported condition types:
 
 - `pixel`: color match.
-- `template`: template match with `templateData` base64 and `threshold`.
-- `pixelHash`: pixel hash match with `referenceHash` base64 and `similarity`.
 - `text`: OCR/text match with `expectedText`, `contains`, and `language`.
+
+Compatibility note: legacy `template` and `pixelHash` conditions can still be parsed, but MacroStudio no longer exposes UI for creating or editing them. Convert them to `pixel` or `text` conditions when editing.

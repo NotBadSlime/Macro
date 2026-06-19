@@ -1,92 +1,234 @@
 <UserControl x:Class="MacroStudio.Controls.ActionPalettePanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
+             Tag="{StaticResource ActionPaletteDragAdornerStyle}"
+             SizeChanged="ActionPalette_SizeChanged">
     <StackPanel Margin="2,0">
-            <TextBlock x:Name="AddTitleText" Text="添加" Style="{StaticResource PanelTitle}" Margin="0,0,0,12" />
-            <Button x:Name="AddDelayButton" Tag="Delay" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+        <TextBlock x:Name="AddTitleText"
+                   Text="添加"
+                   Style="{StaticResource PanelTitle}"
+                   Margin="0,0,0,12" />
+
+        <primitives:UniformGrid x:Name="ActionCommandGrid" Columns="1">
+            <Button x:Name="AddDelayButton"
+                    Tag="Delay"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="44" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="D" Foreground="{DynamicResource SecondaryText}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="AddDelayText" Grid.Column="1" Text="延迟" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <TextBlock Text="&#xE823;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddDelayText" Text="延迟" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddDelayHintText" Text="固定或随机等待" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
                 </Grid>
             </Button>
-            <Button x:Name="AddKeyboardButton" Tag="Keyboard" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+
+            <Button x:Name="AddKeyboardButton"
+                    Tag="Keyboard"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="44" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="K" Foreground="{DynamicResource Accent}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="AddKeyboardText" Grid.Column="1" Text="键盘功能" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#EAF3FF">
+                        <TextBlock Text="&#xE765;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddKeyboardText" Text="键盘功能" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddKeyboardHintText" Text="按下、抬起或输入" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
                 </Grid>
             </Button>
-            <Button x:Name="AddMouseButton" Tag="MouseButton" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+
+            <Button x:Name="AddMouseButton"
+                    Tag="MouseButton"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="44" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="M" Foreground="{DynamicResource AccentOrange}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="AddMouseText" Grid.Column="1" Text="鼠标按键" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#FFF4E0">
+                        <TextBlock Text="&#xE962;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource AccentOrange}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddMouseText" Text="鼠标按键" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddMouseHintText" Text="点击、按住与坐标" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
                 </Grid>
             </Button>
-            <Button x:Name="AddMouseMoveButton" Tag="MouseMove" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+
+            <Button x:Name="AddMouseMoveButton"
+                    Tag="MouseMove"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="44" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="XY" Foreground="{DynamicResource AccentOrange}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="AddMouseMoveText" Grid.Column="1" Text="鼠标移动" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#FFF4E0">
+                        <TextBlock Text="&#xE8AB;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource AccentOrange}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddMouseMoveText" Text="鼠标移动" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddMouseMoveHintText" Text="相对或绝对移动" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
                 </Grid>
             </Button>
-            <Button x:Name="AddWheelButton" Tag="MouseWheel" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+
+            <Button x:Name="AddWheelButton"
+                    Tag="MouseWheel"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="44" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="W" Foreground="{DynamicResource AccentBlue}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="AddWheelText" Grid.Column="1" Text="滚轮" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#EAF3FF">
+                        <TextBlock Text="&#xE7F4;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource AccentBlue}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddWheelText" Text="滚轮" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddWheelHintText" Text="垂直/水平滚动" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
                 </Grid>
             </Button>
-            <Button x:Name="AddTextButton" Tag="Text" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+
+            <Button x:Name="AddTextButton"
+                    Tag="Text"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="44" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="T" Foreground="{DynamicResource AccentBlue}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="AddTextActionText" Grid.Column="1" Text="文本功能" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#EAF3FF">
+                        <TextBlock Text="&#xE8D2;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource AccentBlue}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddTextActionText" Text="文本功能" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddTextHintText" Text="发送 Unicode 文本" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
                 </Grid>
             </Button>
-            <Button x:Name="AddMacroButton" Tag="Macro" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+
+            <Button x:Name="AddMacroButton"
+                    Tag="Macro"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="44" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="M" Foreground="{DynamicResource Accent}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="AddMacroText" Grid.Column="1" Text="宏" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#EAF8EF">
+                        <TextBlock Text="&#xE74C;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddMacroText" Text="宏" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddMacroActionHintText" Text="调用宏数据库条目" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
                 </Grid>
             </Button>
-            <Button x:Name="AddLoopButton" Tag="Loop" Style="{StaticResource ActionButton}" Click="ActionPalette_Click" PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown" PreviewMouseMove="ActionPalette_PreviewMouseMove">
+
+            <Button x:Name="AddLoopButton"
+                    Tag="Loop"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="44" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="R" Foreground="{DynamicResource Danger}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="AddLoopText" Grid.Column="1" Text="循环" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#FFEDEE">
+                        <TextBlock Text="&#xE8EE;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Danger}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddLoopText" Text="循环" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddLoopHintText" Text="重复一组步骤" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
                 </Grid>
             </Button>
-            <TextBlock x:Name="AddMacroHintText"
-                       Foreground="{DynamicResource SecondaryText}"
-                       TextWrapping="Wrap"
-                       Margin="0,4,0,0"
-                       Text="把左侧宏拖到序列里，可以复制它的步骤。" />
+        </primitives:UniformGrid>
+
+        <TextBlock x:Name="DragHint"
+                   Foreground="{DynamicResource SecondaryText}"
+                   TextWrapping="Wrap"
+                   Margin="2,6,2,0"
+                   Text="点击添加，或拖到序列的目标位置。" />
+        <TextBlock x:Name="AddMacroHintText"
+                   Foreground="{DynamicResource SecondaryText}"
+                   TextWrapping="Wrap"
+                   Margin="2,3,2,0"
+                   Text="把左侧宏拖到序列里，可以复制它的步骤。" />
     </StackPanel>
 </UserControl>

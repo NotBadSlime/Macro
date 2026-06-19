@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using MacroHid.Converter;
@@ -20,6 +21,9 @@ public partial class MacroLibraryPanel : UserControl
     private string? selectedFolder;
     private MacroLibraryClipboardItem? clipboard;
     private MacroLibraryTreeNode? renamingNode;
+    private bool updatingRuntimePrecisionControls;
+    private IReadOnlyDictionary<string, MacroLibraryListenState> listeningStates =
+        new Dictionary<string, MacroLibraryListenState>(StringComparer.OrdinalIgnoreCase);
 
     public event Action<string>? MacroSelected;
     public event Action<string>? MacroDuplicated;
@@ -28,6 +32,9 @@ public partial class MacroLibraryPanel : UserControl
     public event Action<MacroDocument>? ImportApplied;
     public event Func<MacroDocument>? DocumentRequested;
     public event Action<string>? ResultMessage;
+    public event Action? StartListeningAllRequested;
+    public event Action? StopListeningAllRequested;
+    public event Action? PrecisionSettingsEdited;
 
     public MacroLibraryPanel()
     {
@@ -50,6 +57,14 @@ public partial class MacroLibraryPanel : UserControl
         CopyMacroButton.Content = L("Copy");
         PasteMacroButton.Content = L("Paste");
         DeleteMacroButton.Content = L("Delete");
+        GlobalRuntimeTitleText.Text = L("GlobalRuntime");
+        PrecisionModeLabelText.Text = L("PrecisionMode");
+        AffinityMaskLabelText.Text = L("AffinityMask");
+        AffinityMaskHelpText.Text = L("AffinityMaskHelp");
+        AffinityMaskBox.ToolTip = L("AffinityMaskHelp");
+        ListeningTitleText.Text = L("Listening");
+        StartAllListeningButton.Content = L("StartListeningAll");
+        StopAllListeningButton.Content = L("StopListeningAll");
         RenameMenuItem.Header = L("Rename");
         CopyMenuItem.Header = L("Copy");
         PasteMenuItem.Header = L("Paste");
@@ -70,10 +85,62 @@ public partial class MacroLibraryPanel : UserControl
                 _ => L("SortName")
             };
         }
+
+        foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
+        {
+            item.Content = item.Tag?.ToString() switch
+            {
+                "balanced" => L("PrecisionBalanced"),
+                "extremeDuringPlayback" => L("PrecisionExtremeDuringPlayback"),
+                "ultraLowJitter" => L("PrecisionUltraLowJitter"),
+                _ => item.Content
+            };
+        }
+    }
+
+    public string AffinityMaskText => AffinityMaskBox.Text.Trim();
+
+    public PrecisionMode GetSelectedPrecisionMode()
+    {
+        var selected = PrecisionModeBox.SelectedItem as ComboBoxItem;
+        var value = selected?.Tag?.ToString() ?? "extremeDuringPlayback";
+        return value switch
+        {
+            "balanced" => PrecisionMode.Balanced,
+            "ultraLowJitter" => PrecisionMode.UltraLowJitter,
+            _ => PrecisionMode.ExtremeDuringPlayback
+        };
+    }
+
+    public void SetRuntimePrecisionControls(RuntimePrecisionSettings settings)
+    {
+        updatingRuntimePrecisionControls = true;
+        try
+        {
+            AffinityMaskBox.Text = settings.AffinityMask;
+            foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
+            {
+                if (string.Equals(item.Tag?.ToString(), ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
+                {
+                    PrecisionModeBox.SelectedItem = item;
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            updatingRuntimePrecisionControls = false;
+        }
     }
 
     public void RefreshList()
     {
+        RefreshTree();
+    }
+
+    public void SetListeningStates(IReadOnlyDictionary<string, MacroLibraryListenState> states)
+    {
+        listeningStates = new Dictionary<string, MacroLibraryListenState>(states, StringComparer.OrdinalIgnoreCase);
         RefreshTree();
     }
 
@@ -139,6 +206,26 @@ public partial class MacroLibraryPanel : UserControl
     private void LibrarySortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (MacroTreeView is not null) RefreshTree();
+    }
+
+    private void PrecisionModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        NotifyPrecisionSettingsEdited();
+    }
+
+    private void RuntimePrecision_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        NotifyPrecisionSettingsEdited();
+    }
+
+    private void NotifyPrecisionSettingsEdited()
+    {
+        if (updatingRuntimePrecisionControls)
+        {
+            return;
+        }
+
+        PrecisionSettingsEdited?.Invoke();
     }
 
     private void MacroTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -240,9 +327,20 @@ public partial class MacroLibraryPanel : UserControl
     private void MacroTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
-        if (MacroTreeView.SelectedItem is not MacroLibraryTreeNode { Item: { } item }) return;
+        var source = e.OriginalSource as DependencyObject;
+        if (IsScrollbarDragSource(source)) return;
+        var treeViewItem = FindVisualParent<TreeViewItem>(source);
+        if (treeViewItem is null) return;
+        if (treeViewItem.DataContext is not MacroLibraryTreeNode { Item: { } item }) return;
 
         DragDrop.DoDragDrop(MacroTreeView, new DataObject(MacroLibraryDragFormat, item.Id), DragDropEffects.Copy | DragDropEffects.Move);
+    }
+
+    private static bool IsScrollbarDragSource(DependencyObject? source)
+    {
+        return FindVisualParent<ScrollBar>(source) is not null
+            || FindVisualParent<Thumb>(source) is not null
+            || FindVisualParent<Track>(source) is not null;
     }
 
     private void MacroTreeView_Drop(object sender, DragEventArgs e)
@@ -324,6 +422,16 @@ public partial class MacroLibraryPanel : UserControl
         MacroDeleted?.Invoke(state.SelectedMacroId);
     }
 
+    private void StartAllListening_Click(object sender, RoutedEventArgs e)
+    {
+        StartListeningAllRequested?.Invoke();
+    }
+
+    private void StopAllListening_Click(object sender, RoutedEventArgs e)
+    {
+        StopListeningAllRequested?.Invoke();
+    }
+
     private void InitializeExportFormatBox()
     {
         ExportFormatBox.Items.Clear();
@@ -358,7 +466,7 @@ public partial class MacroLibraryPanel : UserControl
             Title = L("ImportMacroTitle")
         };
 
-        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
 
         try
         {
@@ -389,7 +497,7 @@ public partial class MacroLibraryPanel : UserControl
             Multiselect = true
         };
 
-        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
 
         razerModuleFiles = dialog.FileNames
             .Select(fileName => new AuxiliaryMacroFile(Path.GetFileName(fileName), File.ReadAllText(fileName)))
@@ -451,7 +559,7 @@ public partial class MacroLibraryPanel : UserControl
                 FileName = export.FileName
             };
 
-            if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
+            if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
 
             File.WriteAllText(dialog.FileName, export.Output);
             ConversionText.Text = FormatDiagnostics(export.Diagnostics);
@@ -707,7 +815,8 @@ public partial class MacroLibraryPanel : UserControl
     {
         MacroDocument? document = null;
         try { document = state!.LibraryStore.ReadMacro(item.Id); } catch { }
-        return MacroLibraryTreeNode.Macro(item, document);
+        listeningStates.TryGetValue(item.Id, out var listenState);
+        return MacroLibraryTreeNode.Macro(item, document, listenState);
     }
 
     private static void MarkSelectedMacro(IEnumerable<MacroLibraryTreeNode> nodes, string? selectedId)
@@ -750,6 +859,13 @@ public partial class MacroLibraryPanel : UserControl
             if (current is T match) return match;
         return null;
     }
+
+    private static string ToPrecisionModeText(PrecisionMode mode) => mode switch
+    {
+        PrecisionMode.Balanced => "balanced",
+        PrecisionMode.UltraLowJitter => "ultraLowJitter",
+        _ => "extremeDuringPlayback"
+    };
 
     private static string L(string key) => LocalizationService.Get(key);
     private static string LF(string key, params object[] args) => LocalizationService.Format(key, args);

@@ -92,6 +92,36 @@ public sealed class MacroLibraryListEntry
     }
 }
 
+public sealed record MacroLibraryListenState(
+    bool IsListening,
+    bool IsConflict,
+    string Trigger,
+    string Mode,
+    string ProcessFilter)
+{
+    public string BadgeText
+    {
+        get
+        {
+            if (IsConflict) return "冲突";
+            if (IsListening) return "监听中";
+            if (!string.IsNullOrWhiteSpace(Trigger)) return "未监听";
+            return string.Empty;
+        }
+    }
+
+    public Brush BadgeBrush
+    {
+        get
+        {
+            if (IsConflict) return new SolidColorBrush(Color.FromRgb(255, 59, 48));
+            if (IsListening) return new SolidColorBrush(Color.FromRgb(52, 199, 89));
+            if (!string.IsNullOrWhiteSpace(Trigger)) return new SolidColorBrush(Color.FromRgb(142, 142, 147));
+            return Brushes.Transparent;
+        }
+    }
+}
+
 public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
 {
     private static readonly Brush HeaderBrush = new SolidColorBrush(Color.FromRgb(110, 110, 115));
@@ -106,6 +136,7 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
         Brush accent,
         FontWeight weight,
         Brush titleBrush,
+        MacroLibraryListenState? listenState,
         IReadOnlyList<MacroLibraryTreeNode> children)
     {
         Item = item;
@@ -116,6 +147,7 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
         Accent = accent;
         Weight = weight;
         TitleBrush = titleBrush;
+        ListenState = listenState;
         Children = children;
         IsExpanded = IsFolder;
         RenameText = title;
@@ -129,6 +161,12 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
     public Brush Accent { get; }
     public FontWeight Weight { get; }
     public Brush TitleBrush { get; }
+    public MacroLibraryListenState? ListenState { get; }
+    public string ListeningBadgeText => ListenState?.BadgeText ?? string.Empty;
+    public Brush ListeningBadgeBrush => ListenState?.BadgeBrush ?? Brushes.Transparent;
+    public Visibility ListeningBadgeVisibility => string.IsNullOrWhiteSpace(ListeningBadgeText)
+        ? Visibility.Collapsed
+        : Visibility.Visible;
     public IReadOnlyList<MacroLibraryTreeNode> Children { get; }
     public bool IsFolder => Item is null;
     public bool IsExpanded { get; set; }
@@ -161,13 +199,21 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
 
     public static MacroLibraryTreeNode Folder(string title, IReadOnlyList<MacroLibraryTreeNode> children)
     {
-        return new MacroLibraryTreeNode(null, title, title, $"{children.Count} items", "F", FolderBrush, FontWeights.SemiBold, HeaderBrush, children);
+        return new MacroLibraryTreeNode(null, title, title, $"{children.Count} items", "F", FolderBrush, FontWeights.SemiBold, HeaderBrush, null, children);
     }
 
-    public static MacroLibraryTreeNode Macro(MacroLibraryItem item, MacroDocument? document)
+    public static MacroLibraryTreeNode Macro(MacroLibraryItem item, MacroDocument? document, MacroLibraryListenState? listenState = null)
     {
         var entry = MacroLibraryListEntry.Macro(item, document);
-        return new MacroLibraryTreeNode(item, item.Folder, entry.Title, entry.Subtitle, entry.Icon, entry.Accent, entry.Weight, entry.TitleBrush, []);
+        var subtitle = entry.Subtitle;
+        if (listenState is not null)
+        {
+            var parts = new[] { listenState.ProcessFilter, listenState.Trigger, listenState.Mode, subtitle }
+                .Where(part => !string.IsNullOrWhiteSpace(part));
+            subtitle = string.Join(" · ", parts);
+        }
+
+        return new MacroLibraryTreeNode(item, item.Folder, entry.Title, subtitle, entry.Icon, entry.Accent, entry.Weight, entry.TitleBrush, listenState, []);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

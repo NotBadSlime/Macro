@@ -31,7 +31,8 @@ public sealed record PlaybackExecutionOptions(
     int Count,
     PixelEvaluationMode PixelMode,
     bool NoWait,
-    PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback);
+    PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback,
+    string AffinityMask = "");
 
 public sealed record PlaybackRunResult(
     PlaybackRunStatus Status,
@@ -48,18 +49,29 @@ public interface IMacroPlaybackExecutor
         CancellationToken cancellationToken);
 }
 
-public sealed class MacroPlaybackController
+public sealed class MacroPlaybackController : IDisposable
 {
     private readonly object gate = new();
     private readonly MacroDocument document;
     private readonly IMacroPlaybackExecutor executor;
+    private readonly PlaybackExecutionOptions executionOptions;
     private CancellationTokenSource? activeCancellation;
     private Task<PlaybackRunResult>? activeRun;
 
-    public MacroPlaybackController(MacroDocument document, IMacroPlaybackExecutor executor)
+    public MacroPlaybackController(
+        MacroDocument document,
+        IMacroPlaybackExecutor executor,
+        PlaybackExecutionOptions? executionOptions = null)
     {
         this.document = document;
         this.executor = executor;
+        this.executionOptions = executionOptions ?? new PlaybackExecutionOptions(
+            document.Playback.Mode,
+            document.Playback.Count,
+            PixelEvaluationMode.Live,
+            NoWait: false,
+            document.Playback.Precision,
+            document.Playback.AffinityMask);
     }
 
     public PlaybackStatus Status { get; private set; } = PlaybackStatus.Idle;
@@ -123,15 +135,9 @@ public sealed class MacroPlaybackController
     private void StartRunCore()
     {
         activeCancellation = new CancellationTokenSource();
-        var options = new PlaybackExecutionOptions(
-            document.Playback.Mode,
-            document.Playback.Count,
-            PixelEvaluationMode.Live,
-            NoWait: false,
-            document.Playback.Precision);
         Status = PlaybackStatus.Running;
 
-        activeRun = RunAndResetAsync(options, activeCancellation);
+        activeRun = RunAndResetAsync(executionOptions, activeCancellation);
     }
 
     private async Task<PlaybackRunResult> RunAndResetAsync(
@@ -176,5 +182,14 @@ public sealed class MacroPlaybackController
 
         Status = PlaybackStatus.Stopping;
         activeCancellation.Cancel();
+    }
+
+    public void Dispose()
+    {
+        Stop();
+        if (executor is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
     }
 }

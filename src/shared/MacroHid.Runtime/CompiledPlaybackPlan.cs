@@ -15,6 +15,7 @@ public sealed class CompiledPlaybackPlan
         Func<PixelCondition, bool>? pixelEvaluator,
         Func<string, MacroDocument?>? macroResolver,
         IReadOnlyList<CompiledInputBatch> batches,
+        long durationTicks,
         bool requiresResampling,
         Dictionary<ActionBatchKey, PreparedInputBatch> preparedCache)
     {
@@ -24,6 +25,7 @@ public sealed class CompiledPlaybackPlan
         this.preparedCache = preparedCache;
         QpcFrequency = qpcFrequency;
         Batches = batches;
+        DurationTicks = durationTicks;
         RequiresResampling = requiresResampling;
     }
 
@@ -31,7 +33,37 @@ public sealed class CompiledPlaybackPlan
 
     public IReadOnlyList<CompiledInputBatch> Batches { get; }
 
+    public long DurationTicks { get; }
+
     public bool RequiresResampling { get; }
+
+    internal NativePlaybackTimeline ExportNativeTimeline()
+    {
+        var nativeInputCount = 0;
+        foreach (var batch in Batches)
+        {
+            nativeInputCount += batch.PreparedBatch.NativeInputCount;
+        }
+
+        var nativeInputs = new NativeInput[nativeInputCount];
+        var nativeBatches = new MhpBatch[Batches.Count];
+        var offset = 0;
+
+        for (var i = 0; i < Batches.Count; i++)
+        {
+            var batch = Batches[i];
+            var batchInputs = batch.PreparedBatch.NativeInputs;
+            Array.Copy(batchInputs, 0, nativeInputs, offset, batchInputs.Length);
+            nativeBatches[i] = new MhpBatch(
+                batch.DueTick,
+                checked((uint)offset),
+                checked((uint)batchInputs.Length),
+                checked((uint)batch.PreparedBatch.ActionCount));
+            offset += batchInputs.Length;
+        }
+
+        return new NativePlaybackTimeline(nativeInputs, nativeBatches, DurationTicks);
+    }
 
     public static CompiledPlaybackPlan Create(
         MacroDocument document,
@@ -51,7 +83,7 @@ public sealed class CompiledPlaybackPlan
         Func<WaitStep, TimeSpan>? waitDurationSampler,
         Dictionary<ActionBatchKey, PreparedInputBatch>? existingCache)
     {
-        var actions = InputActionCompiler.Compile(
+        var compiled = InputActionCompiler.CompileWithDuration(
             document,
             startTick: 0,
             qpcFrequency,
@@ -59,13 +91,16 @@ public sealed class CompiledPlaybackPlan
             macroResolver,
             waitDurationSampler);
         var cache = existingCache ?? new Dictionary<ActionBatchKey, PreparedInputBatch>();
-        var batches = BuildBatches(actions, cache);
+        var batches = BuildBatches(compiled.Actions, cache);
+        var lastBatchTick = batches.Count == 0 ? 0 : Math.Max(0, batches[^1].DueTick);
+        var durationTicks = Math.Max(compiled.DurationTicks, lastBatchTick);
         return new CompiledPlaybackPlan(
             document,
             qpcFrequency,
             pixelEvaluator,
             macroResolver,
             batches,
+            durationTicks,
             ContainsRandomWait(document.Steps) || document.EffectiveConditions.Any(c => ContainsRandomWait(c.ThenSteps)),
             cache);
     }
@@ -152,3 +187,9 @@ public sealed class CompiledPlaybackPlan
 }
 
 public sealed record CompiledInputBatch(long DueTick, PreparedInputBatch PreparedBatch);
+
+internal sealed record NativePlaybackTimeline(
+    NativeInput[] Inputs,
+    MhpBatch[] Batches,
+    long DurationTicks,
+    int LoopStepCount = 0);

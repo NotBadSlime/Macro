@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace MacroStudio.Controls;
@@ -21,17 +23,35 @@ public sealed class WorkspacePanelWindow : Window
         MinHeight = 220;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.Manual;
+        WindowStyle = WindowStyle.None;
+        AllowsTransparency = true;
+        ResizeMode = ResizeMode.CanResizeWithGrip;
         Background = Brushes.Transparent;
+        UseLayoutRounding = true;
+        SnapsToDevicePixels = true;
 
-        ContentHost = new ContentControl();
+        ContentHost = new ContentControl
+        {
+            Style = (Style)Application.Current.FindResource("ToolWindowFloatingContentStyle")
+        };
 
         dockButton = new Button
         {
-            Content = "停靠",
-            MinWidth = 72,
-            Margin = new Thickness(8, 0, 0, 0)
+            Content = "\uE73F",
+            ToolTip = "停靠",
+            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol")
         };
+        dockButton.Style = (Style)Application.Current.FindResource("ToolWindowChromeButton");
         dockButton.Click += (_, _) => DockRequested?.Invoke(this, EventArgs.Empty);
+
+        var closeButton = new Button
+        {
+            Content = "\uE711",
+            ToolTip = "关闭",
+            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol")
+        };
+        closeButton.Style = (Style)Application.Current.FindResource("ToolWindowChromeButton");
+        closeButton.Click += (_, _) => HidePanel();
 
         titleText = new TextBlock
         {
@@ -39,17 +59,75 @@ public sealed class WorkspacePanelWindow : Window
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
+        titleText.Style = (Style)Application.Current.FindResource("ToolWindowTitle");
 
-        var header = new DockPanel { Margin = new Thickness(12, 10, 12, 8) };
+        var header = new Border
+        {
+            Style = (Style)Application.Current.FindResource("ToolWindowHeaderStyle")
+        };
+        header.MouseLeftButtonDown += ToolWindowHeader_MouseLeftButtonDown;
+        var headerDock = new DockPanel();
+        DockPanel.SetDock(closeButton, Dock.Right);
         DockPanel.SetDock(dockButton, Dock.Right);
-        header.Children.Add(dockButton);
-        header.Children.Add(titleText);
+        headerDock.Children.Add(closeButton);
+        headerDock.Children.Add(dockButton);
+        headerDock.Children.Add(titleText);
+        header.Child = headerDock;
 
         var root = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
         root.Children.Add(header);
         root.Children.Add(ContentHost);
-        Content = root;
+
+        var chromeRoot = new Border
+        {
+            Style = (Style)Application.Current.FindResource("ToolWindowFloatingRootStyle"),
+            Child = root
+        };
+
+        var ResizeBottomThumb = new Thumb
+        {
+            Cursor = Cursors.SizeNS,
+            Height = 10,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Template = CreateTransparentThumbTemplate(),
+            Focusable = false
+        };
+        ResizeBottomThumb.DragDelta += (_, e) => ResizeWindow(0, e.VerticalChange);
+        Panel.SetZIndex(ResizeBottomThumb, 20);
+
+        var ResizeRightThumb = new Thumb
+        {
+            Cursor = Cursors.SizeWE,
+            Width = 10,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Template = CreateTransparentThumbTemplate(),
+            Focusable = false
+        };
+        ResizeRightThumb.DragDelta += (_, e) => ResizeWindow(e.HorizontalChange, 0);
+        Panel.SetZIndex(ResizeRightThumb, 20);
+
+        var ResizeCornerThumb = new Thumb
+        {
+            Cursor = Cursors.SizeNWSE,
+            Width = 20,
+            Height = 20,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Template = CreateTransparentThumbTemplate(),
+            Focusable = false
+        };
+        ResizeCornerThumb.DragDelta += (_, e) => ResizeWindow(e.HorizontalChange, e.VerticalChange);
+        Panel.SetZIndex(ResizeCornerThumb, 21);
+
+        var windowRoot = new Grid();
+        windowRoot.Children.Add(chromeRoot);
+        windowRoot.Children.Add(ResizeBottomThumb);
+        windowRoot.Children.Add(ResizeRightThumb);
+        windowRoot.Children.Add(ResizeCornerThumb);
+        Content = windowRoot;
     }
 
     public string PanelId { get; }
@@ -62,7 +140,69 @@ public sealed class WorkspacePanelWindow : Window
     {
         Title = title;
         titleText.Text = title;
-        dockButton.Content = dockText;
+        dockButton.ToolTip = dockText;
+    }
+
+    private void HidePanel()
+    {
+        Hide();
+        HideRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ToolWindowHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left || FindAncestor<Button>(e.OriginalSource as DependencyObject) is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            DragMove();
+        }
+        catch (InvalidOperationException)
+        {
+            // DragMove can throw if the mouse button state changes during activation.
+        }
+    }
+
+    private void ResizeWindow(double widthDelta, double heightDelta)
+    {
+        if (Math.Abs(widthDelta) > 0.01)
+        {
+            Width = Math.Max(MinWidth, Width + widthDelta);
+        }
+
+        if (Math.Abs(heightDelta) > 0.01)
+        {
+            Height = Math.Max(MinHeight, Height + heightDelta);
+        }
+    }
+
+    private static ControlTemplate CreateTransparentThumbTemplate()
+    {
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        return new ControlTemplate(typeof(Thumb))
+        {
+            VisualTree = border
+        };
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? source)
+        where T : DependencyObject
+    {
+        while (source is not null)
+        {
+            if (source is T match)
+            {
+                return match;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return null;
     }
 
     public void ForceClose()
@@ -76,8 +216,7 @@ public sealed class WorkspacePanelWindow : Window
         if (!forceClosing)
         {
             e.Cancel = true;
-            Hide();
-            HideRequested?.Invoke(this, EventArgs.Empty);
+            HidePanel();
             return;
         }
 

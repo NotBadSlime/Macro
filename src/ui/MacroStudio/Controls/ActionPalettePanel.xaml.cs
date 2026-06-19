@@ -29,6 +29,15 @@ public partial class ActionPalettePanel : UserControl
         AddTextActionText.Text = L("AddText");
         AddMacroText.Text = L("AddMacro");
         AddLoopText.Text = L("AddLoop");
+        AddDelayHintText.Text = L("AddDelayHint");
+        AddKeyboardHintText.Text = L("AddKeyboardHint");
+        AddMouseHintText.Text = L("AddMouseButtonHint");
+        AddMouseMoveHintText.Text = L("AddMouseMoveHint");
+        AddWheelHintText.Text = L("AddWheelHint");
+        AddTextHintText.Text = L("AddTextHint");
+        AddMacroActionHintText.Text = L("AddMacroActionHint");
+        AddLoopHintText.Text = L("AddLoopHint");
+        DragHint.Text = L("ActionPaletteDragHint");
         AddMacroHintText.Text = L("AddMacroHint");
     }
 
@@ -67,8 +76,27 @@ public partial class ActionPalettePanel : UserControl
             return;
 
         paletteDragStarted = true;
-        DragDrop.DoDragDrop(button, new DataObject(ActionTemplateDragFormat, tag), DragDropEffects.Copy);
+        button.Opacity = 0.68;
+        try
+        {
+            DragDrop.DoDragDrop(button, new DataObject(ActionTemplateDragFormat, tag), DragDropEffects.Copy);
+        }
+        finally
+        {
+            button.Opacity = 1;
+        }
+
         e.Handled = true;
+    }
+
+    private void ActionPalette_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateAdaptiveColumns();
+    }
+
+    private void UpdateAdaptiveColumns()
+    {
+        ActionCommandGrid.Columns = ActualWidth >= 520 ? 2 : 1;
     }
 
     private static bool TryParseKind(string? tag, out MacroActionTemplateKind kind)

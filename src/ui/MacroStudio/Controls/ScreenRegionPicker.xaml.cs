@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using MacroHid.Core;
+using MacroStudio.Services;
 
 namespace MacroStudio.Controls;
 
@@ -133,8 +134,7 @@ public partial class ScreenRegionPicker : Window
     public static ScreenRegion? PickRegion(Window? owner = null)
     {
         var picker = new ScreenRegionPicker();
-        if (owner != null) picker.Owner = owner;
-        var result = picker.ShowDialog();
+        var result = DialogOwnerService.ShowDialogSafe(picker, owner);
         return result == true ? picker.SelectedRegion : null;
     }
 }

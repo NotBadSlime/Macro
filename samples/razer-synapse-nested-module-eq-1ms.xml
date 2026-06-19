@@ -1,0 +1,23 @@
+<Macro>
+  <Name>MacroHID Nested Module E/Q 1ms</Name>
+  <MacroEvents>
+    <MacroEvent>
+      <Type>actionBar</Type>
+      <recordProfile>
+        <mmtSetting>0</mmtSetting>
+      </recordProfile>
+      <selected>false</selected>
+    </MacroEvent>
+    <MacroEvent><Type>1</Type><Id>1</Id><KeyEvent><Makecode>69</Makecode><State>0</State></KeyEvent><flag>0</flag><selected>false</selected><isPairing>false</isPairing></MacroEvent>
+    <MacroEvent><Type>0</Type><Number>0.001</Number><selected>false</selected></MacroEvent>
+    <MacroEvent><Type>1</Type><Id>2</Id><KeyEvent><Makecode>69</Makecode><State>1</State></KeyEvent><flag>1</flag><selected>false</selected><isPairing>false</isPairing></MacroEvent>
+    <MacroEvent><Type>0</Type><Number>0.001</Number><selected>false</selected></MacroEvent>
+    <MacroEvent><Type>1</Type><Id>3</Id><KeyEvent><Makecode>81</Makecode><State>0</State></KeyEvent><flag>0</flag><selected>false</selected><isPairing>false</isPairing></MacroEvent>
+    <MacroEvent><Type>0</Type><Number>0.001</Number><selected>false</selected></MacroEvent>
+    <MacroEvent><Type>1</Type><Id>4</Id><KeyEvent><Makecode>81</Makecode><State>1</State></KeyEvent><flag>1</flag><selected>false</selected><isPairing>false</isPairing></MacroEvent>
+  </MacroEvents>
+  <DelaySetting>0</DelaySetting>
+  <Guid>6c2a00ef-5cf8-4e78-bcb9-0f7f3fdcb106</Guid>
+  <Version>4</Version>
+  <MouseMoveType>none</MouseMoveType>
+</Macro>

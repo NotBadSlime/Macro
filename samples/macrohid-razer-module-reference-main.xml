@@ -1,0 +1,53 @@
+<Macro>
+  <!-- converter-only: this Type=7 sample is for MacroHID/MacroConverter module expansion, not direct Razer Synapse import. -->
+  <Name>MacroHID Module Reference Main</Name>
+  <MacroEvents>
+    <MacroEvent>
+      <Type>actionBar</Type>
+      <recordProfile>
+        <mmtSetting>0</mmtSetting>
+      </recordProfile>
+      <selected>false</selected>
+    </MacroEvent>
+    <MacroEvent>
+      <Type>6</Type>
+      <Id />
+      <Number>5000</Number>
+      <LoopEvent>
+        <State>0</State>
+      </LoopEvent>
+      <selected>false</selected>
+      <isPairing>false</isPairing>
+    </MacroEvent>
+    <MacroEvent>
+      <Type>7</Type>
+      <MPIndex>0</MPIndex>
+      <guid>6c2a00ef-5cf8-4e78-bcb9-0f7f3fdcb106</guid>
+      <Name>MacroHID Nested Module E/Q 1ms</Name>
+      <selected>false</selected>
+    </MacroEvent>
+    <MacroEvent><Type>0</Type><Number>0.001</Number><selected>false</selected></MacroEvent>
+    <MacroEvent>
+      <Type>7</Type>
+      <MPIndex>1</MPIndex>
+      <guid>6c2a00ef-5cf8-4e78-bcb9-0f7f3fdcb106</guid>
+      <Name>MacroHID Nested Module E/Q 1ms</Name>
+      <selected>false</selected>
+    </MacroEvent>
+    <MacroEvent><Type>0</Type><Number>0.001</Number><selected>false</selected></MacroEvent>
+    <MacroEvent>
+      <Type>6</Type>
+      <Id />
+      <Number>5000</Number>
+      <LoopEvent>
+        <State>1</State>
+      </LoopEvent>
+      <selected>false</selected>
+      <isPairing>false</isPairing>
+    </MacroEvent>
+  </MacroEvents>
+  <DelaySetting>0</DelaySetting>
+  <Guid>9c1933eb-5fbb-4b83-8a0d-a6a5643f193f</Guid>
+  <Version>4</Version>
+  <MouseMoveType>none</MouseMoveType>
+</Macro>

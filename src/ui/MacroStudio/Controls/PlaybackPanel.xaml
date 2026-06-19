@@ -20,7 +20,11 @@
                 <TextBlock x:Name="TriggerLabelText" Text="触发键" Style="{StaticResource FieldLabel}" />
                 <DockPanel Margin="0,0,0,8">
                     <Button x:Name="CaptureTriggerButton" DockPanel.Dock="Right" Width="78" Content="捕获" Click="CaptureTrigger_Click" />
-                    <TextBox x:Name="TriggerTextBox" Height="30" Margin="0,0,8,0" TextChanged="PlaybackSettings_TextChanged" />
+                    <TextBox x:Name="TriggerTextBox"
+                             Height="30"
+                             Margin="0,0,8,0"
+                             IsReadOnly="True"
+                             TextChanged="PlaybackSettings_TextChanged" />
                 </DockPanel>
             </StackPanel>
 
@@ -45,13 +49,42 @@
                 <TextBox x:Name="PlaybackCountTextBox" Height="30" Text="1" TextChanged="PlaybackSettings_TextChanged" />
             </StackPanel>
 
-            <WrapPanel Grid.Row="4" Grid.ColumnSpan="3" Margin="0,12,0,0">
-                <Button x:Name="StartListeningButton" MinWidth="110" Content="开始监听" Click="StartListening_Click" />
-                <Button x:Name="StopListeningButton" MinWidth="108" Content="停止监听" Click="StopListening_Click" />
-                <Button x:Name="RunNowButton" MinWidth="82" Content="立即运行" Click="RunNow_Click" />
-                <Button x:Name="StopPlaybackButton" MinWidth="64" Content="停止" Style="{StaticResource DangerButton}" Click="StopPlayback_Click" />
-                <TextBlock x:Name="PlaybackStatusText" Text="播放：空闲" Margin="0,6,0,0" Width="300" />
-                <TextBlock x:Name="PlaybackResultText" Text="上次结果：无" Margin="0,4,0,0" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Width="300" />
-            </WrapPanel>
+            <Grid Grid.Row="4" Grid.ColumnSpan="3" Margin="0,12,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="StartListeningButton"
+                        Grid.Column="0"
+                        MinWidth="0"
+                        Content="开始监听"
+                        Click="StartListening_Click" />
+                <Button x:Name="StopListeningButton"
+                        Grid.Column="2"
+                        MinWidth="0"
+                        Content="停止监听"
+                        Click="StopListening_Click" />
+                <Button x:Name="RunNowButton" Grid.Column="0" MinWidth="82" Content="立即运行" Visibility="Collapsed" Click="RunNow_Click" />
+                <Button x:Name="StopPlaybackButton" Grid.Column="2" MinWidth="64" Content="停止" Visibility="Collapsed" Style="{StaticResource DangerButton}" Click="StopPlayback_Click" />
+                <TextBlock x:Name="PlaybackStatusText"
+                           Grid.Row="1"
+                           Grid.ColumnSpan="3"
+                           Text="播放：空闲"
+                           Margin="0,8,0,0"
+                           TextWrapping="Wrap" />
+                <TextBlock x:Name="PlaybackResultText"
+                           Grid.Row="2"
+                           Grid.ColumnSpan="3"
+                           Text="上次结果：无"
+                           Margin="0,4,0,0"
+                           Foreground="{DynamicResource SecondaryText}"
+                           TextWrapping="Wrap" />
+            </Grid>
     </Grid>
 </UserControl>

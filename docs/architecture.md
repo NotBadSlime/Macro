@@ -4,7 +4,7 @@
 
 ### 总览
 
-MacroHID 当前架构是纯 .NET + WPF + Win32 `SendInput` 的用户态系统：
+MacroHID 当前架构是 .NET + WPF + Win32 `SendInput` 的纯用户态系统；极限模式会加载同进程 x64 C++ native playback DLL，但仍不使用驱动：
 
 ```text
 MacroStudio / MacroRunner
@@ -15,7 +15,9 @@ MacroHid.Core  -- .mcrx model, parser, serializer, compiler
         +--> MacroHid.Converter -- import/export adapters
         |
         v
-MacroHid.Runtime -- playback, precision context, conditions, pixels, SendInput
+MacroHid.Runtime -- playback, precision context, conditions, pixels
+        |
+        +--> MacroHid.NativePlayback.dll -- optional in-process native hot path
         |
         v
 Windows SendInput / visible desktop pixels
@@ -44,11 +46,17 @@ Windows SendInput / visible desktop pixels
 - `src/shared/MacroHid.Runtime`
   - 播放控制器。
   - 预编译播放计划。
-  - 高精度 QPC 调度。
+  - 基础 / 高性能 / 极限三档 QPC 调度，目标阈值分别为 0.5ms / 0.25ms / 0.1ms。
   - `PrecisionPlaybackContext`。
-  - `SendInputMacroSink` 和 prepared native batches。
+  - `SendInputMacroSink`、prepared native batches 和 native playback fallback 诊断。
   - 像素采样、截图、模板匹配、OCR 接口占位。
   - 条件监控线程。
+
+- `src/native/MacroHid.NativePlayback`
+  - x64 C++ in-process DLL。
+  - 稳定 C ABI：`MhpCreatePlan`、`MhpRunPlan`、`MhpCancel`、`MhpDestroyPlan`、`MhpGetLastErrorText`。
+  - 复制并持有 `INPUT[]` 和 batch deadline。
+  - 极限热路径使用 QPC、实时进程级别、TimeCritical 线程、MMCSS、CPU affinity、ideal processor、真实 CPU Set ID 映射、高分辨率 waitable timer 和短窗口纯自旋。密集 1ms/2ms timeline 的 auto 模式优先 inline native path 压低单步尖峰；显式 standby path 保留预热线程和 2 worker 低启动路径。
 
 - `src/ui/MacroStudio`
   - WPF 编辑器。
@@ -63,7 +71,7 @@ Windows SendInput / visible desktop pixels
   - 命令行 dry-run 和 SendInput 播放。
 
 - `src/tools/LatencyProbe`
-  - 用户态调度、编码和提交延迟探测。
+  - 用户态调度、编码、提交延迟和循环尾部抖动探测。
 
 - `installer`
   - Inno Setup 安装脚本和语言文件。
@@ -76,9 +84,10 @@ Windows SendInput / visible desktop pixels
 4. `InputActionCompiler` 和运行时生成 `CompiledPlaybackPlan`。
 5. 播放开始时进入 `PrecisionPlaybackContext`。
 6. `MacroPlaybackExecutor` 按 QPC 时间轴提交 prepared input batches。
-7. `SendInputMacroSink` 调用 Win32 `SendInput`。
-8. 条件监控线程按时间窗口和像素条件触发 then-actions。
-9. 播放结束或取消后释放状态并恢复优先级/计时器/GC 策略。
+7. 在 `UltraLowJitter` 且 native DLL 可用时，基础序列优先导出为 native timeline 并由 `MacroHid.NativePlayback.dll` 执行；不可用或不适用时回退 managed path。
+8. `SendInputMacroSink` 或 native engine 调用 Win32 `SendInput`。
+9. 条件监控线程按时间窗口和像素条件触发 then-actions。
+10. 播放结束或取消后释放状态并恢复优先级/计时器/GC 策略。
 
 ### 数据流
 
@@ -91,7 +100,7 @@ Windows SendInput / visible desktop pixels
 
 ### Overview
 
-MacroHID is currently a pure user-mode .NET + WPF + Win32 `SendInput` system:
+MacroHID is currently a pure user-mode .NET + WPF + Win32 `SendInput` system; Extreme mode can load an in-process x64 C++ native playback DLL, but it still does not use a driver:
 
 ```text
 MacroStudio / MacroRunner
@@ -102,7 +111,9 @@ MacroHid.Core  -- .mcrx model, parser, serializer, compiler
         +--> MacroHid.Converter -- import/export adapters
         |
         v
-MacroHid.Runtime -- playback, precision context, conditions, pixels, SendInput
+MacroHid.Runtime -- playback, precision context, conditions, pixels
+        |
+        +--> MacroHid.NativePlayback.dll -- optional in-process native hot path
         |
         v
 Windows SendInput / visible desktop pixels
@@ -131,11 +142,17 @@ There is no kernel driver, no background Windows service, no VHF/KMDF layer, and
 - `src/shared/MacroHid.Runtime`
   - Playback controller.
   - Precompiled playback plan.
-  - High-precision QPC scheduling.
+  - Basic / High Performance / Extreme QPC scheduling with 0.5ms / 0.25ms / 0.1ms target thresholds.
   - `PrecisionPlaybackContext`.
-  - `SendInputMacroSink` and prepared native batches.
-  - Pixel sampling, capture, template matching, OCR bridge placeholder.
+  - `SendInputMacroSink`, prepared native batches, and native playback fallback diagnostics.
+  - Pixel sampling, region capture, and OCR bridge for condition directives; template image and pixel hash conditions are legacy parse-only formats.
   - Condition monitor thread.
+
+- `src/native/MacroHid.NativePlayback`
+  - x64 C++ in-process DLL.
+  - Stable C ABI: `MhpCreatePlan`, `MhpRunPlan`, `MhpCancel`, `MhpDestroyPlan`, `MhpGetLastErrorText`.
+  - Copies and owns `INPUT[]` packets and batch deadlines.
+  - The Extreme hot path uses QPC, real-time process class, TimeCritical thread priority, MMCSS, CPU affinity, ideal processor, actual CPU Set ID mapping, high-resolution waitable timers, and short-window pure spinning. Dense 1ms/2ms timelines prefer the inline native path in auto mode to reduce per-step spikes; the explicit standby path keeps warmed workers and a two-worker low-startup path.
 
 - `src/ui/MacroStudio`
   - WPF editor.
@@ -150,7 +167,7 @@ There is no kernel driver, no background Windows service, no VHF/KMDF layer, and
   - Command-line dry-run and SendInput playback.
 
 - `src/tools/LatencyProbe`
-  - User-mode scheduling, encoding, and submission latency probe.
+  - User-mode scheduling, encoding, submission latency, and loop-tail jitter probe.
 
 - `installer`
   - Inno Setup script and language files.
@@ -163,9 +180,10 @@ There is no kernel driver, no background Windows service, no VHF/KMDF layer, and
 4. `InputActionCompiler` and the runtime build a `CompiledPlaybackPlan`.
 5. Playback enters `PrecisionPlaybackContext`.
 6. `MacroPlaybackExecutor` submits prepared input batches on the QPC timeline.
-7. `SendInputMacroSink` calls Win32 `SendInput`.
-8. The condition monitor thread triggers then-actions based on time windows and pixel conditions.
-9. Playback completion or cancellation restores priority, timer, and GC state.
+7. In `UltraLowJitter`, when the native DLL is available, the base sequence is exported as a native timeline and executed by `MacroHid.NativePlayback.dll`; otherwise MacroHID falls back to the managed path.
+8. `SendInputMacroSink` or the native engine calls Win32 `SendInput`.
+9. The condition monitor thread triggers then-actions based on time windows and pixel conditions.
+10. Playback completion or cancellation restores priority, timer, and GC state.
 
 ### Data Flow
 

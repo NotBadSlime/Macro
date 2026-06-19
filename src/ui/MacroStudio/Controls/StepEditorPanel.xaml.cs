@@ -288,11 +288,8 @@ public partial class StepEditorPanel : UserControl
         CoordinatePickerStarted?.Invoke(this, EventArgs.Empty);
         try
         {
-            var picker = new ScreenCoordinatePickerWindow
-            {
-                Owner = Window.GetWindow(this)
-            };
-            if (picker.ShowDialog() == true)
+            var picker = new ScreenCoordinatePickerWindow();
+            if (DialogOwnerService.ShowDialogSafe(picker, this) == true)
             {
                 MouseButtonCoordinateEnabledBox.IsChecked = true;
                 SetComboBox(MouseButtonCoordinateModeBox, MouseMoveMode.Absolute.ToString());

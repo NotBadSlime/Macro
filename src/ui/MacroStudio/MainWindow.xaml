@@ -41,15 +41,16 @@
                                    Margin="0,0,14,0" />
                         <Button x:Name="OpenButton"
                                 Style="{StaticResource CommandBarButton}"
-                                Content="打开"
+                                Content="打开宏文件"
                                 Click="OpenMacro_Click" />
                         <Button x:Name="SaveButton"
                                 Style="{StaticResource CommandBarButton}"
-                                Content="保存"
+                                Content="另存当前宏"
                                 Click="SaveMacro_Click" />
                         <Button x:Name="WindowMenuButton"
                                 Style="{StaticResource CommandBarButton}"
                                 Content="窗口"
+                                Visibility="Collapsed"
                                 Click="WindowMenu_Click">
                             <Button.ContextMenu>
                                 <ContextMenu x:Name="WindowMenuContext">
@@ -181,58 +182,200 @@
                     </DockPanel>
                 </Border>
 
-                <Grid x:Name="WorkbenchGrid" Margin="14,10,14,14" ClipToBounds="True" Grid.Column="1">
+                <controls:WorkspaceDockHost x:Name="DockHost" Margin="14,10,14,14" ClipToBounds="True" Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="MainDockRow" Height="*" MinHeight="320" />
+                        <RowDefinition x:Name="BottomDockSplitterRow" Height="12" />
+                        <RowDefinition x:Name="BottomDockRow" Height="230" MinHeight="160" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="240" MinWidth="200" />
+                        <ColumnDefinition x:Name="LeftDockColumn" Width="260" MinWidth="210" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" MinWidth="500" />
+                        <ColumnDefinition x:Name="CenterDockColumn" Width="*" MinWidth="480" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="420" MinWidth="340" />
+                        <ColumnDefinition x:Name="RightDockColumn" Width="390" MinWidth="320" />
                     </Grid.ColumnDefinitions>
 
-                    <ContentControl x:Name="LibraryPanelHost" Grid.Column="0">
-                        <controls:MacroLibraryPanel x:Name="LibraryPanel" />
-                    </ContentControl>
-
-                    <controls:SmoothGridSplitter Grid.Column="1" />
-
-                    <ContentControl x:Name="SequencePanelHost" Grid.Column="2">
-                        <Border ClipToBounds="True">
-                            <controls:SequencePanel x:Name="SequencePanelControl"
-                                                    AutomationProperties.AutomationId="SequencePanelControl" />
+                    <Grid x:Name="LeftDockContent" Grid.Row="0" Grid.Column="0" VerticalAlignment="Stretch">
+                        <Border x:Name="LibraryToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                            <DockPanel>
+                                <Border x:Name="LibraryPART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                            <Button Tag="library" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
+                                            <Button Tag="library" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="LibraryToolTitle" Text="宏数据库" Style="{StaticResource ToolWindowTitle}" />
+                                    </DockPanel>
+                                </Border>
+                                <ContentControl x:Name="LibraryPanelHost">
+                                    <controls:MacroLibraryPanel x:Name="LibraryPanel" />
+                                </ContentControl>
+                            </DockPanel>
                         </Border>
-                    </ContentControl>
+                    </Grid>
 
-                    <controls:SmoothGridSplitter Grid.Column="3" />
+                    <controls:SmoothGridSplitter x:Name="LeftDockSplitter"
+                                                 Grid.Row="0"
+                                                 Grid.Column="1"
+                                                 ResizeBehavior="PreviousAndNext"
+                                                 Style="{StaticResource AnimatedDockSplitterStyle}" />
 
-                    <ScrollViewer x:Name="InspectorPanel"
-                                  AutomationProperties.AutomationId="ConditionSequenceColumn"
-                                  Grid.Column="4"
-                                  Background="{DynamicResource InspectorBackground}"
-                                  VerticalScrollBarVisibility="Auto"
-                                  Panel.ZIndex="10">
-                        <StackPanel>
-                            <ContentControl x:Name="ConditionPanelHost">
-                                <controls:CollapsibleSection x:Name="ConditionSection" Header="条件序列" IsExpanded="True">
-                                    <controls:ConditionDirectivePanel x:Name="ConditionPanel" />
-                                </controls:CollapsibleSection>
-                            </ContentControl>
-                            <ContentControl x:Name="JsonPanelHost" Visibility="Collapsed">
-                                <controls:McrxJsonPanel x:Name="JsonPanel" />
-                            </ContentControl>
-                            <ContentControl x:Name="ActionPaletteHost">
-                                <controls:CollapsibleSection x:Name="ActionPaletteSection" Header="动作面板" IsExpanded="False">
-                                    <controls:ActionPalettePanel x:Name="ActionPalette" />
-                                </controls:CollapsibleSection>
-                            </ContentControl>
-                            <ContentControl x:Name="PlaybackPanelHost">
-                                <controls:CollapsibleSection x:Name="PlaybackSection" Header="播放控制" IsExpanded="False">
-                                    <controls:PlaybackPanel x:Name="PlaybackPanelControl" />
-                                </controls:CollapsibleSection>
-                            </ContentControl>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
+                    <Grid x:Name="CenterDockContent" Grid.Row="0" Grid.Column="2" VerticalAlignment="Stretch">
+                        <Border x:Name="SequenceToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                            <DockPanel>
+                                <Border x:Name="SequencePART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                            <Button Tag="sequence" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
+                                            <Button Tag="sequence" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="SequenceToolTitle" Text="序列" Style="{StaticResource ToolWindowTitle}" />
+                                    </DockPanel>
+                                </Border>
+                                <ContentControl x:Name="SequencePanelHost">
+                                    <Border ClipToBounds="True">
+                                        <controls:SequencePanel x:Name="SequencePanelControl"
+                                                                AutomationProperties.AutomationId="SequencePanelControl" />
+                                    </Border>
+                                </ContentControl>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+
+                    <controls:SmoothGridSplitter x:Name="RightDockSplitter"
+                                                 Grid.Row="0"
+                                                 Grid.Column="3"
+                                                 ResizeBehavior="PreviousAndNext"
+                                                 Style="{StaticResource AnimatedDockSplitterStyle}" />
+
+                    <Border x:Name="RightDockContent"
+                            Grid.Row="0"
+                            Grid.Column="4"
+                            Background="{DynamicResource InspectorBackground}"
+                            CornerRadius="16"
+                            ClipToBounds="True">
+                        <DockPanel>
+                            <StackPanel x:Name="RightToolTabs"
+                                        DockPanel.Dock="Top"
+                                        Orientation="Horizontal"
+                                        Margin="0,0,0,8">
+                                <ToggleButton x:Name="ConditionRightToolButton"
+                                              Tag="conditions"
+                                              Style="{StaticResource RightToolTabStyle}"
+                                              Click="RightToolButton_Click"
+                                              Content="&#xE9D9;"
+                                              ToolTip="条件序列" />
+                                <ToggleButton x:Name="ActionRightToolButton"
+                                              Tag="actions"
+                                              Style="{StaticResource RightToolTabStyle}"
+                                              Click="RightToolButton_Click"
+                                              Content="&#xE8A7;"
+                                              ToolTip="动作面板" />
+                                <ToggleButton x:Name="PlaybackRightToolButton"
+                                              Tag="playback"
+                                              Style="{StaticResource RightToolTabStyle}"
+                                              Click="RightToolButton_Click"
+                                              Content="&#xE768;"
+                                              ToolTip="播放控制" />
+                            </StackPanel>
+
+                            <Grid x:Name="RightToolDeck">
+                                <Border x:Name="ConditionToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                                    <DockPanel>
+                                        <Border x:Name="ConditionPART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                    <Button Tag="conditions" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
+                                                    <Button Tag="conditions" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
+                                                </StackPanel>
+                                                <TextBlock x:Name="ConditionToolTitle" Text="条件序列" Style="{StaticResource ToolWindowTitle}" />
+                                            </DockPanel>
+                                        </Border>
+                                        <ContentControl x:Name="ConditionPanelHost" AutomationProperties.AutomationId="ConditionSequenceColumn">
+                                            <controls:ConditionDirectivePanel x:Name="ConditionPanel" />
+                                        </ContentControl>
+                                    </DockPanel>
+                                </Border>
+
+                                <Border x:Name="ActionPaletteToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                                    <DockPanel>
+                                        <Border x:Name="ActionPalettePART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                    <Button Tag="actions" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
+                                                    <Button Tag="actions" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
+                                                </StackPanel>
+                                                <TextBlock x:Name="ActionPaletteToolTitle" Text="动作面板" Style="{StaticResource ToolWindowTitle}" />
+                                            </DockPanel>
+                                        </Border>
+                                        <ScrollViewer x:Name="ActionPaletteToolScrollViewer"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled"
+                                                      CanContentScroll="False">
+                                            <ContentControl x:Name="ActionPaletteHost">
+                                                <controls:ActionPalettePanel x:Name="ActionPalette" />
+                                            </ContentControl>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </Border>
+
+                                <Border x:Name="PlaybackToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                                    <DockPanel>
+                                        <Border x:Name="PlaybackPART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                    <Button Tag="playback" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
+                                                    <Button Tag="playback" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
+                                                </StackPanel>
+                                                <TextBlock x:Name="PlaybackToolTitle" Text="播放控制" Style="{StaticResource ToolWindowTitle}" />
+                                            </DockPanel>
+                                        </Border>
+                                        <ScrollViewer x:Name="PlaybackToolScrollViewer"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled"
+                                                      CanContentScroll="False">
+                                            <ContentControl x:Name="PlaybackPanelHost">
+                                                <controls:PlaybackPanel x:Name="PlaybackPanelControl" />
+                                            </ContentControl>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </Border>
+                            </Grid>
+                        </DockPanel>
+                    </Border>
+
+                    <GridSplitter x:Name="BottomDockSplitter"
+                                  Grid.Row="1"
+                                  Grid.ColumnSpan="5"
+                                  Height="12"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Center"
+                                  Background="Transparent"
+                                  Cursor="SizeNS"
+                                  Style="{StaticResource AnimatedDockSplitterStyle}"
+                                  ResizeDirection="Rows"
+                                  ResizeBehavior="PreviousAndNext" />
+
+                    <Grid x:Name="BottomDockContent" Grid.Row="2" Grid.ColumnSpan="5" VerticalAlignment="Stretch">
+                        <Border x:Name="JsonToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                            <DockPanel>
+                                <Border x:Name="JsonPART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                            <Button Tag="json" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
+                                            <Button Tag="json" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="JsonToolTitle" Text="MCRX JSON" Style="{StaticResource ToolWindowTitle}" />
+                                    </DockPanel>
+                                </Border>
+                                <ContentControl x:Name="JsonPanelHost" Grid.Row="2">
+                                    <controls:McrxJsonPanel x:Name="JsonPanel" />
+                                </ContentControl>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+                </controls:WorkspaceDockHost>
             </Grid>
         </DockPanel>
     </Border>

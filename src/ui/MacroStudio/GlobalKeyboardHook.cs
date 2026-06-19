@@ -289,17 +289,14 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     private bool GestureIsDown(HotkeyGesture trigger)
     {
-        if (trigger.Key == HidKey.None && trigger.MouseButton == MouseButton.None)
+        if (trigger.Keys.Count == 0 && trigger.MouseButtons.Count == 0)
         {
             return ModifiersMatch(trigger.Modifiers);
         }
 
-        if (trigger.MouseButton != MouseButton.None)
-        {
-            return pressedMouseButtons.Contains(trigger.MouseButton) && ModifiersMatch(trigger.Modifiers);
-        }
-
-        return IsKeyDown(trigger.Key) && ModifiersMatch(trigger.Modifiers);
+        return ModifiersMatch(trigger.Modifiers)
+            && trigger.Keys.All(IsKeyDown)
+            && trigger.MouseButtons.All(pressedMouseButtons.Contains);
     }
 
     private bool IsKeyDown(HidKey key)
