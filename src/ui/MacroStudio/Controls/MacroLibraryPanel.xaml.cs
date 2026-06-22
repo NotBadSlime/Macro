@@ -1,9 +1,12 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MacroHid.Converter;
 using MacroHid.Core;
 using MacroStudio.Services;
@@ -14,14 +17,27 @@ namespace MacroStudio.Controls;
 public partial class MacroLibraryPanel : UserControl
 {
     private const string MacroLibraryDragFormat = "MacroHID.MacroLibraryItem";
+    private const int WM_MOUSEWHEEL = 0x020A;
+    private const int WM_MOUSEWHEEL_LOW_LEVEL = 0x020A;
+    private const int WH_MOUSE_LL = 14;
+    private const long LibraryAutoScrollIntervalMilliseconds = 120;
+    private const double WheelDelta = 120.0;
 
+    private readonly LowLevelMouseProc libraryDragMouseHookProc;
     private MacroEditorState? state;
     private bool suppressSelection;
     private List<AuxiliaryMacroFile> razerModuleFiles = [];
+    private readonly HashSet<string> expandedFolders = new(StringComparer.Ordinal);
     private string? selectedFolder;
     private MacroLibraryClipboardItem? clipboard;
     private MacroLibraryTreeNode? renamingNode;
     private bool updatingRuntimePrecisionControls;
+    private bool libraryDragInProgress;
+    private ScrollViewer? macroTreeScrollViewer;
+    private HwndSource? macroTreeHwndSource;
+    private IntPtr libraryDragMouseHookHandle;
+    private long lastLibraryAutoScrollTick;
+    private MacroLibraryTreeNode? macroDropIndicatorNode;
     private IReadOnlyDictionary<string, MacroLibraryListenState> listeningStates =
         new Dictionary<string, MacroLibraryListenState>(StringComparer.OrdinalIgnoreCase);
 
@@ -38,6 +54,7 @@ public partial class MacroLibraryPanel : UserControl
 
     public MacroLibraryPanel()
     {
+        libraryDragMouseHookProc = LibraryDragMouseHookCallback;
         InitializeComponent();
     }
 
@@ -51,7 +68,6 @@ public partial class MacroLibraryPanel : UserControl
 
     public void ApplyLocalization()
     {
-        LibraryTitleText.Text = L("MacroLibrary");
         NewMacroButton.Content = L("NewMacro");
         NewFolderButton.Content = L("NewFolder");
         CopyMacroButton.Content = L("Copy");
@@ -81,6 +97,7 @@ public partial class MacroLibraryPanel : UserControl
         {
             item.Content = item.Tag?.ToString() switch
             {
+                "manual" => L("SortManual"),
                 "updated" => L("SortRecentlyUpdated"),
                 _ => L("SortName")
             };
@@ -148,10 +165,16 @@ public partial class MacroLibraryPanel : UserControl
     {
         if (state is null) return;
 
+        var search = MacroSearchBox.Text.Trim();
+        var previousScrollOffset = GetMacroTreeScrollViewer()?.VerticalOffset ?? 0;
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            CaptureExpandedFolders();
+        }
+
         state.ReloadLibrary();
         var selectedId = state.SelectedMacroId ?? state.LibrarySnapshot.SelectedMacroId;
-        var search = MacroSearchBox.Text.Trim();
-        var sortMode = (LibrarySortBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "name";
+        var sortMode = (LibrarySortBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "manual";
         var items = state.LibrarySnapshot.Items.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -161,44 +184,56 @@ public partial class MacroLibraryPanel : UserControl
                 || item.Folder.Contains(search, StringComparison.CurrentCultureIgnoreCase));
         }
 
-        var materializedItems = (sortMode == "updated"
-            ? items.OrderByDescending(item => item.UpdatedAt).ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
-            : items.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase))
-            .ToList();
+        var materializedItems = sortMode switch
+        {
+            "updated" => items.OrderByDescending(item => item.UpdatedAt).ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
+            "name" => items.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
+            _ => items.ToList()
+        };
 
-        suppressSelection = true;
         var nodes = new List<MacroLibraryTreeNode>();
-        var folderNames = state.LibrarySnapshot.Folders
-            .Concat(materializedItems.Select(item => item.Folder))
-            .Where(folder => !string.IsNullOrWhiteSpace(folder))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(folder => folder, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-
-        foreach (var folder in folderNames)
+        try
         {
-            var children = materializedItems
-                .Where(item => string.Equals(item.Folder, folder, StringComparison.Ordinal))
-                .Select(CreateMacroNode)
+            suppressSelection = true;
+            var folderNames = state.LibrarySnapshot.Folders
+                .Concat(materializedItems.Select(item => item.Folder))
+                .Where(folder => !string.IsNullOrWhiteSpace(folder))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(folder => folder, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
-            if (!string.IsNullOrWhiteSpace(search) && children.Count == 0 && !folder.Contains(search, StringComparison.CurrentCultureIgnoreCase))
-                continue;
 
-            var folderNode = MacroLibraryTreeNode.Folder(folder, children);
-            folderNode.IsSelected = selectedId is null && string.Equals(selectedFolder, folder, StringComparison.Ordinal);
-            MarkSelectedMacro(folderNode.Children, selectedId);
-            nodes.Add(folderNode);
+            foreach (var folder in folderNames)
+            {
+                var children = materializedItems
+                    .Where(item => string.Equals(item.Folder, folder, StringComparison.Ordinal))
+                    .Select(CreateMacroNode)
+                    .ToList();
+                if (!string.IsNullOrWhiteSpace(search) && children.Count == 0 && !folder.Contains(search, StringComparison.CurrentCultureIgnoreCase))
+                    continue;
+
+                var folderNode = MacroLibraryTreeNode.Folder(folder, children);
+                folderNode.IsExpanded = !string.IsNullOrWhiteSpace(search)
+                    || expandedFolders.Contains(folder);
+                folderNode.IsSelected = selectedId is null && string.Equals(selectedFolder, folder, StringComparison.Ordinal);
+                MarkSelectedMacro(folderNode.Children, selectedId);
+                nodes.Add(folderNode);
+            }
+
+            foreach (var item in materializedItems.Where(item => string.IsNullOrWhiteSpace(item.Folder)))
+            {
+                var macroNode = CreateMacroNode(item);
+                macroNode.IsSelected = item.Id == selectedId;
+                nodes.Add(macroNode);
+            }
+
+            MacroTreeView.ItemsSource = nodes;
         }
-
-        foreach (var item in materializedItems.Where(item => string.IsNullOrWhiteSpace(item.Folder)))
+        finally
         {
-            var macroNode = CreateMacroNode(item);
-            macroNode.IsSelected = item.Id == selectedId;
-            nodes.Add(macroNode);
+            suppressSelection = false;
         }
 
-        MacroTreeView.ItemsSource = nodes;
-        suppressSelection = false;
+        RestoreMacroTreeScroll(previousScrollOffset);
     }
 
     private void MacroSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshList();
@@ -324,6 +359,22 @@ public partial class MacroLibraryPanel : UserControl
         treeViewItem.IsSelected = true;
     }
 
+    private void MacroTreeView_Loaded(object sender, RoutedEventArgs e)
+    {
+        macroTreeScrollViewer = FindVisualChild<ScrollViewer>(MacroTreeView);
+        macroTreeHwndSource = HwndSource.FromVisual(MacroTreeView) as HwndSource;
+        macroTreeHwndSource?.RemoveHook(MacroTreeWndProc);
+        macroTreeHwndSource?.AddHook(MacroTreeWndProc);
+    }
+
+    private void MacroTreeView_Unloaded(object sender, RoutedEventArgs e)
+    {
+        StopLibraryDragWheelHook();
+        macroTreeHwndSource?.RemoveHook(MacroTreeWndProc);
+        macroTreeHwndSource = null;
+        macroTreeScrollViewer = null;
+    }
+
     private void MacroTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
@@ -333,7 +384,109 @@ public partial class MacroLibraryPanel : UserControl
         if (treeViewItem is null) return;
         if (treeViewItem.DataContext is not MacroLibraryTreeNode { Item: { } item }) return;
 
-        DragDrop.DoDragDrop(MacroTreeView, new DataObject(MacroLibraryDragFormat, item.Id), DragDropEffects.Copy | DragDropEffects.Move);
+        try
+        {
+            libraryDragInProgress = true;
+            StartLibraryDragWheelHook();
+            DragDrop.DoDragDrop(MacroTreeView, new DataObject(MacroLibraryDragFormat, item.Id), DragDropEffects.Copy | DragDropEffects.Move);
+        }
+        finally
+        {
+            StopLibraryDragWheelHook();
+            ClearMacroDropIndicator();
+            libraryDragInProgress = false;
+        }
+    }
+
+    private void MacroTreeView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!libraryDragInProgress)
+        {
+            return;
+        }
+
+        ScrollMacroTreeByWheelDelta(e.Delta);
+        e.Handled = true;
+    }
+
+    private void MacroTreeView_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(MacroLibraryDragFormat))
+        {
+            ClearMacroDropIndicator();
+            e.Effects = DragDropEffects.None;
+            return;
+        }
+
+        AutoScrollMacroTree(e.GetPosition(MacroTreeView));
+        if (e.Data.GetData(MacroLibraryDragFormat) is not string macroId)
+        {
+            ClearMacroDropIndicator();
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        var target = GetMacroDropTarget(e.GetPosition(MacroTreeView), macroId);
+        SetMacroDropIndicator(target);
+        e.Effects = target.IsNoOp ? DragDropEffects.None : DragDropEffects.Move;
+        e.Handled = true;
+    }
+
+    private void MacroTreeView_DragLeave(object sender, DragEventArgs e)
+    {
+        ClearMacroDropIndicator();
+    }
+
+    private IntPtr MacroTreeWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_MOUSEWHEEL && libraryDragInProgress && IsScreenPointInsideMacroTree(lParam))
+        {
+            ScrollMacroTreeByWheelDelta(GetWheelDelta(wParam));
+            handled = true;
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void StartLibraryDragWheelHook()
+    {
+        if (libraryDragMouseHookHandle != IntPtr.Zero)
+        {
+            return;
+        }
+
+        libraryDragMouseHookHandle = SetWindowsHookEx(WH_MOUSE_LL, libraryDragMouseHookProc, IntPtr.Zero, 0);
+    }
+
+    private void StopLibraryDragWheelHook()
+    {
+        if (libraryDragMouseHookHandle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        UnhookWindowsHookEx(libraryDragMouseHookHandle);
+        libraryDragMouseHookHandle = IntPtr.Zero;
+    }
+
+    private IntPtr LibraryDragMouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0
+            && wParam.ToInt32() == WM_MOUSEWHEEL_LOW_LEVEL
+            && libraryDragInProgress
+            && libraryDragMouseHookHandle != IntPtr.Zero)
+        {
+            var data = Marshal.PtrToStructure<MouseLowLevelHookStruct>(lParam);
+            if (IsScreenPointInsideMacroTree(data.Point.X, data.Point.Y))
+            {
+                var delta = unchecked((short)((data.MouseData >> 16) & 0xFFFF));
+                Dispatcher.BeginInvoke(new Action(() => ScrollMacroTreeByWheelDelta(delta)), DispatcherPriority.Input);
+                return new IntPtr(1);
+            }
+        }
+
+        return CallNextHookEx(libraryDragMouseHookHandle, nCode, wParam, lParam);
     }
 
     private static bool IsScrollbarDragSource(DependencyObject? source)
@@ -343,22 +496,112 @@ public partial class MacroLibraryPanel : UserControl
             || FindVisualParent<Track>(source) is not null;
     }
 
+    private bool IsScreenPointInsideMacroTree(IntPtr lParam)
+    {
+        if (!MacroTreeView.IsLoaded)
+        {
+            return false;
+        }
+
+        var packed = lParam.ToInt64();
+        var screenPoint = new Point(
+            unchecked((short)(packed & 0xFFFF)),
+            unchecked((short)((packed >> 16) & 0xFFFF)));
+        return IsScreenPointInsideMacroTree(screenPoint.X, screenPoint.Y);
+    }
+
+    private bool IsScreenPointInsideMacroTree(double screenX, double screenY)
+    {
+        if (!MacroTreeView.IsLoaded)
+        {
+            return false;
+        }
+
+        var screenPoint = new Point(screenX, screenY);
+        var treePoint = MacroTreeView.PointFromScreen(screenPoint);
+        return treePoint.X >= 0
+            && treePoint.Y >= 0
+            && treePoint.X <= MacroTreeView.ActualWidth
+            && treePoint.Y <= MacroTreeView.ActualHeight;
+    }
+
+    private static int GetWheelDelta(IntPtr wParam)
+    {
+        return unchecked((short)((wParam.ToInt64() >> 16) & 0xFFFF));
+    }
+
+    private void AutoScrollMacroTree(Point position)
+    {
+        var scrollViewer = GetMacroTreeScrollViewer();
+        if (scrollViewer is null)
+        {
+            return;
+        }
+
+        const double edgeSize = 20;
+        var now = Environment.TickCount64;
+        if (now - lastLibraryAutoScrollTick < LibraryAutoScrollIntervalMilliseconds)
+        {
+            return;
+        }
+
+        if (position.Y < edgeSize)
+        {
+            lastLibraryAutoScrollTick = now;
+            scrollViewer.LineUp();
+        }
+        else if (position.Y > MacroTreeView.ActualHeight - edgeSize)
+        {
+            lastLibraryAutoScrollTick = now;
+            scrollViewer.LineDown();
+        }
+        else
+        {
+            lastLibraryAutoScrollTick = 0;
+        }
+    }
+
+    private void ScrollMacroTreeByWheelDelta(int delta)
+    {
+        var scrollViewer = GetMacroTreeScrollViewer();
+        if (scrollViewer is null)
+        {
+            return;
+        }
+
+        var lines = SystemParameters.WheelScrollLines <= 0 ? 3 : SystemParameters.WheelScrollLines;
+        var offsetDelta = -(delta / WheelDelta) * lines;
+        var target = Math.Clamp(scrollViewer.VerticalOffset + offsetDelta, 0, scrollViewer.ScrollableHeight);
+        scrollViewer.ScrollToVerticalOffset(target);
+    }
+
     private void MacroTreeView_Drop(object sender, DragEventArgs e)
     {
         if (state is null) return;
         if (!e.Data.GetDataPresent(MacroLibraryDragFormat)) return;
         if (e.Data.GetData(MacroLibraryDragFormat) is not string macroId) return;
 
-        var targetFolder = GetDropTargetFolder(e.OriginalSource as DependencyObject);
+        var target = GetMacroDropTarget(e.GetPosition(MacroTreeView), macroId);
+        if (target.IsNoOp)
+        {
+            ClearMacroDropIndicator();
+            e.Effects = DragDropEffects.Move;
+            e.Handled = true;
+            return;
+        }
+
         try
         {
-            state.LibraryStore.MoveMacro(macroId, targetFolder);
+            ClearMacroDropIndicator();
+            state.LibraryStore.MoveMacro(macroId, target.Folder, target.BeforeMacroId);
             state.SelectedMacroId = macroId;
-            selectedFolder = targetFolder;
+            selectedFolder = target.Folder;
+            SelectLibrarySortMode("manual");
             RefreshTree();
-            ResultMessage?.Invoke(string.IsNullOrWhiteSpace(targetFolder)
+            ResultMessage?.Invoke(string.IsNullOrWhiteSpace(target.Folder)
                 ? L("MacroMovedToRoot")
-                : LF("MacroMovedToFolder", targetFolder));
+                : LF("MacroMovedToFolder", target.Folder));
+            e.Effects = DragDropEffects.Move;
             e.Handled = true;
         }
         catch (Exception ex)
@@ -832,6 +1075,33 @@ public partial class MacroLibraryPanel : UserControl
         }
     }
 
+    private void CaptureExpandedFolders()
+    {
+        expandedFolders.Clear();
+        if (MacroTreeView.ItemsSource is not IEnumerable<MacroLibraryTreeNode> nodes)
+        {
+            return;
+        }
+
+        foreach (var node in nodes.Where(node => node.IsFolder && node.IsExpanded))
+        {
+            expandedFolders.Add(node.FolderName);
+        }
+    }
+
+    private void RestoreMacroTreeScroll(double verticalOffset)
+    {
+        MacroTreeView.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            GetMacroTreeScrollViewer()?.ScrollToVerticalOffset(verticalOffset);
+        }), DispatcherPriority.Loaded);
+    }
+
+    private ScrollViewer? GetMacroTreeScrollViewer()
+    {
+        return macroTreeScrollViewer ??= FindVisualChild<ScrollViewer>(MacroTreeView);
+    }
+
     private string GetCurrentFolder()
     {
         if (MacroTreeView.SelectedItem is MacroLibraryTreeNode node)
@@ -840,6 +1110,139 @@ public partial class MacroLibraryPanel : UserControl
         }
 
         return selectedFolder ?? string.Empty;
+    }
+
+    private void SelectLibrarySortMode(string tag)
+    {
+        foreach (var item in LibrarySortBox.Items.OfType<ComboBoxItem>())
+        {
+            if (!string.Equals(item.Tag?.ToString(), tag, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!ReferenceEquals(LibrarySortBox.SelectedItem, item))
+            {
+                LibrarySortBox.SelectedItem = item;
+            }
+
+            return;
+        }
+    }
+
+    private MacroLibraryDropTarget GetMacroDropTarget(Point point, string sourceMacroId)
+    {
+        var source = MacroTreeView.InputHitTest(point) as DependencyObject;
+        var treeViewItem = FindVisualParent<TreeViewItem>(source);
+        if (treeViewItem?.DataContext is not MacroLibraryTreeNode node)
+        {
+            return MacroLibraryDropTarget.NoOp;
+        }
+
+        if (node.IsFolder)
+        {
+            return new MacroLibraryDropTarget(node.FolderName, null, node, MacroLibraryDropIndicator.Into);
+        }
+
+        if (node.Item is not { } target)
+        {
+            return MacroLibraryDropTarget.NoOp;
+        }
+
+        if (string.Equals(target.Id, sourceMacroId, StringComparison.Ordinal))
+        {
+            return MacroLibraryDropTarget.NoOp;
+        }
+
+        var pointInsideItem = MacroTreeView.TranslatePoint(point, treeViewItem);
+        var insertBeforeTarget = pointInsideItem.Y < treeViewItem.ActualHeight / 2;
+        var beforeMacroId = insertBeforeTarget
+            ? target.Id
+            : GetNextMacroIdInFolder(target.Id, target.Folder, sourceMacroId);
+        var indicator = insertBeforeTarget
+            ? MacroLibraryDropIndicator.Before
+            : MacroLibraryDropIndicator.After;
+        return new MacroLibraryDropTarget(target.Folder, beforeMacroId, node, indicator);
+    }
+
+    private void SetMacroDropIndicator(MacroLibraryDropTarget target)
+    {
+        if (target.IsNoOp || target.Node is null || target.Indicator == MacroLibraryDropIndicator.None)
+        {
+            ClearMacroDropIndicator();
+            return;
+        }
+
+        if (ReferenceEquals(macroDropIndicatorNode, target.Node) && target.Node.DropIndicator == target.Indicator)
+        {
+            return;
+        }
+
+        ClearMacroDropIndicator();
+        macroDropIndicatorNode = target.Node;
+        target.Node.DropIndicator = target.Indicator;
+    }
+
+    private void ClearMacroDropIndicator()
+    {
+        if (macroDropIndicatorNode is null)
+        {
+            return;
+        }
+
+        macroDropIndicatorNode.DropIndicator = MacroLibraryDropIndicator.None;
+        macroDropIndicatorNode = null;
+    }
+
+    private string? GetNextMacroIdInFolder(string targetMacroId, string folder, string sourceMacroId)
+    {
+        var seenTarget = false;
+        foreach (var node in GetMacroNodesInFolder(folder))
+        {
+            if (string.Equals(node.Item?.Id, targetMacroId, StringComparison.Ordinal))
+            {
+                seenTarget = true;
+                continue;
+            }
+
+            if (!seenTarget || string.Equals(node.Item?.Id, sourceMacroId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return node.Item?.Id;
+        }
+
+        return null;
+    }
+
+    private IEnumerable<MacroLibraryTreeNode> GetMacroNodesInFolder(string folder)
+    {
+        if (MacroTreeView.ItemsSource is not IEnumerable<MacroLibraryTreeNode> nodes)
+        {
+            yield break;
+        }
+
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            foreach (var node in nodes.Where(node => node.Item is not null))
+            {
+                yield return node;
+            }
+
+            yield break;
+        }
+
+        var folderNode = nodes.FirstOrDefault(node => node.IsFolder && string.Equals(node.FolderName, folder, StringComparison.Ordinal));
+        if (folderNode is null)
+        {
+            yield break;
+        }
+
+        foreach (var child in folderNode.Children.Where(node => node.Item is not null))
+        {
+            yield return child;
+        }
     }
 
     private static string GetDropTargetFolder(DependencyObject? source)
@@ -853,10 +1256,40 @@ public partial class MacroLibraryPanel : UserControl
         return string.Empty;
     }
 
+    private string GetDropTargetFolder(Point point)
+    {
+        return GetDropTargetFolder(MacroTreeView.InputHitTest(point) as DependencyObject);
+    }
+
     private static T? FindVisualParent<T>(DependencyObject? source) where T : DependencyObject
     {
         for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
             if (current is T match) return match;
+        return null;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject? source) where T : DependencyObject
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(source); index++)
+        {
+            var child = VisualTreeHelper.GetChild(source, index);
+            if (child is T match)
+            {
+                return match;
+            }
+
+            var descendant = FindVisualChild<T>(child);
+            if (descendant is not null)
+            {
+                return descendant;
+            }
+        }
+
         return null;
     }
 
@@ -872,9 +1305,61 @@ public partial class MacroLibraryPanel : UserControl
 
     private sealed record MacroLibraryClipboardItem(MacroLibraryClipboardKind Kind, string Value);
 
+    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseLowLevelHookStruct
+    {
+        public NativePoint Point;
+        public int MouseData;
+        public int Flags;
+        public int Time;
+        public IntPtr ExtraInfo;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(
+        int idHook,
+        LowLevelMouseProc lpfn,
+        IntPtr hmod,
+        uint dwThreadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CallNextHookEx(
+        IntPtr hhk,
+        int nCode,
+        IntPtr wParam,
+        IntPtr lParam);
+
     private enum MacroLibraryClipboardKind
     {
         Macro,
         Folder
+    }
+
+    private sealed record MacroLibraryDropTarget(
+        string Folder,
+        string? BeforeMacroId,
+        MacroLibraryTreeNode? Node,
+        MacroLibraryDropIndicator Indicator,
+        bool IsNoOp = false)
+    {
+        public static MacroLibraryDropTarget NoOp { get; } = new(
+            string.Empty,
+            null,
+            null,
+            MacroLibraryDropIndicator.None,
+            IsNoOp: true);
     }
 }

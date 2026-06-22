@@ -4,88 +4,118 @@
     <UserControl.Resources>
         <HierarchicalDataTemplate x:Key="MacroTreeNodeTemplate" ItemsSource="{Binding Children}">
             <Grid Margin="8,7" MouseLeftButtonDown="MacroTreeNode_MouseLeftButtonDown">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="24" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Icon}"
-                           FontSize="15"
-                           Foreground="{Binding Accent}"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{Binding Title}"
-                                   FontWeight="{Binding Weight}"
-                                   Foreground="{Binding TitleBrush}"
-                                   TextTrimming="CharacterEllipsis">
-                            <TextBlock.Style>
-                                <Style TargetType="{x:Type TextBlock}">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsRenaming}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                        <Border Grid.Column="1"
-                                Background="{Binding ListeningBadgeBrush}"
-                                CornerRadius="9"
-                                Padding="7,2"
-                                Margin="8,0,0,0"
-                                VerticalAlignment="Center"
-                                Visibility="{Binding ListeningBadgeVisibility}">
-                            <TextBlock Text="{Binding ListeningBadgeText}"
-                                       Foreground="White"
-                                       FontSize="10" />
-                        </Border>
-                        <TextBox x:Name="RenameTextBox"
-                                 MinHeight="24"
-                                 Margin="-4,-3,0,-2"
-                                 Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 Loaded="RenameTextBox_Loaded"
-                                 KeyDown="RenameTextBox_KeyDown"
-                                 LostFocus="RenameTextBox_LostFocus">
-                            <TextBox.Style>
-                                <Style TargetType="{x:Type TextBox}">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsRenaming}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBox.Style>
-                        </TextBox>
-                    </Grid>
-                    <TextBlock Text="{Binding Subtitle}"
-                               Foreground="{DynamicResource SecondaryText}"
-                               FontSize="11"
-                               TextTrimming="CharacterEllipsis" />
-                </StackPanel>
+                <Border Margin="-5,-4"
+                        Background="{DynamicResource Selection}"
+                        BorderBrush="{DynamicResource SelectionBorder}"
+                        BorderThickness="1"
+                        CornerRadius="7"
+                        Opacity="0.75"
+                        Visibility="{Binding DropIntoVisibility}"
+                        IsHitTestVisible="False" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Icon}"
+                               FontSize="15"
+                               Foreground="{Binding Accent}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Title}"
+                                       FontWeight="{Binding Weight}"
+                                       Foreground="{DynamicResource PrimaryText}"
+                                       TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="{x:Type TextBlock}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <Border Grid.Column="1"
+                                    Background="{Binding ListeningBadgeBrush}"
+                                    CornerRadius="9"
+                                    Padding="7,2"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding ListeningBadgeVisibility}">
+                                <TextBlock Text="{Binding ListeningBadgeText}"
+                                           Foreground="White"
+                                           FontSize="10" />
+                            </Border>
+                            <TextBox x:Name="RenameTextBox"
+                                     MinHeight="24"
+                                     Margin="-4,-3,0,-2"
+                                     Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Loaded="RenameTextBox_Loaded"
+                                     KeyDown="RenameTextBox_KeyDown"
+                                     LostFocus="RenameTextBox_LostFocus">
+                                <TextBox.Style>
+                                    <Style TargetType="{x:Type TextBox}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                        </Grid>
+                        <TextBlock Text="{Binding Subtitle}"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   FontSize="11"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+                <Border Height="3"
+                        Margin="-5,-7,-5,0"
+                        Background="{DynamicResource Accent}"
+                        CornerRadius="2"
+                        VerticalAlignment="Top"
+                        Visibility="{Binding DropBeforeVisibility}"
+                        IsHitTestVisible="False" />
+                <Border Height="3"
+                        Margin="-5,0,-5,-7"
+                        Background="{DynamicResource Accent}"
+                        CornerRadius="2"
+                        VerticalAlignment="Bottom"
+                        Visibility="{Binding DropAfterVisibility}"
+                        IsHitTestVisible="False" />
             </Grid>
         </HierarchicalDataTemplate>
     </UserControl.Resources>
 
     <Border Style="{StaticResource SidebarPanelBorderStyle}" Padding="12">
-        <DockPanel>
-            <StackPanel DockPanel.Dock="Top">
-                <TextBlock x:Name="LibraryTitleText" Style="{StaticResource PanelTitle}" Text="宏数据库" />
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="220" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Margin="0,0,0,8">
                 <TextBox x:Name="MacroSearchBox"
                          Height="32"
-                         Margin="0,12,0,8"
+                         Margin="0,0,0,8"
                          TextChanged="MacroSearchBox_TextChanged" />
                 <ComboBox x:Name="LibrarySortBox"
                           Height="30"
                           Margin="0,0,0,10"
                           SelectionChanged="LibrarySortBox_SelectionChanged">
-                    <ComboBoxItem Tag="name" Content="按字母顺序" IsSelected="True" />
+                    <ComboBoxItem Tag="manual" Content="自定义顺序" IsSelected="True" />
+                    <ComboBoxItem Tag="name" Content="按字母顺序" />
                     <ComboBoxItem Tag="updated" Content="最近更新" />
                 </ComboBox>
                 <WrapPanel Margin="0,0,0,8">
@@ -95,6 +125,51 @@
                     <Button x:Name="PasteMacroButton" MinWidth="72" Content="粘贴" Click="PasteMacro_Click" IsEnabled="False" />
                     <Button x:Name="DeleteMacroButton" MinWidth="72" Content="删除" Style="{StaticResource DangerButton}" Click="DeleteMacro_Click" />
                 </WrapPanel>
+            </StackPanel>
+
+            <TreeView x:Name="MacroTreeView"
+                      Grid.Row="1"
+                      MinHeight="220"
+                      Margin="0,0,0,10"
+                      ItemTemplate="{StaticResource MacroTreeNodeTemplate}"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.CanContentScroll="False"
+                      SelectedItemChanged="MacroTreeView_SelectedItemChanged"
+                      Loaded="MacroTreeView_Loaded"
+                      Unloaded="MacroTreeView_Unloaded"
+                      PreviewMouseMove="MacroTreeView_PreviewMouseMove"
+                      PreviewMouseWheel="MacroTreeView_PreviewMouseWheel"
+                      PreviewMouseRightButtonDown="MacroTreeView_PreviewMouseRightButtonDown"
+                      DragOver="MacroTreeView_DragOver"
+                      DragLeave="MacroTreeView_DragLeave"
+                      KeyDown="MacroTreeView_KeyDown"
+                      AllowDrop="True"
+                      Drop="MacroTreeView_Drop">
+                <TreeView.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem x:Name="RenameMenuItem" Header="重命名" Click="RenameMenuItem_Click" />
+                        <MenuItem x:Name="CopyMenuItem" Header="复制" Click="CopyMenuItem_Click" />
+                        <MenuItem x:Name="PasteMenuItem" Header="粘贴" Click="PasteMenuItem_Click" />
+                        <Separator />
+                        <MenuItem x:Name="DeleteMenuItem" Header="删除" Click="DeleteMenuItem_Click" />
+                    </ContextMenu>
+                </TreeView.ContextMenu>
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="{x:Type TreeViewItem}" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                    </Style>
+                </TreeView.ItemContainerStyle>
+            </TreeView>
+
+            <ScrollViewer x:Name="LibraryToolsScrollViewer"
+                          Grid.Row="2"
+                          MaxHeight="220"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          CanContentScroll="False">
+                <StackPanel>
                 <Border Height="1"
                         Margin="0,2,0,10"
                         Background="{DynamicResource PanelBorder}" />
@@ -183,35 +258,8 @@
                            TextWrapping="Wrap"
                            Margin="0,0,0,10"
                            Foreground="{DynamicResource SecondaryText}" />
-            </StackPanel>
-
-            <TreeView x:Name="MacroTreeView"
-                      ItemTemplate="{StaticResource MacroTreeNodeTemplate}"
-                      ScrollViewer.VerticalScrollBarVisibility="Auto"
-                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                      ScrollViewer.CanContentScroll="False"
-                      SelectedItemChanged="MacroTreeView_SelectedItemChanged"
-                      PreviewMouseMove="MacroTreeView_PreviewMouseMove"
-                      PreviewMouseRightButtonDown="MacroTreeView_PreviewMouseRightButtonDown"
-                      KeyDown="MacroTreeView_KeyDown"
-                      AllowDrop="True"
-                      Drop="MacroTreeView_Drop">
-                <TreeView.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem x:Name="RenameMenuItem" Header="重命名" Click="RenameMenuItem_Click" />
-                        <MenuItem x:Name="CopyMenuItem" Header="复制" Click="CopyMenuItem_Click" />
-                        <MenuItem x:Name="PasteMenuItem" Header="粘贴" Click="PasteMenuItem_Click" />
-                        <Separator />
-                        <MenuItem x:Name="DeleteMenuItem" Header="删除" Click="DeleteMenuItem_Click" />
-                    </ContextMenu>
-                </TreeView.ContextMenu>
-                <TreeView.ItemContainerStyle>
-                    <Style TargetType="{x:Type TreeViewItem}" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-                    </Style>
-                </TreeView.ItemContainerStyle>
-            </TreeView>
-        </DockPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </Border>
 </UserControl>

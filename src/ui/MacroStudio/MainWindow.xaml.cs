@@ -59,6 +59,7 @@ public partial class MainWindow : Window
         ContentRendered += MainWindow_ContentRendered;
         LocalizationService.Initialize();
         ConfigureWorkspaceDockHost();
+        RefreshThemeToggleButton();
 
         InitializeLanguageComboBox();
         InitializePanels();
@@ -88,8 +89,8 @@ public partial class MainWindow : Window
         LibraryPanel.ImportApplied += OnImportApplied;
         LibraryPanel.DocumentRequested += () => GetDocumentWithPlayback();
         LibraryPanel.ResultMessage += msg => SetStatus(msg);
-        LibraryPanel.StartListeningAllRequested += OnStartListening;
-        LibraryPanel.StopListeningAllRequested += OnStopListening;
+        LibraryPanel.StartListeningAllRequested += OnStartListeningAll;
+        LibraryPanel.StopListeningAllRequested += OnStopListeningAll;
         LibraryPanel.PrecisionSettingsEdited += OnPrecisionSettingsEdited;
 
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
@@ -108,8 +109,8 @@ public partial class MainWindow : Window
 
         ActionPalette.ActionClicked += OnActionPaletteClicked;
 
-        PlaybackPanelControl.StartListeningRequested += OnStartListening;
-        PlaybackPanelControl.StopListeningRequested += OnStopListening;
+        PlaybackPanelControl.StartListeningRequested += OnStartCurrentListening;
+        PlaybackPanelControl.StopListeningRequested += OnStopCurrentListening;
         PlaybackPanelControl.RunNowRequested += OnRunNow;
         PlaybackPanelControl.StopPlaybackRequested += OnStopPlayback;
         PlaybackPanelControl.PlaybackSettingsEdited += OnPlaybackSettingsEdited;
@@ -1048,11 +1049,30 @@ public partial class MainWindow : Window
             return;
         }
 
-        listening = false;
-        keyboardHook?.Dispose();
-        keyboardHook = null;
+        var activeIds = listeningControllers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
         StopListeningControllers();
-        OnStartListening();
+        if (activeIds.Count == 0)
+        {
+            listening = false;
+            keyboardHook?.Dispose();
+            keyboardHook = null;
+            RefreshLibraryListeningState();
+            return;
+        }
+
+        var candidates = BuildListeningCandidates()
+            .Where(candidate => activeIds.Contains(candidate.Item.Id))
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            listening = false;
+            keyboardHook?.Dispose();
+            keyboardHook = null;
+            RefreshLibraryListeningState();
+            return;
+        }
+
+        StartListeningCandidates(candidates);
     }
 
     private void AutoSaveCurrentMacro(bool updateStatus)
@@ -1134,68 +1154,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnStartListening()
+    private async void OnStartListeningAll()
     {
         try
         {
             AutoSaveCurrentMacro(updateStatus: false);
-
-            var bindings = new List<HotkeyBinding>();
-            var controllers = new Dictionary<string, MacroPlaybackController>(StringComparer.OrdinalIgnoreCase);
-            var macroNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var processFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var candidates = BuildListeningCandidates();
-            var conflicts = FindListeningConflicts(candidates);
-            if (conflicts.Count > 0)
-            {
-                RefreshLibraryListeningState(conflicts);
-                throw new InvalidOperationException(FormatListeningConflictMessage(conflicts));
-            }
-
-            foreach (var candidate in candidates)
-            {
-                var item = candidate.Item;
-                var document = candidate.Document;
-                bindings.Add(new HotkeyBinding(item.Id, candidate.Trigger));
-                var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
-                var options = CreatePlaybackOptions(document);
-                executor.Prepare(document, options);
-                controllers[item.Id] = new MacroPlaybackController(document, executor, options);
-                macroNames[item.Id] = document.Name;
-                processFilters[item.Id] = candidate.ProcessFilter;
-            }
-
-            if (bindings.Count == 0)
-                throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
-
-            keyboardHook?.Dispose();
-            StopListeningControllers();
-
-            keyboardHook = new GlobalKeyboardHook();
-            keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
-            keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
-            keyboardHook.Start(bindings);
-
-            foreach (var (id, controller) in controllers)
-            {
-                listeningControllers[id] = controller;
-            }
-
-            foreach (var (id, name) in macroNames)
-            {
-                listeningMacroNames[id] = name;
-            }
-
-            foreach (var (id, processFilter) in processFilters)
-            {
-                listeningProcessFilters[id] = processFilter;
-            }
-
-            playbackController = null;
-            listening = true;
-            RefreshLibraryListeningState();
-            PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({bindings.Count})");
-            SetStatus($"{L("Listening")} ({bindings.Count})");
+            var count = StartListeningCandidates(BuildListeningCandidates());
+            PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
+            SetStatus($"{L("Listening")} ({count})");
             await Task.CompletedTask;
         }
         catch (Exception ex)
@@ -1207,7 +1173,38 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnStopListening()
+    private async void OnStartCurrentListening()
+    {
+        try
+        {
+            AutoSaveCurrentMacro(updateStatus: false);
+            var current = BuildCurrentListeningCandidate();
+            var desiredIds = listeningControllers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            desiredIds.Add(current.Item.Id);
+
+            var candidates = BuildListeningCandidates()
+                .Where(candidate => desiredIds.Contains(candidate.Item.Id))
+                .ToList();
+            if (!candidates.Any(candidate => string.Equals(candidate.Item.Id, current.Item.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                candidates.Add(current);
+            }
+
+            var count = StartListeningCandidates(candidates);
+            PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
+            SetStatus($"{L("Listening")} ({count})");
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
+            PlaybackPanelControl.SetPlaybackResult(ex.Message);
+            SetStatus(L("PlaybackError"));
+            RefreshLibraryListeningState();
+        }
+    }
+
+    private void OnStopListeningAll()
     {
         listening = false;
         keyboardHook?.Dispose();
@@ -1218,6 +1215,81 @@ public partial class MainWindow : Window
         PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusIdle"));
         PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
         SetStatus(L("Idle"));
+    }
+
+    private void OnStopCurrentListening()
+    {
+        if (editorState.SelectedMacroId is not { } id)
+        {
+            return;
+        }
+
+        StopListeningController(id);
+        RestartKeyboardHookFromListeningControllers();
+        RefreshLibraryListeningState();
+        PlaybackPanelControl.SetPlaybackStatus(listening ? L("PlaybackStatusListening") : L("PlaybackStatusIdle"));
+        PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
+        SetStatus(listening ? L("Listening") : L("Idle"));
+    }
+
+    private int StartListeningCandidates(IReadOnlyList<ListeningCandidate> candidates)
+    {
+        var conflicts = FindListeningConflicts(candidates);
+        if (conflicts.Count > 0)
+        {
+            RefreshLibraryListeningState(conflicts);
+            throw new InvalidOperationException(FormatListeningConflictMessage(conflicts));
+        }
+
+        var bindings = new List<HotkeyBinding>();
+        var controllers = new Dictionary<string, MacroPlaybackController>(StringComparer.OrdinalIgnoreCase);
+        var macroNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var processFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in candidates)
+        {
+            var item = candidate.Item;
+            var document = candidate.Document;
+            bindings.Add(new HotkeyBinding(item.Id, candidate.Trigger));
+            var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
+            var options = CreatePlaybackOptions(document);
+            executor.Prepare(document, options);
+            controllers[item.Id] = new MacroPlaybackController(document, executor, options);
+            macroNames[item.Id] = document.Name;
+            processFilters[item.Id] = candidate.ProcessFilter;
+        }
+
+        if (bindings.Count == 0)
+            throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
+
+        keyboardHook?.Dispose();
+        keyboardHook = null;
+        StopListeningControllers();
+        listening = false;
+
+        keyboardHook = new GlobalKeyboardHook();
+        keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
+        keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
+        keyboardHook.Start(bindings);
+
+        foreach (var (id, controller) in controllers)
+        {
+            listeningControllers[id] = controller;
+        }
+
+        foreach (var (id, name) in macroNames)
+        {
+            listeningMacroNames[id] = name;
+        }
+
+        foreach (var (id, processFilter) in processFilters)
+        {
+            listeningProcessFilters[id] = processFilter;
+        }
+
+        playbackController = null;
+        listening = true;
+        RefreshLibraryListeningState();
+        return bindings.Count;
     }
 
     private void StopListeningControllers()
@@ -1231,6 +1303,57 @@ public partial class MainWindow : Window
         listeningControllers.Clear();
         listeningMacroNames.Clear();
         listeningProcessFilters.Clear();
+    }
+
+    private void StopListeningController(string id)
+    {
+        if (!listeningControllers.Remove(id, out var controller))
+        {
+            return;
+        }
+
+        controller.Stop();
+        controller.Dispose();
+        listeningMacroNames.Remove(id);
+        listeningProcessFilters.Remove(id);
+        if (ReferenceEquals(playbackController, controller))
+        {
+            playbackController = null;
+        }
+    }
+
+    private void RestartKeyboardHookFromListeningControllers()
+    {
+        keyboardHook?.Dispose();
+        keyboardHook = null;
+
+        var activeIds = listeningControllers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (activeIds.Count == 0)
+        {
+            listening = false;
+            return;
+        }
+
+        var candidates = BuildListeningCandidates()
+            .Where(candidate => activeIds.Contains(candidate.Item.Id))
+            .ToList();
+        var candidateIds = candidates.Select(candidate => candidate.Item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in activeIds.Where(id => !candidateIds.Contains(id)).ToList())
+        {
+            StopListeningController(id);
+        }
+
+        if (candidates.Count == 0)
+        {
+            listening = false;
+            return;
+        }
+
+        keyboardHook = new GlobalKeyboardHook();
+        keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
+        keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
+        keyboardHook.Start(candidates.Select(candidate => new HotkeyBinding(candidate.Item.Id, candidate.Trigger)));
+        listening = true;
     }
 
     private List<ListeningCandidate> BuildListeningCandidates()
@@ -1261,6 +1384,28 @@ public partial class MainWindow : Window
         }
 
         return candidates;
+    }
+
+    private ListeningCandidate BuildCurrentListeningCandidate()
+    {
+        if (editorState.SelectedMacroId is not { } id)
+        {
+            throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
+        }
+
+        var item = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
+        var document = libraryStore.ReadMacro(item.Id);
+        if (document.Playback.Trigger is not { } trigger)
+        {
+            throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
+        }
+
+        return new ListeningCandidate(
+            item,
+            document,
+            trigger,
+            document.Playback.ProcessFilter ?? string.Empty);
     }
 
     private IReadOnlyList<(ListeningCandidate Left, ListeningCandidate Right)> FindListeningConflicts(
@@ -1677,6 +1822,11 @@ public partial class MainWindow : Window
     private void ThemeToggle_Click(object sender, RoutedEventArgs e)
     {
         ThemeService.Toggle();
+        RefreshThemeToggleButton();
+    }
+
+    private void RefreshThemeToggleButton()
+    {
         ThemeToggleButton.Content = ThemeService.CurrentTheme == AppTheme.Dark ? "☾" : "☀";
     }
 

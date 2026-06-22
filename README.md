@@ -42,6 +42,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 - [安装说明](docs/installer.md)
 - [使用说明](docs/usage.md)
 - [精度说明](docs/precision.md)
+- [当前精度水平](docs/current-precision-status.md)
 - [架构说明](docs/architecture.md)
 - [MCRX 格式](docs/mcrx-format.md)
 
@@ -91,6 +92,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 - [Installation](docs/installer.md)
 - [Usage Guide](docs/usage.md)
 - [Precision Notes](docs/precision.md)
+- [Current Precision Status](docs/current-precision-status.md)
 - [Architecture](docs/architecture.md)
 - [MCRX Format](docs/mcrx-format.md)
 

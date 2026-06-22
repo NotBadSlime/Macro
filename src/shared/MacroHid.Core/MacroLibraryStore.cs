@@ -177,7 +177,7 @@ public sealed class MacroLibraryStore
         SaveIndex(index);
     }
 
-    public MacroLibraryItem MoveMacro(string id, string? folder)
+    public MacroLibraryItem MoveMacro(string id, string? folder, string? beforeMacroId = null)
     {
         var index = LoadIndex();
         var itemIndex = index.Items.FindIndex(item => item.Id == id);
@@ -186,14 +186,16 @@ public sealed class MacroLibraryStore
             throw new KeyNotFoundException($"Macro '{id}' was not found.");
         }
 
+        var previous = index.Items[itemIndex];
+        index.Items.RemoveAt(itemIndex);
         var normalizedFolder = NormalizeFolder(folder);
         EnsureFolder(index, normalizedFolder);
-        var updated = index.Items[itemIndex] with
+        var updated = previous with
         {
             Folder = normalizedFolder,
             UpdatedAt = DateTimeOffset.UtcNow
         };
-        index.Items[itemIndex] = updated;
+        index.Items.Insert(GetMoveInsertIndex(index, normalizedFolder, beforeMacroId), updated);
         SaveIndex(index);
         return updated;
     }
@@ -353,6 +355,23 @@ public sealed class MacroLibraryStore
     {
         return index.Items.FirstOrDefault(item => item.Id == id)
             ?? throw new KeyNotFoundException($"Macro '{id}' was not found.");
+    }
+
+    private static int GetMoveInsertIndex(MacroLibraryIndex index, string folder, string? beforeMacroId)
+    {
+        if (!string.IsNullOrWhiteSpace(beforeMacroId))
+        {
+            var beforeIndex = index.Items.FindIndex(item =>
+                string.Equals(item.Id, beforeMacroId, StringComparison.Ordinal)
+                && string.Equals(item.Folder, folder, StringComparison.Ordinal));
+            if (beforeIndex >= 0)
+            {
+                return beforeIndex;
+            }
+        }
+
+        var lastInFolderIndex = index.Items.FindLastIndex(item => string.Equals(item.Folder, folder, StringComparison.Ordinal));
+        return lastInFolderIndex >= 0 ? lastInFolderIndex + 1 : index.Items.Count;
     }
 
     private static string NormalizeName(string? name)

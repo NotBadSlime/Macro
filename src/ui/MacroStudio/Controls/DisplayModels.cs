@@ -23,11 +23,9 @@ public sealed class BoolToThicknessConverter : IValueConverter
 
 public sealed class MacroLibraryListEntry
 {
-    private static readonly Brush HeaderBrush = new SolidColorBrush(Color.FromRgb(110, 110, 115));
     private static readonly Brush MacroBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
-    private static readonly Brush TextBrush = new SolidColorBrush(Color.FromRgb(29, 29, 31));
 
-    private MacroLibraryListEntry(MacroLibraryItem? item, string title, string subtitle, string icon, Brush accent, FontWeight weight, Brush titleBrush)
+    private MacroLibraryListEntry(MacroLibraryItem? item, string title, string subtitle, string icon, Brush accent, FontWeight weight)
     {
         Item = item;
         Title = title;
@@ -35,7 +33,6 @@ public sealed class MacroLibraryListEntry
         Icon = icon;
         Accent = accent;
         Weight = weight;
-        TitleBrush = titleBrush;
     }
 
     public MacroLibraryItem? Item { get; }
@@ -44,11 +41,10 @@ public sealed class MacroLibraryListEntry
     public string Icon { get; }
     public Brush Accent { get; }
     public FontWeight Weight { get; }
-    public Brush TitleBrush { get; }
 
     public static MacroLibraryListEntry Header(string title)
     {
-        return new MacroLibraryListEntry(null, title, string.Empty, "F", HeaderBrush, FontWeights.SemiBold, HeaderBrush);
+        return new MacroLibraryListEntry(null, title, string.Empty, "F", Brushes.Gray, FontWeights.SemiBold);
     }
 
     public static MacroLibraryListEntry Macro(MacroLibraryItem item)
@@ -69,7 +65,7 @@ public sealed class MacroLibraryListEntry
             subtitle = $"{document.Playback.ProcessFilter} · {subtitle}";
         }
 
-        return new MacroLibraryListEntry(item, item.Name, subtitle, "M", MacroBrush, FontWeights.Normal, TextBrush);
+        return new MacroLibraryListEntry(item, item.Name, subtitle, "M", MacroBrush, FontWeights.Normal);
     }
 
     private static string FormatPlaybackMode(PlaybackSettings settings)
@@ -122,9 +118,16 @@ public sealed record MacroLibraryListenState(
     }
 }
 
+public enum MacroLibraryDropIndicator
+{
+    None,
+    Before,
+    After,
+    Into
+}
+
 public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
 {
-    private static readonly Brush HeaderBrush = new SolidColorBrush(Color.FromRgb(110, 110, 115));
     private static readonly Brush FolderBrush = new SolidColorBrush(Color.FromRgb(142, 142, 147));
 
     private MacroLibraryTreeNode(
@@ -135,7 +138,6 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
         string icon,
         Brush accent,
         FontWeight weight,
-        Brush titleBrush,
         MacroLibraryListenState? listenState,
         IReadOnlyList<MacroLibraryTreeNode> children)
     {
@@ -146,10 +148,8 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
         Icon = icon;
         Accent = accent;
         Weight = weight;
-        TitleBrush = titleBrush;
         ListenState = listenState;
         Children = children;
-        IsExpanded = IsFolder;
         RenameText = title;
     }
 
@@ -160,7 +160,6 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
     public string Icon { get; }
     public Brush Accent { get; }
     public FontWeight Weight { get; }
-    public Brush TitleBrush { get; }
     public MacroLibraryListenState? ListenState { get; }
     public string ListeningBadgeText => ListenState?.BadgeText ?? string.Empty;
     public Brush ListeningBadgeBrush => ListenState?.BadgeBrush ?? Brushes.Transparent;
@@ -171,6 +170,31 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
     public bool IsFolder => Item is null;
     public bool IsExpanded { get; set; }
     public bool IsSelected { get; set; }
+    public Visibility DropBeforeVisibility => DropIndicator == MacroLibraryDropIndicator.Before
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+    public Visibility DropAfterVisibility => DropIndicator == MacroLibraryDropIndicator.After
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+    public Visibility DropIntoVisibility => DropIndicator == MacroLibraryDropIndicator.Into
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
+    private MacroLibraryDropIndicator dropIndicator;
+    public MacroLibraryDropIndicator DropIndicator
+    {
+        get => dropIndicator;
+        set
+        {
+            if (dropIndicator == value) return;
+            dropIndicator = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DropBeforeVisibility));
+            OnPropertyChanged(nameof(DropAfterVisibility));
+            OnPropertyChanged(nameof(DropIntoVisibility));
+        }
+    }
+
     private string renameText = string.Empty;
     public string RenameText
     {
@@ -199,7 +223,7 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
 
     public static MacroLibraryTreeNode Folder(string title, IReadOnlyList<MacroLibraryTreeNode> children)
     {
-        return new MacroLibraryTreeNode(null, title, title, $"{children.Count} items", "F", FolderBrush, FontWeights.SemiBold, HeaderBrush, null, children);
+        return new MacroLibraryTreeNode(null, title, title, $"{children.Count} items", "F", FolderBrush, FontWeights.SemiBold, null, children);
     }
 
     public static MacroLibraryTreeNode Macro(MacroLibraryItem item, MacroDocument? document, MacroLibraryListenState? listenState = null)
@@ -213,7 +237,7 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
             subtitle = string.Join(" · ", parts);
         }
 
-        return new MacroLibraryTreeNode(item, item.Folder, entry.Title, subtitle, entry.Icon, entry.Accent, entry.Weight, entry.TitleBrush, listenState, []);
+        return new MacroLibraryTreeNode(item, item.Folder, entry.Title, subtitle, entry.Icon, entry.Accent, entry.Weight, listenState, []);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

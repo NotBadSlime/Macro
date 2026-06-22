@@ -31,6 +31,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 SetupLogging=yes
+SetupIconFile=..\src\ui\MacroStudio\Assets\AppIcon.ico
 UninstallDisplayIcon={app}\MacroStudio\{#AppExeName}
 
 [Languages]

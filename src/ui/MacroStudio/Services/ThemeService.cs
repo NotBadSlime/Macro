@@ -40,16 +40,39 @@ public static class ThemeService
         var newDictionary = new ResourceDictionary { Source = uri };
 
         var mergedDictionaries = Application.Current.Resources.MergedDictionaries;
-
-        if (currentThemeDictionary is not null)
-        {
-            mergedDictionaries.Remove(currentThemeDictionary);
-        }
-
-        mergedDictionaries.Insert(0, newDictionary);
+        var insertIndex = RemoveExistingThemeDictionaries(mergedDictionaries);
+        mergedDictionaries.Insert(Math.Min(insertIndex, mergedDictionaries.Count), newDictionary);
         currentThemeDictionary = newDictionary;
         CurrentTheme = theme;
         ThemeChanged?.Invoke();
+    }
+
+    private static int RemoveExistingThemeDictionaries(IList<ResourceDictionary> mergedDictionaries)
+    {
+        var insertIndex = 0;
+        for (var index = mergedDictionaries.Count - 1; index >= 0; index--)
+        {
+            if (!IsThemeDictionary(mergedDictionaries[index]))
+            {
+                continue;
+            }
+
+            insertIndex = index;
+            mergedDictionaries.RemoveAt(index);
+        }
+
+        return insertIndex;
+    }
+
+    private static bool IsThemeDictionary(ResourceDictionary dictionary)
+    {
+        return dictionary.Source is { } source
+            && (UriEquals(source, LightThemeUri) || UriEquals(source, DarkThemeUri));
+    }
+
+    private static bool UriEquals(Uri left, Uri right)
+    {
+        return string.Equals(left.OriginalString, right.OriginalString, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SettingsPath =>

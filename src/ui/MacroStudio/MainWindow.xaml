@@ -8,6 +8,7 @@
         Width="1120"
         MinHeight="560"
         MinWidth="1040"
+        Icon="Assets/AppIcon.ico"
         Background="{DynamicResource PageBackground}"
         FontFamily="Segoe UI"
         ResizeMode="CanResize"

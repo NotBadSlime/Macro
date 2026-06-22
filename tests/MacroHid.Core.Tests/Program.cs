@@ -100,6 +100,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
+    ("MacroStudio separates library batch listening from playback current listening", MacroStudioSeparatesLibraryBatchListeningFromPlaybackCurrentListening),
     ("MacroStudio keeps playback listening buttons below mode controls", MacroStudioKeepsPlaybackListeningButtonsBelowModeControls),
     ("MacroStudio autosaves sequence conditions and rebuilds listeners", MacroStudioAutosavesSequenceConditionsAndRebuildsListeners),
     ("MacroStudio drop insertion uses target row and suppresses drag click duplication", MacroStudioDropInsertionUsesTargetRowAndSuppressesDragClickDuplication),
@@ -133,6 +134,8 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio condition editor content scrolls without clipping then actions", MacroStudioConditionEditorContentScrollsWithoutClippingThenActions),
     ("MacroStudio refreshes JSON content before showing tool window", MacroStudioRefreshesJsonContentBeforeShowingToolWindow),
     ("MacroStudio JSON panel avoids duplicate title", MacroStudioJsonPanelAvoidsDuplicateTitle),
+    ("MacroStudio macro library panel avoids duplicate tool title", MacroStudioMacroLibraryPanelAvoidsDuplicateToolTitle),
+    ("MacroStudio theme toggle replaces existing theme dictionaries", MacroStudioThemeToggleReplacesExistingThemeDictionaries),
     ("MacroStudio keeps bottom resize handle available when bottom panel is hidden", MacroStudioKeepsBottomResizeHandleAvailableWhenBottomPanelIsHidden),
     ("MacroStudio floating tool windows expose manual resize handles", MacroStudioFloatingToolWindowsExposeManualResizeHandles),
     ("MacroStudio exposes high feedback workspace motion styles", MacroStudioExposesHighFeedbackWorkspaceMotionStyles),
@@ -190,10 +193,17 @@ var tests = new (string Name, Action Body)[]
     ("Macro library store persists and duplicates macros", MacroLibraryStorePersistsAndDuplicatesMacros),
     ("Macro library store resolves external aliases", MacroLibraryStoreResolvesExternalAliases),
     ("Macro library store persists empty folders and moves macros like files", MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles),
+    ("Macro library store reorders macros within folders", MacroLibraryStoreReordersMacrosWithinFolders),
     ("Macro library store renames macros and folders", MacroLibraryStoreRenamesMacrosAndFolders),
     ("MacroStudio macro library uses a folder tree", MacroStudioMacroLibraryUsesFolderTree),
     ("MacroStudio macro library supports Explorer rename copy and paste", MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste),
+    ("MacroStudio macro library uses dynamic theme text colors", MacroStudioMacroLibraryUsesDynamicThemeTextColors),
     ("MacroStudio macro library scrollbar drag is not captured as macro drag", MacroStudioMacroLibraryScrollbarDragIsNotCapturedAsMacroDrag),
+    ("MacroStudio macro library keeps viewport stable while refreshing and dragging", MacroStudioMacroLibraryKeepsViewportStableWhileRefreshingAndDragging),
+    ("MacroStudio macro library accepts drag drops after wheel scrolling", MacroStudioMacroLibraryAcceptsDragDropsAfterWheelScrolling),
+    ("MacroStudio macro library ignores blank drag drop targets", MacroStudioMacroLibraryIgnoresBlankDragDropTargets),
+    ("MacroStudio macro library throttles edge autoscroll while dragging", MacroStudioMacroLibraryThrottlesEdgeAutoscrollWhileDragging),
+    ("MacroStudio macro library shows drag drop target indicators", MacroStudioMacroLibraryShowsDragDropTargetIndicators),
     ("Macro action templates create playable press release steps", MacroActionTemplatesCreatePlayablePressReleaseSteps),
 };
 
@@ -2192,6 +2202,21 @@ static void MacroStudioExposesLibraryListenAllControlsAndConflictStatus()
     Assert.Contains("RefreshLibraryListeningState", mainWindowCode);
 }
 
+static void MacroStudioSeparatesLibraryBatchListeningFromPlaybackCurrentListening()
+{
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("LibraryPanel.StartListeningAllRequested += OnStartListeningAll", mainWindowCode);
+    Assert.Contains("LibraryPanel.StopListeningAllRequested += OnStopListeningAll", mainWindowCode);
+    Assert.Contains("PlaybackPanelControl.StartListeningRequested += OnStartCurrentListening", mainWindowCode);
+    Assert.Contains("PlaybackPanelControl.StopListeningRequested += OnStopCurrentListening", mainWindowCode);
+    Assert.Contains("BuildCurrentListeningCandidate", mainWindowCode);
+    Assert.Contains("RestartKeyboardHookFromListeningControllers", mainWindowCode);
+    Assert.Contains("StopListeningController(string id)", mainWindowCode);
+    Assert.DoesNotContain("PlaybackPanelControl.StartListeningRequested += OnStartListening;", mainWindowCode);
+    Assert.DoesNotContain("PlaybackPanelControl.StopListeningRequested += OnStopListening;", mainWindowCode);
+}
+
 static void MacroStudioKeepsPlaybackListeningButtonsBelowModeControls()
 {
     var playbackXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackPanel.xaml"));
@@ -2849,6 +2874,33 @@ static void MacroStudioJsonPanelAvoidsDuplicateTitle()
     Assert.DoesNotContain("x:Name=\"JsonTitleText\"", jsonXaml);
     Assert.DoesNotContain("Style=\"{StaticResource PanelTitle}\"", jsonXaml);
     Assert.Contains("JsonApplyBar", jsonXaml);
+}
+
+static void MacroStudioMacroLibraryPanelAvoidsDuplicateToolTitle()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var mainWindowXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml"));
+
+    Assert.Contains("LibraryToolTitle", mainWindowXaml);
+    Assert.DoesNotContain("x:Name=\"LibraryTitleText\"", libraryXaml);
+    Assert.DoesNotContain("Style=\"{StaticResource PanelTitle}\"", libraryXaml);
+    Assert.DoesNotContain("LibraryTitleText.Text", libraryCode);
+}
+
+static void MacroStudioThemeToggleReplacesExistingThemeDictionaries()
+{
+    var themeServiceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Services", "ThemeService.cs"));
+    var mainWindowXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml"));
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("Click=\"ThemeToggle_Click\"", mainWindowXaml);
+    Assert.Contains("ThemeService.Toggle()", mainWindowCode);
+    Assert.Contains("RefreshThemeToggleButton", mainWindowCode);
+    Assert.Contains("RemoveExistingThemeDictionaries", themeServiceCode);
+    Assert.Contains("IsThemeDictionary", themeServiceCode);
+    Assert.Contains("mergedDictionaries.RemoveAt(index)", themeServiceCode);
+    Assert.DoesNotContain("mergedDictionaries.Insert(0, newDictionary)", themeServiceCode);
 }
 
 static void MacroStudioKeepsBottomResizeHandleAvailableWhenBottomPanelIsHidden()
@@ -4264,6 +4316,38 @@ static void MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles()
     }
 }
 
+static void MacroLibraryStoreReordersMacrosWithinFolders()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var store = new MacroLibraryStore(root);
+        var alpha = store.CreateMacro("Alpha", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+        var beta = store.CreateMacro("Beta", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+        var gamma = store.CreateMacro("Gamma", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+
+        store.MoveMacro(gamma.Id, string.Empty, beforeMacroId: alpha.Id);
+        store.MoveMacro(beta.Id, "Combat", beforeMacroId: null);
+        store.MoveMacro(alpha.Id, "Combat", beforeMacroId: beta.Id);
+
+        var reloaded = new MacroLibraryStore(root).Load();
+        var reloadedIds = reloaded.Items.Select(item => item.Id).ToArray();
+        Assert.Equal(3, reloadedIds.Length);
+        Assert.Equal(gamma.Id, reloadedIds[0]);
+        Assert.Equal(alpha.Id, reloadedIds[1]);
+        Assert.Equal(beta.Id, reloadedIds[2]);
+        Assert.Equal("Combat", reloaded.Items.Single(item => item.Id == alpha.Id).Folder);
+        Assert.Equal("Combat", reloaded.Items.Single(item => item.Id == beta.Id).Folder);
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
 static void MacroLibraryStoreRenamesMacrosAndFolders()
 {
     var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
@@ -4329,6 +4413,17 @@ static void MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste()
     Assert.Contains("IsRenaming", displayModels);
 }
 
+static void MacroStudioMacroLibraryUsesDynamicThemeTextColors()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+
+    Assert.Contains("Foreground=\"{DynamicResource PrimaryText}\"", libraryXaml);
+    Assert.DoesNotContain("Foreground=\"{Binding TitleBrush}\"", libraryXaml);
+    Assert.DoesNotContain("TitleBrush", displayModels);
+    Assert.DoesNotContain("TextBrush", displayModels);
+}
+
 static void MacroStudioMacroLibraryScrollbarDragIsNotCapturedAsMacroDrag()
 {
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
@@ -4342,6 +4437,93 @@ static void MacroStudioMacroLibraryScrollbarDragIsNotCapturedAsMacroDrag()
     Assert.Contains("FindVisualParent<TreeViewItem>", libraryCode);
     Assert.Contains("treeViewItem.DataContext is not MacroLibraryTreeNode { Item: { } item }", libraryCode);
     Assert.DoesNotContain("MacroTreeView.SelectedItem is not MacroLibraryTreeNode { Item: { } item }", libraryCode);
+}
+
+static void MacroStudioMacroLibraryKeepsViewportStableWhileRefreshingAndDragging()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+
+    Assert.Contains("<Grid.RowDefinitions>", libraryXaml);
+    Assert.Contains("Grid.Row=\"1\"", libraryXaml);
+    Assert.Contains("MinHeight=\"220\"", libraryXaml);
+    Assert.Contains("LibraryToolsScrollViewer", libraryXaml);
+    Assert.Contains("PreviewMouseWheel=\"MacroTreeView_PreviewMouseWheel\"", libraryXaml);
+    Assert.Contains("DragOver=\"MacroTreeView_DragOver\"", libraryXaml);
+
+    Assert.Contains("CaptureExpandedFolders", libraryCode);
+    Assert.Contains("RestoreMacroTreeScroll", libraryCode);
+    Assert.Contains("GetMacroTreeScrollViewer", libraryCode);
+    Assert.Contains("WM_MOUSEWHEEL", libraryCode);
+    Assert.Contains("ScrollMacroTreeByWheelDelta", libraryCode);
+    Assert.Contains("WM_MOUSEWHEEL_LOW_LEVEL", libraryCode);
+    Assert.Contains("StartLibraryDragWheelHook", libraryCode);
+    Assert.Contains("StopLibraryDragWheelHook", libraryCode);
+    Assert.Contains("LibraryDragMouseHookCallback", libraryCode);
+    Assert.DoesNotContain("IsExpanded = IsFolder;", displayModels);
+}
+
+static void MacroStudioMacroLibraryAcceptsDragDropsAfterWheelScrolling()
+{
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+
+    Assert.Contains("e.Effects = DragDropEffects.Move", libraryCode);
+    Assert.Contains("ComboBoxItem Tag=\"manual\"", libraryXaml);
+    Assert.Contains("GetMacroDropTarget(e.GetPosition(MacroTreeView), macroId)", libraryCode);
+    Assert.Contains("MoveMacro(macroId, target.Folder, target.BeforeMacroId)", libraryCode);
+    Assert.Contains("SelectLibrarySortMode(\"manual\")", libraryCode);
+    Assert.Contains("GetNextMacroIdInFolder", libraryCode);
+    Assert.Contains("e.Effects = DragDropEffects.Move", libraryCode.Substring(libraryCode.IndexOf("private void MacroTreeView_Drop", StringComparison.Ordinal)));
+}
+
+static void MacroStudioMacroLibraryIgnoresBlankDragDropTargets()
+{
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var targetMethodStart = libraryCode.IndexOf("private MacroLibraryDropTarget GetMacroDropTarget", StringComparison.Ordinal);
+    var targetMethodEnd = libraryCode.IndexOf("private string? GetNextMacroIdInFolder", StringComparison.Ordinal);
+    var targetMethod = libraryCode[targetMethodStart..targetMethodEnd];
+    var dragOverMethodStart = libraryCode.IndexOf("private void MacroTreeView_DragOver", StringComparison.Ordinal);
+    var dragOverMethodEnd = libraryCode.IndexOf("private IntPtr MacroTreeWndProc", StringComparison.Ordinal);
+    var dragOverMethod = libraryCode[dragOverMethodStart..dragOverMethodEnd];
+
+    Assert.Contains("return MacroLibraryDropTarget.NoOp;", targetMethod);
+    Assert.DoesNotContain("return new MacroLibraryDropTarget(string.Empty, null);", targetMethod);
+    Assert.Contains("var target = GetMacroDropTarget(e.GetPosition(MacroTreeView), macroId);", dragOverMethod);
+    Assert.Contains("target.IsNoOp ? DragDropEffects.None : DragDropEffects.Move", dragOverMethod);
+}
+
+static void MacroStudioMacroLibraryThrottlesEdgeAutoscrollWhileDragging()
+{
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var autoScrollStart = libraryCode.IndexOf("private void AutoScrollMacroTree", StringComparison.Ordinal);
+    var autoScrollEnd = libraryCode.IndexOf("private void ScrollMacroTreeByWheelDelta", StringComparison.Ordinal);
+    var autoScrollMethod = libraryCode[autoScrollStart..autoScrollEnd];
+
+    Assert.Contains("LibraryAutoScrollIntervalMilliseconds", libraryCode);
+    Assert.Contains("lastLibraryAutoScrollTick", libraryCode);
+    Assert.Contains("Environment.TickCount64", autoScrollMethod);
+    Assert.Contains("now - lastLibraryAutoScrollTick < LibraryAutoScrollIntervalMilliseconds", autoScrollMethod);
+}
+
+static void MacroStudioMacroLibraryShowsDragDropTargetIndicators()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+
+    Assert.Contains("DropBeforeVisibility", libraryXaml);
+    Assert.Contains("DropAfterVisibility", libraryXaml);
+    Assert.Contains("DropIntoVisibility", libraryXaml);
+    Assert.Contains("DragLeave=\"MacroTreeView_DragLeave\"", libraryXaml);
+    Assert.Contains("MacroLibraryDropIndicator", displayModels);
+    Assert.Contains("DropIndicator", displayModels);
+    Assert.Contains("SetMacroDropIndicator(target)", libraryCode);
+    Assert.Contains("ClearMacroDropIndicator", libraryCode);
+    Assert.Contains("MacroLibraryDropIndicator.Into", libraryCode);
+    Assert.Contains("MacroLibraryDropIndicator.Before", libraryCode);
+    Assert.Contains("MacroLibraryDropIndicator.After", libraryCode);
 }
 
 static void MacroActionTemplatesCreatePlayablePressReleaseSteps()

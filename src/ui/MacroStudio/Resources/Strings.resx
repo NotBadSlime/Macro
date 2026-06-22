@@ -313,6 +313,7 @@
   <data name="MoveDown" xml:space="preserve"><value>Down</value></data>
   <data name="SearchMacros" xml:space="preserve"><value>Search macros</value></data>
   <data name="AdvancedJson" xml:space="preserve"><value>MCRX JSON</value></data>
+  <data name="SortManual" xml:space="preserve"><value>Custom Order</value></data>
   <data name="SortName" xml:space="preserve"><value>Name A-Z</value></data>
   <data name="SortRecentlyUpdated" xml:space="preserve"><value>Recently Updated</value></data>
   <data name="Ungrouped" xml:space="preserve"><value>Macros</value></data>
