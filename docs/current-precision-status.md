@@ -14,7 +14,7 @@ affinityMask=0xE
 
 | 项目 | 结果 |
 | --- | --- |
-| 单元 / 静态 / 回归测试 | `184 test(s) passed` |
+| 单元 / 静态 / 回归测试 | `185 test(s) passed` |
 | `dotnet build MacroHID.sln --configuration Release` | 成功，`0` 错误，`0` 警告 |
 | `Build-LocalRun.ps1 -Configuration Release` | 成功，已更新本机运行目录 |
 

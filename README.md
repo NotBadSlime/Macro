@@ -1,5 +1,7 @@
 # MacroHID
 
+Current stable release: `1.0.0`
+
 ## 中文
 
 MacroHID 是一个面向 Windows 10/11 x64 的本机宏自动化工具。当前版本采用纯用户态 `SendInput` 路线，不安装驱动、不启用测试签名、不修改 Secure Boot；它适用于合法的本机桌面自动化、普通应用以及以同等权限运行的管理员应用。
@@ -41,6 +43,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 
 - [安装说明](docs/installer.md)
 - [使用说明](docs/usage.md)
+- [1.0.0 正式版说明](docs/release-1.0.0.md)
 - [精度说明](docs/precision.md)
 - [当前精度水平](docs/current-precision-status.md)
 - [架构说明](docs/architecture.md)
@@ -91,6 +94,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 
 - [Installation](docs/installer.md)
 - [Usage Guide](docs/usage.md)
+- [1.0.0 Release Notes](docs/release-1.0.0.md)
 - [Precision Notes](docs/precision.md)
 - [Current Precision Status](docs/current-precision-status.md)
 - [Architecture](docs/architecture.md)
