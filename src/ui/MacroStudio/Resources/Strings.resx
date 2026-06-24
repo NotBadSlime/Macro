@@ -266,7 +266,7 @@
   <data name="RazerModuleFileFilter" xml:space="preserve">
     <value>Razer XML (*.xml)|*.xml|All files (*.*)|*.*</value>
   </data>
-  <data name="MacroLibrary" xml:space="preserve"><value>Macro Library</value></data>
+  <data name="MacroLibrary" xml:space="preserve"><value>Macro Library Manager</value></data>
   <data name="NewMacro" xml:space="preserve"><value>New</value></data>
   <data name="NewFolder" xml:space="preserve"><value>Folder</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>Duplicate</value></data>
@@ -317,9 +317,30 @@
   <data name="SortName" xml:space="preserve"><value>Name A-Z</value></data>
   <data name="SortRecentlyUpdated" xml:space="preserve"><value>Recently Updated</value></data>
   <data name="Ungrouped" xml:space="preserve"><value>Macros</value></data>
+  <data name="ProcessGroup" xml:space="preserve"><value>Process group</value></data>
+  <data name="NewGroup" xml:space="preserve"><value>Process group</value></data>
+  <data name="NewDatabase" xml:space="preserve"><value>New database</value></data>
+  <data name="DeleteDatabase" xml:space="preserve"><value>Delete database</value></data>
+  <data name="ReturnToManager" xml:space="preserve"><value>Back to manager</value></data>
+  <data name="SelectDatabase" xml:space="preserve"><value>Select database</value></data>
+  <data name="StartSelectedDatabaseListening" xml:space="preserve"><value>Listen to this database</value></data>
+  <data name="StartSelectedDatabasesListening" xml:space="preserve"><value>Listen to {0} selected</value></data>
+  <data name="StopSelectedDatabaseListening" xml:space="preserve"><value>Stop this database</value></data>
+  <data name="StopSelectedDatabasesListening" xml:space="preserve"><value>Stop {0} selected</value></data>
+  <data name="GroupProcessFilter" xml:space="preserve"><value>Active process</value></data>
+  <data name="GroupProcessFilterHelp" xml:space="preserve"><value>Enable this group only when the process is foreground, such as chrome.exe or notepad; chrome.</value></data>
+  <data name="ProcessGroupDatabaseSummary" xml:space="preserve"><value>Process group library · {0}</value></data>
+  <data name="SelectProcess" xml:space="preserve"><value>Process</value></data>
+  <data name="SelectProcessFile" xml:space="preserve"><value>File</value></data>
+  <data name="SelectProcessFileTitle" xml:space="preserve"><value>Select application executable</value></data>
+  <data name="ProcessExecutableFileFilter" xml:space="preserve"><value>Applications (*.exe)|*.exe|All files (*.*)|*.*</value></data>
+  <data name="NoProcessesFound" xml:space="preserve"><value>No running processes available</value></data>
   <data name="Folder" xml:space="preserve"><value>Folder</value></data>
   <data name="MacroMovedToRoot" xml:space="preserve"><value>Moved macro to root</value></data>
   <data name="MacroMovedToFolder" xml:space="preserve"><value>Moved macro to folder: {0}</value></data>
+  <data name="GroupDeleted" xml:space="preserve"><value>Deleted group: {0}</value></data>
+  <data name="GroupUpdated" xml:space="preserve"><value>Updated group: {0}</value></data>
+  <data name="GroupRenamed" xml:space="preserve"><value>Renamed group: {0}</value></data>
   <data name="FolderDeleted" xml:space="preserve"><value>Deleted folder: {0}</value></data>
   <data name="MacroCopied" xml:space="preserve"><value>Copied macro: {0}</value></data>
   <data name="FolderCopied" xml:space="preserve"><value>Copied folder: {0}</value></data>
@@ -352,7 +373,7 @@
   <data name="WorkspaceFloat" xml:space="preserve"><value>Float</value></data>
   <data name="WorkspaceDock" xml:space="preserve"><value>Dock</value></data>
   <data name="WorkspaceResetLayout" xml:space="preserve"><value>Reset layout</value></data>
-  <data name="WorkspacePanelLibrary" xml:space="preserve"><value>Macro Library</value></data>
+  <data name="WorkspacePanelLibrary" xml:space="preserve"><value>Macro Library Manager</value></data>
   <data name="WorkspacePanelSequence" xml:space="preserve"><value>Sequence</value></data>
   <data name="WorkspacePanelConditions" xml:space="preserve"><value>Conditions</value></data>
   <data name="WorkspacePanelActions" xml:space="preserve"><value>Action Panel</value></data>

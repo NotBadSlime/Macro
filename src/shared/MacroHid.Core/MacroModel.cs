@@ -104,6 +104,51 @@ public static class PlaybackProcessFilter
     }
 }
 
+public static class MacroLibraryActivationFilter
+{
+    public static bool Matches(string? groupProcessFilter, string? processName)
+    {
+        return PlaybackProcessFilter.Matches(groupProcessFilter, processName);
+    }
+
+    public static bool FiltersOverlap(string? leftGroupProcessFilter, string? rightGroupProcessFilter)
+    {
+        var left = NormalizeProcessFilterParts(leftGroupProcessFilter);
+        var right = NormalizeProcessFilterParts(rightGroupProcessFilter);
+        if (left.Count == 0 || right.Count == 0)
+        {
+            return true;
+        }
+
+        return left.Overlaps(right);
+    }
+
+    private static HashSet<string> NormalizeProcessFilterParts(string? value)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return result;
+        }
+
+        foreach (var token in value.Split([',', ';', '|', '\r', '\n', '\t', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var normalized = token.Trim();
+            if (normalized.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = normalized[..^4];
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalized))
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result;
+    }
+}
+
 public sealed class HotkeyGesture : IEquatable<HotkeyGesture>
 {
     public HotkeyGesture(HidModifier modifiers, HidKey key, MouseButton mouseButton = MouseButton.None)

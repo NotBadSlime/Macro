@@ -5,6 +5,7 @@ using MacroStudio;
 using MacroStudio.Controls;
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
 
 if (Environment.GetEnvironmentVariable("MACROHID_JSON_REFLECTION_DISABLED_PROBE") == "1")
@@ -37,6 +38,7 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers ultra low jitter precision mode", McrxParserCoversUltraLowJitterPrecisionMode),
     ("MCRX parser covers playback affinity mask", McrxParserCoversPlaybackAffinityMask),
     ("Playback process filter matches foreground process names", PlaybackProcessFilterMatchesForegroundProcessNames),
+    ("Global keyboard hook separates duplicate Tab bindings by foreground process", GlobalKeyboardHookSeparatesDuplicateTabBindingsByForegroundProcess),
     ("MCRX parser covers modifier-only and mouse side button triggers", McrxParserCoversModifierOnlyAndMouseSideButtonTriggers),
     ("MCRX parser covers multi-key and mouse combo triggers", McrxParserCoversMultiKeyAndMouseComboTriggers),
     ("MCRX parser defaults missing playback settings", McrxParserDefaultsMissingPlaybackSettings),
@@ -73,8 +75,9 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 1.0.0", MacroHidReleaseVersionIsOneZeroZero),
+    ("MacroHID release version is 1.1.0", MacroHidReleaseVersionIsOneOneZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
+    ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("MacroStudio uses launcher style soft workbench shell", MacroStudioUsesLauncherStyleSoftWorkbenchShell),
     ("MacroStudio lays out base and conditional sequences side by side", MacroStudioLaysOutBaseAndConditionalSequencesSideBySide),
     ("MacroStudio opens condition then-action editor", MacroStudioOpensConditionThenActionEditor),
@@ -102,6 +105,8 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
     ("MacroStudio separates library batch listening from playback current listening", MacroStudioSeparatesLibraryBatchListeningFromPlaybackCurrentListening),
+    ("MacroStudio supports selected database batch listening", MacroStudioSupportsSelectedDatabaseBatchListening),
+    ("MacroStudio uses compact database selection indicators", MacroStudioUsesCompactDatabaseSelectionIndicators),
     ("MacroStudio keeps playback listening buttons below mode controls", MacroStudioKeepsPlaybackListeningButtonsBelowModeControls),
     ("MacroStudio autosaves sequence conditions and rebuilds listeners", MacroStudioAutosavesSequenceConditionsAndRebuildsListeners),
     ("MacroStudio drop insertion uses target row and suppresses drag click duplication", MacroStudioDropInsertionUsesTargetRowAndSuppressesDragClickDuplication),
@@ -163,6 +168,8 @@ var tests = new (string Name, Action Body)[]
     ("LatencyProbe uses precision target thresholds", LatencyProbeUsesPrecisionTargetThresholds),
     ("Native playback project exposes stable C ABI", NativePlaybackProjectExposesStableCAbi),
     ("Runtime exports native playback timeline and fallback bridge", RuntimeExportsNativePlaybackTimelineAndFallbackBridge),
+    ("Runtime uses native lite for high performance precision", RuntimeUsesNativeLiteForHighPerformancePrecision),
+    ("Runtime keeps external condition directives on native timeline", RuntimeKeepsExternalConditionDirectivesOnNativeTimeline),
     ("LatencyProbe exposes native backend and outlier tracing", LatencyProbeExposesNativeBackendAndOutlierTracing),
         ("Native playback exports per-outlier trace events", NativePlaybackExportsPerOutlierTraceEvents),
     ("Native playback uses delayed rescue fast lane for dense ultra timelines", NativePlaybackUsesDelayedRescueFastLaneForDenseUltraTimelines),
@@ -196,7 +203,16 @@ var tests = new (string Name, Action Body)[]
     ("Macro library store persists empty folders and moves macros like files", MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles),
     ("Macro library store reorders macros within folders", MacroLibraryStoreReordersMacrosWithinFolders),
     ("Macro library store renames macros and folders", MacroLibraryStoreRenamesMacrosAndFolders),
+    ("Macro library store migrates legacy macros into global process group", MacroLibraryStoreMigratesLegacyMacrosIntoGlobalProcessGroup),
+    ("Macro library store creates edits and deletes process groups", MacroLibraryStoreCreatesEditsAndDeletesProcessGroups),
+    ("Macro library store moves macros across process groups", MacroLibraryStoreMovesMacrosAcrossProcessGroups),
+    ("Macro library activation filter uses process group filters", MacroLibraryActivationFilterUsesProcessGroupFilters),
     ("MacroStudio macro library uses a folder tree", MacroStudioMacroLibraryUsesFolderTree),
+    ("MacroStudio macro library presents database manager hierarchy", MacroStudioMacroLibraryPresentsDatabaseManagerHierarchy),
+    ("MacroStudio macro library uses progressive database views", MacroStudioMacroLibraryUsesProgressiveDatabaseViews),
+    ("MacroStudio macro library exposes process group controls", MacroStudioMacroLibraryExposesProcessGroupControls),
+    ("MacroStudio macro library can pick running processes and executable files for groups", MacroStudioMacroLibraryCanPickRunningProcessesAndExecutableFilesForGroups),
+    ("MacroStudio listeners apply process group filters", MacroStudioListenersApplyProcessGroupFilters),
     ("MacroStudio macro library supports Explorer rename copy and paste", MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste),
     ("MacroStudio macro library uses dynamic theme text colors", MacroStudioMacroLibraryUsesDynamicThemeTextColors),
     ("MacroStudio macro library scrollbar drag is not captured as macro drag", MacroStudioMacroLibraryScrollbarDragIsNotCapturedAsMacroDrag),
@@ -1182,6 +1198,43 @@ static void PlaybackProcessFilterMatchesForegroundProcessNames()
     Assert.False(PlaybackProcessFilter.Matches("notepad", null));
 }
 
+static void GlobalKeyboardHookSeparatesDuplicateTabBindingsByForegroundProcess()
+{
+    using var hook = new GlobalKeyboardHook();
+    var gestures = GetPrivateField<Dictionary<string, HotkeyGesture>>(hook, "gestures");
+    var pressedKeys = GetPrivateField<HashSet<int>>(hook, "pressedKeys");
+    var pressedIds = new List<string>();
+    hook.TriggerPressed += (_, args) => pressedIds.Add(args.Id);
+
+    gestures["genshin"] = new HotkeyGesture(HidModifier.None, HidKey.Tab);
+    gestures["notepad"] = new HotkeyGesture(HidModifier.None, HidKey.Tab);
+    pressedKeys.Add(0x09);
+
+    InvokePrivate(hook, "EvaluatePressedTriggers");
+
+    Assert.Equal(2, pressedIds.Count);
+    Assert.True(pressedIds.Contains("genshin", StringComparer.OrdinalIgnoreCase));
+    Assert.True(pressedIds.Contains("notepad", StringComparer.OrdinalIgnoreCase));
+    Assert.False(MacroLibraryActivationFilter.FiltersOverlap("YuanShen.exe; GenshinImpact.exe", "notepad.exe"));
+
+    var filters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["genshin"] = "YuanShen.exe; GenshinImpact.exe",
+        ["notepad"] = "notepad.exe"
+    };
+    var notepadMatches = pressedIds
+        .Where(id => MacroLibraryActivationFilter.Matches(filters[id], "notepad.exe"))
+        .ToList();
+    var genshinMatches = pressedIds
+        .Where(id => MacroLibraryActivationFilter.Matches(filters[id], "YuanShen.exe"))
+        .ToList();
+
+    Assert.Single(notepadMatches);
+    Assert.Equal("notepad", notepadMatches[0]);
+    Assert.Single(genshinMatches);
+    Assert.Equal("genshin", genshinMatches[0]);
+}
+
 static void McrxParserCoversModifierOnlyAndMouseSideButtonTriggers()
 {
     var ctrl = McrxParser.ParseHotkeyGesture("Ctrl");
@@ -1504,9 +1557,9 @@ static void LocalizationResourcesCoverPlaybackLabelInThreeLanguages()
 
 static void LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages()
 {
-    Assert.Equal("Macro Library", LocalizationService.Get("MacroLibrary", new CultureInfo("en-US")));
-    Assert.Equal("宏数据库", LocalizationService.Get("MacroLibrary", new CultureInfo("zh-CN")));
-    Assert.Equal("巨集資料庫", LocalizationService.Get("MacroLibrary", new CultureInfo("zh-TW")));
+    Assert.Equal("Macro Library Manager", LocalizationService.Get("MacroLibrary", new CultureInfo("en-US")));
+    Assert.Equal("宏数据库管理", LocalizationService.Get("MacroLibrary", new CultureInfo("zh-CN")));
+    Assert.Equal("巨集資料庫管理", LocalizationService.Get("MacroLibrary", new CultureInfo("zh-TW")));
     Assert.Equal("Keyboard Function", LocalizationService.Get("AddKeyboard", new CultureInfo("en-US")));
     Assert.Equal("键盘功能", LocalizationService.Get("AddKeyboard", new CultureInfo("zh-CN")));
     Assert.Equal("鍵盤功能", LocalizationService.Get("AddKeyboard", new CultureInfo("zh-TW")));
@@ -1534,23 +1587,23 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsOneZeroZero()
+static void MacroHidReleaseVersionIsOneOneZero()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.0.0.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.1.0.md"));
 
-    Assert.Contains("<Version>1.0.0</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>1.0.0.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>1.0.0.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>1.1.0</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>1.1.0.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>1.1.0.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"1.0.0\"", installer);
-    Assert.Contains("[string]$Version = \"1.0.0\"", installerBuild);
-    Assert.Contains("Current stable release: `1.0.0`", readme);
-    Assert.Contains("MacroHID `1.0.0` 是当前正式版", releaseNotes);
-    Assert.Contains("Git tag：`v1.0.0`", releaseNotes);
+    Assert.Contains("#define AppVersion \"1.1.0\"", installer);
+    Assert.Contains("[string]$Version = \"1.1.0\"", installerBuild);
+    Assert.Contains("Current stable release: `1.1.0`", readme);
+    Assert.Contains("MacroHID `1.1.0` 是当前正式版", releaseNotes);
+    Assert.Contains("Git tag：`v1.1.0`", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -1573,6 +1626,22 @@ static void MacroStudioUsesBorderlessCustomWindowChrome()
     Assert.Contains("Color=\"#EFF3F8\"", lightThemeXaml);
     Assert.Contains("TopChromeBar_MouseLeftButtonDown", codeBehind);
     Assert.Contains("ToggleMaximize", codeBehind);
+}
+
+static void MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea()
+{
+    var codeBehind = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("OnSourceInitialized", codeBehind);
+    Assert.Contains("HwndSource.FromHwnd", codeBehind);
+    Assert.Contains("WindowProcedure", codeBehind);
+    Assert.Contains("WM_GETMINMAXINFO", codeBehind);
+    Assert.Contains("GetMonitorInfo", codeBehind);
+    Assert.Contains("MONITOR_DEFAULTTONEAREST", codeBehind);
+    Assert.Contains("rcWork", codeBehind);
+    Assert.Contains("ptMaxPosition", codeBehind);
+    Assert.Contains("ptMaxSize", codeBehind);
+    Assert.Contains("source.RemoveHook(WindowProcedure)", codeBehind);
 }
 
 static void MacroStudioUsesLauncherStyleSoftWorkbenchShell()
@@ -2051,9 +2120,9 @@ static void MacroStudioSupportsMacroCallSelectionAndPlaybackAutosave()
     Assert.Contains("MacroTargetBox", stepEditorXaml);
     Assert.Contains("RefreshMacroTargetBox", stepEditorCode);
     Assert.Contains("PlaybackSettings_TextChanged", playbackXaml);
-    Assert.Contains("ProcessFilterBox", playbackXaml);
-    Assert.Contains("ProcessFilterText", playbackCode);
-    Assert.Contains("settings.ProcessFilter", playbackCode);
+    Assert.DoesNotContain("ProcessFilterBox", playbackXaml);
+    Assert.DoesNotContain("ProcessFilterText", playbackCode);
+    Assert.DoesNotContain("settings.ProcessFilter", playbackCode);
     Assert.Contains("PlaybackSettingsEdited", playbackCode);
     Assert.Contains("OnPlaybackSettingsEdited", mainWindowCode);
     Assert.Contains("AutoSaveCurrentMacro", mainWindowCode);
@@ -2193,11 +2262,11 @@ static void MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries
     Assert.Contains("listeningControllers", mainWindowCode);
     Assert.Contains("keyboardHook.Start(bindings", mainWindowCode);
     Assert.Contains("TriggerPressed += KeyboardHook_TriggerPressed", mainWindowCode);
-    Assert.Contains("listeningProcessFilters", mainWindowCode);
     Assert.Contains("ForegroundProcessService.GetForegroundProcessName", mainWindowCode);
-    Assert.Contains("PlaybackProcessFilter.Matches", mainWindowCode);
+    Assert.Contains("MacroLibraryActivationFilter.Matches", mainWindowCode);
+    Assert.DoesNotContain("listeningProcessFilters", mainWindowCode);
     Assert.Contains("FormatPlaybackMode", displayModels);
-    Assert.Contains("ProcessFilter", displayModels);
+    Assert.Contains("GroupProcessFilter", displayModels);
     Assert.Contains("public static MacroLibraryTreeNode Macro", displayModels);
     Assert.Contains("CreateMacroNode", libraryPanelCode);
 }
@@ -2211,7 +2280,7 @@ static void MacroStudioExposesLibraryListenAllControlsAndConflictStatus()
 
     Assert.Contains("StartAllListeningButton", libraryXaml);
     Assert.Contains("StopAllListeningButton", libraryXaml);
-    Assert.Contains("StartListeningAllRequested", libraryCode);
+    Assert.Contains("StartListeningGroupsRequested", libraryCode);
     Assert.Contains("StopListeningAllRequested", libraryCode);
     Assert.Contains("SetListeningStates", libraryCode);
     Assert.Contains("MacroLibraryListenState", displayModels);
@@ -2226,7 +2295,8 @@ static void MacroStudioSeparatesLibraryBatchListeningFromPlaybackCurrentListenin
 {
     var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
 
-    Assert.Contains("LibraryPanel.StartListeningAllRequested += OnStartListeningAll", mainWindowCode);
+    Assert.Contains("LibraryPanel.StartListeningGroupsRequested += OnStartListeningGroups", mainWindowCode);
+    Assert.Contains("LibraryPanel.StopListeningGroupsRequested += OnStopListeningGroups", mainWindowCode);
     Assert.Contains("LibraryPanel.StopListeningAllRequested += OnStopListeningAll", mainWindowCode);
     Assert.Contains("PlaybackPanelControl.StartListeningRequested += OnStartCurrentListening", mainWindowCode);
     Assert.Contains("PlaybackPanelControl.StopListeningRequested += OnStopCurrentListening", mainWindowCode);
@@ -2235,6 +2305,48 @@ static void MacroStudioSeparatesLibraryBatchListeningFromPlaybackCurrentListenin
     Assert.Contains("StopListeningController(string id)", mainWindowCode);
     Assert.DoesNotContain("PlaybackPanelControl.StartListeningRequested += OnStartListening;", mainWindowCode);
     Assert.DoesNotContain("PlaybackPanelControl.StopListeningRequested += OnStopListening;", mainWindowCode);
+}
+
+static void MacroStudioSupportsSelectedDatabaseBatchListening()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("ManagerSelectionDot", libraryXaml);
+    Assert.Contains("StopEveryListeningButton", libraryXaml);
+    Assert.Contains("StartListeningGroupsRequested", libraryCode);
+    Assert.Contains("StopListeningGroupsRequested", libraryCode);
+    Assert.Contains("selectedManagerGroupIds", libraryCode);
+    Assert.Contains("GetSelectedManagerGroupIds", libraryCode);
+    Assert.Contains("UpdateManagerListeningButtons", libraryCode);
+    Assert.Contains("ToggleManagerGroupSelection", libraryCode);
+    Assert.Contains("ModifierKeys.Control", libraryCode);
+    Assert.Contains("IsManagerSelected", displayModels);
+    Assert.Contains("GroupSelectionVisibility", displayModels);
+    Assert.Contains("CreateGroupListenState", libraryCode);
+    Assert.Contains("IsGroupSummary", displayModels);
+    Assert.Contains("OnStartListeningGroups(IReadOnlyList<string> groupIds)", mainWindowCode);
+    Assert.Contains("OnStopListeningGroups(IReadOnlyList<string> groupIds)", mainWindowCode);
+    Assert.Contains("BuildListeningCandidatesForGroups", mainWindowCode);
+    Assert.Contains("StopListeningGroups(groupIds)", mainWindowCode);
+    Assert.Contains("desiredIds.Add(candidate.Item.Id)", mainWindowCode);
+}
+
+static void MacroStudioUsesCompactDatabaseSelectionIndicators()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+
+    Assert.Contains("ManagerSelectionDot", libraryXaml);
+    Assert.Contains("ManagerStateStrip", libraryXaml);
+    Assert.Contains("ManagerSelectionDotVisibility", displayModels);
+    Assert.Contains("StatusStripVisibility", displayModels);
+    Assert.Contains("StatusStripBrush", displayModels);
+    Assert.DoesNotContain("CheckBox x:Name=\"ManagerGroupCheckBox\"", libraryXaml);
+    Assert.DoesNotContain("StatusOutlineVisibility", libraryXaml);
+    Assert.DoesNotContain("Margin=\"-6,-5\"", libraryXaml);
 }
 
 static void MacroStudioKeepsPlaybackListeningButtonsBelowModeControls()
@@ -3452,6 +3564,42 @@ static void RuntimeExportsNativePlaybackTimelineAndFallbackBridge()
     Assert.Contains("fallbackReason", executorCode);
 }
 
+static void RuntimeUsesNativeLiteForHighPerformancePrecision()
+{
+    var runtimeDir = Path.Combine("src", "shared", "MacroHid.Runtime");
+    var engineCode = File.ReadAllText(Path.Combine(runtimeDir, "NativePlaybackEngine.cs"));
+    var executorCode = File.ReadAllText(Path.Combine(runtimeDir, "MacroPlaybackExecutor.cs"));
+    var nativeCode = File.ReadAllText(Path.Combine("src", "native", "MacroHid.NativePlayback", "NativePlayback.cpp"));
+    var probeCode = File.ReadAllText(Path.Combine("src", "tools", "LatencyProbe", "Program.cs"));
+
+    Assert.Contains("CanUseNativePrecision", executorCode);
+    Assert.Contains("PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter", executorCode);
+    Assert.DoesNotContain("options.Precision != PrecisionMode.UltraLowJitter", executorCode);
+    Assert.Contains("ToNativePrecisionMode", engineCode);
+    Assert.Contains("PrecisionMode.ExtremeDuringPlayback => 1", engineCode);
+    Assert.Contains("NativePlaybackEngineMode.Inline", engineCode);
+    Assert.Contains("precision == PrecisionMode.UltraLowJitter && enableCpuScan", engineCode);
+    Assert.DoesNotContain("native playback is only used by UltraLowJitter", engineCode);
+    Assert.Contains("profile is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter", probeCode);
+    Assert.Contains("options.precisionMode == MhpUltraLowJitter ? 2500 : 800", nativeCode);
+    Assert.Contains("options->precisionMode == MhpUltraLowJitter", nativeCode);
+}
+
+static void RuntimeKeepsExternalConditionDirectivesOnNativeTimeline()
+{
+    var executorCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs"));
+
+    Assert.Contains("TryRunNativeIterationWithConditionMonitors", executorCode);
+    Assert.Contains("CreateConditionMonitors(document, conditionEvaluator, iterationStartTick, qpcFrequency)", executorCode);
+    Assert.Contains("TryRunNativeIteration(document, options, iterationPlan, nativePreparedPlan", executorCode);
+    Assert.Contains("CompleteAllMonitorsAfterCurrentEvaluation(monitors)", executorCode);
+    Assert.Contains("WaitForTriggeredConditionActions(monitors, cancellationToken)", executorCode);
+    Assert.DoesNotContain("condition ranges require managed step activation", executorCode);
+    Assert.DoesNotContain("document.EffectiveConditions.Count == 0", executorCode);
+    Assert.Contains("inline PixelWhen requires managed step activation", executorCode);
+    Assert.Contains("ContainsPixelWhen(document.Steps)", executorCode);
+}
+
 static void LatencyProbeExposesNativeBackendAndOutlierTracing()
 {
     var probeCode = File.ReadAllText(Path.Combine("src", "tools", "LatencyProbe", "Program.cs"));
@@ -3878,6 +4026,10 @@ static void PrecisionProfileBenchmarkScriptValidatesAllTargetTiers()
     Assert.Contains("TargetUs = 500", script);
     Assert.Contains("TargetUs = 250", script);
     Assert.Contains("TargetUs = 100", script);
+    Assert.Contains("NativeTier = \"native-lite\"", script);
+    Assert.Contains("NativeTier = \"native-ultra\"", script);
+    Assert.Contains("MetricName = \"nativeBatchLate\"", script);
+    Assert.Contains("EffectiveBackend", script);
     Assert.Contains("--backend", script);
     Assert.Contains("--profile", script);
     Assert.Contains("--native-engine", script);
@@ -4397,6 +4549,134 @@ static void MacroLibraryStoreRenamesMacrosAndFolders()
     }
 }
 
+static void MacroLibraryStoreMigratesLegacyMacrosIntoGlobalProcessGroup()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        Directory.CreateDirectory(root);
+        File.WriteAllText(
+            Path.Combine(root, "library.json"),
+            """
+            {
+              "items": [
+                {
+                  "id": "legacy-1",
+                  "name": "Legacy",
+                  "folder": "Combat",
+                  "fileName": "legacy-1.mcrx",
+                  "updatedAt": "2026-06-20T12:00:00+00:00"
+                }
+              ],
+              "folders": ["Combat"],
+              "selectedMacroId": "legacy-1"
+            }
+            """);
+
+        var snapshot = new MacroLibraryStore(root).Load();
+        var global = snapshot.Groups.Single(group => group.IsGlobal);
+
+        Assert.Equal(MacroLibraryStore.GlobalGroupId, global.Id);
+        Assert.Equal("", global.ProcessFilter);
+        Assert.Equal(global.Id, snapshot.Items.Single().GroupId);
+        Assert.True(snapshot.GroupFolders.Any(folder =>
+            folder.GroupId == global.Id
+            && folder.Name == "Combat"));
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void MacroLibraryStoreCreatesEditsAndDeletesProcessGroups()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var store = new MacroLibraryStore(root);
+        var group = store.CreateGroup("Photoshop", "Photoshop.exe");
+        store.CreateFolder("Brushes", group.Id);
+        var macro = store.CreateMacro("Brush", "Brushes", [new WaitStep(TimeSpan.FromMilliseconds(1))], group.Id);
+
+        var edited = store.UpdateGroup(group.Id, "Adobe Photoshop", "photoshop");
+        var afterEdit = store.Load();
+
+        Assert.Equal("Adobe Photoshop", edited.Name);
+        Assert.Equal("photoshop", afterEdit.Groups.Single(item => item.Id == group.Id).ProcessFilter);
+        Assert.Equal(group.Id, afterEdit.Items.Single(item => item.Id == macro.Id).GroupId);
+        Assert.True(afterEdit.GroupFolders.Any(folder => folder.GroupId == group.Id && folder.Name == "Brushes"));
+
+        store.DeleteGroup(group.Id);
+        var afterDelete = store.Load();
+
+        Assert.False(afterDelete.Groups.Any(item => item.Id == group.Id));
+        Assert.Equal(MacroLibraryStore.GlobalGroupId, afterDelete.Items.Single(item => item.Id == macro.Id).GroupId);
+        Assert.False(afterDelete.GroupFolders.Any(folder => folder.GroupId == group.Id));
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void MacroLibraryStoreMovesMacrosAcrossProcessGroups()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var store = new MacroLibraryStore(root);
+        var chrome = store.CreateGroup("Chrome", "chrome");
+        var game = store.CreateGroup("Game", "game.exe");
+        var alpha = store.CreateMacro("Alpha", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))], groupId: chrome.Id);
+        var beta = store.CreateMacro("Beta", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))], groupId: chrome.Id);
+        var gamma = store.CreateMacro("Gamma", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))], groupId: game.Id);
+
+        store.MoveMacro(gamma.Id, "Raid", beforeMacroId: null, groupId: chrome.Id);
+        store.MoveMacro(beta.Id, "Raid", beforeMacroId: gamma.Id, groupId: chrome.Id);
+        store.MoveMacro(alpha.Id, "Raid", beforeMacroId: beta.Id, groupId: chrome.Id);
+
+        var reloaded = store.Load();
+        var raidIds = reloaded.Items
+            .Where(item => item.GroupId == chrome.Id && item.Folder == "Raid")
+            .Select(item => item.Id)
+            .ToArray();
+
+        Assert.Equal(3, raidIds.Length);
+        Assert.Equal(alpha.Id, raidIds[0]);
+        Assert.Equal(beta.Id, raidIds[1]);
+        Assert.Equal(gamma.Id, raidIds[2]);
+        Assert.True(reloaded.GroupFolders.Any(folder => folder.GroupId == chrome.Id && folder.Name == "Raid"));
+        Assert.False(reloaded.GroupFolders.Any(folder => folder.GroupId == game.Id && folder.Name == "Raid"));
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void MacroLibraryActivationFilterUsesProcessGroupFilters()
+{
+    Assert.True(MacroLibraryActivationFilter.Matches("chrome", "chrome.exe"));
+    Assert.True(MacroLibraryActivationFilter.Matches("", "notepad.exe"));
+    Assert.True(MacroLibraryActivationFilter.Matches("chrome.exe; editor", "CHROME"));
+    Assert.False(MacroLibraryActivationFilter.Matches("chrome", "notepad"));
+    Assert.False(MacroLibraryActivationFilter.Matches("chrome", null));
+
+    Assert.True(MacroLibraryActivationFilter.FiltersOverlap("", "chrome"));
+    Assert.True(MacroLibraryActivationFilter.FiltersOverlap("chrome", "chrome.exe; editor"));
+    Assert.False(MacroLibraryActivationFilter.FiltersOverlap("chrome", "notepad"));
+}
+
 static void MacroStudioMacroLibraryUsesFolderTree()
 {
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
@@ -4410,6 +4690,94 @@ static void MacroStudioMacroLibraryUsesFolderTree()
     Assert.Contains("CreateFolder", libraryCode);
     Assert.Contains("MoveMacro", libraryCode);
     Assert.Contains("MacroTreeView_Drop", libraryCode);
+}
+
+static void MacroStudioMacroLibraryPresentsDatabaseManagerHierarchy()
+{
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+    var english = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.resx"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+    var traditional = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-TW.resx"));
+
+    Assert.Contains("WorkspacePanelLibrary", english);
+    Assert.Contains("<value>Macro Library Manager</value>", english);
+    Assert.Contains("<value>宏数据库管理</value>", simplified);
+    Assert.Contains("<value>巨集資料庫管理</value>", traditional);
+    Assert.Contains("ProcessGroupDatabaseSummary", displayModels);
+    Assert.Contains("进程组宏库", simplified);
+    Assert.Contains("行程群組巨集庫", traditional);
+}
+
+static void MacroStudioMacroLibraryUsesProgressiveDatabaseViews()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("BackToManagerButton", libraryXaml);
+    Assert.Contains("CurrentDatabaseTitleText", libraryXaml);
+    Assert.Contains("ManagerOnlyControls", libraryXaml);
+    Assert.Contains("DatabaseOnlyControls", libraryXaml);
+    Assert.Contains("LibraryImportExportPanel", libraryXaml);
+    Assert.Contains("showingDatabaseContents", libraryCode);
+    Assert.Contains("EnterDatabaseView", libraryCode);
+    Assert.Contains("ReturnToManagerView", libraryCode);
+    Assert.Contains("ApplyProgressiveViewState", libraryCode);
+    Assert.Contains("BuildManagerNodes", libraryCode);
+    Assert.Contains("BuildDatabaseNodes", libraryCode);
+    Assert.Contains("ImportMacroButton.IsEnabled = showingDatabaseContents", libraryCode);
+    Assert.Contains("MacroTreeNode_MouseLeftButtonDown", libraryCode);
+    Assert.Contains("EnterDatabaseView(node.ProcessGroup.Id)", libraryCode);
+    Assert.Contains("<value>新建数据库</value>", simplified);
+    Assert.Contains("<value>返回管理</value>", simplified);
+}
+
+static void MacroStudioMacroLibraryExposesProcessGroupControls()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+    var storeCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Core", "MacroLibraryStore.cs"));
+
+    Assert.Contains("NewGroupButton", libraryXaml);
+    Assert.Contains("GroupProcessFilterBox", libraryXaml);
+    Assert.Contains("CreateGroup", libraryCode);
+    Assert.Contains("UpdateGroup", libraryCode);
+    Assert.Contains("DeleteGroup", libraryCode);
+    Assert.Contains("public static MacroLibraryTreeNode Group", displayModels);
+    Assert.Contains("MoveMacro(macroId, target.Folder, target.BeforeMacroId, target.GroupId)", libraryCode);
+    Assert.Contains("public sealed record MacroLibraryGroup", storeCode);
+}
+
+static void MacroStudioMacroLibraryCanPickRunningProcessesAndExecutableFilesForGroups()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("SelectProcessButton", libraryXaml);
+    Assert.Contains("SelectProcessFileButton", libraryXaml);
+    Assert.Contains("SelectProcess_Click", libraryXaml);
+    Assert.Contains("SelectProcessFile_Click", libraryXaml);
+    Assert.Contains("Process.GetProcesses", libraryCode);
+    Assert.Contains("ContextMenu", libraryCode);
+    Assert.Contains("OpenFileDialog", libraryCode);
+    Assert.Contains("Path.GetFileName", libraryCode);
+    Assert.Contains("ApplySelectedGroupProcessFilter", libraryCode);
+    Assert.Contains("SelectProcess", simplified);
+    Assert.Contains("SelectProcessFile", simplified);
+}
+
+static void MacroStudioListenersApplyProcessGroupFilters()
+{
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("EffectiveProcessFilter", mainWindowCode);
+    Assert.Contains("GroupProcessFilter", mainWindowCode);
+    Assert.Contains("MacroLibraryActivationFilter.Matches", mainWindowCode);
+    Assert.Contains("activeTriggeredControllerIds", mainWindowCode);
+    Assert.Contains("MacroLibraryActivationFilter.FiltersOverlap", mainWindowCode);
+    Assert.DoesNotContain("document.Playback.ProcessFilter ?? string.Empty", mainWindowCode);
 }
 
 static void MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste()
@@ -4492,7 +4860,7 @@ static void MacroStudioMacroLibraryAcceptsDragDropsAfterWheelScrolling()
     Assert.Contains("e.Effects = DragDropEffects.Move", libraryCode);
     Assert.Contains("ComboBoxItem Tag=\"manual\"", libraryXaml);
     Assert.Contains("GetMacroDropTarget(e.GetPosition(MacroTreeView), macroId)", libraryCode);
-    Assert.Contains("MoveMacro(macroId, target.Folder, target.BeforeMacroId)", libraryCode);
+    Assert.Contains("MoveMacro(macroId, target.Folder, target.BeforeMacroId, target.GroupId)", libraryCode);
     Assert.Contains("SelectLibrarySortMode(\"manual\")", libraryCode);
     Assert.Contains("GetNextMacroIdInFolder", libraryCode);
     Assert.Contains("e.Effects = DragDropEffects.Move", libraryCode.Substring(libraryCode.IndexOf("private void MacroTreeView_Drop", StringComparison.Ordinal)));
@@ -4608,6 +4976,22 @@ static bool ContainsTapOrClick(IEnumerable<MacroStep> steps)
     }
 
     return false;
+}
+
+static T GetPrivateField<T>(object target, string name)
+{
+    var field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException($"Missing private field '{name}'.");
+    return field.GetValue(target) is T value
+        ? value
+        : throw new InvalidOperationException($"Private field '{name}' has unexpected type.");
+}
+
+static void InvokePrivate(object target, string name)
+{
+    var method = target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException($"Missing private method '{name}'.");
+    method.Invoke(target, []);
 }
 
 static class Assert

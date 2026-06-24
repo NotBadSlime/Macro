@@ -33,7 +33,6 @@ public partial class PlaybackPanel : UserControl
     }
 
     public string TriggerText => TriggerTextBox.Text.Trim();
-    public string ProcessFilterText => ProcessFilterBox.Text.Trim();
     public string CountText => PlaybackCountTextBox.Text;
 
     public PlaybackMode GetSelectedPlaybackMode()
@@ -55,7 +54,6 @@ public partial class PlaybackPanel : UserControl
         try
         {
             TriggerTextBox.Text = settings.Trigger?.ToString() ?? string.Empty;
-            ProcessFilterBox.Text = settings.ProcessFilter;
             PlaybackCountTextBox.Text = settings.Count.ToString();
             foreach (var item in PlaybackModeBox.Items.OfType<ComboBoxItem>())
             {
@@ -89,7 +87,6 @@ public partial class PlaybackPanel : UserControl
         PlaybackTitleText.Text = L("Playback");
         TriggerLabelText.Text = L("Trigger");
         CaptureTriggerButton.Content = L("Capture");
-        ProcessFilterLabelText.Text = L("ProcessFilter");
         ModeLabelText.Text = L("Mode");
         PlaybackCountLabelText.Text = L("Count");
         StartListeningButton.Content = L("StartListening");

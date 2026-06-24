@@ -520,7 +520,7 @@ static bool ShouldUseNativeProbe(ProbeBackend backend, PrecisionMode profile, bo
     }
 
     return backend == ProbeBackend.Native
-        || (backend == ProbeBackend.Auto && profile == PrecisionMode.UltraLowJitter);
+        || (backend == ProbeBackend.Auto && profile is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter);
 }
 
 static string ToProfileText(PrecisionMode mode) => mode switch
