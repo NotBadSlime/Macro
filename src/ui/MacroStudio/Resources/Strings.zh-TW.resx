@@ -85,7 +85,7 @@
   <data name="ExportMacroTitle" xml:space="preserve"><value>匯出巨集</value></data>
   <data name="ConverterImportFileFilter" xml:space="preserve"><value>支援的巨集檔案 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt|所有檔案 (*.*)|*.*</value></data>
   <data name="RazerModuleFileFilter" xml:space="preserve"><value>雷雲 XML (*.xml)|*.xml|所有檔案 (*.*)|*.*</value></data>
-  <data name="MacroLibrary" xml:space="preserve"><value>巨集資料庫</value></data>
+  <data name="MacroLibrary" xml:space="preserve"><value>巨集資料庫管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新增</value></data>
   <data name="NewFolder" xml:space="preserve"><value>資料夾</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>複製</value></data>
@@ -136,9 +136,30 @@
   <data name="SortName" xml:space="preserve"><value>按字母順序</value></data>
   <data name="SortRecentlyUpdated" xml:space="preserve"><value>最近更新</value></data>
   <data name="Ungrouped" xml:space="preserve"><value>巨集</value></data>
+  <data name="ProcessGroup" xml:space="preserve"><value>行程群組</value></data>
+  <data name="NewGroup" xml:space="preserve"><value>行程群組</value></data>
+  <data name="NewDatabase" xml:space="preserve"><value>新增資料庫</value></data>
+  <data name="DeleteDatabase" xml:space="preserve"><value>刪除資料庫</value></data>
+  <data name="ReturnToManager" xml:space="preserve"><value>返回管理</value></data>
+  <data name="SelectDatabase" xml:space="preserve"><value>請選擇資料庫</value></data>
+  <data name="StartSelectedDatabaseListening" xml:space="preserve"><value>監聽此庫</value></data>
+  <data name="StartSelectedDatabasesListening" xml:space="preserve"><value>監聽選中 {0} 個</value></data>
+  <data name="StopSelectedDatabaseListening" xml:space="preserve"><value>停止此庫</value></data>
+  <data name="StopSelectedDatabasesListening" xml:space="preserve"><value>停止選中 {0} 個</value></data>
+  <data name="GroupProcessFilter" xml:space="preserve"><value>啟用行程</value></data>
+  <data name="GroupProcessFilterHelp" xml:space="preserve"><value>僅目前行程在最前面時啟用該分組，例如 chrome.exe 或 notepad; chrome。</value></data>
+  <data name="ProcessGroupDatabaseSummary" xml:space="preserve"><value>行程群組巨集庫 · {0}</value></data>
+  <data name="SelectProcess" xml:space="preserve"><value>行程</value></data>
+  <data name="SelectProcessFile" xml:space="preserve"><value>檔案</value></data>
+  <data name="SelectProcessFileTitle" xml:space="preserve"><value>選擇程式檔案</value></data>
+  <data name="ProcessExecutableFileFilter" xml:space="preserve"><value>程式檔案 (*.exe)|*.exe|所有檔案 (*.*)|*.*</value></data>
+  <data name="NoProcessesFound" xml:space="preserve"><value>沒有可選擇的執行中行程</value></data>
   <data name="Folder" xml:space="preserve"><value>資料夾</value></data>
   <data name="MacroMovedToRoot" xml:space="preserve"><value>已移動巨集到根目錄</value></data>
   <data name="MacroMovedToFolder" xml:space="preserve"><value>已移動巨集到資料夾：{0}</value></data>
+  <data name="GroupDeleted" xml:space="preserve"><value>已刪除分組：{0}</value></data>
+  <data name="GroupUpdated" xml:space="preserve"><value>已更新分組：{0}</value></data>
+  <data name="GroupRenamed" xml:space="preserve"><value>已重新命名分組：{0}</value></data>
   <data name="FolderDeleted" xml:space="preserve"><value>已刪除資料夾：{0}</value></data>
   <data name="MacroCopied" xml:space="preserve"><value>已複製巨集：{0}</value></data>
   <data name="FolderCopied" xml:space="preserve"><value>已複製資料夾：{0}</value></data>
@@ -176,7 +197,7 @@
   <data name="WorkspaceFloat" xml:space="preserve"><value>浮動</value></data>
   <data name="WorkspaceDock" xml:space="preserve"><value>停靠</value></data>
   <data name="WorkspaceResetLayout" xml:space="preserve"><value>重設佈局</value></data>
-  <data name="WorkspacePanelLibrary" xml:space="preserve"><value>巨集資料庫</value></data>
+  <data name="WorkspacePanelLibrary" xml:space="preserve"><value>巨集資料庫管理</value></data>
   <data name="WorkspacePanelSequence" xml:space="preserve"><value>序列</value></data>
   <data name="WorkspacePanelConditions" xml:space="preserve"><value>條件序列</value></data>
   <data name="WorkspacePanelActions" xml:space="preserve"><value>動作面板</value></data>

@@ -68,6 +68,21 @@ internal sealed record NativeOutlierTraceEvent(
 
 internal static class NativePlaybackEngine
 {
+    private static bool CanUseNativePrecision(PrecisionMode precision)
+    {
+        return precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter;
+    }
+
+    private static int ToNativePrecisionMode(PrecisionMode precision)
+    {
+        return precision switch
+        {
+            PrecisionMode.ExtremeDuringPlayback => 1,
+            PrecisionMode.UltraLowJitter => 2,
+            _ => 0
+        };
+    }
+
     public static NativePlaybackRunDiagnostics CreateFallbackDiagnostics(string fallbackReason)
     {
         return EmptyDiagnostics("managed", fallbackReason);
@@ -195,13 +210,16 @@ internal static class NativePlaybackEngine
         diagnostics = EmptyDiagnostics("native", string.Empty);
         fallbackReason = string.Empty;
 
-        if (precision != PrecisionMode.UltraLowJitter)
+        if (!CanUseNativePrecision(precision))
         {
-            fallbackReason = "native playback is only used by UltraLowJitter.";
+            fallbackReason = "native playback is not used by Balanced.";
             diagnostics = EmptyDiagnostics("managed", fallbackReason);
             return false;
         }
 
+        var effectiveEngineMode = precision == PrecisionMode.ExtremeDuringPlayback
+            ? NativePlaybackEngineMode.Inline
+            : engineMode;
         var cancelFlag = 0;
         var timeline = preparedPlan.Timeline;
         var qpcFrequency = preparedPlan.QpcFrequency;
@@ -236,8 +254,8 @@ internal static class NativePlaybackEngine
 
             var options = new MhpRunOptions
             {
-                PrecisionMode = 2,
-                EnableCpuScan = enableCpuScan ? 1 : 0,
+                PrecisionMode = ToNativePrecisionMode(precision),
+                EnableCpuScan = precision == PrecisionMode.UltraLowJitter && enableCpuScan ? 1 : 0,
                 OutlierThresholdUs = Math.Max(0, outlierThresholdUs),
                 LoopStepCount = Math.Max(0, timeline.LoopStepCount),
                 QpcFrequency = qpcFrequency,
@@ -248,7 +266,7 @@ internal static class NativePlaybackEngine
                 OutlierEventCapacity = checked((uint)nativeOutlierEvents.Length)
             };
 
-            var modes = engineMode switch
+            var modes = effectiveEngineMode switch
             {
                 NativePlaybackEngineMode.Standby => new[] { NativeEngineMode.Standby, NativeEngineMode.Inline },
                 NativePlaybackEngineMode.Inline => new[] { NativeEngineMode.Inline },

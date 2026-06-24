@@ -60,11 +60,6 @@ public sealed class MacroLibraryListEntry
             subtitle = $"{trigger} · {FormatPlaybackMode(document.Playback)} · {subtitle}";
         }
 
-        if (!string.IsNullOrWhiteSpace(document?.Playback.ProcessFilter))
-        {
-            subtitle = $"{document.Playback.ProcessFilter} · {subtitle}";
-        }
-
         return new MacroLibraryListEntry(item, item.Name, subtitle, "M", MacroBrush, FontWeights.Normal);
     }
 
@@ -93,13 +88,19 @@ public sealed record MacroLibraryListenState(
     bool IsConflict,
     string Trigger,
     string Mode,
-    string ProcessFilter)
+    string GroupProcessFilter,
+    int ListeningCount = 0,
+    int CandidateCount = 0,
+    bool IsGroupSummary = false)
 {
     public string BadgeText
     {
         get
         {
             if (IsConflict) return "冲突";
+            if (IsGroupSummary && CandidateCount > 0 && ListeningCount > 0 && ListeningCount < CandidateCount)
+                return $"部分监听 {ListeningCount}/{CandidateCount}";
+            if (IsGroupSummary && ListeningCount > 0) return $"监听中 {ListeningCount}";
             if (IsListening) return "监听中";
             if (!string.IsNullOrWhiteSpace(Trigger)) return "未监听";
             return string.Empty;
@@ -111,6 +112,7 @@ public sealed record MacroLibraryListenState(
         get
         {
             if (IsConflict) return new SolidColorBrush(Color.FromRgb(255, 59, 48));
+            if (IsGroupSummary && ListeningCount > 0) return new SolidColorBrush(Color.FromRgb(0, 122, 255));
             if (IsListening) return new SolidColorBrush(Color.FromRgb(52, 199, 89));
             if (!string.IsNullOrWhiteSpace(Trigger)) return new SolidColorBrush(Color.FromRgb(142, 142, 147));
             return Brushes.Transparent;
@@ -128,10 +130,13 @@ public enum MacroLibraryDropIndicator
 
 public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
 {
+    private static readonly Brush GroupBrush = new SolidColorBrush(Color.FromRgb(0, 122, 255));
     private static readonly Brush FolderBrush = new SolidColorBrush(Color.FromRgb(142, 142, 147));
 
     private MacroLibraryTreeNode(
+        MacroLibraryGroup? group,
         MacroLibraryItem? item,
+        string groupId,
         string folderName,
         string title,
         string subtitle,
@@ -139,9 +144,12 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
         Brush accent,
         FontWeight weight,
         MacroLibraryListenState? listenState,
+        bool isManagerSelected,
         IReadOnlyList<MacroLibraryTreeNode> children)
     {
+        ProcessGroup = group;
         Item = item;
+        GroupId = groupId;
         FolderName = folderName;
         Title = title;
         Subtitle = subtitle;
@@ -149,11 +157,14 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
         Accent = accent;
         Weight = weight;
         ListenState = listenState;
+        IsManagerSelected = isManagerSelected;
         Children = children;
         RenameText = title;
     }
 
+    public MacroLibraryGroup? ProcessGroup { get; }
     public MacroLibraryItem? Item { get; }
+    public string GroupId { get; }
     public string FolderName { get; }
     public string Title { get; }
     public string Subtitle { get; }
@@ -161,13 +172,25 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
     public Brush Accent { get; }
     public FontWeight Weight { get; }
     public MacroLibraryListenState? ListenState { get; }
+    public bool IsManagerSelected { get; }
+    public Visibility GroupSelectionVisibility => IsGroup ? Visibility.Visible : Visibility.Collapsed;
     public string ListeningBadgeText => ListenState?.BadgeText ?? string.Empty;
     public Brush ListeningBadgeBrush => ListenState?.BadgeBrush ?? Brushes.Transparent;
     public Visibility ListeningBadgeVisibility => string.IsNullOrWhiteSpace(ListeningBadgeText)
         ? Visibility.Collapsed
         : Visibility.Visible;
+    public Visibility ManagerSelectionDotVisibility => IsGroup && IsManagerSelected
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+    public Brush StatusStripBrush => ListenState?.BadgeBrush ?? Brushes.Transparent;
+    public Visibility StatusStripVisibility => ListenState is { IsConflict: true }
+        || ListenState is { IsGroupSummary: true, ListeningCount: > 0 }
+        || ListenState is { IsListening: true }
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     public IReadOnlyList<MacroLibraryTreeNode> Children { get; }
-    public bool IsFolder => Item is null;
+    public bool IsGroup => ProcessGroup is not null;
+    public bool IsFolder => ProcessGroup is null && Item is null;
     public bool IsExpanded { get; set; }
     public bool IsSelected { get; set; }
     public Visibility DropBeforeVisibility => DropIndicator == MacroLibraryDropIndicator.Before
@@ -223,7 +246,25 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
 
     public static MacroLibraryTreeNode Folder(string title, IReadOnlyList<MacroLibraryTreeNode> children)
     {
-        return new MacroLibraryTreeNode(null, title, title, $"{children.Count} items", "F", FolderBrush, FontWeights.SemiBold, null, children);
+        return Folder(MacroLibraryStore.GlobalGroupId, title, children);
+    }
+
+    public static MacroLibraryTreeNode Folder(string groupId, string title, IReadOnlyList<MacroLibraryTreeNode> children)
+    {
+        return new MacroLibraryTreeNode(null, null, groupId, title, title, $"{children.Count} items", "F", FolderBrush, FontWeights.SemiBold, null, false, children);
+    }
+
+    public static MacroLibraryTreeNode Group(
+        MacroLibraryGroup group,
+        IReadOnlyList<MacroLibraryTreeNode> children,
+        MacroLibraryListenState? listenState = null,
+        bool isManagerSelected = false)
+    {
+        var activation = group.IsGlobal || string.IsNullOrWhiteSpace(group.ProcessFilter)
+            ? LocalizationService.Get("AllProcesses")
+            : group.ProcessFilter;
+        var subtitle = LocalizationService.Format("ProcessGroupDatabaseSummary", activation);
+        return new MacroLibraryTreeNode(group, null, group.Id, string.Empty, group.Name, subtitle, "P", GroupBrush, FontWeights.SemiBold, listenState, isManagerSelected, children);
     }
 
     public static MacroLibraryTreeNode Macro(MacroLibraryItem item, MacroDocument? document, MacroLibraryListenState? listenState = null)
@@ -232,12 +273,12 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
         var subtitle = entry.Subtitle;
         if (listenState is not null)
         {
-            var parts = new[] { listenState.ProcessFilter, listenState.Trigger, listenState.Mode, subtitle }
+            var parts = new[] { listenState.GroupProcessFilter, listenState.Trigger, listenState.Mode, subtitle }
                 .Where(part => !string.IsNullOrWhiteSpace(part));
             subtitle = string.Join(" · ", parts);
         }
 
-        return new MacroLibraryTreeNode(item, item.Folder, entry.Title, subtitle, entry.Icon, entry.Accent, entry.Weight, listenState, []);
+        return new MacroLibraryTreeNode(null, item, item.GroupId, item.Folder, entry.Title, subtitle, entry.Icon, entry.Accent, entry.Weight, listenState, false, []);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

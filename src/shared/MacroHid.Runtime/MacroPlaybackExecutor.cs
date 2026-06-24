@@ -357,7 +357,19 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 var iterationStartTick = plannedIterationStartTick;
                 var iterationDurationTicks = Math.Max(1, iterationPlan.DurationTicks);
 
-                if (!TryRunNativeIteration(document, options, iterationPlan, nativePreparedPlan, cancellationToken, ref sequence, ref actionsSubmitted))
+                if (!TryRunNativeIterationWithConditionMonitors(
+                        document,
+                        options,
+                        iterationPlan,
+                        nativePreparedPlan,
+                        conditionEvaluator,
+                        delayStrategy,
+                        iterationStartTick,
+                        iterationDurationTicks,
+                        qpcFrequency,
+                        cancellationToken,
+                        ref sequence,
+                        ref actionsSubmitted))
                 {
                     var monitors = CreateConditionMonitors(document, conditionEvaluator, iterationStartTick, qpcFrequency);
                     try
@@ -436,6 +448,57 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         }
     }
 
+    private bool TryRunNativeIterationWithConditionMonitors(
+        MacroDocument document,
+        PlaybackExecutionOptions options,
+        CompiledPlaybackPlan iterationPlan,
+        NativePlaybackPreparedPlan? nativePreparedPlan,
+        CompositeConditionEvaluator conditionEvaluator,
+        IPlaybackDelayStrategy delayStrategy,
+        long iterationStartTick,
+        long iterationDurationTicks,
+        long qpcFrequency,
+        CancellationToken cancellationToken,
+        ref uint sequence,
+        ref int actionsSubmitted)
+    {
+        if (!CanAttemptNativeIteration(options))
+        {
+            return false;
+        }
+
+        if (TryReportPixelWhenNativeFallback(document, options))
+        {
+            return false;
+        }
+
+        var monitors = CreateConditionMonitors(document, conditionEvaluator, iterationStartTick, qpcFrequency);
+        try
+        {
+            ActivateAllMonitors(monitors);
+            if (!TryRunNativeIteration(document, options, iterationPlan, nativePreparedPlan, cancellationToken, ref sequence, ref actionsSubmitted))
+            {
+                return false;
+            }
+
+            WaitForIterationEndBeforeDeactivatingConditions(
+                monitors,
+                delayStrategy,
+                iterationStartTick + iterationDurationTicks,
+                qpcFrequency,
+                cancellationToken,
+                options.NoWait);
+            CompleteAllMonitorsAfterCurrentEvaluation(monitors);
+            WaitForTriggeredConditionActions(monitors, cancellationToken);
+            DeactivateAllMonitors(monitors);
+            return true;
+        }
+        finally
+        {
+            DisposeMonitors(monitors);
+        }
+    }
+
     private bool TryRunNativeIteration(
         MacroDocument document,
         PlaybackExecutionOptions options,
@@ -445,21 +508,17 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         ref uint sequence,
         ref int actionsSubmitted)
     {
-        if (options.Precision != PrecisionMode.UltraLowJitter
-            || options.NoWait
-            || configuredDelayStrategy is not null
-            || inputSink is not SendInputMacroSink sendInput)
+        if (!CanAttemptNativeIteration(options))
         {
             return false;
         }
 
-        if (document.EffectiveConditions.Count > 0)
+        if (TryReportPixelWhenNativeFallback(document, options))
         {
-            sendInput.SetNativePlaybackDiagnostics(
-                NativePlaybackEngine.CreateFallbackDiagnostics("condition ranges require managed step activation."));
             return false;
         }
 
+        var sendInput = (SendInputMacroSink)inputSink;
         NativePlaybackRunDiagnostics diagnostics;
         string fallbackReason;
         bool ranNative;
@@ -499,6 +558,28 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         sequence += (uint)Math.Max(0, diagnostics.ActionsSubmitted);
         actionsSubmitted += Math.Max(0, diagnostics.ActionsSubmitted);
         return true;
+    }
+
+    private bool CanAttemptNativeIteration(PlaybackExecutionOptions options)
+    {
+        return CanUseNativePrecision(options.Precision)
+            && !options.NoWait
+            && configuredDelayStrategy is null
+            && inputSink is SendInputMacroSink;
+    }
+
+    private bool TryReportPixelWhenNativeFallback(MacroDocument document, PlaybackExecutionOptions options)
+    {
+        if (options.PixelMode == PixelEvaluationMode.Live
+            && ContainsPixelWhen(document.Steps)
+            && inputSink is SendInputMacroSink sendInput)
+        {
+            sendInput.SetNativePlaybackDiagnostics(
+                NativePlaybackEngine.CreateFallbackDiagnostics("inline PixelWhen requires managed step activation."));
+            return true;
+        }
+
+        return false;
     }
 
     private NativePlaybackPreparedPlan? TryCreateNativePreparedPlan(
@@ -559,12 +640,16 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private bool CanUseNativePreparedPlan(MacroDocument document, PlaybackExecutionOptions options)
     {
-        return options.Precision == PrecisionMode.UltraLowJitter
+        return CanUseNativePrecision(options.Precision)
             && !options.NoWait
             && configuredDelayStrategy is null
             && inputSink is SendInputMacroSink
-            && document.EffectiveConditions.Count == 0
             && (options.PixelMode != PixelEvaluationMode.Live || !ContainsPixelWhen(document.Steps));
+    }
+
+    private static bool CanUseNativePrecision(PrecisionMode precision)
+    {
+        return precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter;
     }
 
     private static bool ContainsPixelWhen(IReadOnlyList<MacroStep> steps)

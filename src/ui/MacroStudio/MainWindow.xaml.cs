@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
@@ -6,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using MacroHid.Core;
@@ -29,10 +31,12 @@ public partial class MainWindow : Window
     private MacroPlaybackController? playbackController;
     private readonly Dictionary<string, MacroPlaybackController> listeningControllers = [];
     private readonly Dictionary<string, string> listeningMacroNames = [];
-    private readonly Dictionary<string, string> listeningProcessFilters = [];
+    private readonly Dictionary<string, string> listeningGroupProcessFilters = [];
+    private readonly HashSet<string> activeTriggeredControllerIds = [];
     private readonly Dictionary<string, WorkspacePanelRegistration> workspacePanels = [];
     private readonly HashSet<string> pendingFloatingPanelIds = [];
     private WorkspaceLayout workspaceLayout = new([], WorkspaceLayoutStore.CurrentVersion);
+    private HwndSource? windowSource;
     private bool listening;
     private bool updatingLanguageComboBox;
     private bool updatingWorkspaceMenu;
@@ -44,7 +48,10 @@ public partial class MainWindow : Window
         MacroLibraryItem Item,
         MacroDocument Document,
         HotkeyGesture Trigger,
-        string ProcessFilter);
+        string GroupProcessFilter)
+    {
+        public string EffectiveProcessFilter => GroupProcessFilter;
+    }
 
     public MainWindow()
     {
@@ -89,9 +96,11 @@ public partial class MainWindow : Window
         LibraryPanel.ImportApplied += OnImportApplied;
         LibraryPanel.DocumentRequested += () => GetDocumentWithPlayback();
         LibraryPanel.ResultMessage += msg => SetStatus(msg);
-        LibraryPanel.StartListeningAllRequested += OnStartListeningAll;
+        LibraryPanel.StartListeningGroupsRequested += OnStartListeningGroups;
+        LibraryPanel.StopListeningGroupsRequested += OnStopListeningGroups;
         LibraryPanel.StopListeningAllRequested += OnStopListeningAll;
         LibraryPanel.PrecisionSettingsEdited += OnPrecisionSettingsEdited;
+        LibraryPanel.LibraryStructureEdited += OnLibraryStructureEdited;
 
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
         SequencePanelControl.RunNowRequested += OnRunNow;
@@ -1075,6 +1084,12 @@ public partial class MainWindow : Window
         StartListeningCandidates(candidates);
     }
 
+    private void OnLibraryStructureEdited()
+    {
+        RestartListeningWithCurrentSettings();
+        RefreshLibraryListeningState();
+    }
+
     private void AutoSaveCurrentMacro(bool updateStatus)
     {
         var document = GetDocumentWithPlayback();
@@ -1154,12 +1169,27 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnStartListeningAll()
+    private async void OnStartListeningGroups(IReadOnlyList<string> groupIds)
     {
         try
         {
             AutoSaveCurrentMacro(updateStatus: false);
-            var count = StartListeningCandidates(BuildListeningCandidates());
+            var selectedCandidates = BuildListeningCandidatesForGroups(groupIds);
+            if (selectedCandidates.Count == 0)
+            {
+                throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
+            }
+
+            var desiredIds = listeningControllers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var candidate in selectedCandidates)
+            {
+                desiredIds.Add(candidate.Item.Id);
+            }
+
+            var candidates = BuildListeningCandidates()
+                .Where(candidate => desiredIds.Contains(candidate.Item.Id))
+                .ToList();
+            var count = StartListeningCandidates(candidates);
             PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
             SetStatus($"{L("Listening")} ({count})");
             await Task.CompletedTask;
@@ -1169,6 +1199,18 @@ public partial class MainWindow : Window
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
             SetStatus(L("PlaybackError"));
+            RefreshLibraryListeningState();
+        }
+    }
+
+    private void OnStopListeningGroups(IReadOnlyList<string> groupIds)
+    {
+        var stopped = StopListeningGroups(groupIds);
+        PlaybackPanelControl.SetPlaybackStatus(listening ? $"{L("PlaybackStatusListening")} ({listeningControllers.Count})" : L("PlaybackStatusIdle"));
+        PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
+        SetStatus(listening ? $"{L("Listening")} ({listeningControllers.Count})" : L("Idle"));
+        if (stopped == 0)
+        {
             RefreshLibraryListeningState();
         }
     }
@@ -1232,6 +1274,30 @@ public partial class MainWindow : Window
         SetStatus(listening ? L("Listening") : L("Idle"));
     }
 
+    private int StopListeningGroups(IReadOnlyList<string> groupIds)
+    {
+        var groupSet = groupIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (groupSet.Count == 0)
+        {
+            return 0;
+        }
+
+        var snapshot = libraryStore.Load();
+        var macroIds = snapshot.Items
+            .Where(item => groupSet.Contains(item.GroupId))
+            .Select(item => item.Id)
+            .Where(id => listeningControllers.ContainsKey(id))
+            .ToList();
+        foreach (var id in macroIds)
+        {
+            StopListeningController(id);
+        }
+
+        RestartKeyboardHookFromListeningControllers();
+        RefreshLibraryListeningState();
+        return macroIds.Count;
+    }
+
     private int StartListeningCandidates(IReadOnlyList<ListeningCandidate> candidates)
     {
         var conflicts = FindListeningConflicts(candidates);
@@ -1244,7 +1310,7 @@ public partial class MainWindow : Window
         var bindings = new List<HotkeyBinding>();
         var controllers = new Dictionary<string, MacroPlaybackController>(StringComparer.OrdinalIgnoreCase);
         var macroNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var processFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var groupProcessFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var candidate in candidates)
         {
             var item = candidate.Item;
@@ -1255,7 +1321,7 @@ public partial class MainWindow : Window
             executor.Prepare(document, options);
             controllers[item.Id] = new MacroPlaybackController(document, executor, options);
             macroNames[item.Id] = document.Name;
-            processFilters[item.Id] = candidate.ProcessFilter;
+            groupProcessFilters[item.Id] = candidate.GroupProcessFilter;
         }
 
         if (bindings.Count == 0)
@@ -1281,9 +1347,9 @@ public partial class MainWindow : Window
             listeningMacroNames[id] = name;
         }
 
-        foreach (var (id, processFilter) in processFilters)
+        foreach (var (id, groupProcessFilter) in groupProcessFilters)
         {
-            listeningProcessFilters[id] = processFilter;
+            listeningGroupProcessFilters[id] = groupProcessFilter;
         }
 
         playbackController = null;
@@ -1302,7 +1368,8 @@ public partial class MainWindow : Window
 
         listeningControllers.Clear();
         listeningMacroNames.Clear();
-        listeningProcessFilters.Clear();
+        listeningGroupProcessFilters.Clear();
+        activeTriggeredControllerIds.Clear();
     }
 
     private void StopListeningController(string id)
@@ -1315,7 +1382,8 @@ public partial class MainWindow : Window
         controller.Stop();
         controller.Dispose();
         listeningMacroNames.Remove(id);
-        listeningProcessFilters.Remove(id);
+        listeningGroupProcessFilters.Remove(id);
+        activeTriggeredControllerIds.Remove(id);
         if (ReferenceEquals(playbackController, controller))
         {
             playbackController = null;
@@ -1359,7 +1427,9 @@ public partial class MainWindow : Window
     private List<ListeningCandidate> BuildListeningCandidates()
     {
         var candidates = new List<ListeningCandidate>();
-        foreach (var item in libraryStore.Load().Items)
+        var snapshot = libraryStore.Load();
+        var groups = snapshot.Groups.ToDictionary(group => group.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var item in snapshot.Items)
         {
             MacroDocument document;
             try
@@ -1380,10 +1450,23 @@ public partial class MainWindow : Window
                 item,
                 document,
                 trigger,
-                document.Playback.ProcessFilter ?? string.Empty));
+                groups.TryGetValue(item.GroupId, out var group) ? group.ProcessFilter : string.Empty));
         }
 
         return candidates;
+    }
+
+    private List<ListeningCandidate> BuildListeningCandidatesForGroups(IReadOnlyList<string> groupIds)
+    {
+        var groupSet = groupIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (groupSet.Count == 0)
+        {
+            return [];
+        }
+
+        return BuildListeningCandidates()
+            .Where(candidate => groupSet.Contains(candidate.Item.GroupId))
+            .ToList();
     }
 
     private ListeningCandidate BuildCurrentListeningCandidate()
@@ -1393,7 +1476,8 @@ public partial class MainWindow : Window
             throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
         }
 
-        var item = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase))
+        var snapshot = libraryStore.Load();
+        var item = snapshot.Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
         var document = libraryStore.ReadMacro(item.Id);
         if (document.Playback.Trigger is not { } trigger)
@@ -1405,7 +1489,7 @@ public partial class MainWindow : Window
             item,
             document,
             trigger,
-            document.Playback.ProcessFilter ?? string.Empty);
+            snapshot.Groups.FirstOrDefault(group => string.Equals(group.Id, item.GroupId, StringComparison.OrdinalIgnoreCase))?.ProcessFilter ?? string.Empty);
     }
 
     private IReadOnlyList<(ListeningCandidate Left, ListeningCandidate Right)> FindListeningConflicts(
@@ -1419,7 +1503,7 @@ public partial class MainWindow : Window
                 var left = candidates[i];
                 var right = candidates[j];
                 if (string.Equals(left.Trigger.ToString(), right.Trigger.ToString(), StringComparison.OrdinalIgnoreCase)
-                    && ProcessFiltersOverlap(left.ProcessFilter, right.ProcessFilter))
+                    && ProcessFiltersOverlap(left, right))
                 {
                     conflicts.Add((left, right));
                 }
@@ -1429,41 +1513,11 @@ public partial class MainWindow : Window
         return conflicts;
     }
 
-    private static bool ProcessFiltersOverlap(string? left, string? right)
+    private static bool ProcessFiltersOverlap(ListeningCandidate left, ListeningCandidate right)
     {
-        var leftParts = NormalizeProcessFilterParts(left);
-        var rightParts = NormalizeProcessFilterParts(right);
-        if (leftParts.Count == 0 || rightParts.Count == 0)
-        {
-            return true;
-        }
-
-        return leftParts.Overlaps(rightParts);
-    }
-
-    private static HashSet<string> NormalizeProcessFilterParts(string? value)
-    {
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return result;
-        }
-
-        foreach (var token in value.Split([',', ';', '|', '\r', '\n', '\t', ' '], StringSplitOptions.RemoveEmptyEntries))
-        {
-            var normalized = token.Trim();
-            if (normalized.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            {
-                normalized = normalized[..^4];
-            }
-
-            if (!string.IsNullOrWhiteSpace(normalized))
-            {
-                result.Add(normalized);
-            }
-        }
-
-        return result;
+        return MacroLibraryActivationFilter.FiltersOverlap(
+            left.GroupProcessFilter,
+            right.GroupProcessFilter);
     }
 
     private void RefreshLibraryListeningState(
@@ -1486,7 +1540,7 @@ public partial class MainWindow : Window
                 conflictIds.Contains(candidate.Item.Id),
                 candidate.Trigger.ToString(),
                 FormatPlaybackModeSummary(candidate.Document.Playback),
-                string.IsNullOrWhiteSpace(candidate.ProcessFilter) ? L("AllProcesses") : candidate.ProcessFilter);
+                string.IsNullOrWhiteSpace(candidate.EffectiveProcessFilter) ? L("AllProcesses") : candidate.EffectiveProcessFilter);
         }
 
         LibraryPanel.SetListeningStates(states);
@@ -1556,7 +1610,7 @@ public partial class MainWindow : Window
 
     private void OnImportApplied(MacroDocument document)
     {
-        var item = libraryStore.CreateMacro(document);
+        var item = libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
         editorState.SelectedMacroId = item.Id;
         LibraryPanel.RefreshList();
         RefreshLibraryListeningState();
@@ -1636,7 +1690,6 @@ public partial class MainWindow : Window
         var trigger = string.IsNullOrWhiteSpace(triggerText) ? null : McrxParser.ParseHotkeyGesture(triggerText);
         var mode = PlaybackPanelControl.GetSelectedPlaybackMode();
         if (!int.TryParse(PlaybackPanelControl.CountText, out var count) || count < 1) count = 1;
-        var processFilter = PlaybackPanelControl.ProcessFilterText;
 
         var root = JsonNode.Parse(SequencePanelControl.EditorText)?.AsObject()
             ?? throw new JsonException("Macro JSON root must be an object.");
@@ -1651,7 +1704,6 @@ public partial class MainWindow : Window
             ["count"] = count
         };
         if (trigger is not null) playback["trigger"] = trigger.ToString();
-        if (!string.IsNullOrWhiteSpace(processFilter)) playback["processFilter"] = processFilter;
         root["playback"] = playback;
 
         SequencePanelControl.EditorText = root.ToJsonString(new JsonSerializerOptions
@@ -1694,12 +1746,16 @@ public partial class MainWindow : Window
         _ = Dispatcher.InvokeAsync(async () =>
         {
             if (!listeningControllers.TryGetValue(e.Id, out var controller)) return;
-            if (listeningProcessFilters.TryGetValue(e.Id, out var processFilter)
-                && !PlaybackProcessFilter.Matches(processFilter, ForegroundProcessService.GetForegroundProcessName()))
+            var foregroundProcess = ForegroundProcessService.GetForegroundProcessName();
+            var groupProcessFilter = listeningGroupProcessFilters.TryGetValue(e.Id, out var groupFilter)
+                ? groupFilter
+                : string.Empty;
+            if (!MacroLibraryActivationFilter.Matches(groupProcessFilter, foregroundProcess))
             {
                 return;
             }
 
+            activeTriggeredControllerIds.Add(e.Id);
             playbackController = controller;
             await controller.TriggerPressedAsync();
             UpdatePlaybackStatus();
@@ -1717,6 +1773,7 @@ public partial class MainWindow : Window
         _ = Dispatcher.InvokeAsync(() =>
         {
             if (!listeningControllers.TryGetValue(e.Id, out var controller)) return;
+            if (!activeTriggeredControllerIds.Remove(e.Id)) return;
             controller.TriggerReleased();
             playbackController = controller;
             UpdatePlaybackStatus();
@@ -1762,6 +1819,59 @@ public partial class MainWindow : Window
     private void SetStatus(string text) => StatusText.Text = text;
 
     // --- Window chrome ---
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var handle = new WindowInteropHelper(this).Handle;
+        var source = HwndSource.FromHwnd(handle);
+        if (source is null)
+        {
+            return;
+        }
+
+        source.RemoveHook(WindowProcedure);
+        source.AddHook(WindowProcedure);
+        windowSource = source;
+    }
+
+    private IntPtr WindowProcedure(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_GETMINMAXINFO)
+        {
+            ApplyWorkAreaMaximizeBounds(hwnd, lParam);
+            handled = true;
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private static void ApplyWorkAreaMaximizeBounds(IntPtr hwnd, IntPtr lParam)
+    {
+        var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if (monitor == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var monitorInfo = new MONITORINFO
+        {
+            cbSize = Marshal.SizeOf<MONITORINFO>()
+        };
+        if (!GetMonitorInfo(monitor, ref monitorInfo))
+        {
+            return;
+        }
+
+        var minMaxInfo = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+        var rcWork = monitorInfo.rcWork;
+        var rcMonitor = monitorInfo.rcMonitor;
+        minMaxInfo.ptMaxPosition.x = Math.Abs(rcWork.left - rcMonitor.left);
+        minMaxInfo.ptMaxPosition.y = Math.Abs(rcWork.top - rcMonitor.top);
+        minMaxInfo.ptMaxSize.x = Math.Abs(rcWork.right - rcWork.left);
+        minMaxInfo.ptMaxSize.y = Math.Abs(rcWork.bottom - rcWork.top);
+        Marshal.StructureToPtr(minMaxInfo, lParam, true);
+    }
 
     private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -1920,6 +2030,8 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         SaveWorkspaceLayout();
+        windowSource?.RemoveHook(WindowProcedure);
+        windowSource = null;
         keyboardHook?.Dispose();
         StopListeningControllers();
         playbackController?.Stop();
@@ -2127,6 +2239,51 @@ public partial class MainWindow : Window
         public bool IsFloating { get; set; }
         public WorkspaceDockRegion DockRegion { get; set; }
         public WorkspacePanelLayout? SavedLayout { get; set; }
+    }
+
+    private const int WM_GETMINMAXINFO = 0x0024;
+    private const int MONITOR_DEFAULTTONEAREST = 2;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int dwFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int x;
+        public int y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int left;
+        public int top;
+        public int right;
+        public int bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public int dwFlags;
     }
 
     private const string SampleMacro = """

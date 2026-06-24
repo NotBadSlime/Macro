@@ -117,20 +117,23 @@ $profiles = @(
         Name = "Basic"
         Profile = "basic"
         Backend = "managed"
+        NativeTier = "managed"
         TargetUs = 500
         MetricName = "loopStepJitter"
     },
     [pscustomobject]@{
         Name = "HighPerformance"
         Profile = "high"
-        Backend = "managed"
+        Backend = "auto"
+        NativeTier = "native-lite"
         TargetUs = 250
-        MetricName = "loopStepJitter"
+        MetricName = "nativeBatchLate"
     },
     [pscustomobject]@{
         Name = "Extreme"
         Profile = "ultra"
         Backend = "native"
+        NativeTier = "native-ultra"
         TargetUs = 100
         MetricName = "nativeBatchLate"
     }
@@ -152,7 +155,12 @@ foreach ($profile in $profiles) {
         "--trace-outliers", $outlierPath
     )
 
-    if ($profile.Backend -eq "native") {
+    if ($profile.NativeTier -eq "native-lite") {
+        $probeArgs += @(
+            "--native-engine", "inline"
+        )
+    }
+    elseif ($profile.NativeTier -eq "native-ultra") {
         $probeArgs += @(
             "--native-engine", $NativeEngine,
             "--warm-native",
@@ -177,7 +185,8 @@ foreach ($profile in $profiles) {
     $lines = @($probeOutput | ForEach-Object { "$_" })
     $allText = [string]::Join([Environment]::NewLine, $lines)
     $stepMetric = Read-ProbeMetric -Lines $lines -MetricName $profile.MetricName
-    $loopEndMetric = if ($profile.Backend -eq "native") {
+    $usesNativeMetrics = $profile.MetricName -eq "nativeBatchLate"
+    $loopEndMetric = if ($usesNativeMetrics) {
         Read-ProbeMetric -Lines $lines -MetricName "nativeLoopEndLate" -DefaultValue 0
     }
     else {
@@ -189,7 +198,9 @@ foreach ($profile in $profiles) {
         Name = $profile.Name
         TargetUs = $profile.TargetUs
         Backend = $profile.Backend
-        AffinityMask = if ($profile.Backend -eq "native" -and -not [string]::IsNullOrWhiteSpace($AffinityMask)) { $AffinityMask } else { "" }
+        NativeTier = $profile.NativeTier
+        EffectiveBackend = Read-RegexValue $stepMetric.Line "backend=([^ ]+)" $profile.Backend
+        AffinityMask = if ($profile.NativeTier -eq "native-ultra" -and -not [string]::IsNullOrWhiteSpace($AffinityMask)) { $AffinityMask } else { "" }
         StepP50Us = $stepMetric.P50
         StepP95Us = $stepMetric.P95
         StepP99Us = $stepMetric.P99
@@ -200,9 +211,9 @@ foreach ($profile in $profiles) {
         LoopEndMaxUs = $loopEndMetric.Max
         LoopEndOutliersOverTarget = $loopEndMetric.OutliersOverTarget
         PassedTarget = $passed
-        NativeWarmupUs = if ($profile.Backend -eq "native") { [int](Read-RegexValue $allText "nativeWarmup=(\d+)us" "0") } else { 0 }
-        NativeStartupUs = if ($profile.Backend -eq "native") { [int](Read-RegexValue $allText "nativeStartup=(\d+)us" "0") } else { 0 }
-        SelectedCpu = if ($profile.Backend -eq "native") { Read-RegexValue $allText "selectedCpu=([^ ]+)" "unknown" } else { "" }
+        NativeWarmupUs = if ($usesNativeMetrics) { [int](Read-RegexValue $allText "nativeWarmup=(\d+)us" "0") } else { 0 }
+        NativeStartupUs = if ($usesNativeMetrics) { [int](Read-RegexValue $allText "nativeStartup=(\d+)us" "0") } else { 0 }
+        SelectedCpu = if ($usesNativeMetrics) { Read-RegexValue $allText "selectedCpu=([^ ]+)" "unknown" } else { "" }
         LogPath = $logPath
         OutlierCsv = $outlierPath
     }
@@ -235,10 +246,10 @@ $lines.Add("- Auto-tuned affinity mask: " + ($(if ($AutoTuneAffinity -and -not [
 $lines.Add("- Affinity mask: " + ($(if ([string]::IsNullOrWhiteSpace($AffinityMask)) { "default" } else { $AffinityMask })))
 $lines.Add("- All profiles passed: $AllProfilesPassed")
 $lines.Add("")
-$lines.Add("| Profile | Target | Backend | Step p99.9 | Step max | OutliersOverTarget | Loop-end max | Pass |")
-$lines.Add("| --- | ---: | --- | ---: | ---: | ---: | ---: | --- |")
+$lines.Add("| Profile | Target | Backend | Native tier | Effective backend | Step p99.9 | Step max | OutliersOverTarget | Loop-end max | Pass |")
+$lines.Add("| --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | --- |")
 foreach ($result in $results) {
-    $lines.Add("| $($result.Name) | $($result.TargetUs)us | $($result.Backend) | $($result.StepP999Us)us | $($result.StepMaxUs)us | $($result.StepOutliersOverTarget) | $($result.LoopEndMaxUs)us | $($result.PassedTarget) |")
+    $lines.Add("| $($result.Name) | $($result.TargetUs)us | $($result.Backend) | $($result.NativeTier) | $($result.EffectiveBackend) | $($result.StepP999Us)us | $($result.StepMaxUs)us | $($result.StepOutliersOverTarget) | $($result.LoopEndMaxUs)us | $($result.PassedTarget) |")
 }
 
 $lines.Add("")

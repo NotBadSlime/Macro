@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -27,11 +28,18 @@ public partial class MacroLibraryPanel : UserControl
     private MacroEditorState? state;
     private bool suppressSelection;
     private List<AuxiliaryMacroFile> razerModuleFiles = [];
+    private readonly HashSet<string> expandedGroups = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> expandedFolders = new(StringComparer.Ordinal);
+    private readonly HashSet<string> selectedManagerGroupIds = new(StringComparer.OrdinalIgnoreCase);
+    private string selectedGroupId = MacroLibraryStore.GlobalGroupId;
+    private string activeDatabaseGroupId = MacroLibraryStore.GlobalGroupId;
+    private bool showingDatabaseContents;
+    private bool managerSelectionInitialized;
     private string? selectedFolder;
     private MacroLibraryClipboardItem? clipboard;
     private MacroLibraryTreeNode? renamingNode;
     private bool updatingRuntimePrecisionControls;
+    private bool updatingGroupControls;
     private bool libraryDragInProgress;
     private ScrollViewer? macroTreeScrollViewer;
     private HwndSource? macroTreeHwndSource;
@@ -48,9 +56,11 @@ public partial class MacroLibraryPanel : UserControl
     public event Action<MacroDocument>? ImportApplied;
     public event Func<MacroDocument>? DocumentRequested;
     public event Action<string>? ResultMessage;
-    public event Action? StartListeningAllRequested;
+    public event Action<IReadOnlyList<string>>? StartListeningGroupsRequested;
+    public event Action<IReadOnlyList<string>>? StopListeningGroupsRequested;
     public event Action? StopListeningAllRequested;
     public event Action? PrecisionSettingsEdited;
+    public event Action? LibraryStructureEdited;
 
     public MacroLibraryPanel()
     {
@@ -68,19 +78,26 @@ public partial class MacroLibraryPanel : UserControl
 
     public void ApplyLocalization()
     {
+        NewGroupButton.Content = L("NewDatabase");
+        DeleteDatabaseButton.Content = L("DeleteDatabase");
+        BackToManagerButton.Content = L("ReturnToManager");
         NewMacroButton.Content = L("NewMacro");
         NewFolderButton.Content = L("NewFolder");
         CopyMacroButton.Content = L("Copy");
         PasteMacroButton.Content = L("Paste");
         DeleteMacroButton.Content = L("Delete");
+        GroupProcessFilterLabelText.Text = L("GroupProcessFilter");
+        GroupProcessFilterBox.ToolTip = L("GroupProcessFilterHelp");
+        SelectProcessButton.Content = L("SelectProcess");
+        SelectProcessFileButton.Content = L("SelectProcessFile");
+        ApplyGroupButton.Content = L("Apply");
         GlobalRuntimeTitleText.Text = L("GlobalRuntime");
         PrecisionModeLabelText.Text = L("PrecisionMode");
         AffinityMaskLabelText.Text = L("AffinityMask");
         AffinityMaskHelpText.Text = L("AffinityMaskHelp");
         AffinityMaskBox.ToolTip = L("AffinityMaskHelp");
         ListeningTitleText.Text = L("Listening");
-        StartAllListeningButton.Content = L("StartListeningAll");
-        StopAllListeningButton.Content = L("StopListeningAll");
+        StopEveryListeningButton.Content = L("StopListeningAll");
         RenameMenuItem.Header = L("Rename");
         CopyMenuItem.Header = L("Copy");
         PasteMenuItem.Header = L("Paste");
@@ -113,9 +130,16 @@ public partial class MacroLibraryPanel : UserControl
                 _ => item.Content
             };
         }
+
+        ApplyProgressiveViewState();
+        UpdateManagerListeningButtons();
     }
 
     public string AffinityMaskText => AffinityMaskBox.Text.Trim();
+
+    public string CurrentDatabaseGroupId => showingDatabaseContents
+        ? activeDatabaseGroupId
+        : selectedGroupId;
 
     public PrecisionMode GetSelectedPrecisionMode()
     {
@@ -169,64 +193,42 @@ public partial class MacroLibraryPanel : UserControl
         var previousScrollOffset = GetMacroTreeScrollViewer()?.VerticalOffset ?? 0;
         if (string.IsNullOrWhiteSpace(search))
         {
+            CaptureExpandedGroups();
             CaptureExpandedFolders();
         }
 
         state.ReloadLibrary();
-        var selectedId = state.SelectedMacroId ?? state.LibrarySnapshot.SelectedMacroId;
+        EnsureActiveDatabaseGroup();
+        EnsureManagerSelection();
+        var selectedId = showingDatabaseContents
+            ? state.SelectedMacroId ?? state.LibrarySnapshot.SelectedMacroId
+            : null;
         var sortMode = (LibrarySortBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "manual";
-        var items = state.LibrarySnapshot.Items.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            items = items.Where(item =>
-                item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase)
-                || item.Folder.Contains(search, StringComparison.CurrentCultureIgnoreCase));
-        }
-
         var materializedItems = sortMode switch
         {
-            "updated" => items.OrderByDescending(item => item.UpdatedAt).ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
-            "name" => items.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
-            _ => items.ToList()
+            "updated" => state.LibrarySnapshot.Items.OrderByDescending(item => item.UpdatedAt).ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
+            "name" => state.LibrarySnapshot.Items.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
+            _ => state.LibrarySnapshot.Items.ToList()
         };
 
         var nodes = new List<MacroLibraryTreeNode>();
         try
         {
             suppressSelection = true;
-            var folderNames = state.LibrarySnapshot.Folders
-                .Concat(materializedItems.Select(item => item.Folder))
-                .Where(folder => !string.IsNullOrWhiteSpace(folder))
-                .Distinct(StringComparer.Ordinal)
-                .OrderBy(folder => folder, StringComparer.CurrentCultureIgnoreCase)
-                .ToList();
+            nodes = showingDatabaseContents
+                ? BuildDatabaseNodes(materializedItems, search, selectedId)
+                : BuildManagerNodes(materializedItems, search);
 
-            foreach (var folder in folderNames)
+            if (!state.LibrarySnapshot.Groups.Any(group => string.Equals(group.Id, selectedGroupId, StringComparison.OrdinalIgnoreCase)))
             {
-                var children = materializedItems
-                    .Where(item => string.Equals(item.Folder, folder, StringComparison.Ordinal))
-                    .Select(CreateMacroNode)
-                    .ToList();
-                if (!string.IsNullOrWhiteSpace(search) && children.Count == 0 && !folder.Contains(search, StringComparison.CurrentCultureIgnoreCase))
-                    continue;
-
-                var folderNode = MacroLibraryTreeNode.Folder(folder, children);
-                folderNode.IsExpanded = !string.IsNullOrWhiteSpace(search)
-                    || expandedFolders.Contains(folder);
-                folderNode.IsSelected = selectedId is null && string.Equals(selectedFolder, folder, StringComparison.Ordinal);
-                MarkSelectedMacro(folderNode.Children, selectedId);
-                nodes.Add(folderNode);
+                selectedGroupId = MacroLibraryStore.GlobalGroupId;
             }
 
-            foreach (var item in materializedItems.Where(item => string.IsNullOrWhiteSpace(item.Folder)))
-            {
-                var macroNode = CreateMacroNode(item);
-                macroNode.IsSelected = item.Id == selectedId;
-                nodes.Add(macroNode);
-            }
-
+            var selectedGroup = state.LibrarySnapshot.Groups.FirstOrDefault(group => string.Equals(group.Id, selectedGroupId, StringComparison.OrdinalIgnoreCase))
+                ?? state.LibrarySnapshot.Groups.FirstOrDefault();
+            SetGroupEditor(selectedGroup);
             MacroTreeView.ItemsSource = nodes;
+            ApplyProgressiveViewState();
         }
         finally
         {
@@ -234,6 +236,237 @@ public partial class MacroLibraryPanel : UserControl
         }
 
         RestoreMacroTreeScroll(previousScrollOffset);
+    }
+
+    private List<MacroLibraryTreeNode> BuildManagerNodes(IReadOnlyList<MacroLibraryItem> materializedItems, string search)
+    {
+        var nodes = new List<MacroLibraryTreeNode>();
+        foreach (var group in state!.LibrarySnapshot.Groups)
+        {
+            var groupItems = materializedItems
+                .Where(item => string.Equals(item.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var matchesSearch = string.IsNullOrWhiteSpace(search)
+                || group.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                || group.ProcessFilter.Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                || groupItems.Any(item =>
+                    item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                    || item.Folder.Contains(search, StringComparison.CurrentCultureIgnoreCase));
+            if (!matchesSearch)
+            {
+                continue;
+            }
+
+            var groupNode = MacroLibraryTreeNode.Group(
+                group,
+                [],
+                CreateGroupListenState(group, groupItems),
+                selectedManagerGroupIds.Contains(group.Id));
+            groupNode.IsExpanded = false;
+            groupNode.IsSelected = string.Equals(selectedGroupId, group.Id, StringComparison.OrdinalIgnoreCase);
+            nodes.Add(groupNode);
+        }
+
+        return nodes;
+    }
+
+    private MacroLibraryListenState? CreateGroupListenState(MacroLibraryGroup group, IReadOnlyList<MacroLibraryItem> groupItems)
+    {
+        var macroStates = groupItems
+            .Select(item => listeningStates.TryGetValue(item.Id, out var listenState) ? listenState : null)
+            .Where(state => state is not null)
+            .Cast<MacroLibraryListenState>()
+            .ToList();
+        if (macroStates.Count == 0)
+        {
+            return null;
+        }
+
+        var listeningCount = macroStates.Count(state => state.IsListening);
+        var hasConflict = macroStates.Any(state => state.IsConflict);
+        return new MacroLibraryListenState(
+            listeningCount > 0,
+            hasConflict,
+            string.Empty,
+            string.Empty,
+            group.IsGlobal || string.IsNullOrWhiteSpace(group.ProcessFilter) ? L("AllProcesses") : group.ProcessFilter,
+            listeningCount,
+            macroStates.Count,
+            IsGroupSummary: true);
+    }
+
+    private List<MacroLibraryTreeNode> BuildDatabaseNodes(IReadOnlyList<MacroLibraryItem> materializedItems, string search, string? selectedId)
+    {
+        var group = GetActiveDatabaseGroup();
+        if (group is null)
+        {
+            return [];
+        }
+
+        var groupItems = materializedItems
+            .Where(item => string.Equals(item.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.IsNullOrWhiteSpace(search)
+                || item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                || item.Folder.Contains(search, StringComparison.CurrentCultureIgnoreCase))
+            .ToList();
+        var nodes = new List<MacroLibraryTreeNode>();
+        var folderNames = state!.LibrarySnapshot.GroupFolders
+            .Where(folder => string.Equals(folder.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+            .Select(folder => folder.Name)
+            .Concat(groupItems.Select(item => item.Folder))
+            .Where(folder => !string.IsNullOrWhiteSpace(folder))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(folder => folder, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        foreach (var folder in folderNames)
+        {
+            var children = groupItems
+                .Where(item => string.Equals(item.Folder, folder, StringComparison.Ordinal))
+                .Select(CreateMacroNode)
+                .ToList();
+            if (!string.IsNullOrWhiteSpace(search) && children.Count == 0 && !folder.Contains(search, StringComparison.CurrentCultureIgnoreCase))
+            {
+                continue;
+            }
+
+            var folderNode = MacroLibraryTreeNode.Folder(group.Id, folder, children);
+            folderNode.IsExpanded = !string.IsNullOrWhiteSpace(search)
+                || expandedFolders.Contains(FormatFolderExpansionKey(group.Id, folder));
+            folderNode.IsSelected = selectedId is null
+                && string.Equals(selectedGroupId, group.Id, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(selectedFolder, folder, StringComparison.Ordinal);
+            MarkSelectedMacro(folderNode.Children, selectedId);
+            nodes.Add(folderNode);
+        }
+
+        foreach (var item in groupItems.Where(item => string.IsNullOrWhiteSpace(item.Folder)))
+        {
+            var macroNode = CreateMacroNode(item);
+            macroNode.IsSelected = item.Id == selectedId;
+            nodes.Add(macroNode);
+        }
+
+        return nodes;
+    }
+
+    private void EnsureActiveDatabaseGroup()
+    {
+        if (state is null) return;
+        var groups = state.LibrarySnapshot.Groups;
+        if (groups.Count == 0)
+        {
+            activeDatabaseGroupId = MacroLibraryStore.GlobalGroupId;
+            selectedGroupId = MacroLibraryStore.GlobalGroupId;
+            showingDatabaseContents = false;
+            return;
+        }
+
+        if (!groups.Any(group => string.Equals(activeDatabaseGroupId, group.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            activeDatabaseGroupId = groups.FirstOrDefault(group => group.IsGlobal)?.Id ?? groups[0].Id;
+            showingDatabaseContents = false;
+        }
+    }
+
+    private void EnsureManagerSelection()
+    {
+        if (state is null) return;
+        var groupIds = state.LibrarySnapshot.Groups
+            .Select(group => group.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        selectedManagerGroupIds.RemoveWhere(groupId => !groupIds.Contains(groupId));
+
+        if (!groupIds.Contains(selectedGroupId))
+        {
+            selectedGroupId = state.LibrarySnapshot.Groups.FirstOrDefault(group => group.IsGlobal)?.Id
+                ?? state.LibrarySnapshot.Groups.FirstOrDefault()?.Id
+                ?? MacroLibraryStore.GlobalGroupId;
+        }
+
+        if (!managerSelectionInitialized && state.LibrarySnapshot.Groups.Count > 0)
+        {
+            selectedManagerGroupIds.Add(selectedGroupId);
+            managerSelectionInitialized = true;
+        }
+    }
+
+    private MacroLibraryGroup? GetActiveDatabaseGroup()
+    {
+        return state?.LibrarySnapshot.Groups.FirstOrDefault(group =>
+            string.Equals(group.Id, activeDatabaseGroupId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsSelectedMacro(MacroLibraryTreeNode node)
+    {
+        return node.IsSelected || node.Children.Any(ContainsSelectedMacro);
+    }
+
+    private void SetGroupEditor(MacroLibraryGroup? group)
+    {
+        updatingGroupControls = true;
+        try
+        {
+            GroupProcessFilterBox.Text = group?.ProcessFilter ?? string.Empty;
+            GroupProcessFilterBox.IsEnabled = group is { IsGlobal: false };
+            SelectProcessButton.IsEnabled = group is { IsGlobal: false };
+            SelectProcessFileButton.IsEnabled = group is { IsGlobal: false };
+            ApplyGroupButton.IsEnabled = group is { IsGlobal: false };
+            DeleteDatabaseButton.IsEnabled = !showingDatabaseContents && group is { IsGlobal: false };
+        }
+        finally
+        {
+            updatingGroupControls = false;
+        }
+    }
+
+    private void ApplyProgressiveViewState()
+    {
+        var managerVisibility = showingDatabaseContents ? Visibility.Collapsed : Visibility.Visible;
+        var databaseVisibility = showingDatabaseContents ? Visibility.Visible : Visibility.Collapsed;
+        ManagerOnlyControls.Visibility = managerVisibility;
+        ManagerRuntimeControls.Visibility = managerVisibility;
+        DatabaseOnlyControls.Visibility = databaseVisibility;
+        DatabaseNavigationBar.Visibility = databaseVisibility;
+        LibraryImportExportPanel.Visibility = databaseVisibility;
+        MacroTreeView.AllowDrop = showingDatabaseContents;
+        ImportMacroButton.IsEnabled = showingDatabaseContents;
+        ImportRazerModulesButton.IsEnabled = showingDatabaseContents;
+        ExportMacroButton.IsEnabled = showingDatabaseContents;
+        CopyMenuItem.Visibility = databaseVisibility;
+        PasteMenuItem.Visibility = databaseVisibility;
+        CurrentDatabaseTitleText.Text = GetDatabaseTitleText();
+        DeleteMenuItem.Header = showingDatabaseContents ? L("Delete") : L("DeleteDatabase");
+        DeleteDatabaseButton.IsEnabled = !showingDatabaseContents && GetSelectedEditableGroup() is not null;
+        UpdateManagerListeningButtons();
+    }
+
+    private void UpdateManagerListeningButtons()
+    {
+        var selectedCount = showingDatabaseContents ? 0 : selectedManagerGroupIds.Count;
+        StartAllListeningButton.IsEnabled = selectedCount > 0;
+        StopAllListeningButton.IsEnabled = selectedCount > 0;
+
+        StartAllListeningButton.Content = selectedCount switch
+        {
+            0 => L("SelectDatabase"),
+            1 => L("StartSelectedDatabaseListening"),
+            _ => LF("StartSelectedDatabasesListening", selectedCount)
+        };
+        StopAllListeningButton.Content = selectedCount switch
+        {
+            0 => L("SelectDatabase"),
+            1 => L("StopSelectedDatabaseListening"),
+            _ => LF("StopSelectedDatabasesListening", selectedCount)
+        };
+    }
+
+    private string GetDatabaseTitleText()
+    {
+        var group = GetActiveDatabaseGroup();
+        return group is null
+            ? L("MacroLibrary")
+            : $"{L("MacroLibrary")} / {group.Name}";
     }
 
     private void MacroSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshList();
@@ -268,7 +501,9 @@ public partial class MacroLibraryPanel : UserControl
         if (suppressSelection) return;
         if (MacroTreeView.SelectedItem is not MacroLibraryTreeNode node) return;
         UpdateClipboardControls();
-        selectedFolder = node.IsFolder ? node.FolderName : node.Item!.Folder;
+        selectedGroupId = node.GroupId;
+        selectedFolder = node.IsFolder ? node.FolderName : node.Item?.Folder;
+        SetGroupEditor(node.ProcessGroup ?? state!.LibrarySnapshot.Groups.FirstOrDefault(group => string.Equals(group.Id, selectedGroupId, StringComparison.OrdinalIgnoreCase)));
         if (node.Item is not { } item)
         {
             state!.SelectedMacroId = null;
@@ -283,11 +518,75 @@ public partial class MacroLibraryPanel : UserControl
 
     private void MacroTreeNode_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount != 2) return;
         if ((sender as FrameworkElement)?.DataContext is not MacroLibraryTreeNode node) return;
 
+        if (!showingDatabaseContents && node.ProcessGroup is not null)
+        {
+            if (e.ClickCount == 2)
+            {
+                EnterDatabaseView(node.ProcessGroup.Id);
+            }
+            else
+            {
+                ToggleManagerGroupSelection(node, (Keyboard.Modifiers & ModifierKeys.Control) != 0);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (e.ClickCount != 2) return;
         BeginRename(node);
         e.Handled = true;
+    }
+
+    private void ToggleManagerGroupSelection(MacroLibraryTreeNode node, bool additive)
+    {
+        if (state is null || node.ProcessGroup is null) return;
+        selectedGroupId = node.GroupId;
+        selectedFolder = null;
+        state.SelectedMacroId = null;
+        state.LibraryStore.SetSelected(null);
+
+        if (!additive)
+        {
+            selectedManagerGroupIds.Clear();
+            selectedManagerGroupIds.Add(node.GroupId);
+        }
+        else if (!selectedManagerGroupIds.Remove(node.GroupId))
+        {
+            selectedManagerGroupIds.Add(node.GroupId);
+        }
+
+        SetGroupEditor(node.ProcessGroup);
+        RefreshTree();
+    }
+
+    private void EnterDatabaseView(string groupId)
+    {
+        if (state is null) return;
+        showingDatabaseContents = true;
+        activeDatabaseGroupId = groupId;
+        selectedGroupId = groupId;
+        selectedFolder = null;
+        state.SelectedMacroId = null;
+        state.LibraryStore.SetSelected(null);
+        RefreshTree();
+    }
+
+    private void ReturnToManagerView()
+    {
+        showingDatabaseContents = false;
+        selectedFolder = null;
+        state!.SelectedMacroId = null;
+        state.LibraryStore.SetSelected(null);
+        RefreshTree();
+    }
+
+    private void BackToManager_Click(object sender, RoutedEventArgs e)
+    {
+        if (state is null) return;
+        ReturnToManagerView();
     }
 
     private void MacroTreeView_KeyDown(object sender, KeyEventArgs e)
@@ -301,6 +600,7 @@ public partial class MacroLibraryPanel : UserControl
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && e.Key == Key.C)
         {
+            if (!showingDatabaseContents) return;
             CopySelectionToClipboard();
             e.Handled = true;
             return;
@@ -308,6 +608,7 @@ public partial class MacroLibraryPanel : UserControl
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && e.Key == Key.V)
         {
+            if (!showingDatabaseContents) return;
             PasteClipboard();
             e.Handled = true;
             return;
@@ -377,6 +678,7 @@ public partial class MacroLibraryPanel : UserControl
 
     private void MacroTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
     {
+        if (!showingDatabaseContents) return;
         if (e.LeftButton != MouseButtonState.Pressed) return;
         var source = e.OriginalSource as DependencyObject;
         if (IsScrollbarDragSource(source)) return;
@@ -411,6 +713,14 @@ public partial class MacroLibraryPanel : UserControl
 
     private void MacroTreeView_DragOver(object sender, DragEventArgs e)
     {
+        if (!showingDatabaseContents)
+        {
+            ClearMacroDropIndicator();
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         if (!e.Data.GetDataPresent(MacroLibraryDragFormat))
         {
             ClearMacroDropIndicator();
@@ -578,6 +888,7 @@ public partial class MacroLibraryPanel : UserControl
     private void MacroTreeView_Drop(object sender, DragEventArgs e)
     {
         if (state is null) return;
+        if (!showingDatabaseContents) return;
         if (!e.Data.GetDataPresent(MacroLibraryDragFormat)) return;
         if (e.Data.GetData(MacroLibraryDragFormat) is not string macroId) return;
 
@@ -593,11 +904,13 @@ public partial class MacroLibraryPanel : UserControl
         try
         {
             ClearMacroDropIndicator();
-            state.LibraryStore.MoveMacro(macroId, target.Folder, target.BeforeMacroId);
+            state.LibraryStore.MoveMacro(macroId, target.Folder, target.BeforeMacroId, target.GroupId);
             state.SelectedMacroId = macroId;
+            selectedGroupId = target.GroupId;
             selectedFolder = target.Folder;
             SelectLibrarySortMode("manual");
             RefreshTree();
+            LibraryStructureEdited?.Invoke();
             ResultMessage?.Invoke(string.IsNullOrWhiteSpace(target.Folder)
                 ? L("MacroMovedToRoot")
                 : LF("MacroMovedToFolder", target.Folder));
@@ -610,12 +923,153 @@ public partial class MacroLibraryPanel : UserControl
         }
     }
 
+    private void NewGroup_Click(object sender, RoutedEventArgs e)
+    {
+        if (state is null) return;
+        var group = state.LibraryStore.CreateGroup(NextGroupName(), string.Empty);
+        selectedGroupId = group.Id;
+        activeDatabaseGroupId = group.Id;
+        selectedManagerGroupIds.Clear();
+        selectedManagerGroupIds.Add(group.Id);
+        showingDatabaseContents = false;
+        selectedFolder = null;
+        state.SelectedMacroId = null;
+        expandedGroups.Add(group.Id);
+        RefreshTree();
+        LibraryStructureEdited?.Invoke();
+    }
+
+    private void DeleteDatabase_Click(object sender, RoutedEventArgs e)
+    {
+        if (state is null) return;
+        if (GetSelectedEditableGroup() is not { } group) return;
+
+        state.LibraryStore.DeleteGroup(group.Id);
+        state.SelectedMacroId = null;
+        selectedManagerGroupIds.Remove(group.Id);
+        selectedManagerGroupIds.Clear();
+        selectedManagerGroupIds.Add(MacroLibraryStore.GlobalGroupId);
+        selectedGroupId = MacroLibraryStore.GlobalGroupId;
+        activeDatabaseGroupId = MacroLibraryStore.GlobalGroupId;
+        selectedFolder = null;
+        showingDatabaseContents = false;
+        RefreshTree();
+        LibraryStructureEdited?.Invoke();
+        ResultMessage?.Invoke(LF("GroupDeleted", group.Name));
+    }
+
+    private void ApplyGroup_Click(object sender, RoutedEventArgs e)
+    {
+        if (state is null || updatingGroupControls) return;
+        ApplySelectedGroupProcessFilter(GroupProcessFilterBox.Text);
+    }
+
+    private void SelectProcess_Click(object sender, RoutedEventArgs e)
+    {
+        if (GetSelectedEditableGroup() is null) return;
+
+        var menu = new ContextMenu();
+        foreach (var process in EnumerateRunningProcesses())
+        {
+            var item = new MenuItem
+            {
+                Header = string.IsNullOrWhiteSpace(process.WindowTitle)
+                    ? process.ProcessName
+                    : $"{process.ProcessName} - {process.WindowTitle}",
+                Tag = process.ProcessName
+            };
+            item.Click += (_, _) => ApplySelectedGroupProcessFilter(process.ProcessName);
+            menu.Items.Add(item);
+        }
+
+        if (menu.Items.Count == 0)
+        {
+            ResultMessage?.Invoke(L("NoProcessesFound"));
+            return;
+        }
+
+        menu.PlacementTarget = SelectProcessButton;
+        menu.IsOpen = true;
+    }
+
+    private void SelectProcessFile_Click(object sender, RoutedEventArgs e)
+    {
+        if (GetSelectedEditableGroup() is null) return;
+
+        var dialog = new OpenFileDialog
+        {
+            Filter = L("ProcessExecutableFileFilter"),
+            Title = L("SelectProcessFileTitle")
+        };
+
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
+
+        var processName = Path.GetFileName(dialog.FileName);
+        ApplySelectedGroupProcessFilter(processName);
+    }
+
+    private void ApplySelectedGroupProcessFilter(string processFilter)
+    {
+        if (state is null || GetSelectedEditableGroup() is not { } group) return;
+        try
+        {
+            GroupProcessFilterBox.Text = processFilter.Trim();
+            state.LibraryStore.UpdateGroup(group.Id, group.Name, GroupProcessFilterBox.Text);
+            RefreshTree();
+            LibraryStructureEdited?.Invoke();
+            ResultMessage?.Invoke(LF("GroupUpdated", group.Name));
+        }
+        catch (Exception ex)
+        {
+            ResultMessage?.Invoke(ex.Message);
+        }
+    }
+
+    private MacroLibraryGroup? GetSelectedEditableGroup()
+    {
+        if (state is null) return null;
+        var group = state.LibraryStore.Load().Groups.FirstOrDefault(group => string.Equals(group.Id, selectedGroupId, StringComparison.OrdinalIgnoreCase));
+        return group is { IsGlobal: false } ? group : null;
+    }
+
+    private static IEnumerable<RunningProcessChoice> EnumerateRunningProcesses()
+    {
+        return Process.GetProcesses()
+            .Select(TryCreateRunningProcessChoice)
+            .Where(choice => choice is not null)
+            .Cast<RunningProcessChoice>()
+            .GroupBy(choice => choice.ProcessName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(choice => !string.IsNullOrWhiteSpace(choice.WindowTitle)).First())
+            .OrderBy(choice => choice.ProcessName, StringComparer.CurrentCultureIgnoreCase);
+    }
+
+    private static RunningProcessChoice? TryCreateRunningProcessChoice(Process process)
+    {
+        try
+        {
+            var processName = $"{process.ProcessName}.exe";
+            var title = process.MainWindowTitle;
+            return string.IsNullOrWhiteSpace(processName)
+                ? null
+                : new RunningProcessChoice(processName, title);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            process.Dispose();
+        }
+    }
+
     private void NewMacro_Click(object sender, RoutedEventArgs e)
     {
         if (state is null) return;
         var name = NextMacroName("Macro");
-        var item = state.LibraryStore.CreateMacro(name, GetCurrentFolder());
+        var item = state.LibraryStore.CreateMacro(name, GetCurrentFolder(), groupId: GetCurrentGroupId());
         state.SelectedMacroId = item.Id;
+        selectedGroupId = item.GroupId;
         RefreshTree();
         MacroCreated?.Invoke(item);
     }
@@ -624,7 +1078,7 @@ public partial class MacroLibraryPanel : UserControl
     {
         if (state is null) return;
         var folder = NextFolderName();
-        state.LibraryStore.CreateFolder(folder);
+        state.LibraryStore.CreateFolder(folder, GetCurrentGroupId());
         state.SelectedMacroId = null;
         selectedFolder = folder;
         RefreshTree();
@@ -651,9 +1105,22 @@ public partial class MacroLibraryPanel : UserControl
     private void DeleteMacro_Click(object sender, RoutedEventArgs e)
     {
         if (state is null) return;
+        if (MacroTreeView.SelectedItem is MacroLibraryTreeNode { IsGroup: true, ProcessGroup: { } group })
+        {
+            if (group.IsGlobal) return;
+            state.LibraryStore.DeleteGroup(group.Id);
+            state.SelectedMacroId = null;
+            selectedGroupId = MacroLibraryStore.GlobalGroupId;
+            selectedFolder = null;
+            RefreshTree();
+            LibraryStructureEdited?.Invoke();
+            ResultMessage?.Invoke(LF("GroupDeleted", group.Name));
+            return;
+        }
+
         if (MacroTreeView.SelectedItem is MacroLibraryTreeNode { IsFolder: true } folder)
         {
-            state.LibraryStore.DeleteFolder(folder.FolderName, deleteMacros: false);
+            state.LibraryStore.DeleteFolder(folder.FolderName, deleteMacros: false, folder.GroupId);
             state.SelectedMacroId = null;
             selectedFolder = null;
             RefreshTree();
@@ -667,12 +1134,28 @@ public partial class MacroLibraryPanel : UserControl
 
     private void StartAllListening_Click(object sender, RoutedEventArgs e)
     {
-        StartListeningAllRequested?.Invoke();
+        var groupIds = GetSelectedManagerGroupIds();
+        if (groupIds.Count == 0) return;
+        StartListeningGroupsRequested?.Invoke(groupIds);
     }
 
     private void StopAllListening_Click(object sender, RoutedEventArgs e)
     {
+        var groupIds = GetSelectedManagerGroupIds();
+        if (groupIds.Count == 0) return;
+        StopListeningGroupsRequested?.Invoke(groupIds);
+    }
+
+    private void StopEveryListening_Click(object sender, RoutedEventArgs e)
+    {
         StopListeningAllRequested?.Invoke();
+    }
+
+    public IReadOnlyList<string> GetSelectedManagerGroupIds()
+    {
+        return showingDatabaseContents
+            ? []
+            : selectedManagerGroupIds.ToList();
     }
 
     private void InitializeExportFormatBox()
@@ -703,6 +1186,7 @@ public partial class MacroLibraryPanel : UserControl
 
     private void ImportMacro_Click(object sender, RoutedEventArgs e)
     {
+        if (!showingDatabaseContents) return;
         var dialog = new OpenFileDialog
         {
             Filter = L("ConverterImportFileFilter"),
@@ -732,6 +1216,7 @@ public partial class MacroLibraryPanel : UserControl
     private void ImportRazerModules_Click(object sender, RoutedEventArgs e)
     {
         if (state is null) return;
+        if (!showingDatabaseContents) return;
 
         var dialog = new OpenFileDialog
         {
@@ -757,11 +1242,13 @@ public partial class MacroLibraryPanel : UserControl
                 IReadOnlyList<string> aliases = MacroConversionService.TryGetRazerMacroGuid(file.Content, out var guid)
                     ? [guid]
                     : [];
+                var targetGroupId = CurrentDatabaseGroupId;
                 var existing = state.LibraryStore.Load().Items.FirstOrDefault(item =>
-                    string.Equals(item.Name, imported.Document.Name, StringComparison.CurrentCultureIgnoreCase));
+                    string.Equals(item.GroupId, targetGroupId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(item.Name, imported.Document.Name, StringComparison.CurrentCultureIgnoreCase));
                 lastImported = existing is not null && aliases.Count > 0
                     ? state.LibraryStore.AddAliasesToMacro(existing.Id, aliases)
-                    : state.LibraryStore.CreateMacro(imported.Document, aliases: aliases);
+                    : state.LibraryStore.CreateMacro(imported.Document, aliases: aliases, groupId: targetGroupId);
                 importedCount++;
             }
             catch
@@ -837,7 +1324,13 @@ public partial class MacroLibraryPanel : UserControl
 
     private string NextMacroName(string prefix)
     {
-        var used = state!.LibraryStore.Load().Items.Select(item => item.Name).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        var groupId = GetCurrentGroupId();
+        var folder = GetCurrentFolder();
+        var used = state!.LibraryStore.Load().Items
+            .Where(item => string.Equals(item.GroupId, groupId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(item.Folder, folder, StringComparison.Ordinal))
+            .Select(item => item.Name)
+            .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
         for (var i = 1; i < 10_000; i++)
         {
             var candidate = $"{prefix} {i}";
@@ -848,13 +1341,31 @@ public partial class MacroLibraryPanel : UserControl
 
     private string NextFolderName()
     {
-        var used = state!.LibraryStore.Load().Items.Select(item => item.Folder).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        var groupId = GetCurrentGroupId();
+        var used = state!.LibraryStore.Load().GroupFolders
+            .Where(folder => string.Equals(folder.GroupId, groupId, StringComparison.OrdinalIgnoreCase))
+            .Select(folder => folder.Name)
+            .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
         for (var i = 1; i < 10_000; i++)
         {
             var candidate = $"{L("Folder")} {i}";
             if (!used.Contains(candidate)) return candidate;
         }
         return $"{L("Folder")} {DateTime.Now:HHmmss}";
+    }
+
+    private string NextGroupName()
+    {
+        var used = state!.LibraryStore.Load().Groups
+            .Select(group => group.Name)
+            .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        for (var i = 1; i < 10_000; i++)
+        {
+            var candidate = $"{L("ProcessGroup")} {i}";
+            if (!used.Contains(candidate)) return candidate;
+        }
+
+        return $"{L("ProcessGroup")} {DateTime.Now:HHmmss}";
     }
 
     private void BeginRename(MacroLibraryTreeNode? node)
@@ -885,19 +1396,30 @@ public partial class MacroLibraryPanel : UserControl
 
         try
         {
-            if (node.IsFolder)
+            if (node.IsGroup && node.ProcessGroup is { } group)
             {
-                var newName = CreateUniqueFolderName(requestedName, node.FolderName);
-                state.LibraryStore.RenameFolder(node.FolderName, newName);
+                var newName = CreateUniqueGroupName(requestedName, group.Id);
+                var renamed = state.LibraryStore.UpdateGroup(group.Id, newName, group.ProcessFilter);
+                selectedGroupId = renamed.Id;
+                selectedFolder = null;
+                state.SelectedMacroId = null;
+                ResultMessage?.Invoke(LF("GroupRenamed", newName));
+            }
+            else if (node.IsFolder)
+            {
+                var newName = CreateUniqueFolderName(requestedName, node.FolderName, node.GroupId);
+                state.LibraryStore.RenameFolder(node.FolderName, newName, node.GroupId);
+                selectedGroupId = node.GroupId;
                 selectedFolder = newName;
                 state.SelectedMacroId = null;
                 ResultMessage?.Invoke(LF("FolderRenamed", newName));
             }
             else if (node.Item is { } item)
             {
-                var newName = CreateUniqueMacroName(requestedName, item.Folder, item.Id);
+                var newName = CreateUniqueMacroName(requestedName, item.GroupId, item.Folder, item.Id);
                 var renamed = state.LibraryStore.RenameMacro(item.Id, newName);
                 state.SelectedMacroId = renamed.Id;
+                selectedGroupId = renamed.GroupId;
                 ResultMessage?.Invoke(LF("MacroRenamed", newName));
                 MacroSelected?.Invoke(renamed.Id);
             }
@@ -926,10 +1448,11 @@ public partial class MacroLibraryPanel : UserControl
     {
         var node = GetSelectedNode();
         if (node is null) return;
+        if (node.IsGroup) return;
 
         clipboard = node.IsFolder
-            ? new MacroLibraryClipboardItem(MacroLibraryClipboardKind.Folder, node.FolderName)
-            : new MacroLibraryClipboardItem(MacroLibraryClipboardKind.Macro, node.Item!.Id);
+            ? new MacroLibraryClipboardItem(MacroLibraryClipboardKind.Folder, node.FolderName, node.GroupId)
+            : new MacroLibraryClipboardItem(MacroLibraryClipboardKind.Macro, node.Item!.Id, node.GroupId);
         UpdateClipboardControls();
         ResultMessage?.Invoke(node.IsFolder ? LF("FolderCopied", node.FolderName) : LF("MacroCopied", node.Title));
     }
@@ -945,14 +1468,15 @@ public partial class MacroLibraryPanel : UserControl
 
         try
         {
+            var targetGroupId = GetCurrentGroupId();
             var targetFolder = GetCurrentFolder();
             switch (clipboard.Kind)
             {
                 case MacroLibraryClipboardKind.Macro:
-                    PasteMacro(clipboard.Value, targetFolder);
+                    PasteMacro(clipboard.Value, targetGroupId, targetFolder);
                     break;
                 case MacroLibraryClipboardKind.Folder:
-                    PasteFolder(clipboard.Value);
+                    PasteFolder(clipboard.Value, clipboard.GroupId, targetGroupId);
                     break;
             }
         }
@@ -962,34 +1486,38 @@ public partial class MacroLibraryPanel : UserControl
         }
     }
 
-    private void PasteMacro(string macroId, string targetFolder)
+    private void PasteMacro(string macroId, string targetGroupId, string targetFolder)
     {
         var snapshot = state!.LibraryStore.Load();
         var source = snapshot.Items.First(item => item.Id == macroId);
         var document = state.LibraryStore.ReadMacro(macroId);
-        var copyName = CreateUniqueMacroName($"{source.Name} Copy", targetFolder, null);
-        var created = state.LibraryStore.CreateMacro(document with { Name = copyName }, targetFolder);
+        var copyName = CreateUniqueMacroName($"{source.Name} Copy", targetGroupId, targetFolder, null);
+        var created = state.LibraryStore.CreateMacro(document with { Name = copyName }, targetFolder, groupId: targetGroupId);
 
         state.SelectedMacroId = created.Id;
+        selectedGroupId = created.GroupId;
         selectedFolder = created.Folder;
         RefreshTree();
         MacroSelected?.Invoke(created.Id);
         ResultMessage?.Invoke(LF("MacroPasted", copyName));
     }
 
-    private void PasteFolder(string folder)
+    private void PasteFolder(string folder, string sourceGroupId, string targetGroupId)
     {
         var snapshot = state!.LibraryStore.Load();
-        var copiedFolder = CreateUniqueFolderName($"{folder} Copy", null);
-        state.LibraryStore.CreateFolder(copiedFolder);
+        var copiedFolder = CreateUniqueFolderName($"{folder} Copy", null, targetGroupId);
+        state.LibraryStore.CreateFolder(copiedFolder, targetGroupId);
 
-        foreach (var item in snapshot.Items.Where(item => string.Equals(item.Folder, folder, StringComparison.Ordinal)))
+        foreach (var item in snapshot.Items.Where(item =>
+            string.Equals(item.GroupId, sourceGroupId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(item.Folder, folder, StringComparison.Ordinal)))
         {
             var document = state.LibraryStore.ReadMacro(item.Id);
-            state.LibraryStore.CreateMacro(document with { Name = item.Name }, copiedFolder);
+            state.LibraryStore.CreateMacro(document with { Name = item.Name }, copiedFolder, groupId: targetGroupId);
         }
 
         state.SelectedMacroId = null;
+        selectedGroupId = targetGroupId;
         selectedFolder = copiedFolder;
         RefreshTree();
         ResultMessage?.Invoke(LF("FolderPasted", copiedFolder));
@@ -1013,11 +1541,23 @@ public partial class MacroLibraryPanel : UserControl
         return MacroTreeView.SelectedItem as MacroLibraryTreeNode;
     }
 
-    private string CreateUniqueMacroName(string requestedName, string folder, string? excludingId)
+    private string CreateUniqueGroupName(string requestedName, string? excludingGroupId)
+    {
+        var baseName = string.IsNullOrWhiteSpace(requestedName) ? L("ProcessGroup") : requestedName.Trim();
+        var used = state!.LibraryStore.Load().Groups
+            .Where(group => !string.Equals(group.Id, excludingGroupId, StringComparison.OrdinalIgnoreCase))
+            .Select(group => group.Name)
+            .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+
+        return CreateUniqueName(baseName, used);
+    }
+
+    private string CreateUniqueMacroName(string requestedName, string groupId, string folder, string? excludingId)
     {
         var baseName = string.IsNullOrWhiteSpace(requestedName) ? L("Macro") : requestedName.Trim();
         var used = state!.LibraryStore.Load().Items
             .Where(item => !string.Equals(item.Id, excludingId, StringComparison.Ordinal)
+                && string.Equals(item.GroupId, groupId, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(item.Folder, folder, StringComparison.Ordinal))
             .Select(item => item.Name)
             .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
@@ -1025,10 +1565,12 @@ public partial class MacroLibraryPanel : UserControl
         return CreateUniqueName(baseName, used);
     }
 
-    private string CreateUniqueFolderName(string requestedName, string? excludingFolder)
+    private string CreateUniqueFolderName(string requestedName, string? excludingFolder, string groupId)
     {
         var baseName = string.IsNullOrWhiteSpace(requestedName) ? L("Folder") : requestedName.Trim();
-        var used = state!.LibraryStore.Load().Folders
+        var used = state!.LibraryStore.Load().GroupFolders
+            .Where(folder => string.Equals(folder.GroupId, groupId, StringComparison.OrdinalIgnoreCase))
+            .Select(folder => folder.Name)
             .Where(folder => !string.Equals(folder, excludingFolder, StringComparison.Ordinal))
             .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
 
@@ -1072,6 +1614,22 @@ public partial class MacroLibraryPanel : UserControl
                 node.IsSelected = true;
                 return;
             }
+
+            MarkSelectedMacro(node.Children, selectedId);
+        }
+    }
+
+    private void CaptureExpandedGroups()
+    {
+        expandedGroups.Clear();
+        if (MacroTreeView.ItemsSource is not IEnumerable<MacroLibraryTreeNode> nodes)
+        {
+            return;
+        }
+
+        foreach (var node in nodes.Where(node => node.IsGroup && node.IsExpanded))
+        {
+            expandedGroups.Add(node.GroupId);
         }
     }
 
@@ -1083,9 +1641,21 @@ public partial class MacroLibraryPanel : UserControl
             return;
         }
 
-        foreach (var node in nodes.Where(node => node.IsFolder && node.IsExpanded))
+        foreach (var node in FlattenNodes(nodes).Where(node => node.IsFolder && node.IsExpanded))
         {
-            expandedFolders.Add(node.FolderName);
+            expandedFolders.Add(FormatFolderExpansionKey(node.GroupId, node.FolderName));
+        }
+    }
+
+    private static IEnumerable<MacroLibraryTreeNode> FlattenNodes(IEnumerable<MacroLibraryTreeNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            yield return node;
+            foreach (var child in FlattenNodes(node.Children))
+            {
+                yield return child;
+            }
         }
     }
 
@@ -1104,12 +1674,39 @@ public partial class MacroLibraryPanel : UserControl
 
     private string GetCurrentFolder()
     {
+        if (!showingDatabaseContents)
+        {
+            return string.Empty;
+        }
+
         if (MacroTreeView.SelectedItem is MacroLibraryTreeNode node)
         {
             return node.IsFolder ? node.FolderName : node.Item?.Folder ?? string.Empty;
         }
 
         return selectedFolder ?? string.Empty;
+    }
+
+    private string GetCurrentGroupId()
+    {
+        if (showingDatabaseContents)
+        {
+            return activeDatabaseGroupId;
+        }
+
+        if (MacroTreeView.SelectedItem is MacroLibraryTreeNode node)
+        {
+            return node.GroupId;
+        }
+
+        return string.IsNullOrWhiteSpace(selectedGroupId)
+            ? MacroLibraryStore.GlobalGroupId
+            : selectedGroupId;
+    }
+
+    private static string FormatFolderExpansionKey(string groupId, string folder)
+    {
+        return $"{groupId}\n{folder}";
     }
 
     private void SelectLibrarySortMode(string tag)
@@ -1139,9 +1736,14 @@ public partial class MacroLibraryPanel : UserControl
             return MacroLibraryDropTarget.NoOp;
         }
 
+        if (node.IsGroup)
+        {
+            return new MacroLibraryDropTarget(node.GroupId, string.Empty, null, node, MacroLibraryDropIndicator.Into);
+        }
+
         if (node.IsFolder)
         {
-            return new MacroLibraryDropTarget(node.FolderName, null, node, MacroLibraryDropIndicator.Into);
+            return new MacroLibraryDropTarget(node.GroupId, node.FolderName, null, node, MacroLibraryDropIndicator.Into);
         }
 
         if (node.Item is not { } target)
@@ -1158,11 +1760,11 @@ public partial class MacroLibraryPanel : UserControl
         var insertBeforeTarget = pointInsideItem.Y < treeViewItem.ActualHeight / 2;
         var beforeMacroId = insertBeforeTarget
             ? target.Id
-            : GetNextMacroIdInFolder(target.Id, target.Folder, sourceMacroId);
+            : GetNextMacroIdInFolder(target.Id, target.GroupId, target.Folder, sourceMacroId);
         var indicator = insertBeforeTarget
             ? MacroLibraryDropIndicator.Before
             : MacroLibraryDropIndicator.After;
-        return new MacroLibraryDropTarget(target.Folder, beforeMacroId, node, indicator);
+        return new MacroLibraryDropTarget(target.GroupId, target.Folder, beforeMacroId, node, indicator);
     }
 
     private void SetMacroDropIndicator(MacroLibraryDropTarget target)
@@ -1194,10 +1796,10 @@ public partial class MacroLibraryPanel : UserControl
         macroDropIndicatorNode = null;
     }
 
-    private string? GetNextMacroIdInFolder(string targetMacroId, string folder, string sourceMacroId)
+    private string? GetNextMacroIdInFolder(string targetMacroId, string groupId, string folder, string sourceMacroId)
     {
         var seenTarget = false;
-        foreach (var node in GetMacroNodesInFolder(folder))
+        foreach (var node in GetMacroNodesInFolder(groupId, folder))
         {
             if (string.Equals(node.Item?.Id, targetMacroId, StringComparison.Ordinal))
             {
@@ -1216,16 +1818,22 @@ public partial class MacroLibraryPanel : UserControl
         return null;
     }
 
-    private IEnumerable<MacroLibraryTreeNode> GetMacroNodesInFolder(string folder)
+    private IEnumerable<MacroLibraryTreeNode> GetMacroNodesInFolder(string groupId, string folder)
     {
         if (MacroTreeView.ItemsSource is not IEnumerable<MacroLibraryTreeNode> nodes)
         {
             yield break;
         }
 
+        var groupNode = nodes.FirstOrDefault(node => node.IsGroup && string.Equals(node.GroupId, groupId, StringComparison.OrdinalIgnoreCase));
+        if (groupNode is null)
+        {
+            yield break;
+        }
+
         if (string.IsNullOrWhiteSpace(folder))
         {
-            foreach (var node in nodes.Where(node => node.Item is not null))
+            foreach (var node in groupNode.Children.Where(node => node.Item is not null))
             {
                 yield return node;
             }
@@ -1233,7 +1841,7 @@ public partial class MacroLibraryPanel : UserControl
             yield break;
         }
 
-        var folderNode = nodes.FirstOrDefault(node => node.IsFolder && string.Equals(node.FolderName, folder, StringComparison.Ordinal));
+        var folderNode = groupNode.Children.FirstOrDefault(node => node.IsFolder && string.Equals(node.FolderName, folder, StringComparison.Ordinal));
         if (folderNode is null)
         {
             yield break;
@@ -1303,7 +1911,9 @@ public partial class MacroLibraryPanel : UserControl
     private static string L(string key) => LocalizationService.Get(key);
     private static string LF(string key, params object[] args) => LocalizationService.Format(key, args);
 
-    private sealed record MacroLibraryClipboardItem(MacroLibraryClipboardKind Kind, string Value);
+    private sealed record MacroLibraryClipboardItem(MacroLibraryClipboardKind Kind, string Value, string GroupId);
+
+    private sealed record RunningProcessChoice(string ProcessName, string WindowTitle);
 
     private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
@@ -1349,6 +1959,7 @@ public partial class MacroLibraryPanel : UserControl
     }
 
     private sealed record MacroLibraryDropTarget(
+        string GroupId,
         string Folder,
         string? BeforeMacroId,
         MacroLibraryTreeNode? Node,
@@ -1356,6 +1967,7 @@ public partial class MacroLibraryPanel : UserControl
         bool IsNoOp = false)
     {
         public static MacroLibraryDropTarget NoOp { get; } = new(
+            MacroLibraryStore.GlobalGroupId,
             string.Empty,
             null,
             null,

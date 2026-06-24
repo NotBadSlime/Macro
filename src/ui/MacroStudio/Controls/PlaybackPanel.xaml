@@ -28,14 +28,6 @@
                 </DockPanel>
             </StackPanel>
 
-            <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="0,0,0,8">
-                <TextBlock x:Name="ProcessFilterLabelText" Text="进程筛选" Style="{StaticResource FieldLabel}" />
-                <TextBox x:Name="ProcessFilterBox"
-                         Height="30"
-                         TextChanged="PlaybackSettings_TextChanged"
-                         ToolTip="仅当前窗口进程匹配时响应热键，例如 notepad 或 notepad.exe；多个用逗号或分号分隔。" />
-            </StackPanel>
-
             <StackPanel Grid.Row="3" Grid.Column="0">
                 <TextBlock x:Name="ModeLabelText" Text="模式" Style="{StaticResource FieldLabel}" />
                 <ComboBox x:Name="PlaybackModeBox" Height="30" SelectionChanged="PlaybackModeBox_SelectionChanged">

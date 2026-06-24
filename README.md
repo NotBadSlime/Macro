@@ -1,6 +1,6 @@
 # MacroHID
 
-Current stable release: `1.0.0`
+Current stable release: `1.1.0`
 
 ## 中文
 
@@ -43,6 +43,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 
 - [安装说明](docs/installer.md)
 - [使用说明](docs/usage.md)
+- [1.1.0 正式版说明](docs/release-1.1.0.md)
 - [1.0.0 正式版说明](docs/release-1.0.0.md)
 - [精度说明](docs/precision.md)
 - [当前精度水平](docs/current-precision-status.md)
@@ -94,6 +95,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 
 - [Installation](docs/installer.md)
 - [Usage Guide](docs/usage.md)
+- [1.1.0 Release Notes](docs/release-1.1.0.md)
 - [1.0.0 Release Notes](docs/release-1.0.0.md)
 - [Precision Notes](docs/precision.md)
 - [Current Precision Status](docs/current-precision-status.md)

@@ -12,17 +12,36 @@
                         Opacity="0.75"
                         Visibility="{Binding DropIntoVisibility}"
                         IsHitTestVisible="False" />
+                <Border x:Name="ManagerStateStrip"
+                        Width="3"
+                        Margin="0,3,0,3"
+                        HorizontalAlignment="Left"
+                        Background="{Binding StatusStripBrush}"
+                        CornerRadius="2"
+                        Visibility="{Binding StatusStripVisibility}"
+                        IsHitTestVisible="False" />
                 <Grid>
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="14" />
                         <ColumnDefinition Width="24" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
+                    <Ellipse x:Name="ManagerSelectionDot"
+                             Grid.Column="0"
+                             Width="7"
+                             Height="7"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Fill="{DynamicResource Accent}"
+                             Visibility="{Binding ManagerSelectionDotVisibility}"
+                             IsHitTestVisible="False" />
                     <TextBlock Text="{Binding Icon}"
+                               Grid.Column="1"
                                FontSize="15"
                                Foreground="{Binding Accent}"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
-                    <StackPanel Grid.Column="1">
+                    <StackPanel Grid.Column="2">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -106,25 +125,75 @@
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Margin="0,0,0,8">
-                <TextBox x:Name="MacroSearchBox"
-                         Height="32"
-                         Margin="0,0,0,8"
-                         TextChanged="MacroSearchBox_TextChanged" />
-                <ComboBox x:Name="LibrarySortBox"
-                          Height="30"
-                          Margin="0,0,0,10"
-                          SelectionChanged="LibrarySortBox_SelectionChanged">
-                    <ComboBoxItem Tag="manual" Content="自定义顺序" IsSelected="True" />
-                    <ComboBoxItem Tag="name" Content="按字母顺序" />
-                    <ComboBoxItem Tag="updated" Content="最近更新" />
-                </ComboBox>
-                <WrapPanel Margin="0,0,0,8">
-                    <Button x:Name="NewMacroButton" MinWidth="72" Content="新建" Click="NewMacro_Click" />
-                    <Button x:Name="NewFolderButton" MinWidth="76" Content="文件夹" Click="NewFolder_Click" />
-                    <Button x:Name="CopyMacroButton" MinWidth="72" Content="复制" Click="CopyMacro_Click" />
-                    <Button x:Name="PasteMacroButton" MinWidth="72" Content="粘贴" Click="PasteMacro_Click" IsEnabled="False" />
-                    <Button x:Name="DeleteMacroButton" MinWidth="72" Content="删除" Style="{StaticResource DangerButton}" Click="DeleteMacro_Click" />
-                </WrapPanel>
+                <Grid x:Name="DatabaseNavigationBar"
+                      Margin="0,0,0,8"
+                      Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="BackToManagerButton"
+                            Grid.Column="0"
+                            MinWidth="90"
+                            Content="返回管理"
+                            Click="BackToManager_Click" />
+                    <TextBlock x:Name="CurrentDatabaseTitleText"
+                               Grid.Column="2"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource PrimaryText}"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                </Grid>
+
+                <StackPanel x:Name="DatabaseOnlyControls">
+                    <TextBox x:Name="MacroSearchBox"
+                             Height="32"
+                             Margin="0,0,0,8"
+                             TextChanged="MacroSearchBox_TextChanged" />
+                    <ComboBox x:Name="LibrarySortBox"
+                              Height="30"
+                              Margin="0,0,0,10"
+                              SelectionChanged="LibrarySortBox_SelectionChanged">
+                        <ComboBoxItem Tag="manual" Content="自定义顺序" IsSelected="True" />
+                        <ComboBoxItem Tag="name" Content="按字母顺序" />
+                        <ComboBoxItem Tag="updated" Content="最近更新" />
+                    </ComboBox>
+                    <WrapPanel Margin="0,0,0,8">
+                        <Button x:Name="NewMacroButton" MinWidth="72" Content="新建" Click="NewMacro_Click" />
+                        <Button x:Name="NewFolderButton" MinWidth="76" Content="文件夹" Click="NewFolder_Click" />
+                        <Button x:Name="CopyMacroButton" MinWidth="72" Content="复制" Click="CopyMacro_Click" />
+                        <Button x:Name="PasteMacroButton" MinWidth="72" Content="粘贴" Click="PasteMacro_Click" IsEnabled="False" />
+                        <Button x:Name="DeleteMacroButton" MinWidth="72" Content="删除" Style="{StaticResource DangerButton}" Click="DeleteMacro_Click" />
+                    </WrapPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="ManagerOnlyControls">
+                    <WrapPanel Margin="0,0,0,8">
+                        <Button x:Name="NewGroupButton" MinWidth="96" Content="新建数据库" Click="NewGroup_Click" />
+                        <Button x:Name="DeleteDatabaseButton" MinWidth="96" Content="删除数据库" Style="{StaticResource DangerButton}" Click="DeleteDatabase_Click" />
+                    </WrapPanel>
+                    <TextBlock x:Name="GroupProcessFilterLabelText"
+                               Text="启用进程"
+                               Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="GroupProcessFilterBox"
+                             Height="30"
+                             ToolTip="仅当前进程在最前面时启用该分组，例如 chrome.exe 或 notepad; chrome。" />
+                    <WrapPanel Margin="0,6,0,8">
+                        <Button x:Name="SelectProcessButton"
+                                MinWidth="76"
+                                Content="进程"
+                                Click="SelectProcess_Click" />
+                        <Button x:Name="SelectProcessFileButton"
+                                MinWidth="76"
+                                Content="文件"
+                                Click="SelectProcessFile_Click" />
+                        <Button x:Name="ApplyGroupButton"
+                                MinWidth="56"
+                                Content="应用"
+                                Click="ApplyGroup_Click" />
+                    </WrapPanel>
+                </StackPanel>
             </StackPanel>
 
             <TreeView x:Name="MacroTreeView"
@@ -170,94 +239,104 @@
                           HorizontalScrollBarVisibility="Disabled"
                           CanContentScroll="False">
                 <StackPanel>
-                <Border Height="1"
-                        Margin="0,2,0,10"
-                        Background="{DynamicResource PanelBorder}" />
-                <TextBlock x:Name="GlobalRuntimeTitleText"
-                           Text="全局运行"
-                           Style="{StaticResource FieldLabel}"
-                           Margin="0,0,0,8" />
-                <TextBlock x:Name="PrecisionModeLabelText"
-                           Text="精度模式"
-                           Style="{StaticResource FieldLabel}" />
-                <ComboBox x:Name="PrecisionModeBox"
-                          Height="30"
-                          Margin="0,0,0,8"
-                          SelectionChanged="PrecisionModeBox_SelectionChanged">
-                    <ComboBoxItem Tag="balanced" Content="基础" />
-                    <ComboBoxItem Tag="extremeDuringPlayback" Content="高性能" IsSelected="True" />
-                    <ComboBoxItem Tag="ultraLowJitter" Content="极限" />
-                </ComboBox>
-                <TextBlock x:Name="AffinityMaskLabelText"
-                           Text="极限核心掩码"
-                           Style="{StaticResource FieldLabel}" />
-                <TextBox x:Name="AffinityMaskBox"
-                         Height="30"
-                         TextChanged="RuntimePrecision_TextChanged"
-                         ToolTip="仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。" />
-                <TextBlock x:Name="AffinityMaskHelpText"
-                           Text="仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。"
-                           Foreground="{DynamicResource SecondaryText}"
-                           FontSize="10"
-                           TextWrapping="Wrap"
-                           Margin="0,4,0,10" />
-                <Border Height="1"
-                        Margin="0,2,0,10"
-                        Background="{DynamicResource PanelBorder}" />
-                <TextBlock x:Name="ListeningTitleText"
-                           Text="监听"
-                           Style="{StaticResource FieldLabel}"
-                           Margin="0,0,0,8" />
-                <Grid x:Name="ListenAllButtonsGrid" Margin="0,0,0,10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="StartAllListeningButton"
-                            Grid.Column="0"
-                            MinWidth="0"
-                            Content="一键监听"
-                            Click="StartAllListening_Click" />
-                    <Button x:Name="StopAllListeningButton"
-                            Grid.Column="2"
-                            MinWidth="0"
-                            Content="停止监听"
-                            Click="StopAllListening_Click" />
-                </Grid>
-                <Border Height="1"
-                        Margin="0,2,0,10"
-                        Background="{DynamicResource PanelBorder}" />
-                <TextBlock x:Name="ImportExportTitleText"
-                           Text="导入 / 导出"
-                           Style="{StaticResource FieldLabel}"
-                           Margin="0,0,0,8" />
-                <WrapPanel Margin="0,0,0,8">
-                    <Button x:Name="ImportMacroButton" MinWidth="72" Content="导入" Click="ImportMacro_Click" />
-                    <Button x:Name="ImportRazerModulesButton" MinWidth="96" Content="雷云模块" Click="ImportRazerModules_Click" />
-                </WrapPanel>
-                <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="72" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock x:Name="ExportFormatLabelText" Text="导出格式" Style="{StaticResource FieldLabel}" />
-                        <ComboBox x:Name="ExportFormatBox" Height="30" />
+                    <StackPanel x:Name="ManagerRuntimeControls">
+                        <Border Height="1"
+                                Margin="0,2,0,10"
+                                Background="{DynamicResource PanelBorder}" />
+                        <TextBlock x:Name="GlobalRuntimeTitleText"
+                                   Text="全局运行"
+                                   Style="{StaticResource FieldLabel}"
+                                   Margin="0,0,0,8" />
+                        <TextBlock x:Name="PrecisionModeLabelText"
+                                   Text="精度模式"
+                                   Style="{StaticResource FieldLabel}" />
+                        <ComboBox x:Name="PrecisionModeBox"
+                                  Height="30"
+                                  Margin="0,0,0,8"
+                                  SelectionChanged="PrecisionModeBox_SelectionChanged">
+                            <ComboBoxItem Tag="balanced" Content="基础" />
+                            <ComboBoxItem Tag="extremeDuringPlayback" Content="高性能" IsSelected="True" />
+                            <ComboBoxItem Tag="ultraLowJitter" Content="极限" />
+                        </ComboBox>
+                        <TextBlock x:Name="AffinityMaskLabelText"
+                                   Text="极限核心掩码"
+                                   Style="{StaticResource FieldLabel}" />
+                        <TextBox x:Name="AffinityMaskBox"
+                                 Height="30"
+                                 TextChanged="RuntimePrecision_TextChanged"
+                                 ToolTip="仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。" />
+                        <TextBlock x:Name="AffinityMaskHelpText"
+                                   Text="仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   FontSize="10"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,10" />
+                        <Border Height="1"
+                                Margin="0,2,0,10"
+                                Background="{DynamicResource PanelBorder}" />
+                        <TextBlock x:Name="ListeningTitleText"
+                                   Text="监听"
+                                   Style="{StaticResource FieldLabel}"
+                                   Margin="0,0,0,8" />
+                        <Grid x:Name="ListenAllButtonsGrid" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="StartAllListeningButton"
+                                    Grid.Column="0"
+                                    MinWidth="0"
+                                    Content="请选择数据库"
+                                    Click="StartAllListening_Click" />
+                            <Button x:Name="StopAllListeningButton"
+                                    Grid.Column="2"
+                                    MinWidth="0"
+                                    Content="停止所选"
+                                    Click="StopAllListening_Click" />
+                        </Grid>
+                        <Button x:Name="StopEveryListeningButton"
+                                MinWidth="0"
+                                Margin="0,0,0,10"
+                                Content="全部停止"
+                                Click="StopEveryListening_Click" />
                     </StackPanel>
-                    <Button x:Name="ExportMacroButton"
-                            Grid.Column="2"
-                            Height="30"
-                            Margin="0,18,0,0"
-                            Content="导出"
-                            Click="ExportMacro_Click" />
-                </Grid>
-                <TextBlock x:Name="ConversionText"
-                           Text="转换器已内置"
-                           TextWrapping="Wrap"
-                           Margin="0,0,0,10"
-                           Foreground="{DynamicResource SecondaryText}" />
+
+                    <StackPanel x:Name="LibraryImportExportPanel">
+                        <Border Height="1"
+                                Margin="0,2,0,10"
+                                Background="{DynamicResource PanelBorder}" />
+                        <TextBlock x:Name="ImportExportTitleText"
+                                   Text="导入 / 导出"
+                                   Style="{StaticResource FieldLabel}"
+                                   Margin="0,0,0,8" />
+                        <WrapPanel Margin="0,0,0,8">
+                            <Button x:Name="ImportMacroButton" MinWidth="72" Content="导入" Click="ImportMacro_Click" />
+                            <Button x:Name="ImportRazerModulesButton" MinWidth="96" Content="雷云模块" Click="ImportRazerModules_Click" />
+                        </WrapPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="72" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock x:Name="ExportFormatLabelText" Text="导出格式" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="ExportFormatBox" Height="30" />
+                            </StackPanel>
+                            <Button x:Name="ExportMacroButton"
+                                    Grid.Column="2"
+                                    Height="30"
+                                    Margin="0,18,0,0"
+                                    Content="导出"
+                                    Click="ExportMacro_Click" />
+                        </Grid>
+                        <TextBlock x:Name="ConversionText"
+                                   Text="转换器已内置"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10"
+                                   Foreground="{DynamicResource SecondaryText}" />
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

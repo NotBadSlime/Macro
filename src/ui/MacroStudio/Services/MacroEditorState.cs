@@ -12,7 +12,12 @@ public class MacroEditorState
     }
 
     public MacroLibraryStore LibraryStore => libraryStore;
-    public MacroLibrarySnapshot LibrarySnapshot { get; set; } = new([], null, []);
+    public MacroLibrarySnapshot LibrarySnapshot { get; set; } = new(
+        [],
+        null,
+        [],
+        [new MacroLibraryGroup(MacroLibraryStore.GlobalGroupId, "全局", string.Empty, true)],
+        []);
     public string? SelectedMacroId { get; set; }
     public MacroDocument? CurrentDocument { get; set; }
     public int SelectedStepIndex { get; set; } = -1;
