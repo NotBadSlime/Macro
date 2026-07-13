@@ -34,6 +34,12 @@ public enum ConflictBehavior
     Force
 }
 
+public enum ConditionExecutionMode
+{
+    Parallel,
+    PauseMainTimeline
+}
+
 public interface IConditionMatcher
 {
     string Type { get; }
@@ -84,7 +90,8 @@ public sealed record ConditionalDirective(
     TimeSpan? WindowStart = null,
     TimeSpan? WindowEnd = null,
     IReadOnlyList<int>? StartStepPath = null,
-    IReadOnlyList<int>? EndStepPath = null)
+    IReadOnlyList<int>? EndStepPath = null,
+    ConditionExecutionMode ExecutionMode = ConditionExecutionMode.Parallel)
 {
     public TimeSpan EffectivePollInterval => PollInterval is { } value && value > TimeSpan.Zero
         ? value

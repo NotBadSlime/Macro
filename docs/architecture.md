@@ -42,6 +42,7 @@ Windows SendInput / visible desktop pixels
   - Lua/Logitech Lua。
   - XMouse。
   - QMacro。
+  - GIMacros JSON。
 
 - `src/shared/MacroHid.Runtime`
   - 播放控制器。
@@ -54,7 +55,7 @@ Windows SendInput / visible desktop pixels
 
 - `src/native/MacroHid.NativePlayback`
   - x64 C++ in-process DLL。
-  - 稳定 C ABI：`MhpCreatePlan`、`MhpRunPlan`、`MhpCancel`、`MhpDestroyPlan`、`MhpGetLastErrorText`。
+  - 稳定 C ABI：`MhpCreatePlan`、`MhpRunPlan`、`MhpRunPlanControlled`、播放控制句柄、`MhpCancel`、`MhpDestroyPlan`、`MhpGetLastErrorText`。
   - 复制并持有 `INPUT[]` 和 batch deadline。
   - 极限热路径使用 QPC、实时进程级别、TimeCritical 线程、MMCSS、CPU affinity、ideal processor、真实 CPU Set ID 映射、高分辨率 waitable timer 和短窗口纯自旋。密集 1ms/2ms timeline 的 auto 模式优先 inline native path 压低单步尖峰；显式 standby path 保留预热线程和 2 worker 低启动路径。
 
@@ -86,7 +87,7 @@ Windows SendInput / visible desktop pixels
 6. `MacroPlaybackExecutor` 按 QPC 时间轴提交 prepared input batches。
 7. 在 `UltraLowJitter` 且 native DLL 可用时，基础序列优先导出为 native timeline 并由 `MacroHid.NativePlayback.dll` 执行；不可用或不适用时回退 managed path。
 8. `SendInputMacroSink` 或 native engine 调用 Win32 `SendInput`。
-9. 条件监控线程按时间窗口和像素条件触发 then-actions。
+9. 条件监控线程按时间窗口和像素条件触发 then-actions；并行模式使用辅助 native-inline/managed 路径，暂停模式通过独立 native 控制句柄冻结主计划并平移剩余 deadline。
 10. 播放结束或取消后释放状态并恢复优先级/计时器/GC 策略。
 
 ### 数据流
@@ -138,6 +139,7 @@ There is no kernel driver, no background Windows service, no VHF/KMDF layer, and
   - Lua/Logitech Lua.
   - XMouse.
   - QMacro.
+  - GIMacros JSON.
 
 - `src/shared/MacroHid.Runtime`
   - Playback controller.
@@ -150,7 +152,7 @@ There is no kernel driver, no background Windows service, no VHF/KMDF layer, and
 
 - `src/native/MacroHid.NativePlayback`
   - x64 C++ in-process DLL.
-  - Stable C ABI: `MhpCreatePlan`, `MhpRunPlan`, `MhpCancel`, `MhpDestroyPlan`, `MhpGetLastErrorText`.
+  - Stable C ABI: `MhpCreatePlan`, `MhpRunPlan`, `MhpRunPlanControlled`, per-run playback controls, `MhpCancel`, `MhpDestroyPlan`, `MhpGetLastErrorText`.
   - Copies and owns `INPUT[]` packets and batch deadlines.
   - The Extreme hot path uses QPC, real-time process class, TimeCritical thread priority, MMCSS, CPU affinity, ideal processor, actual CPU Set ID mapping, high-resolution waitable timers, and short-window pure spinning. Dense 1ms/2ms timelines prefer the inline native path in auto mode to reduce per-step spikes; the explicit standby path keeps warmed workers and a two-worker low-startup path.
 
@@ -182,7 +184,7 @@ There is no kernel driver, no background Windows service, no VHF/KMDF layer, and
 6. `MacroPlaybackExecutor` submits prepared input batches on the QPC timeline.
 7. In `UltraLowJitter`, when the native DLL is available, the base sequence is exported as a native timeline and executed by `MacroHid.NativePlayback.dll`; otherwise MacroHID falls back to the managed path.
 8. `SendInputMacroSink` or the native engine calls Win32 `SendInput`.
-9. The condition monitor thread triggers then-actions based on time windows and pixel conditions.
+9. The condition monitor thread triggers then-actions based on time windows and pixel conditions. Parallel actions use an auxiliary native-inline/managed path; pause mode freezes the native main plan and shifts its remaining deadlines through a per-run control handle.
 10. Playback completion or cancellation restores priority, timer, and GC state.
 
 ### Data Flow

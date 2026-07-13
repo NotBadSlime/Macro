@@ -126,6 +126,26 @@ internal static partial class NativePlaybackInterop
         ref int cancelFlag,
         out MhpRunStats stats);
 
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl, SetLastError = true)]
+    public static extern MhpStatus MhpRunPlanControlled(
+        IntPtr plan,
+        ref MhpRunOptions options,
+        ref int cancelFlag,
+        IntPtr playbackControl,
+        out MhpRunStats stats);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr MhpCreatePlaybackControl();
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void MhpPausePlayback(IntPtr playbackControl);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void MhpResumePlayback(IntPtr playbackControl);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void MhpDestroyPlaybackControl(IntPtr playbackControl);
+
     [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
     public static extern void MhpCancel(ref int cancelFlag);
 

@@ -83,7 +83,7 @@
   <data name="ImportMacroTitle" xml:space="preserve"><value>导入宏</value></data>
   <data name="ImportRazerModulesTitle" xml:space="preserve"><value>导入雷云模块 XML</value></data>
   <data name="ExportMacroTitle" xml:space="preserve"><value>导出宏</value></data>
-  <data name="ConverterImportFileFilter" xml:space="preserve"><value>支持的宏文件 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt|所有文件 (*.*)|*.*</value></data>
+  <data name="ConverterImportFileFilter" xml:space="preserve"><value>支持的宏文件 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|所有文件 (*.*)|*.*</value></data>
   <data name="RazerModuleFileFilter" xml:space="preserve"><value>雷云 XML (*.xml)|*.xml|所有文件 (*.*)|*.*</value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>宏数据库管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新建</value></data>
@@ -105,6 +105,8 @@
   <data name="AddText" xml:space="preserve"><value>文本功能</value></data>
   <data name="AddMacro" xml:space="preserve"><value>宏</value></data>
   <data name="AddLoop" xml:space="preserve"><value>循环</value></data>
+  <data name="AddStopCurrent" xml:space="preserve"><value>停止当前宏序列</value></data>
+  <data name="AddStopAll" xml:space="preserve"><value>停止所有宏序列</value></data>
   <data name="AddPixel" xml:space="preserve"><value>像素条件</value></data>
   <data name="AddDelayHint" xml:space="preserve"><value>固定或随机等待</value></data>
   <data name="AddKeyboardHint" xml:space="preserve"><value>按下、抬起或输入</value></data>
@@ -114,6 +116,8 @@
   <data name="AddTextHint" xml:space="preserve"><value>发送 Unicode 文本</value></data>
   <data name="AddMacroActionHint" xml:space="preserve"><value>调用宏数据库条目</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>重复一组步骤</value></data>
+  <data name="AddStopCurrentHint" xml:space="preserve"><value>退出当前宏调用，外层继续执行</value></data>
+  <data name="AddStopAllHint" xml:space="preserve"><value>立即终止整次宏播放</value></data>
   <data name="ActionPaletteDragHint" xml:space="preserve"><value>点击添加，或拖到序列的目标位置。</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>把左侧宏拖到序列里，可以复制它的步骤。</value></data>
   <data name="StepProperties" xml:space="preserve"><value>属性</value></data>

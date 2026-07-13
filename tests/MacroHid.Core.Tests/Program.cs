@@ -6,6 +6,7 @@ using MacroStudio.Controls;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 if (Environment.GetEnvironmentVariable("MACROHID_JSON_REFLECTION_DISABLED_PROBE") == "1")
@@ -32,6 +33,7 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers macro call and pixel time windows", McrxParserCoversMacroCallAndPixelTimeWindows),
     ("MCRX parser covers conditional directive time windows", McrxParserCoversConditionalDirectiveTimeWindows),
     ("MCRX parser covers random waits and conditional directive paths", McrxParserCoversRandomWaitsAndConditionalDirectivePaths),
+    ("MCRX parser covers sequence stop controls and condition execution mode", McrxParserCoversSequenceStopsAndConditionExecutionMode),
     ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
     ("MCRX parser covers playback precision mode", McrxParserCoversPlaybackPrecisionMode),
     ("Precision mode profiles expose target jitter budgets", PrecisionModeProfilesExposeTargetJitterBudgets),
@@ -68,14 +70,20 @@ var tests = new (string Name, Action Body)[]
     ("Latency histogram computes p50 p95 p99 from microsecond samples", LatencyHistogramComputesPercentiles),
     ("Playback controller starts and stops toggle loop on trigger press", PlaybackControllerStopsToggleLoopOnTriggerPress),
     ("Playback controller runs fixed count once by default", PlaybackControllerRunsFixedCountOnceByDefault),
+    ("Playback controller stops fixed count on a second trigger press", PlaybackControllerStopsFixedCountOnSecondTriggerPress),
     ("Playback controller cancels hold loop when trigger is released", PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased),
     ("Playback executor checks cancellation before submitting delayed actions", PlaybackExecutorChecksCancellationBeforeDelayedActions),
     ("Playback executor resolves macro call steps", PlaybackExecutorResolvesMacroCallSteps),
+    ("Playback executor stops only the current nested macro sequence", PlaybackExecutorStopsOnlyCurrentNestedSequence),
+    ("Playback executor stops all fixed count iterations", PlaybackExecutorStopsAllFixedCountIterations),
+    ("Playback executor allows cancellable tail self calls", PlaybackExecutorAllowsCancellableTailSelfCalls),
+    ("Condition stop all cancels the main timeline", ConditionStopAllCancelsMainTimeline),
+    ("Pause condition mode shifts the remaining main timeline", PauseConditionModeShiftsRemainingMainTimeline),
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 1.1.0", MacroHidReleaseVersionIsOneOneZero),
+    ("MacroHID release version is 1.2.0", MacroHidReleaseVersionIsOneTwoZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("MacroStudio uses launcher style soft workbench shell", MacroStudioUsesLauncherStyleSoftWorkbenchShell),
@@ -177,6 +185,8 @@ var tests = new (string Name, Action Body)[]
     ("Native playback avoids blind CPU pinning and reports startup costs", NativePlaybackAvoidsBlindCpuPinningAndReportsStartupCosts),
     ("Native playback reports applied scheduler priority state", NativePlaybackReportsAppliedSchedulerPriorityState),
     ("Native playback exposes standby engine ABI and ordering gates", NativePlaybackExposesStandbyEngineAbiAndOrderingGates),
+    ("Native playback pause control shifts a running timeline", NativePlaybackPauseControlShiftsRunningTimeline),
+    ("Pause condition keeps the main timeline on native playback", PauseConditionKeepsMainTimelineOnNativePlayback),
         ("Runtime uses warmed standby native engine by default and keeps inline fallback", RuntimeUsesWarmedStandbyNativeEngineByDefaultAndKeepsInlineFallback),
     ("LatencyProbe exposes native engine mode selection", LatencyProbeExposesNativeEngineModeSelection),
     ("MacroStudio warms native playback before first trigger", MacroStudioWarmsNativePlaybackBeforeFirstTrigger),
@@ -196,6 +206,8 @@ var tests = new (string Name, Action Body)[]
     ("Embedded converter preserves Razer sub-millisecond timing", EmbeddedConverterPreservesRazerSubMillisecondTiming),
     ("Embedded converter preserves Razer overlapping press release order", EmbeddedConverterPreservesRazerOverlappingPressReleaseOrder),
     ("Embedded converter imports Razer module references as macro calls", EmbeddedConverterImportsRazerModuleReferencesAsMacroCalls),
+    ("Embedded converter imports GIMacros JSON", EmbeddedConverterImportsGIMacrosJson),
+    ("Embedded converter exports GIMacros JSON", EmbeddedConverterExportsGIMacrosJson),
     ("Embedded converter exports MacroConverter formats", EmbeddedConverterExportsMacroConverterFormats),
     ("Embedded converter reports warnings for unsupported external features", EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures),
     ("Macro library store persists and duplicates macros", MacroLibraryStorePersistsAndDuplicatesMacros),
@@ -1058,6 +1070,47 @@ static void McrxParserCoversRandomWaitsAndConditionalDirectivePaths()
     Assert.Contains("\"endPath\": \"0.1\"", serialized);
 }
 
+static void McrxParserCoversSequenceStopsAndConditionExecutionMode()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "control-flow",
+      "steps": [
+        { "type": "sequence.stop-current" },
+        { "type": "sequence.stop-all" }
+      ],
+      "conditions": [
+        {
+          "id": "pause",
+          "name": "pause main",
+          "startStep": 0,
+          "endStep": 1,
+          "type": "pixel",
+          "x": 1,
+          "y": 2,
+          "r": 3,
+          "g": 4,
+          "b": 5,
+          "executionMode": "PauseMainTimeline",
+          "then": [{ "type": "sequence.stop-all" }]
+        }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+    Assert.IsType<StopCurrentSequenceStep>(document.Steps[0]);
+    Assert.IsType<StopAllSequencesStep>(document.Steps[1]);
+    Assert.Equal(ConditionExecutionMode.PauseMainTimeline, document.EffectiveConditions[0].ExecutionMode);
+    Assert.IsType<StopAllSequencesStep>(document.EffectiveConditions[0].ThenSteps.Single());
+
+    var serialized = McrxSerializer.Serialize(document);
+    Assert.Contains("\"type\": \"sequence.stop-current\"", serialized);
+    Assert.Contains("\"type\": \"sequence.stop-all\"", serialized);
+    Assert.Contains("\"executionMode\": \"PauseMainTimeline\"", serialized);
+}
+
 static void McrxParserCoversPlaybackHotkeySettings()
 {
     const string json = """
@@ -1476,6 +1529,25 @@ static void PlaybackControllerRunsFixedCountOnceByDefault()
     Assert.Equal(PlaybackStatus.Idle, controller.Status);
 }
 
+static void PlaybackControllerStopsFixedCountOnSecondTriggerPress()
+{
+    var document = new MacroDocument(
+        1,
+        "fixed-many",
+        new PlaybackSettings(new HotkeyGesture(HidModifier.None, HidKey.F8), PlaybackMode.FixedCount, 20),
+        [new WaitStep(TimeSpan.FromSeconds(1))]);
+    var executor = new ControlledPlaybackExecutor();
+    var controller = new MacroPlaybackController(document, executor);
+
+    controller.TriggerPressedAsync().GetAwaiter().GetResult();
+    controller.TriggerPressedAsync().GetAwaiter().GetResult();
+
+    Assert.True(executor.LastCancellationToken.IsCancellationRequested);
+    executor.Complete();
+    controller.WhenIdleAsync().GetAwaiter().GetResult();
+    Assert.Equal(PlaybackStatus.Idle, controller.Status);
+}
+
 static void PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased()
 {
     var document = new MacroDocument(
@@ -1541,6 +1613,141 @@ static void PlaybackExecutorResolvesMacroCallSteps()
     Assert.Equal(new KeyInputAction(KeyActionKind.Up, HidKey.B, HidModifier.None), sink.Actions[1]);
 }
 
+static void PlaybackExecutorStopsOnlyCurrentNestedSequence()
+{
+    var sink = new RecordingInputSink();
+    var nested = new MacroDocument(
+        1,
+        "nested",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero),
+            new StopCurrentSequenceStep(),
+            new KeyStep(KeyActionKind.Down, HidKey.C, HidModifier.None, TimeSpan.Zero)
+        ]);
+    var root = new MacroDocument(
+        1,
+        "root",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new MacroCallStep("nested"),
+            new KeyStep(KeyActionKind.Down, HidKey.D, HidModifier.None, TimeSpan.Zero)
+        ]);
+    var executor = new MacroPlaybackExecutor(sink, macroResolver: name => name == "nested" ? nested : null);
+
+    var result = executor.RunAsync(
+        root,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.MatchAll, NoWait: true),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.False(result.Cancelled);
+    Assert.Equal(3, sink.Actions.Count);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None), sink.Actions[0]);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None), sink.Actions[1]);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.D, HidModifier.None), sink.Actions[2]);
+}
+
+static void PlaybackExecutorStopsAllFixedCountIterations()
+{
+    var sink = new RecordingInputSink();
+    var document = new MacroDocument(
+        1,
+        "stop-all",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new StopAllSequencesStep(),
+            new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero)
+        ]);
+    var executor = new MacroPlaybackExecutor(sink);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 5, PixelEvaluationMode.MatchAll, NoWait: true),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+    Assert.Equal(0, result.IterationsCompleted);
+    Assert.True(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+}
+
+static void PlaybackExecutorAllowsCancellableTailSelfCalls()
+{
+    using var cancellation = new CancellationTokenSource();
+    var sink = new CancellingInputSink(cancellation, cancelAfter: 6);
+    MacroDocument? document = null;
+    document = new MacroDocument(
+        1,
+        "self",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new MacroCallStep("self")
+        ]);
+    var executor = new MacroPlaybackExecutor(sink, macroResolver: name => name == "self" ? document : null);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.MatchAll, NoWait: true),
+        cancellation.Token).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+    Assert.True(sink.Actions.Count >= 6);
+}
+
+static void ConditionStopAllCancelsMainTimeline()
+{
+    var sink = new RecordingInputSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var document = new MacroDocument(
+        1,
+        "condition-stop-all",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromSeconds(1)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective("stop", "stop", 0, 1, matcher, [new StopAllSequencesStep()])]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+
+static void PauseConditionModeShiftsRemainingMainTimeline()
+{
+    var sink = new TimestampInputSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var document = new MacroDocument(
+        1,
+        "condition-pause",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromMilliseconds(150)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "pause",
+            "pause",
+            0,
+            1,
+            matcher,
+            [new WaitStep(TimeSpan.FromMilliseconds(60)), new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero)],
+            ExecutionMode: ConditionExecutionMode.PauseMainTimeline)]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+    var started = Stopwatch.GetTimestamp();
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.False(result.Cancelled);
+    var conditionAction = sink.Entries.Single(entry => entry.Action == new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None));
+    var mainAction = sink.Entries.Single(entry => entry.Action == new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None));
+    Assert.True(conditionAction.Timestamp < mainAction.Timestamp);
+    var mainElapsedMs = (mainAction.Timestamp - started) * 1000.0 / Stopwatch.Frequency;
+    Assert.True(mainElapsedMs >= 180);
+}
+
 static void LocalizationNormalizesSupportedCultures()
 {
     Assert.Equal("zh-CN", LocalizationService.NormalizeCultureName(new CultureInfo("zh-Hans-CN")));
@@ -1587,23 +1794,23 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsOneOneZero()
+static void MacroHidReleaseVersionIsOneTwoZero()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.1.0.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.2.0.md"));
 
-    Assert.Contains("<Version>1.1.0</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>1.1.0.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>1.1.0.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>1.2.0</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>1.2.0.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>1.2.0.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"1.1.0\"", installer);
-    Assert.Contains("[string]$Version = \"1.1.0\"", installerBuild);
-    Assert.Contains("Current stable release: `1.1.0`", readme);
-    Assert.Contains("MacroHID `1.1.0` 是当前正式版", releaseNotes);
-    Assert.Contains("Git tag：`v1.1.0`", releaseNotes);
+    Assert.Contains("#define AppVersion \"1.2.0\"", installer);
+    Assert.Contains("[string]$Version = \"1.2.0\"", installerBuild);
+    Assert.Contains("Current stable release: `1.2.0`", readme);
+    Assert.Contains("MacroHID `1.2.0` 是当前正式版", releaseNotes);
+    Assert.Contains("Git tag：`v1.2.0`", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -3122,7 +3329,7 @@ static void MacroStudioPreservesRazerModuleCallsWhenImportingMainMacros()
 {
     var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
 
-    Assert.Contains("MacroConversionFormat.Auto, [])", libraryCode);
+    Assert.Contains("LoadConversionAuxiliaryFiles(dialog.FileName)", libraryCode);
     Assert.DoesNotContain("MacroConversionFormat.Auto, razerModuleFiles", libraryCode);
 }
 
@@ -3420,8 +3627,10 @@ static void ConditionMonitorUsesPrecisionThreadAndPreparedThenActions()
 
     Assert.Contains("new Thread(() => PollLoop", conditionCode);
     Assert.Contains("Priority = ThreadPriority.Highest", conditionCode);
-    Assert.Contains("PrecisionPlaybackContext.Enter(PrecisionMode.ExtremeDuringPlayback)", conditionCode);
+    Assert.Contains("PrecisionPlaybackContext.Enter(precision)", conditionCode);
     Assert.Contains("CompiledPlaybackPlan.Create", conditionCode);
+    Assert.Contains("NativePlaybackEngine.TryRun", conditionCode);
+    Assert.Contains("NativePlaybackEngineMode.Inline", conditionCode);
     Assert.Contains("SubmitPrepared", conditionCode);
     Assert.Contains("WaitForTriggeredCompletion", conditionCode);
     Assert.Contains("monitorThread.Join", conditionCode);
@@ -3590,8 +3799,10 @@ static void RuntimeKeepsExternalConditionDirectivesOnNativeTimeline()
     var executorCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs"));
 
     Assert.Contains("TryRunNativeIterationWithConditionMonitors", executorCode);
-    Assert.Contains("CreateConditionMonitors(document, conditionEvaluator, iterationStartTick, qpcFrequency)", executorCode);
-    Assert.Contains("TryRunNativeIteration(document, options, iterationPlan, nativePreparedPlan", executorCode);
+    Assert.Contains("CreateConditionMonitors(", executorCode);
+    Assert.Contains("options.Precision", executorCode);
+    Assert.Contains("if (!TryRunNativeIteration(", executorCode);
+    Assert.Contains("nativeControl", executorCode);
     Assert.Contains("CompleteAllMonitorsAfterCurrentEvaluation(monitors)", executorCode);
     Assert.Contains("WaitForTriggeredConditionActions(monitors, cancellationToken)", executorCode);
     Assert.DoesNotContain("condition ranges require managed step activation", executorCode);
@@ -4334,6 +4545,221 @@ static void EmbeddedConverterImportsRazerModuleReferencesAsMacroCalls()
 
     var call = Assert.IsType<MacroCallStep>(import.Document.Steps.Single());
     Assert.Equal("Nested Burst", call.Macro);
+}
+
+static void NativePlaybackPauseControlShiftsRunningTimeline()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        return;
+    }
+
+    var dllPath = Path.GetFullPath(Path.Combine(
+        "src",
+        "native",
+        "MacroHid.NativePlayback",
+        "x64",
+        "Release",
+        "MacroHid.NativePlayback.dll"));
+    Assert.True(File.Exists(dllPath));
+
+    var library = NativeLibrary.Load(dllPath);
+    IntPtr plan = IntPtr.Zero;
+    IntPtr control = IntPtr.Zero;
+    IntPtr stats = IntPtr.Zero;
+    try
+    {
+        var createPlan = Marshal.GetDelegateForFunctionPointer<ProbeCreatePlanDelegate>(
+            NativeLibrary.GetExport(library, "MhpCreatePlan"));
+        var runControlled = Marshal.GetDelegateForFunctionPointer<ProbeRunControlledDelegate>(
+            NativeLibrary.GetExport(library, "MhpRunPlanControlled"));
+        var createControl = Marshal.GetDelegateForFunctionPointer<ProbeCreateControlDelegate>(
+            NativeLibrary.GetExport(library, "MhpCreatePlaybackControl"));
+        var pause = Marshal.GetDelegateForFunctionPointer<ProbeControlCommandDelegate>(
+            NativeLibrary.GetExport(library, "MhpPausePlayback"));
+        var resume = Marshal.GetDelegateForFunctionPointer<ProbeControlCommandDelegate>(
+            NativeLibrary.GetExport(library, "MhpResumePlayback"));
+        var destroyControl = Marshal.GetDelegateForFunctionPointer<ProbeControlCommandDelegate>(
+            NativeLibrary.GetExport(library, "MhpDestroyPlaybackControl"));
+        var destroyPlan = Marshal.GetDelegateForFunctionPointer<ProbeControlCommandDelegate>(
+            NativeLibrary.GetExport(library, "MhpDestroyPlan"));
+
+        var batches = new[]
+        {
+            new ProbeNativeBatch(
+                (long)Math.Round(Stopwatch.Frequency * 0.080, MidpointRounding.AwayFromZero),
+                0,
+                0,
+                0)
+        };
+        Assert.Equal(0, createPlan(IntPtr.Zero, 0, batches, 1, out plan));
+        Assert.True(plan != IntPtr.Zero);
+        control = createControl();
+        Assert.True(control != IntPtr.Zero);
+        stats = Marshal.AllocHGlobal(512);
+
+        var options = new ProbeNativeRunOptions
+        {
+            PrecisionMode = 1,
+            QpcFrequency = Stopwatch.Frequency,
+            NativeEngineMode = 2,
+            OutlierThresholdUs = 250
+        };
+        var cancelFlag = 0;
+        var started = Stopwatch.GetTimestamp();
+        var run = Task.Run(() => runControlled(plan, ref options, ref cancelFlag, control, stats));
+        Thread.Sleep(20);
+        pause(control);
+        Thread.Sleep(60);
+        resume(control);
+
+        Assert.Equal(0, run.GetAwaiter().GetResult());
+        var elapsedMs = (Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency;
+        Assert.True(elapsedMs >= 125);
+
+        destroyControl(control);
+        control = IntPtr.Zero;
+        destroyPlan(plan);
+        plan = IntPtr.Zero;
+    }
+    finally
+    {
+        if (stats != IntPtr.Zero) Marshal.FreeHGlobal(stats);
+        if (control != IntPtr.Zero)
+        {
+            var destroy = Marshal.GetDelegateForFunctionPointer<ProbeControlCommandDelegate>(
+                NativeLibrary.GetExport(library, "MhpDestroyPlaybackControl"));
+            destroy(control);
+        }
+        if (plan != IntPtr.Zero)
+        {
+            var destroy = Marshal.GetDelegateForFunctionPointer<ProbeControlCommandDelegate>(
+                NativeLibrary.GetExport(library, "MhpDestroyPlan"));
+            destroy(plan);
+        }
+        NativeLibrary.Free(library);
+    }
+}
+
+static void PauseConditionKeepsMainTimelineOnNativePlayback()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        return;
+    }
+
+    var sourceDll = Path.GetFullPath(Path.Combine(
+        "src",
+        "native",
+        "MacroHid.NativePlayback",
+        "x64",
+        "Release",
+        "MacroHid.NativePlayback.dll"));
+    var runtimeDll = Path.Combine(AppContext.BaseDirectory, "MacroHid.NativePlayback.dll");
+    File.Copy(sourceDll, runtimeDll, overwrite: true);
+
+    var sink = new SendInputMacroSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var document = new MacroDocument(
+        1,
+        "native-condition-pause",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromMilliseconds(200)), new TextStep(string.Empty)],
+        [new ConditionalDirective(
+            "pause-native",
+            "pause native",
+            0,
+            1,
+            matcher,
+            [new WaitStep(TimeSpan.FromMilliseconds(60)), new TextStep(string.Empty)],
+            ExecutionMode: ConditionExecutionMode.PauseMainTimeline)]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+    var started = Stopwatch.GetTimestamp();
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(
+            PlaybackMode.FixedCount,
+            1,
+            PixelEvaluationMode.Live,
+            NoWait: false,
+            PrecisionMode.UltraLowJitter),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    var elapsedMs = (Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency;
+    Assert.False(result.Cancelled);
+    Assert.True(elapsedMs >= 235);
+    Assert.True((result.InputStats?.BackendName ?? string.Empty).StartsWith("native", StringComparison.Ordinal));
+}
+
+static void EmbeddedConverterImportsGIMacrosJson()
+{
+    const string main = """
+    [
+      // GIMacros allows comments in sample files.
+      ["kd", "q", 10],
+      ["ku", "q", 20],
+      ["md", "left", 0],
+      ["mu", "left", 15],
+      ["view", [3, -2], 3],
+      ["loop", 2, [["wait", 5], ["kd", "space", 0], ["ku", "space", 1]]],
+      ["import", "parts/burst.json"],
+      ["unknown", "ignored"]
+    ]
+    """;
+    const string imported = """
+    [
+      ["kd", "1", 0],
+      ["ku", "1", 2]
+    ]
+    """;
+
+    var result = MacroConversionService.ImportToMcrx(new MacroImportRequest(
+        main,
+        "main.json",
+        AuxiliaryFiles: [new AuxiliaryMacroFile("parts/burst.json", imported)]));
+
+    Assert.Equal(MacroConversionFormat.GIMacrosJson, result.SourceFormat);
+    Assert.True(result.Document.Steps.OfType<KeyStep>().Any(step => step.Kind == KeyActionKind.Down && step.Key == HidKey.Q));
+    Assert.True(result.Document.Steps.OfType<KeyStep>().Any(step => step.Kind == KeyActionKind.Up && step.Key == HidKey.Q));
+    Assert.True(result.Document.Steps.OfType<MouseButtonStep>().Any(step => step.Kind == ButtonActionKind.Down && step.Button == MouseButton.Left));
+    Assert.True(result.Document.Steps.OfType<WaitStep>().Any(step => step.Duration == TimeSpan.FromMilliseconds(10)));
+
+    var moves = result.Document.Steps.OfType<MouseMoveStep>().Where(step => step.Mode == MouseMoveMode.Relative).ToArray();
+    Assert.Equal(3, moves.Length);
+    Assert.Equal(3, moves.Sum(step => step.X));
+    Assert.Equal(-2, moves.Sum(step => step.Y));
+
+    var repeat = result.Document.Steps.OfType<RepeatStep>().Single();
+    Assert.Equal(2, repeat.Count);
+    Assert.True(repeat.Steps.OfType<KeyStep>().Any(step => step.Key == HidKey.Space));
+    Assert.True(result.Document.Steps.OfType<KeyStep>().Any(step => step.Key == HidKey.D1));
+    Assert.True(result.Diagnostics.Any(item => item.Code == "gimacros.unsupportedCommand"));
+}
+
+static void EmbeddedConverterExportsGIMacrosJson()
+{
+    var document = new MacroDocument(
+        1,
+        "GI Demo",
+        [
+            new KeyStep(KeyActionKind.Tap, HidKey.Q, HidModifier.None, TimeSpan.FromMilliseconds(12)),
+            new MouseButtonStep(MouseButton.Right, ButtonActionKind.Click, TimeSpan.FromMilliseconds(8)),
+            new MouseMoveStep(MouseMoveMode.Relative, 4, -1, TimeSpan.FromMilliseconds(3)),
+            new RepeatStep(2, [new WaitStep(TimeSpan.FromMilliseconds(5))])
+        ]);
+
+    var export = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.GIMacrosJson, "gi-demo.json");
+
+    Assert.Equal("gi-demo.json", export.FileName);
+    Assert.Contains("\"kd\"", export.Output);
+    Assert.Contains("\"view\"", export.Output);
+    Assert.False(export.Diagnostics.Any(item => item.Severity == MacroDiagnosticSeverity.Warning));
+
+    var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(export.Output, "gi-demo.json"));
+    Assert.Equal(MacroConversionFormat.GIMacrosJson, imported.SourceFormat);
+    Assert.True(imported.Document.Steps.OfType<KeyStep>().Any(step => step.Kind == KeyActionKind.Down && step.Key == HidKey.Q));
+    Assert.True(imported.Document.Steps.OfType<RepeatStep>().Any(step => step.Count == 2));
 }
 
 static void EmbeddedConverterExportsMacroConverterFormats()
@@ -5086,6 +5512,58 @@ static class Assert
     }
 }
 
+[StructLayout(LayoutKind.Sequential)]
+readonly struct ProbeNativeBatch
+{
+    public ProbeNativeBatch(long dueTicks, uint inputOffset, uint inputCount, uint actionCount)
+    {
+        DueTicks = dueTicks;
+        InputOffset = inputOffset;
+        InputCount = inputCount;
+        ActionCount = actionCount;
+    }
+
+    public readonly long DueTicks;
+    public readonly uint InputOffset;
+    public readonly uint InputCount;
+    public readonly uint ActionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+struct ProbeNativeRunOptions
+{
+    public int PrecisionMode;
+    public int EnableCpuScan;
+    public int OutlierThresholdUs;
+    public int LoopStepCount;
+    public long QpcFrequency;
+    public int NativeEngineMode;
+    public IntPtr OutlierEvents;
+    public uint OutlierEventCapacity;
+}
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+delegate int ProbeCreatePlanDelegate(
+    IntPtr inputs,
+    uint inputCount,
+    [In] ProbeNativeBatch[] batches,
+    uint batchCount,
+    out IntPtr plan);
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+delegate int ProbeRunControlledDelegate(
+    IntPtr plan,
+    ref ProbeNativeRunOptions options,
+    ref int cancelFlag,
+    IntPtr playbackControl,
+    IntPtr stats);
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+delegate IntPtr ProbeCreateControlDelegate();
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+delegate void ProbeControlCommandDelegate(IntPtr value);
+
 sealed class ControlledPlaybackExecutor : IMacroPlaybackExecutor
 {
     private readonly TaskCompletionSource<PlaybackRunResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -5125,6 +5603,61 @@ sealed class RecordingInputSink : IMacroInputSink
     {
         return null;
     }
+}
+
+sealed class CancellingInputSink : IMacroInputSink
+{
+    private readonly CancellationTokenSource cancellation;
+    private readonly int cancelAfter;
+
+    public CancellingInputSink(CancellationTokenSource cancellation, int cancelAfter)
+    {
+        this.cancellation = cancellation;
+        this.cancelAfter = cancelAfter;
+    }
+
+    public bool IsAvailable => true;
+    public List<InputAction> Actions { get; } = [];
+
+    public void Submit(uint sequence, InputAction action)
+    {
+        Actions.Add(action);
+        if (Actions.Count >= cancelAfter)
+        {
+            cancellation.Cancel();
+        }
+    }
+
+    public InputSubmissionStats? GetStats() => null;
+}
+
+sealed class TimestampInputSink : IMacroInputSink
+{
+    private readonly object gate = new();
+    private readonly List<(InputAction Action, long Timestamp)> entries = [];
+
+    public bool IsAvailable => true;
+
+    public IReadOnlyList<(InputAction Action, long Timestamp)> Entries
+    {
+        get
+        {
+            lock (gate)
+            {
+                return entries.ToArray();
+            }
+        }
+    }
+
+    public void Submit(uint sequence, InputAction action)
+    {
+        lock (gate)
+        {
+            entries.Add((action, Stopwatch.GetTimestamp()));
+        }
+    }
+
+    public InputSubmissionStats? GetStats() => null;
 }
 
 sealed class CancellingDelayStrategy : IPlaybackDelayStrategy

@@ -388,6 +388,8 @@ public sealed class StepDisplayItem
             ConsumerStep consumer => new StepDisplayItem(index, path, "🎵", GetConsumerIndicator(consumer), $"媒体 {consumer.Control}", FormatDuration(consumer.Hold), PinkBrush, StepDisplayKind.Normal, indent),
             WaitStep wait => new StepDisplayItem(index, path, "⏱", "", FormatWait(wait), "", GrayBrush, StepDisplayKind.Delay, indent),
             MacroCallStep macro => new StepDisplayItem(index, path, "📦", "▶", $"调用宏: {ResolveMacroDisplayName(macro.Macro, macroNameResolver)}", "", GreenBrush, StepDisplayKind.Normal, indent),
+            StopCurrentSequenceStep => new StepDisplayItem(index, path, "■", "", "停止当前宏序列", "外层继续", OrangeBrush, StepDisplayKind.Normal, indent),
+            StopAllSequencesStep => new StepDisplayItem(index, path, "■", "", "停止所有宏序列", "立即停止", RedBrush, StepDisplayKind.Normal, indent),
             _ => new StepDisplayItem(index, path, "?", "", step.GetType().Name, "", GrayBrush, StepDisplayKind.Normal, indent)
         };
     }

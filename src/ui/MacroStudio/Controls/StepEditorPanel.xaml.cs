@@ -91,6 +91,16 @@ public partial class StepEditorPanel : UserControl
             return;
         }
 
+        if (step is StopCurrentSequenceStep or StopAllSequencesStep)
+        {
+            StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
+            ApplyStepEditButton.IsEnabled = false;
+            StepEditorHintText.Text = step is StopAllSequencesStep
+                ? L("AddStopAllHint")
+                : L("AddStopCurrentHint");
+            return;
+        }
+
         updatingEditor = true;
         PopulateStepEditor(step);
         updatingEditor = false;

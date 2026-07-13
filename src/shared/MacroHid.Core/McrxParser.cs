@@ -132,6 +132,8 @@ public static class McrxParser
             "wait" => ParseWait(stepElement),
             "repeat" => new RepeatStep(GetInt(stepElement, "count", 1), ParseSteps(stepElement.GetProperty("steps"))),
             "macro.call" => new MacroCallStep(GetString(stepElement, "macro", string.Empty) ?? string.Empty),
+            "sequence.stop-current" => new StopCurrentSequenceStep(),
+            "sequence.stop-all" => new StopAllSequencesStep(),
             "pixel.when" => ParsePixelWhen(stepElement),
             _ => throw new JsonException($"Unsupported macro step type '{type}'.")
         };
@@ -418,6 +420,9 @@ public static class McrxParser
         var windowEnd = GetOptionalTimeSpan(elem, "windowEndMs");
         var startPath = ParseOptionalStepPath(elem, "startPath");
         var endPath = ParseOptionalStepPath(elem, "endPath");
+        var executionMode = elem.TryGetProperty("executionMode", out var executionModeProp)
+            ? ParseEnum<ConditionExecutionMode>(executionModeProp.GetString(), "condition execution mode")
+            : ConditionExecutionMode.Parallel;
         var thenSteps = elem.TryGetProperty("then", out var thenProp)
             ? ParseSteps(thenProp)
             : Array.Empty<MacroStep>();
@@ -435,7 +440,8 @@ public static class McrxParser
             windowStart,
             windowEnd,
             startPath,
-            endPath);
+            endPath,
+            executionMode);
     }
 
     private static IReadOnlyList<int>? ParseOptionalStepPath(JsonElement elem, string name)

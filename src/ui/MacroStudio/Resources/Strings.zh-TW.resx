@@ -83,7 +83,7 @@
   <data name="ImportMacroTitle" xml:space="preserve"><value>匯入巨集</value></data>
   <data name="ImportRazerModulesTitle" xml:space="preserve"><value>匯入雷雲模組 XML</value></data>
   <data name="ExportMacroTitle" xml:space="preserve"><value>匯出巨集</value></data>
-  <data name="ConverterImportFileFilter" xml:space="preserve"><value>支援的巨集檔案 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt|所有檔案 (*.*)|*.*</value></data>
+  <data name="ConverterImportFileFilter" xml:space="preserve"><value>支援的巨集檔案 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|所有檔案 (*.*)|*.*</value></data>
   <data name="RazerModuleFileFilter" xml:space="preserve"><value>雷雲 XML (*.xml)|*.xml|所有檔案 (*.*)|*.*</value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>巨集資料庫管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新增</value></data>
@@ -105,6 +105,8 @@
   <data name="AddText" xml:space="preserve"><value>文字功能</value></data>
   <data name="AddMacro" xml:space="preserve"><value>巨集</value></data>
   <data name="AddLoop" xml:space="preserve"><value>循環</value></data>
+  <data name="AddStopCurrent" xml:space="preserve"><value>停止目前巨集序列</value></data>
+  <data name="AddStopAll" xml:space="preserve"><value>停止所有巨集序列</value></data>
   <data name="AddPixel" xml:space="preserve"><value>像素條件</value></data>
   <data name="AddDelayHint" xml:space="preserve"><value>固定或隨機等待</value></data>
   <data name="AddKeyboardHint" xml:space="preserve"><value>按下、抬起或輸入</value></data>
@@ -114,6 +116,8 @@
   <data name="AddTextHint" xml:space="preserve"><value>傳送 Unicode 文字</value></data>
   <data name="AddMacroActionHint" xml:space="preserve"><value>呼叫巨集資料庫項目</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>重複一組步驟</value></data>
+  <data name="AddStopCurrentHint" xml:space="preserve"><value>退出目前巨集呼叫，外層繼續執行</value></data>
+  <data name="AddStopAllHint" xml:space="preserve"><value>立即終止整次巨集播放</value></data>
   <data name="ActionPaletteDragHint" xml:space="preserve"><value>點擊新增，或拖到序列的目標位置。</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>把左側巨集拖到序列裡，可以複製它的步驟。</value></data>
   <data name="StepProperties" xml:space="preserve"><value>屬性</value></data>

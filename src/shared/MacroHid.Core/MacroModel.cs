@@ -373,6 +373,10 @@ public sealed record RepeatStep(int Count, IReadOnlyList<MacroStep> Steps) : Mac
 
 public sealed record MacroCallStep(string Macro) : MacroStep;
 
+public sealed record StopCurrentSequenceStep : MacroStep;
+
+public sealed record StopAllSequencesStep : MacroStep;
+
 public sealed record PixelWhenStep(
     PixelCondition Condition,
     IReadOnlyList<MacroStep> ThenSteps,

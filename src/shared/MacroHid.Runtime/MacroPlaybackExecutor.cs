@@ -240,7 +240,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     public void Prepare(MacroDocument document, PlaybackExecutionOptions options)
     {
-        if (!CanUseNativePreparedPlan(document, options))
+        if (!CanUseNativePreparedPlan(document, options)
+            || RequiresManagedControlFlow(document, options))
         {
             ClearPreparedPlan();
             return;
@@ -325,6 +326,14 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             return new PlaybackRunResult(PlaybackRunStatus.InputUnavailable, 0, 0, Cancelled: false, InputStats: null);
         }
 
+        using var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cancellationToken = runCancellation.Token;
+
+        if (RequiresManagedControlFlow(document, options))
+        {
+            return RunManagedControlFlow(document, options, runCancellation, cancellationToken);
+        }
+
         var qpcFrequency = clock.Frequency;
         var delayStrategy = configuredDelayStrategy ?? new QpcPlaybackDelayStrategy(clock, options.Precision);
         var iterationsTarget = options.Mode == PlaybackMode.FixedCount ? options.Count : int.MaxValue;
@@ -367,11 +376,22 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         iterationStartTick,
                         iterationDurationTicks,
                         qpcFrequency,
+                        runCancellation.Cancel,
                         cancellationToken,
                         ref sequence,
                         ref actionsSubmitted))
                 {
-                    var monitors = CreateConditionMonitors(document, conditionEvaluator, iterationStartTick, qpcFrequency);
+                    using var pauseCoordinator = HasPauseMainTimelineCondition(document)
+                        ? new PlaybackPauseCoordinator(clock)
+                        : null;
+                    var monitors = CreateConditionMonitors(
+                        document,
+                        conditionEvaluator,
+                        iterationStartTick,
+                        qpcFrequency,
+                        options.Precision,
+                        runCancellation.Cancel,
+                        pauseCoordinator: pauseCoordinator);
                     try
                     {
                         ActivateAllMonitors(monitors);
@@ -382,7 +402,14 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
                             var batch = iterationPlan.Batches[batchIndex];
                             var dueTick = iterationStartTick + batch.DueTick;
-                            delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, options.NoWait);
+                            if (pauseCoordinator is null)
+                            {
+                                delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, options.NoWait);
+                            }
+                            else
+                            {
+                                pauseCoordinator.WaitUntil(dueTick, delayStrategy, qpcFrequency, cancellationToken, options.NoWait);
+                            }
                             cancellationToken.ThrowIfCancellationRequested();
                             RecordJitter(timingRecorder, dueTick, qpcFrequency);
 
@@ -408,7 +435,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                             iterationStartTick + iterationDurationTicks,
                             qpcFrequency,
                             cancellationToken,
-                            options.NoWait);
+                            options.NoWait,
+                            pauseCoordinator);
                         CompleteAllMonitorsAfterCurrentEvaluation(monitors);
                         WaitForTriggeredConditionActions(monitors, cancellationToken);
                         DeactivateAllMonitors(monitors);
@@ -458,6 +486,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         long iterationStartTick,
         long iterationDurationTicks,
         long qpcFrequency,
+        Action stopAllRequested,
         CancellationToken cancellationToken,
         ref uint sequence,
         ref int actionsSubmitted)
@@ -472,30 +501,57 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             return false;
         }
 
-        var monitors = CreateConditionMonitors(document, conditionEvaluator, iterationStartTick, qpcFrequency);
-        try
+        NativePlaybackRunControl? nativeControl = null;
+        if (HasPauseMainTimelineCondition(document)
+            && !NativePlaybackRunControl.TryCreate(out nativeControl))
         {
-            ActivateAllMonitors(monitors);
-            if (!TryRunNativeIteration(document, options, iterationPlan, nativePreparedPlan, cancellationToken, ref sequence, ref actionsSubmitted))
-            {
-                return false;
-            }
-
-            WaitForIterationEndBeforeDeactivatingConditions(
-                monitors,
-                delayStrategy,
-                iterationStartTick + iterationDurationTicks,
-                qpcFrequency,
-                cancellationToken,
-                options.NoWait);
-            CompleteAllMonitorsAfterCurrentEvaluation(monitors);
-            WaitForTriggeredConditionActions(monitors, cancellationToken);
-            DeactivateAllMonitors(monitors);
-            return true;
+            return false;
         }
-        finally
+
+        using (nativeControl)
+        using (var pauseCoordinator = nativeControl is null ? null : new PlaybackPauseCoordinator(clock, nativeControl))
         {
-            DisposeMonitors(monitors);
+            var monitors = CreateConditionMonitors(
+                document,
+                conditionEvaluator,
+                iterationStartTick,
+                qpcFrequency,
+                options.Precision,
+                stopAllRequested,
+                pauseCoordinator: pauseCoordinator);
+            try
+            {
+                ActivateAllMonitors(monitors);
+                if (!TryRunNativeIteration(
+                        document,
+                        options,
+                        iterationPlan,
+                        nativePreparedPlan,
+                        cancellationToken,
+                        ref sequence,
+                        ref actionsSubmitted,
+                        nativeControl))
+                {
+                    return false;
+                }
+
+                WaitForIterationEndBeforeDeactivatingConditions(
+                    monitors,
+                    delayStrategy,
+                    iterationStartTick + iterationDurationTicks,
+                    qpcFrequency,
+                    cancellationToken,
+                    options.NoWait,
+                    pauseCoordinator);
+                CompleteAllMonitorsAfterCurrentEvaluation(monitors);
+                WaitForTriggeredConditionActions(monitors, cancellationToken);
+                DeactivateAllMonitors(monitors);
+                return true;
+            }
+            finally
+            {
+                DisposeMonitors(monitors);
+            }
         }
     }
 
@@ -506,7 +562,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         NativePlaybackPreparedPlan? nativePreparedPlan,
         CancellationToken cancellationToken,
         ref uint sequence,
-        ref int actionsSubmitted)
+        ref int actionsSubmitted,
+        NativePlaybackRunControl? playbackControl = null)
     {
         if (!CanAttemptNativeIteration(options))
         {
@@ -530,7 +587,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 cancellationToken,
                 out diagnostics,
                 out fallbackReason,
-                enableCpuScan: NativePlaybackWarmup.CpuScanReady);
+                enableCpuScan: NativePlaybackWarmup.CpuScanReady,
+                playbackControl: playbackControl);
         }
         else
         {
@@ -540,7 +598,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 cancellationToken,
                 out diagnostics,
                 out fallbackReason,
-                enableCpuScan: NativePlaybackWarmup.CpuScanReady);
+                enableCpuScan: NativePlaybackWarmup.CpuScanReady,
+                playbackControl: playbackControl);
         }
 
         if (!ranNative)
@@ -672,10 +731,16 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         MacroDocument document,
         CompositeConditionEvaluator evaluator,
         long macroStartTick,
-        long qpcFrequency)
+        long qpcFrequency,
+        PrecisionMode precision,
+        Action stopAllRequested,
+        bool applyStepWindows = true,
+        PlaybackPauseCoordinator? pauseCoordinator = null)
     {
         var monitors = new List<ConditionMonitor>();
-        var conditionWindows = CreateConditionTimeWindows(document, qpcFrequency);
+        var conditionWindows = applyStepWindows
+            ? CreateConditionTimeWindows(document, qpcFrequency)
+            : [];
         foreach (var cond in document.EffectiveConditions)
         {
             monitors.Add(new ConditionMonitor(
@@ -684,9 +749,119 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 inputSink,
                 macroResolver,
                 macroStartTick,
-                qpcFrequency));
+                qpcFrequency,
+                precision,
+                stopAllRequested,
+                pauseCoordinator));
         }
         return monitors;
+    }
+
+    private PlaybackRunResult RunManagedControlFlow(
+        MacroDocument document,
+        PlaybackExecutionOptions options,
+        CancellationTokenSource runCancellation,
+        CancellationToken cancellationToken)
+    {
+        var qpcFrequency = clock.Frequency;
+        var delayStrategy = configuredDelayStrategy ?? new QpcPlaybackDelayStrategy(clock, options.Precision);
+        var iterationsTarget = options.Mode == PlaybackMode.FixedCount ? options.Count : int.MaxValue;
+        var iterationsCompleted = 0;
+        var actionsSubmitted = 0;
+        var sequence = 1u;
+        using var conditionEvaluator = new CompositeConditionEvaluator(livePixelEvaluator);
+        try
+        {
+            while (iterationsCompleted < iterationsTarget)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var iterationStartTick = clock.GetTimestamp();
+                using var pauseCoordinator = new PlaybackPauseCoordinator(clock);
+                var monitors = CreateConditionMonitors(
+                    document,
+                    conditionEvaluator,
+                    iterationStartTick,
+                    qpcFrequency,
+                    options.Precision,
+                    runCancellation.Cancel,
+                    applyStepWindows: false,
+                    pauseCoordinator: pauseCoordinator);
+                var runner = new ManagedMacroControlFlowRunner(
+                    inputSink,
+                    delayStrategy,
+                    clock,
+                    GetPixelEvaluator(options.PixelMode),
+                    macroResolver,
+                    pauseCoordinator);
+                MacroControlFlowResult flow;
+                try
+                {
+                    ActivateAllMonitors(monitors);
+                    flow = runner.Run(
+                        document,
+                        iterationStartTick,
+                        qpcFrequency,
+                        cancellationToken,
+                        options.NoWait,
+                        ref sequence,
+                        ref actionsSubmitted);
+                    CompleteAllMonitorsAfterCurrentEvaluation(monitors);
+                    WaitForTriggeredConditionActions(monitors, cancellationToken);
+                    DeactivateAllMonitors(monitors);
+                }
+                finally
+                {
+                    DisposeMonitors(monitors);
+                }
+
+                if (flow == MacroControlFlowResult.StopAll)
+                {
+                    SubmitSafeReleaseActions(ref sequence, ref actionsSubmitted);
+                    return new PlaybackRunResult(
+                        PlaybackRunStatus.Completed,
+                        iterationsCompleted,
+                        actionsSubmitted,
+                        Cancelled: true,
+                        inputSink.GetStats());
+                }
+
+                if (flow == MacroControlFlowResult.StopCurrent)
+                {
+                    iterationsCompleted++;
+                    break;
+                }
+
+                iterationsCompleted++;
+            }
+
+            return new PlaybackRunResult(
+                PlaybackRunStatus.Completed,
+                iterationsCompleted,
+                actionsSubmitted,
+                Cancelled: false,
+                inputSink.GetStats());
+        }
+        catch (OperationCanceledException)
+        {
+            SubmitSafeReleaseActions(ref sequence, ref actionsSubmitted);
+            return new PlaybackRunResult(
+                PlaybackRunStatus.Completed,
+                iterationsCompleted,
+                actionsSubmitted,
+                Cancelled: true,
+                inputSink.GetStats());
+        }
+    }
+
+    private bool RequiresManagedControlFlow(MacroDocument document, PlaybackExecutionOptions options)
+    {
+        return MacroControlFlowInspector.RequiresManagedExecution(document, macroResolver)
+            || (HasPauseMainTimelineCondition(document) && !CanAttemptNativeIteration(options));
+    }
+
+    private static bool HasPauseMainTimelineCondition(MacroDocument document)
+    {
+        return document.EffectiveConditions.Any(condition => condition.ExecutionMode == ConditionExecutionMode.PauseMainTimeline);
     }
 
     private static void ActivateAllMonitors(List<ConditionMonitor> monitors)
@@ -715,11 +890,19 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         long iterationEndTick,
         long qpcFrequency,
         CancellationToken cancellationToken,
-        bool noWait)
+        bool noWait,
+        PlaybackPauseCoordinator? pauseCoordinator = null)
     {
         if (monitors.Count > 0)
         {
-            delayStrategy.WaitUntil(iterationEndTick, qpcFrequency, cancellationToken, noWait);
+            if (pauseCoordinator is null)
+            {
+                delayStrategy.WaitUntil(iterationEndTick, qpcFrequency, cancellationToken, noWait);
+            }
+            else
+            {
+                pauseCoordinator.WaitUntil(iterationEndTick, delayStrategy, qpcFrequency, cancellationToken, noWait);
+            }
         }
     }
 

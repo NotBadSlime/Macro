@@ -15,6 +15,9 @@ public sealed class ConditionMonitor : IDisposable
     private readonly Func<string, MacroDocument?>? macroResolver;
     private readonly long macroStartTick;
     private readonly long qpcFrequency;
+    private readonly PrecisionMode precision;
+    private readonly Action? stopAllRequested;
+    private readonly PlaybackPauseCoordinator? pauseCoordinator;
     private readonly IHighResolutionClock clock = new QpcHighResolutionClock();
     private readonly IPlaybackDelayStrategy delayStrategy;
 
@@ -30,6 +33,29 @@ public sealed class ConditionMonitor : IDisposable
         Func<string, MacroDocument?>? macroResolver = null,
         long macroStartTick = 0,
         long qpcFrequency = 0)
+        : this(
+            directive,
+            evaluator,
+            inputSink,
+            macroResolver,
+            macroStartTick,
+            qpcFrequency,
+            PrecisionMode.ExtremeDuringPlayback,
+            null,
+            null)
+    {
+    }
+
+    internal ConditionMonitor(
+        ConditionalDirective directive,
+        IConditionEvaluator evaluator,
+        IMacroInputSink inputSink,
+        Func<string, MacroDocument?>? macroResolver,
+        long macroStartTick,
+        long qpcFrequency,
+        PrecisionMode precision = PrecisionMode.ExtremeDuringPlayback,
+        Action? stopAllRequested = null,
+        PlaybackPauseCoordinator? pauseCoordinator = null)
     {
         this.directive = directive;
         this.evaluator = evaluator;
@@ -37,7 +63,10 @@ public sealed class ConditionMonitor : IDisposable
         this.macroResolver = macroResolver;
         this.macroStartTick = macroStartTick;
         this.qpcFrequency = qpcFrequency;
-        delayStrategy = new QpcPlaybackDelayStrategy(clock);
+        this.precision = precision;
+        this.stopAllRequested = stopAllRequested;
+        this.pauseCoordinator = pauseCoordinator;
+        delayStrategy = new QpcPlaybackDelayStrategy(clock, precision);
     }
 
     public bool HasTriggered => triggered;
@@ -91,7 +120,7 @@ public sealed class ConditionMonitor : IDisposable
 
     private void PollLoop(CancellationToken cancellationToken)
     {
-        using var precisionContext = PrecisionPlaybackContext.Enter(PrecisionMode.ExtremeDuringPlayback);
+        using var precisionContext = PrecisionPlaybackContext.Enter(precision);
         var frequency = EffectiveFrequency();
         var pollTicks = Math.Max(1, (long)Math.Round(directive.EffectivePollInterval.TotalSeconds * frequency, MidpointRounding.AwayFromZero));
         var nextPollTick = clock.GetTimestamp();
@@ -108,6 +137,9 @@ public sealed class ConditionMonitor : IDisposable
                 if (evaluator.Evaluate(directive.Condition))
                 {
                     triggered = true;
+                    using var pauseLease = directive.ExecutionMode == ConditionExecutionMode.PauseMainTimeline
+                        ? pauseCoordinator?.Pause()
+                        : null;
                     ExecuteThenSteps(cancellationToken);
                     return;
                 }
@@ -131,8 +163,11 @@ public sealed class ConditionMonitor : IDisposable
 
         while (!cancellationToken.IsCancellationRequested && active)
         {
+            pauseCoordinator?.WaitUntilResumed(cancellationToken);
             RuntimeNativeMethods.QueryPerformanceCounter(out var now);
-            var elapsedMs = (now - macroStartTick) * 1000.0 / qpcFrequency;
+            var elapsedTicks = pauseCoordinator?.GetTimelineElapsedTicks(macroStartTick, now)
+                ?? now - macroStartTick;
+            var elapsedMs = elapsedTicks * 1000.0 / qpcFrequency;
 
             if (directive.WindowEnd is { } end && elapsedMs > end.TotalMilliseconds)
             {
@@ -142,7 +177,14 @@ public sealed class ConditionMonitor : IDisposable
             if (directive.WindowStart is { } start && elapsedMs < start.TotalMilliseconds)
             {
                 var dueTick = macroStartTick + (long)Math.Round(start.TotalSeconds * qpcFrequency, MidpointRounding.AwayFromZero);
-                delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait: false);
+                if (pauseCoordinator is null)
+                {
+                    delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait: false);
+                }
+                else
+                {
+                    pauseCoordinator.WaitUntil(dueTick, delayStrategy, qpcFrequency, cancellationToken, noWait: false);
+                }
                 continue;
             }
 
@@ -157,11 +199,51 @@ public sealed class ConditionMonitor : IDisposable
         if (directive.ThenSteps.Count == 0) return;
 
         var qpcFrequency = EffectiveFrequency();
+        var document = new MacroDocument(1, "_condition_then", PlaybackSettings.Default, directive.ThenSteps, null);
+        if (MacroControlFlowInspector.RequiresManagedExecution(document, macroResolver))
+        {
+            uint managedSequence = 100_000;
+            var managedActionsSubmitted = 0;
+            var runner = new ManagedMacroControlFlowRunner(
+                inputSink,
+                delayStrategy,
+                clock,
+                pixelEvaluator: null,
+                macroResolver);
+            var flow = runner.Run(
+                document,
+                clock.GetTimestamp(),
+                qpcFrequency,
+                cancellationToken,
+                noWait: false,
+                ref managedSequence,
+                ref managedActionsSubmitted);
+            if (flow == MacroControlFlowResult.StopAll)
+            {
+                stopAllRequested?.Invoke();
+            }
+            return;
+        }
+
         var plan = CompiledPlaybackPlan.Create(
-            new MacroDocument(1, "_condition_then", PlaybackSettings.Default, directive.ThenSteps, null),
+            document,
             qpcFrequency,
             pixelEvaluator: null,
             macroResolver);
+
+        if (precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter
+            && inputSink is SendInputMacroSink
+            && NativePlaybackEngine.TryRun(
+                plan,
+                precision,
+                cancellationToken,
+                out _,
+                out _,
+                enableCpuScan: false,
+                engineMode: NativePlaybackEngineMode.Inline))
+        {
+            return;
+        }
 
         var startTick = clock.GetTimestamp();
         uint sequence = 100_000;

@@ -184,6 +184,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <!-- Name -->
@@ -201,8 +202,19 @@
                     </ComboBox>
                 </StackPanel>
 
-                <!-- Range -->
+                <!-- Execution mode -->
                 <StackPanel Grid.Row="2" Margin="0,0,0,8">
+                    <TextBlock Text="触发动作执行方式" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="ExecutionModeCombo"
+                              Height="30"
+                              SelectionChanged="ExecutionModeCombo_SelectionChanged">
+                        <ComboBoxItem Content="同时执行" Tag="Parallel" />
+                        <ComboBoxItem Content="暂停主时间线，完成后继续" Tag="PauseMainTimeline" />
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Range -->
+                <StackPanel Grid.Row="3" Margin="0,0,0,8">
                     <TextBlock Text="执行步骤范围" Style="{StaticResource FieldLabel}" />
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -229,7 +241,7 @@
                 </StackPanel>
 
                 <!-- Time window -->
-                <StackPanel Grid.Row="3" Margin="0,0,0,8">
+                <StackPanel Grid.Row="4" Margin="0,0,0,8">
                     <TextBlock Text="触发后时间范围" Style="{StaticResource FieldLabel}" />
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -258,7 +270,7 @@
                 </StackPanel>
 
                 <!-- Region picker -->
-                <StackPanel Grid.Row="4" Margin="0,0,0,8">
+                <StackPanel Grid.Row="5" Margin="0,0,0,8">
                     <TextBlock Text="屏幕区域" Style="{StaticResource FieldLabel}" />
                     <StackPanel Orientation="Horizontal">
                         <TextBlock x:Name="RegionInfoText"
@@ -273,7 +285,7 @@
                 </StackPanel>
 
                 <!-- Pixel-specific -->
-                <StackPanel x:Name="PixelOptionsPanel" Grid.Row="5" Margin="0,0,0,8">
+                <StackPanel x:Name="PixelOptionsPanel" Grid.Row="6" Margin="0,0,0,8">
                     <TextBlock Text="颜色 (RGB)" Style="{StaticResource FieldLabel}" />
                     <WrapPanel>
                         <TextBox x:Name="ColorRBox" Width="50" Height="28" Margin="0,0,4,0" TextChanged="ColorRBox_TextChanged" />
@@ -296,7 +308,7 @@
                 </StackPanel>
 
                 <!-- Text matcher options -->
-                <StackPanel x:Name="TextOptionsPanel" Grid.Row="5" Margin="0,0,0,8" Visibility="Collapsed">
+                <StackPanel x:Name="TextOptionsPanel" Grid.Row="6" Margin="0,0,0,8" Visibility="Collapsed">
                     <TextBlock Text="期望文字" Style="{StaticResource FieldLabel}" />
                     <TextBox x:Name="ExpectedTextBox" Height="28" TextChanged="ExpectedTextBox_TextChanged" />
                     <CheckBox x:Name="ContainsCheckBox" Content="包含匹配" IsChecked="True" Margin="0,6,0,0"
@@ -310,7 +322,7 @@
                 </StackPanel>
 
                 <!-- Then actions -->
-                <StackPanel Grid.Row="6">
+                <StackPanel Grid.Row="7">
                     <DockPanel Margin="0,0,0,6">
                         <TextBlock Text="触发后执行" Style="{StaticResource FieldLabel}" DockPanel.Dock="Left" />
                         <Button x:Name="AddThenActionButton"

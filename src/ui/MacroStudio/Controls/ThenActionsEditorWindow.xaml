@@ -117,6 +117,8 @@
                         <Button x:Name="AddTextButton" Content="文本" Tag="Text" Click="AddAction_Click" />
                         <Button x:Name="AddMacroButton" Content="宏" Tag="Macro" Click="AddAction_Click" />
                         <Button x:Name="AddLoopButton" Content="循环" Tag="Loop" Click="AddAction_Click" />
+                        <Button x:Name="AddStopCurrentButton" Content="停止当前宏序列" Tag="StopCurrent" Click="AddAction_Click" />
+                        <Button x:Name="AddStopAllButton" Content="停止所有宏序列" Tag="StopAll" Click="AddAction_Click" />
                     </StackPanel>
                 </Border>
 

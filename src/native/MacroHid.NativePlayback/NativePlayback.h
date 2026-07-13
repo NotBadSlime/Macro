@@ -124,6 +124,21 @@ extern "C"
         volatile long* cancelFlag,
         MhpRunStats* stats);
 
+    __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
+        void* plan,
+        const MhpRunOptions* options,
+        volatile long* cancelFlag,
+        void* playbackControl,
+        MhpRunStats* stats);
+
+    __declspec(dllexport) void* __cdecl MhpCreatePlaybackControl();
+
+    __declspec(dllexport) void __cdecl MhpPausePlayback(void* playbackControl);
+
+    __declspec(dllexport) void __cdecl MhpResumePlayback(void* playbackControl);
+
+    __declspec(dllexport) void __cdecl MhpDestroyPlaybackControl(void* playbackControl);
+
     __declspec(dllexport) void __cdecl MhpCancel(volatile long* cancelFlag);
 
     __declspec(dllexport) void __cdecl MhpDestroyPlan(void* plan);

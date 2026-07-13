@@ -1198,8 +1198,9 @@ public partial class MacroLibraryPanel : UserControl
         try
         {
             var content = File.ReadAllText(dialog.FileName);
+            var auxiliaryFiles = LoadConversionAuxiliaryFiles(dialog.FileName);
             var import = MacroConversionService.ImportToMcrx(new MacroImportRequest(
-                content, dialog.FileName, MacroConversionFormat.Auto, []));
+                content, dialog.FileName, MacroConversionFormat.Auto, auxiliaryFiles));
             ImportApplied?.Invoke(import.Document);
             var message = LF("ConversionImported", import.SourceFormat, import.Document.Steps.Count);
             ConversionText.Text = message + Environment.NewLine + FormatDiagnostics(import.Diagnostics);
@@ -1211,6 +1212,47 @@ public partial class MacroLibraryPanel : UserControl
             ConversionText.Text = message;
             ResultMessage?.Invoke(ex.Message);
         }
+    }
+
+    private static IReadOnlyList<AuxiliaryMacroFile> LoadConversionAuxiliaryFiles(string selectedFileName)
+    {
+        var directory = Path.GetDirectoryName(selectedFileName);
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        var selectedFullPath = Path.GetFullPath(selectedFileName);
+        var supportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".json",
+            ".mcrx",
+            ".xml",
+            ".lua",
+            ".xmbcs",
+            ".mq",
+            ".txt"
+        };
+        var files = new List<AuxiliaryMacroFile>();
+        foreach (var file in Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories))
+        {
+            if (string.Equals(Path.GetFullPath(file), selectedFullPath, StringComparison.OrdinalIgnoreCase)
+                || !supportedExtensions.Contains(Path.GetExtension(file)))
+            {
+                continue;
+            }
+
+            try
+            {
+                files.Add(new AuxiliaryMacroFile(Path.GetRelativePath(directory, file), File.ReadAllText(file)));
+            }
+            catch
+            {
+                // Auxiliary files are best-effort; the selected macro should still import if one neighbor is unreadable.
+            }
+        }
+
+        return files;
     }
 
     private void ImportRazerModules_Click(object sender, RoutedEventArgs e)

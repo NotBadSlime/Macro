@@ -96,7 +96,8 @@ internal static class NativePlaybackEngine
         out string fallbackReason,
         int outlierThresholdUs = 250,
         bool enableCpuScan = false,
-        NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto)
+        NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
+        NativePlaybackRunControl? playbackControl = null)
     {
         return TryRunTimeline(
             plan.ExportNativeTimeline(),
@@ -107,7 +108,8 @@ internal static class NativePlaybackEngine
             out fallbackReason,
             outlierThresholdUs,
             enableCpuScan,
-            engineMode);
+            engineMode,
+            playbackControl);
     }
 
     public static bool TryRunTimeline(
@@ -119,7 +121,8 @@ internal static class NativePlaybackEngine
         out string fallbackReason,
         int outlierThresholdUs = 250,
         bool enableCpuScan = false,
-        NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto)
+        NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
+        NativePlaybackRunControl? playbackControl = null)
     {
         if (!TryCreatePreparedPlan(timeline, qpcFrequency, out var preparedPlan, out diagnostics, out fallbackReason))
         {
@@ -136,7 +139,8 @@ internal static class NativePlaybackEngine
             outlierThresholdUs,
             enableCpuScan,
             engineMode,
-            includePlanCreateInStartup: true);
+            includePlanCreateInStartup: true,
+            playbackControl: playbackControl);
     }
 
     public static bool TryCreatePreparedPlan(
@@ -205,7 +209,8 @@ internal static class NativePlaybackEngine
         int outlierThresholdUs = 250,
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
-        bool includePlanCreateInStartup = false)
+        bool includePlanCreateInStartup = false,
+        NativePlaybackRunControl? playbackControl = null)
     {
         diagnostics = EmptyDiagnostics("native", string.Empty);
         fallbackReason = string.Empty;
@@ -276,7 +281,14 @@ internal static class NativePlaybackEngine
             {
                 options.NativeEngineMode = (int)mode;
                 var backendName = mode == NativeEngineMode.Standby ? "native-standby" : "native-inline";
-                var runStatus = NativePlaybackInterop.MhpRunPlan(preparedPlan.Handle, ref options, ref cancelFlag, out var stats);
+                var runStatus = playbackControl is null
+                    ? NativePlaybackInterop.MhpRunPlan(preparedPlan.Handle, ref options, ref cancelFlag, out var stats)
+                    : NativePlaybackInterop.MhpRunPlanControlled(
+                        preparedPlan.Handle,
+                        ref options,
+                        ref cancelFlag,
+                        playbackControl.Handle,
+                        out stats);
                 diagnostics = FromStats(
                     stats,
                     runStatus == MhpStatus.Cancelled ? $"{backendName}-cancelled" : backendName,

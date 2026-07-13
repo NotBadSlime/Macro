@@ -40,6 +40,10 @@
 - 文本功能：Unicode 文本输入。
 - 宏：调用宏数据库中的另一个宏。
 - 循环：循环内可继续拖入步骤。
+- 停止当前宏序列：退出当前宏调用，外层调用继续执行。
+- 停止所有宏序列：终止整次播放，效果与再次按下触发键停止一致。
+
+宏可以调用自身。位于序列末尾的自调用会按可取消尾调用运行，不会持续增加调用栈；再次按触发键可以停止。
 
 序列支持多选、框选、拖动排序、拖入循环、复制、剪切、粘贴、删除、上移和下移。点击步骤卡片可直接打开可视化属性编辑器。
 
@@ -60,6 +64,7 @@
 - 屏幕区域或像素坐标。
 - 目标颜色和容差。
 - 触发后执行动作序列。
+- 执行方式：“同时执行”让主时间线和条件动作并行；“暂停主时间线”会等待条件动作完成后从原位置继续。
 
 条件中的动作序列与基础序列使用同一套交互：多选、框选、拖动、复制、剪切、粘贴、拖入循环、行内复制/删除和属性编辑。
 
@@ -73,7 +78,7 @@
 
 触发键支持单键、组合键、Ctrl、Alt、Shift、Win 和鼠标侧键。进程筛选可指定前台窗口进程名，例如 `YuanShen.exe`；只有当前前台进程匹配时该宏才会触发。
 
-精度模式支持基础（0.5ms 目标）、高性能（0.25ms 目标）和极限（0.1ms 目标）。极限会加载 `MacroHid.NativePlayback.dll`，把基础序列热路径放到 x64 C++ in-process 播放循环中执行；密集 1ms/2ms 循环的 auto 模式优先 inline native path，显式 standby 模式保留预热低启动路径。DLL 不可用或当前宏需要 managed 条件激活时会自动回退。目标值是 LatencyProbe 的统计阈值和优化方向，Windows 用户态仍可能出现抢占长尾。
+精度模式支持基础（0.5ms 目标）、高性能（0.25ms 目标）和极限（0.1ms 目标）。极限会加载 `MacroHid.NativePlayback.dll`，把基础序列热路径放到 x64 C++ in-process 播放循环中执行；密集 1ms/2ms 循环的 auto 模式优先 inline native path，显式 standby 模式保留预热低启动路径。条件动作在高性能/极限档会尝试 native-inline；“暂停主时间线”通过独立 native 控制句柄冻结主计划并平移剩余时间戳，不会恢复后集中补发。DLL 不可用或当前宏包含递归/控制流时会自动使用可取消 managed 路径。目标值是 LatencyProbe 的统计阈值和优化方向，Windows 用户态仍可能出现抢占长尾。
 
 ### 6. MCRX JSON
 
@@ -83,7 +88,7 @@ MCRX JSON 面板显示当前宏的原始 JSON。修改 JSON 后，合法内容�
 
 宏数据库中提供导入/导出：
 
-- 导入：`.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro。
+- 导入：`.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro、GIMacros JSON。
 - 雷云模块：先加载模块 XML，再导入主宏，可保留嵌套宏调用关系。
 - 导出：可将当前宏导出为支持的目标格式。
 
@@ -137,6 +142,10 @@ The base sequence runs immediately after playback starts. Add steps by dragging 
 - Text: Unicode text input.
 - Macro: call another macro from the library.
 - Loop: contains nested steps.
+- Stop current sequence: return from the current macro call and continue its caller.
+- Stop all sequences: cancel the entire playback, like pressing the trigger again.
+
+A macro may call itself. A tail self-call stays cancellable without continuously growing the managed call stack.
 
 The sequence supports multi-select, rectangle select, drag sorting, drop into loops, copy, cut, paste, delete, move up, and move down. Click a step card to edit its properties visually.
 
@@ -157,6 +166,7 @@ A condition can include:
 - Screen region or pixel coordinate.
 - Target color and tolerance.
 - Then-actions sequence.
+- Execution mode: run then-actions in parallel, or pause the main timeline and resume after they finish.
 
 Condition then-actions use the same interaction engine as the base sequence: multi-select, rectangle select, drag, copy, cut, paste, drop into loops, row copy/delete buttons, and property editing.
 
@@ -170,7 +180,7 @@ Each macro supports three modes:
 
 Triggers support single keys, chords, Ctrl, Alt, Shift, Win, and mouse side buttons. The process filter can restrict playback to a foreground process such as `YuanShen.exe`; the macro triggers only when the current foreground process matches.
 
-Precision mode supports Basic (0.5ms target), High Performance (0.25ms target), and Extreme (0.1ms target). Extreme loads `MacroHid.NativePlayback.dll`, moving the base-sequence hot path into an x64 C++ in-process playback loop; dense 1ms/2ms loops prefer the inline native path in auto mode, while explicit standby mode keeps the warmed low-startup path. When the DLL is unavailable or the current macro needs managed condition activation, MacroHID falls back automatically. Targets are LatencyProbe thresholds and optimization goals; Windows user mode can still produce preemption tails.
+Precision mode supports Basic (0.5ms target), High Performance (0.25ms target), and Extreme (0.1ms target). Extreme loads `MacroHid.NativePlayback.dll`, moving the base-sequence hot path into an x64 C++ in-process playback loop; dense 1ms/2ms loops prefer the inline native path in auto mode, while explicit standby mode keeps the warmed low-startup path. Condition then-actions attempt native-inline in High Performance and Extreme. Pause mode freezes the native main plan through a per-run control handle and shifts all remaining deadlines, so resume does not burst missed actions. Recursive/control-flow macros use the cancellable managed path when required. Targets are LatencyProbe thresholds and optimization goals; Windows user mode can still produce preemption tails.
 
 ### 6. MCRX JSON
 
@@ -180,7 +190,7 @@ The MCRX JSON panel shows the current macro document. Valid edits update the bas
 
 Import/export lives in the macro library:
 
-- Import: `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro.
+- Import: `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, GIMacros JSON.
 - Razer modules: load module XML files before importing the main macro to preserve nested macro-call relationships where possible.
 - Export: save the current macro to supported target formats.
 

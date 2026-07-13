@@ -1,6 +1,6 @@
 # MacroHID
 
-Current stable release: `1.1.0`
+Current stable release: `1.2.0`
 
 ## 中文
 
@@ -13,7 +13,7 @@ MacroHID 是一个面向 Windows 10/11 x64 的本机宏自动化工具。当前�
 - 播放模式：按下切换循环、按住循环、播放 N 次，并支持执行中停止。
 - 指令覆盖：键盘按下/抬起、Unicode 文本、鼠标按下/抬起、坐标点击、相对/绝对移动、滚轮、水平滚轮、媒体键、延迟、随机延迟、循环、调用宏、像素条件。
 - 条件序列：一个宏包含基础序列和条件序列；基础序列直接执行，条件序列在播放后按像素/时间窗口等条件触发 then-actions。
-- 内置转换器：支持 MacroHID `.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、按键精灵/QMacro 的导入导出，不依赖外部 Electron 转换器。
+- 内置转换器：支持 MacroHID `.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、按键精灵/QMacro、GIMacros JSON 的导入导出，不依赖外部 Electron 转换器。
 - 三档用户态精度模式：基础（目标 0.5ms）、高性能（目标 0.25ms）、极限（目标 0.1ms）；极限档会优先使用进程内 x64 native playback DLL。密集 1ms/2ms 循环在 auto 模式下优先使用 inline native 路径压低单步尖峰，显式 standby 模式保留 2 worker 低启动路径；DLL 不可用时自动回退到 managed ultra。
 
 ### 快速开始
@@ -43,6 +43,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 
 - [安装说明](docs/installer.md)
 - [使用说明](docs/usage.md)
+- [1.2.0 正式版说明](docs/release-1.2.0.md)
 - [1.1.0 正式版说明](docs/release-1.1.0.md)
 - [1.0.0 正式版说明](docs/release-1.0.0.md)
 - [精度说明](docs/precision.md)
@@ -65,7 +66,7 @@ MacroHID is a local Windows input macro tool for Windows 10/11 x64. The current 
 - Playback modes: toggle loop, hold loop, fixed N runs, and stop while running.
 - Step coverage: keyboard down/up, Unicode text, mouse down/up, coordinate clicks, relative/absolute movement, vertical/horizontal wheel, media keys, fixed/random waits, loops, macro calls, and pixel conditions.
 - Condition sequences: each macro has a base sequence and condition directives; the base sequence runs directly, while condition then-actions run only after their condition is met.
-- Built-in converter: imports/exports MacroHID `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, and QMacro formats without launching the external Electron converter.
+- Built-in converter: imports/exports MacroHID `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, and GIMacros JSON formats without launching the external Electron converter.
 - Three user-mode precision modes: Basic (0.5ms target), High Performance (0.25ms target), and Extreme (0.1ms target); Extreme prefers the in-process x64 native playback DLL. Dense 1ms/2ms loops prefer the inline native path in auto mode to reduce per-step spikes, while explicit standby mode keeps a two-worker low-startup path; MacroHID automatically falls back to managed ultra when the DLL is unavailable.
 
 ### Quick Start
@@ -95,6 +96,7 @@ artifacts\installer\MacroHID-Setup-x64.exe
 
 - [Installation](docs/installer.md)
 - [Usage Guide](docs/usage.md)
+- [1.2.0 Release Notes](docs/release-1.2.0.md)
 - [1.1.0 Release Notes](docs/release-1.1.0.md)
 - [1.0.0 Release Notes](docs/release-1.0.0.md)
 - [Precision Notes](docs/precision.md)

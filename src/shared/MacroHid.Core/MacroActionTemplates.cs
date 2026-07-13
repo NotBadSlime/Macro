@@ -10,7 +10,9 @@ public enum MacroActionTemplateKind
     Text,
     Macro,
     Loop,
-    Pixel
+    Pixel,
+    StopCurrent,
+    StopAll
 }
 
 public static class MacroActionTemplateFactory
@@ -40,6 +42,8 @@ public static class MacroActionTemplateFactory
             MacroActionTemplateKind.Text => [new TextStep("text")],
             MacroActionTemplateKind.Macro => [new MacroCallStep(string.Empty)],
             MacroActionTemplateKind.Loop => [new RepeatStep(2, [])],
+            MacroActionTemplateKind.StopCurrent => [new StopCurrentSequenceStep()],
+            MacroActionTemplateKind.StopAll => [new StopAllSequencesStep()],
             MacroActionTemplateKind.Pixel => [new PixelWhenStep(
                 new PixelCondition(new PixelCoordinate(CoordinateScope.Screen, 0, 0), new RgbColor(0, 0, 0), 0),
                 [

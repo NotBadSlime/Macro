@@ -98,6 +98,85 @@ namespace
         return cancelFlag != nullptr && *cancelFlag != 0;
     }
 
+    struct PlaybackControl
+    {
+        volatile long pauseCount = 0;
+        volatile long pauseFlag = 0;
+        volatile long long pauseStartedTick = 0;
+        volatile long long totalPausedTicks = 0;
+    };
+
+    bool IsPaused(const PlaybackControl* control)
+    {
+        return control != nullptr && control->pauseFlag != 0;
+    }
+
+    int64_t TotalPausedTicks(const PlaybackControl* control)
+    {
+        if (control == nullptr)
+        {
+            return 0;
+        }
+
+        return InterlockedCompareExchange64(
+            const_cast<volatile long long*>(&control->totalPausedTicks),
+            0,
+            0);
+    }
+
+    bool WaitForResume(PlaybackControl* control, volatile long* cancelFlag)
+    {
+        while (IsPaused(control))
+        {
+            if (IsCancelled(cancelFlag))
+            {
+                return false;
+            }
+
+            long pausedValue = 1;
+            WaitOnAddress(
+                const_cast<volatile long*>(&control->pauseFlag),
+                &pausedValue,
+                sizeof(pausedValue),
+                10);
+        }
+
+        return !IsCancelled(cancelFlag);
+    }
+
+    bool SpinUntilControlled(
+        int64_t baseDueTick,
+        int64_t rescueDelayTicks,
+        PlaybackControl* control,
+        volatile long* cancelFlag,
+        int64_t& effectiveDueTick)
+    {
+        while (!IsCancelled(cancelFlag))
+        {
+            if (!WaitForResume(control, cancelFlag))
+            {
+                return false;
+            }
+
+            const int64_t pausedTicks = TotalPausedTicks(control);
+            effectiveDueTick = baseDueTick + pausedTicks;
+            const int64_t targetTick = effectiveDueTick + rescueDelayTicks;
+            while (!IsCancelled(cancelFlag)
+                && !IsPaused(control)
+                && QueryCounter() < targetTick)
+            {
+                _mm_pause();
+            }
+
+            if (!IsPaused(control))
+            {
+                return !IsCancelled(cancelFlag);
+            }
+        }
+
+        return false;
+    }
+
     DWORD CurrentProcessorNumber()
     {
         PROCESSOR_NUMBER processor{};
@@ -1069,6 +1148,7 @@ namespace
     struct StandbyBatchResult
     {
         int64_t actualTick = 0;
+        int64_t dueTick = 0;
         DWORD cpu = 0;
         int64_t submitDurationUs = 0;
         UINT sent = 0;
@@ -1083,6 +1163,7 @@ namespace
         const NativePlan* plan;
         const MhpRunOptions* options;
         volatile long* cancelFlag;
+        PlaybackControl* playbackControl;
         int64_t frequency;
         int64_t startTick;
         int64_t wakeStartTick;
@@ -1109,6 +1190,7 @@ namespace
             const NativePlan* plan,
             const MhpRunOptions* options,
             volatile long* cancelFlag,
+            PlaybackControl* playbackControl,
             int64_t frequency,
             int64_t startTick,
             int64_t wakeStartTick,
@@ -1120,6 +1202,7 @@ namespace
             : plan(plan),
               options(options),
               cancelFlag(cancelFlag),
+              playbackControl(playbackControl),
               frequency(frequency),
               startTick(startTick),
               wakeStartTick(wakeStartTick),
@@ -1241,6 +1324,7 @@ namespace
             NativePlan* plan,
             const MhpRunOptions& options,
             volatile long* cancelFlag,
+            PlaybackControl* playbackControl,
             MhpRunStats& stats)
         {
             if (!IsReady())
@@ -1276,6 +1360,7 @@ namespace
                     plan,
                     &options,
                     cancelFlag,
+                    playbackControl,
                     frequency,
                     afterPlaybackSetup,
                     wakeStart,
@@ -1396,16 +1481,18 @@ namespace
                 }
 
                 const auto& batch = context.plan->batches[index];
-                const int64_t dueTick = timelineStart + batch.dueTicks;
-                const int64_t targetTick = workerIndex == 0
-                    ? dueTick
-                    : dueTick + context.helperRescueDelayTicks;
-                while (context.cancelled.load(std::memory_order_acquire) == 0
-                    && !IsCancelled(context.cancelFlag)
-                    && context.batchDoneGates[index].load(std::memory_order_acquire) == 0
-                    && QueryCounter() < targetTick)
+                const int64_t baseDueTick = timelineStart + batch.dueTicks;
+                int64_t dueTick = baseDueTick;
+                const int64_t rescueDelayTicks = workerIndex == 0 ? 0 : context.helperRescueDelayTicks;
+                if (!SpinUntilControlled(
+                        baseDueTick,
+                        rescueDelayTicks,
+                        context.playbackControl,
+                        context.cancelFlag,
+                        dueTick))
                 {
-                    PauseProcessor();
+                    context.cancelled.store(1, std::memory_order_release);
+                    break;
                 }
 
                 if (context.cancelled.load(std::memory_order_acquire) != 0
@@ -1421,6 +1508,17 @@ namespace
                     static_cast<LONG>(workerIndex + 1),
                     0) == 0)
                 {
+                    if (!SpinUntilControlled(
+                            baseDueTick,
+                            0,
+                            context.playbackControl,
+                            context.cancelFlag,
+                            dueTick))
+                    {
+                        context.cancelled.store(1, std::memory_order_release);
+                        context.batchDoneGates[index].store(1, std::memory_order_release);
+                        break;
+                    }
                     SubmitStandbyBatch(context, batch, index, workerIndex, dueTick);
                     context.batchDoneGates[index].store(1, std::memory_order_release);
                 }
@@ -1452,6 +1550,7 @@ namespace
         {
             auto& result = context.results[index];
             result.actualTick = QueryCounter();
+            result.dueTick = dueTick;
             result.cpu = CurrentProcessorNumber();
             result.sent = batch.inputCount;
             result.workerIndex = workerIndex;
@@ -1475,8 +1574,6 @@ namespace
                     result.nativeInputsSubmitted = batch.inputCount;
                 }
             }
-
-            (void)dueTick;
         }
 
         MhpStatus AggregateContext(StandbyRunContext& context, MhpRunStats& stats)
@@ -1513,8 +1610,7 @@ namespace
                 }
 
                 const auto& batch = context.plan->batches[index];
-                const int64_t timelineStart = context.timelineStartTick.load(std::memory_order_acquire);
-                const int64_t dueTick = (timelineStart == 0 ? context.startTick : timelineStart) + batch.dueTicks;
+                const int64_t dueTick = result.dueTick;
                 const int64_t lateUs = std::max<int64_t>(0, ToMicroseconds(result.actualTick - dueTick, context.frequency));
                 lateSamples.push_back(lateUs);
                 if (lateUs > stats.maxLateUs)
@@ -1693,12 +1789,14 @@ namespace
     }
 
     MhpStatus WaitUntilDeadline(
-        int64_t dueTick,
+        int64_t baseDueTick,
         const MhpRunOptions& options,
         int64_t frequency,
         volatile long* cancelFlag,
+        PlaybackControl* playbackControl,
         WaitableTimer& timer,
-        MhpRunStats& stats)
+        MhpRunStats& stats,
+        int64_t& effectiveDueTick)
     {
         const int64_t finalSpinUs = options.precisionMode == MhpUltraLowJitter ? 2500 : 800;
 
@@ -1709,10 +1807,22 @@ namespace
                 return MhpCancelled;
             }
 
+            if (!WaitForResume(playbackControl, cancelFlag))
+            {
+                return MhpCancelled;
+            }
+
+            const int64_t pauseTicks = TotalPausedTicks(playbackControl);
+            effectiveDueTick = baseDueTick + pauseTicks;
+
             const int64_t now = QueryCounter();
-            const int64_t remainingTicks = dueTick - now;
+            const int64_t remainingTicks = effectiveDueTick - now;
             if (remainingTicks <= 0)
             {
+                if (IsPaused(playbackControl) || pauseTicks != TotalPausedTicks(playbackControl))
+                {
+                    continue;
+                }
                 stats.waitPathLateCount++;
                 return MhpOk;
             }
@@ -1729,9 +1839,16 @@ namespace
             }
 
             stats.waitPathSpinCount++;
-            while (!IsCancelled(cancelFlag) && QueryCounter() < dueTick)
+            while (!IsCancelled(cancelFlag)
+                && !IsPaused(playbackControl)
+                && QueryCounter() < effectiveDueTick)
             {
                 PauseProcessor();
+            }
+
+            if (IsPaused(playbackControl) || pauseTicks != TotalPausedTicks(playbackControl))
+            {
+                continue;
             }
 
             return IsCancelled(cancelFlag) ? MhpCancelled : MhpOk;
@@ -1850,6 +1967,16 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlan(
     volatile long* cancelFlag,
     MhpRunStats* stats)
 {
+    return MhpRunPlanControlled(plan, options, cancelFlag, nullptr, stats);
+}
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
+    void* plan,
+    const MhpRunOptions* options,
+    volatile long* cancelFlag,
+    void* playbackControl,
+    MhpRunStats* stats)
+{
     if (plan == nullptr || options == nullptr || stats == nullptr)
     {
         SetLastErrorText(L"invalid null argument");
@@ -1863,12 +1990,13 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlan(
     stats->maxLateBatchIndex = std::numeric_limits<uint32_t>::max();
     stats->maxLateCpu = std::numeric_limits<uint32_t>::max();
     stats->maxLateWorker = -1;
+    auto* control = static_cast<PlaybackControl*>(playbackControl);
 
     if (options->precisionMode == MhpUltraLowJitter
         && options->nativeEngineMode != MhpNativeEngineInline
         && g_standbyEngine.IsReady())
     {
-        auto standbyStatus = g_standbyEngine.Run(nativePlan, *options, cancelFlag, *stats);
+        auto standbyStatus = g_standbyEngine.Run(nativePlan, *options, cancelFlag, control, *stats);
         if (standbyStatus == MhpOk || standbyStatus == MhpCancelled || options->nativeEngineMode == MhpNativeEngineStandby)
         {
             return standbyStatus;
@@ -1903,7 +2031,8 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlan(
         redundantState.cancelFlag = cancelFlag;
         std::vector<std::thread> redundantThreads;
         bool redundantAvailable = false;
-        const bool singleOwnerFastLane = ShouldUseSingleOwnerFastLane(*nativePlan, *options, frequency);
+        const bool singleOwnerFastLane = control == nullptr
+            && ShouldUseSingleOwnerFastLane(*nativePlan, *options, frequency);
         redundantState.helperRescueDelayTicks = singleOwnerFastLane ? HelperRescueDelayTicks(frequency) : 0;
         if (options->precisionMode == MhpUltraLowJitter)
         {
@@ -1929,7 +2058,8 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlan(
 
         for (const auto& batch : nativePlan->batches)
         {
-            const int64_t dueTick = startTick + batch.dueTicks;
+            const int64_t baseDueTick = startTick + batch.dueTicks;
+            int64_t dueTick = baseDueTick + TotalPausedTicks(control);
             int64_t actualTick = 0;
             int64_t submitDurationUs = 0;
             UINT sent = batch.inputCount;
@@ -1937,7 +2067,8 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlan(
             uint32_t nativeInputsSubmitted = 0;
             DWORD currentCpu = lastCpu;
             int workerIndex = 0;
-            const bool useRedundantWaiter = redundantAvailable
+            const bool useRedundantWaiter = control == nullptr
+                && redundantAvailable
                 && ShouldUseRedundantWaiter(*options, previousDueTick, startTick, dueTick, frequency);
 
             if (useRedundantWaiter)
@@ -1976,7 +2107,15 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlan(
             }
             else
             {
-                status = WaitUntilDeadline(dueTick, *options, frequency, cancelFlag, timer, *stats);
+                status = WaitUntilDeadline(
+                    baseDueTick,
+                    *options,
+                    frequency,
+                    cancelFlag,
+                    control,
+                    timer,
+                    *stats,
+                    dueTick);
                 if (status == MhpCancelled)
                 {
                     break;
@@ -2091,6 +2230,66 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlan(
         SetLastErrorText(L"");
     }
     return status;
+}
+
+extern "C" __declspec(dllexport) void* __cdecl MhpCreatePlaybackControl()
+{
+    try
+    {
+        return new PlaybackControl();
+    }
+    catch (...)
+    {
+        return nullptr;
+    }
+}
+
+extern "C" __declspec(dllexport) void __cdecl MhpPausePlayback(void* playbackControl)
+{
+    auto* control = static_cast<PlaybackControl*>(playbackControl);
+    if (control == nullptr)
+    {
+        return;
+    }
+
+    if (InterlockedIncrement(&control->pauseCount) == 1)
+    {
+        InterlockedExchange64(&control->pauseStartedTick, QueryCounter());
+        InterlockedExchange(&control->pauseFlag, 1);
+    }
+}
+
+extern "C" __declspec(dllexport) void __cdecl MhpResumePlayback(void* playbackControl)
+{
+    auto* control = static_cast<PlaybackControl*>(playbackControl);
+    if (control == nullptr)
+    {
+        return;
+    }
+
+    const long remaining = InterlockedDecrement(&control->pauseCount);
+    if (remaining > 0)
+    {
+        return;
+    }
+
+    if (remaining < 0)
+    {
+        InterlockedExchange(&control->pauseCount, 0);
+    }
+
+    const int64_t started = InterlockedExchange64(&control->pauseStartedTick, 0);
+    if (started > 0)
+    {
+        InterlockedAdd64(&control->totalPausedTicks, std::max<int64_t>(0, QueryCounter() - started));
+    }
+    InterlockedExchange(&control->pauseFlag, 0);
+    WakeByAddressAll(const_cast<long*>(&control->pauseFlag));
+}
+
+extern "C" __declspec(dllexport) void __cdecl MhpDestroyPlaybackControl(void* playbackControl)
+{
+    delete static_cast<PlaybackControl*>(playbackControl);
 }
 
 extern "C" __declspec(dllexport) void __cdecl MhpCancel(volatile long* cancelFlag)

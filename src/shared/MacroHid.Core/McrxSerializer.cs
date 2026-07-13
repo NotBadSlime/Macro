@@ -109,6 +109,14 @@ public static class McrxSerializer
                 ["type"] = "macro.call",
                 ["macro"] = macro.Macro
             },
+            StopCurrentSequenceStep => new JsonObject
+            {
+                ["type"] = "sequence.stop-current"
+            },
+            StopAllSequencesStep => new JsonObject
+            {
+                ["type"] = "sequence.stop-all"
+            },
             PixelWhenStep pixel => SerializePixelWhen(pixel),
             _ => throw new NotSupportedException($"Unsupported macro step '{step.GetType().Name}'.")
         };
@@ -345,6 +353,8 @@ public static class McrxSerializer
             obj["pollMs"] = ToMillisecondsValue(poll);
         if (cond.OnConflict != ConflictBehavior.Warn)
             obj["onConflict"] = cond.OnConflict.ToString();
+        if (cond.ExecutionMode != ConditionExecutionMode.Parallel)
+            obj["executionMode"] = cond.ExecutionMode.ToString();
         if (cond.ThenSteps.Count > 0)
             obj["then"] = SerializeSteps(cond.ThenSteps);
 

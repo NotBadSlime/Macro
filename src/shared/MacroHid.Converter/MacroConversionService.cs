@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using MacroHid.Core;
@@ -15,7 +16,8 @@ public static class MacroConversionService
         new(MacroConversionFormat.RazerSynapseXml, "Razer Synapse XML", ".xml", "Razer Synapse XML (*.xml)|*.xml", true, true),
         new(MacroConversionFormat.Lua, "Lua / Logitech Lua", ".lua", "Lua macro (*.lua)|*.lua", true, true),
         new(MacroConversionFormat.XMouse, "XMouse", ".xmbcs", "XMouse profile (*.xmbcs;*.xml)|*.xmbcs;*.xml", true, true),
-        new(MacroConversionFormat.QMacro, "QMacro / 按键精灵", ".mq", "QMacro script (*.mq;*.txt)|*.mq;*.txt", true, true)
+        new(MacroConversionFormat.QMacro, "QMacro / 按键精灵", ".mq", "QMacro script (*.mq;*.txt)|*.mq;*.txt", true, true),
+        new(MacroConversionFormat.GIMacrosJson, "GIMacros JSON", ".json", "GIMacros JSON (*.json)|*.json", true, true)
     ];
 
     public static IReadOnlyList<MacroFormatInfo> GetFormats()
@@ -80,6 +82,11 @@ public static class MacroConversionService
             return MacroConversionFormat.QMacro;
         }
 
+        if (LooksLikeGIMacrosJson(content))
+        {
+            return MacroConversionFormat.GIMacrosJson;
+        }
+
         return MacroConversionFormat.Auto;
     }
 
@@ -103,6 +110,7 @@ public static class MacroConversionService
             MacroConversionFormat.Lua => ImportLua(request.Content, diagnostics),
             MacroConversionFormat.XMouse => ImportXMouse(request.Content, diagnostics),
             MacroConversionFormat.QMacro => ImportQMacro(request.Content, diagnostics),
+            MacroConversionFormat.GIMacrosJson => ImportGIMacrosJson(request.Content, request.FileName, request.AuxiliaryFiles ?? [], diagnostics),
             _ => throw new NotSupportedException($"Unsupported import format '{format}'.")
         };
 
@@ -125,6 +133,7 @@ public static class MacroConversionService
             MacroConversionFormat.Lua => ExportLua(document, diagnostics),
             MacroConversionFormat.XMouse => ExportXMouse(document, diagnostics),
             MacroConversionFormat.QMacro => ExportQMacro(document, diagnostics),
+            MacroConversionFormat.GIMacrosJson => ExportGIMacrosJson(document, diagnostics),
             _ => throw new NotSupportedException($"Unsupported export format '{targetFormat}'.")
         };
 
@@ -150,6 +159,518 @@ public static class MacroConversionService
     public static string GetDefaultExtension(MacroConversionFormat format)
     {
         return FormatInfos.FirstOrDefault(item => item.Format == format)?.DefaultExtension ?? ".txt";
+    }
+
+    private static MacroDocument ImportGIMacrosJson(
+        string content,
+        string? fileName,
+        IReadOnlyList<AuxiliaryMacroFile> auxiliaryFiles,
+        List<MacroConversionDiagnostic> diagnostics)
+    {
+        using var document = ParseGIMacrosJsonDocument(content);
+        if (document.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new FormatException("GIMacros JSON must be an array.");
+        }
+
+        var auxiliaryMap = BuildGIMacrosAuxiliaryMap(auxiliaryFiles, fileName);
+        var virtualPath = NormalizeGIMacrosPath(fileName ?? string.Empty);
+        var virtualDirectory = GIMacrosDirectoryName(virtualPath);
+        var steps = ParseGIMacrosBlock(
+            document.RootElement,
+            virtualDirectory,
+            auxiliaryMap,
+            diagnostics,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            depth: 0);
+        var name = Path.GetFileNameWithoutExtension(fileName ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = "GIMacros JSON";
+        }
+
+        return new MacroDocument(1, name, steps);
+    }
+
+    private static List<MacroStep> ParseGIMacrosBlock(
+        JsonElement block,
+        string currentDirectory,
+        IReadOnlyDictionary<string, AuxiliaryMacroFile> auxiliaryFiles,
+        List<MacroConversionDiagnostic> diagnostics,
+        HashSet<string> importStack,
+        int depth)
+    {
+        if (depth > 32)
+        {
+            diagnostics.Warning("gimacros.maxDepth", "GIMacros nested loop/import depth exceeded 32; remaining commands were skipped.");
+            return [];
+        }
+
+        if (block.ValueKind != JsonValueKind.Array)
+        {
+            diagnostics.Warning("gimacros.blockShape", "GIMacros block must be a JSON array and was skipped.");
+            return [];
+        }
+
+        var steps = new List<MacroStep>();
+        foreach (var item in block.EnumerateArray())
+        {
+            if (!IsGIMacrosCommand(item, out var command))
+            {
+                diagnostics.Warning("gimacros.commandShape", "GIMacros command must be an array whose first item is a command name.");
+                continue;
+            }
+
+            switch (command)
+            {
+                case "kd":
+                    AddGIMacrosKey(steps, item, KeyActionKind.Down, diagnostics);
+                    break;
+                case "ku":
+                    AddGIMacrosKey(steps, item, KeyActionKind.Up, diagnostics);
+                    break;
+                case "md":
+                    AddGIMacrosMouseButton(steps, item, ButtonActionKind.Down);
+                    break;
+                case "mu":
+                    AddGIMacrosMouseButton(steps, item, ButtonActionKind.Up);
+                    break;
+                case "wait":
+                    AddWaitIfNeeded(steps, GIMacrosNumberAt(item, 1));
+                    break;
+                case "view":
+                    AddGIMacrosView(steps, item);
+                    break;
+                case "loop":
+                    AddGIMacrosLoop(steps, item, currentDirectory, auxiliaryFiles, diagnostics, importStack, depth);
+                    break;
+                case "import":
+                    AddGIMacrosImport(steps, item, currentDirectory, auxiliaryFiles, diagnostics, importStack, depth);
+                    break;
+                default:
+                    diagnostics.Warning("gimacros.unsupportedCommand", $"Unsupported GIMacros command '{command}' was skipped.");
+                    break;
+            }
+        }
+
+        return steps;
+    }
+
+    private static void AddGIMacrosKey(List<MacroStep> steps, JsonElement command, KeyActionKind kind, List<MacroConversionDiagnostic> diagnostics)
+    {
+        var keyName = GIMacrosStringAt(command, 1);
+        if (TryParseKey(keyName, out var key, out var modifiers))
+        {
+            steps.Add(new KeyStep(kind, key, modifiers, TimeSpan.Zero));
+            AddWaitIfNeeded(steps, GIMacrosNumberAt(command, 2));
+        }
+        else
+        {
+            diagnostics.Warning("gimacros.unsupportedKey", $"Unsupported GIMacros key '{keyName}' was skipped.");
+        }
+    }
+
+    private static void AddGIMacrosMouseButton(List<MacroStep> steps, JsonElement command, ButtonActionKind kind)
+    {
+        steps.Add(new MouseButtonStep(ParseMouseButton(GIMacrosStringAt(command, 1, "left")), kind, TimeSpan.Zero));
+        AddWaitIfNeeded(steps, GIMacrosNumberAt(command, 2));
+    }
+
+    private static void AddGIMacrosView(List<MacroStep> steps, JsonElement command)
+    {
+        if (!TryGetJsonArrayItem(command, 1, out var delta) || delta.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        var dx = (int)Math.Round(GIMacrosNumberAt(delta, 0), MidpointRounding.AwayFromZero);
+        var dy = (int)Math.Round(GIMacrosNumberAt(delta, 1), MidpointRounding.AwayFromZero);
+        var durationMs = Math.Max(0, GIMacrosNumberAt(command, 2));
+        var stepCount = durationMs <= 0
+            ? 1
+            : Math.Max(1, (int)Math.Round(durationMs, MidpointRounding.AwayFromZero));
+        var stepDuration = stepCount == 0 ? 0 : durationMs / stepCount;
+        var previousX = 0;
+        var previousY = 0;
+
+        for (var i = 1; i <= stepCount; i++)
+        {
+            var nextX = (int)Math.Round(dx * i / (double)stepCount, MidpointRounding.AwayFromZero);
+            var nextY = (int)Math.Round(dy * i / (double)stepCount, MidpointRounding.AwayFromZero);
+            var moveX = nextX - previousX;
+            var moveY = nextY - previousY;
+            previousX = nextX;
+            previousY = nextY;
+
+            if (moveX == 0 && moveY == 0)
+            {
+                AddWaitIfNeeded(steps, stepDuration);
+            }
+            else
+            {
+                steps.Add(new MouseMoveStep(MouseMoveMode.Relative, moveX, moveY, TimeSpan.FromMilliseconds(stepDuration)));
+            }
+        }
+    }
+
+    private static void AddGIMacrosLoop(
+        List<MacroStep> steps,
+        JsonElement command,
+        string currentDirectory,
+        IReadOnlyDictionary<string, AuxiliaryMacroFile> auxiliaryFiles,
+        List<MacroConversionDiagnostic> diagnostics,
+        HashSet<string> importStack,
+        int depth)
+    {
+        if (!TryGetJsonArrayItem(command, 2, out var body) || body.ValueKind != JsonValueKind.Array)
+        {
+            diagnostics.Warning("gimacros.loopShape", "GIMacros loop body must be an array and was skipped.");
+            return;
+        }
+
+        var count = Math.Max(1, (int)Math.Round(GIMacrosNumberAt(command, 1, 1), MidpointRounding.AwayFromZero));
+        steps.Add(new RepeatStep(count, ParseGIMacrosBlock(body, currentDirectory, auxiliaryFiles, diagnostics, importStack, depth + 1)));
+    }
+
+    private static void AddGIMacrosImport(
+        List<MacroStep> steps,
+        JsonElement command,
+        string currentDirectory,
+        IReadOnlyDictionary<string, AuxiliaryMacroFile> auxiliaryFiles,
+        List<MacroConversionDiagnostic> diagnostics,
+        HashSet<string> importStack,
+        int depth)
+    {
+        var importName = GIMacrosStringAt(command, 1);
+        if (string.IsNullOrWhiteSpace(importName))
+        {
+            diagnostics.Warning("gimacros.importNameMissing", "GIMacros import command did not include a file name.");
+            return;
+        }
+
+        var candidates = GIMacrosImportCandidates(currentDirectory, importName);
+        var matchedPath = candidates.FirstOrDefault(auxiliaryFiles.ContainsKey);
+        if (matchedPath is null)
+        {
+            diagnostics.Warning("gimacros.importMissing", $"GIMacros import '{importName}' was not provided as an auxiliary file.");
+            steps.Add(new MacroCallStep(Path.GetFileNameWithoutExtension(importName)));
+            return;
+        }
+
+        if (!importStack.Add(matchedPath))
+        {
+            diagnostics.Warning("gimacros.importCircular", $"GIMacros import '{importName}' has a circular reference and was skipped.");
+            return;
+        }
+
+        try
+        {
+            using var importedDocument = ParseGIMacrosJsonDocument(auxiliaryFiles[matchedPath].Content);
+            steps.AddRange(ParseGIMacrosBlock(
+                importedDocument.RootElement,
+                GIMacrosDirectoryName(matchedPath),
+                auxiliaryFiles,
+                diagnostics,
+                importStack,
+                depth + 1));
+        }
+        finally
+        {
+            importStack.Remove(matchedPath);
+        }
+    }
+
+    private static string ExportGIMacrosJson(MacroDocument document, List<MacroConversionDiagnostic> diagnostics)
+    {
+        var commands = GIMacrosCommands(document.Steps, diagnostics);
+        return JsonSerializer.Serialize(commands, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static List<object?> GIMacrosCommands(IReadOnlyList<MacroStep> steps, List<MacroConversionDiagnostic> diagnostics)
+    {
+        var commands = new List<object?>();
+        foreach (var step in steps)
+        {
+            switch (step)
+            {
+                case KeyStep key:
+                    AddGIMacrosKeyCommands(commands, key);
+                    break;
+                case MouseButtonStep button:
+                    AddGIMacrosButtonCommands(commands, button);
+                    break;
+                case MouseMoveStep { Mode: MouseMoveMode.Relative } move:
+                    commands.Add(new object?[] { "view", new object?[] { move.X, move.Y }, ToMillisecondsToken(move.Duration) });
+                    break;
+                case MouseMoveStep:
+                    diagnostics.Warning("gimacros.unsupportedStep", "Absolute mouse move cannot be exported to GIMacros JSON and was skipped.");
+                    break;
+                case WaitStep wait:
+                    if (wait.IsRandom)
+                    {
+                        diagnostics.Warning("gimacros.randomWait", "GIMacros JSON does not support random waits; the minimum wait was exported.");
+                    }
+                    commands.Add(new object?[] { "wait", ToMillisecondsToken(wait.Duration) });
+                    break;
+                case RepeatStep repeat:
+                    commands.Add(new object?[] { "loop", repeat.Count, GIMacrosCommands(repeat.Steps, diagnostics) });
+                    break;
+                default:
+                    diagnostics.Warning("gimacros.unsupportedStep", $"Step '{step.GetType().Name}' cannot be exported to GIMacros JSON and was skipped.");
+                    break;
+            }
+        }
+
+        return commands;
+    }
+
+    private static void AddGIMacrosKeyCommands(List<object?> commands, KeyStep key)
+    {
+        if (key.Kind == KeyActionKind.Tap)
+        {
+            AddGIMacrosModifierCommands(commands, key.Modifiers, down: true);
+            commands.Add(new object?[] { "kd", GIMacrosKeyName(key.Key), 0 });
+            if (key.Hold > TimeSpan.Zero)
+            {
+                commands.Add(new object?[] { "wait", ToMillisecondsToken(key.Hold) });
+            }
+            commands.Add(new object?[] { "ku", GIMacrosKeyName(key.Key), 0 });
+            AddGIMacrosModifierCommands(commands, key.Modifiers, down: false);
+            return;
+        }
+
+        if (key.Kind == KeyActionKind.Down)
+        {
+            AddGIMacrosModifierCommands(commands, key.Modifiers, down: true);
+            commands.Add(new object?[] { "kd", GIMacrosKeyName(key.Key), ToMillisecondsToken(key.Hold) });
+            return;
+        }
+
+        commands.Add(new object?[] { "ku", GIMacrosKeyName(key.Key), ToMillisecondsToken(key.Hold) });
+        AddGIMacrosModifierCommands(commands, key.Modifiers, down: false);
+    }
+
+    private static void AddGIMacrosButtonCommands(List<object?> commands, MouseButtonStep button)
+    {
+        var buttonName = ButtonName(button.Button);
+        switch (button.Kind)
+        {
+            case ButtonActionKind.Click:
+                commands.Add(new object?[] { "md", buttonName, 0 });
+                if (button.Hold > TimeSpan.Zero)
+                {
+                    commands.Add(new object?[] { "wait", ToMillisecondsToken(button.Hold) });
+                }
+                commands.Add(new object?[] { "mu", buttonName, 0 });
+                break;
+            case ButtonActionKind.Down:
+                commands.Add(new object?[] { "md", buttonName, ToMillisecondsToken(button.Hold) });
+                break;
+            case ButtonActionKind.Up:
+                commands.Add(new object?[] { "mu", buttonName, ToMillisecondsToken(button.Hold) });
+                break;
+        }
+    }
+
+    private static void AddGIMacrosModifierCommands(List<object?> commands, HidModifier modifiers, bool down)
+    {
+        foreach (var keyName in GIMacrosModifierKeyNames(modifiers, down))
+        {
+            commands.Add(new object?[] { down ? "kd" : "ku", keyName, 0 });
+        }
+    }
+
+    private static IEnumerable<string> GIMacrosModifierKeyNames(HidModifier modifiers, bool down)
+    {
+        var names = new List<string>();
+        if ((modifiers & (HidModifier.LeftCtrl | HidModifier.RightCtrl)) != 0) names.Add("ctrl");
+        if ((modifiers & (HidModifier.LeftShift | HidModifier.RightShift)) != 0) names.Add("shift");
+        if ((modifiers & (HidModifier.LeftAlt | HidModifier.RightAlt)) != 0) names.Add("alt");
+        if ((modifiers & (HidModifier.LeftGui | HidModifier.RightGui)) != 0) names.Add("win");
+        return down ? names : names.AsEnumerable().Reverse();
+    }
+
+    private static JsonDocument ParseGIMacrosJsonDocument(string content)
+    {
+        return JsonDocument.Parse(content, new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        });
+    }
+
+    private static bool LooksLikeGIMacrosJson(string content)
+    {
+        try
+        {
+            using var document = ParseGIMacrosJsonDocument(content);
+            return document.RootElement.ValueKind == JsonValueKind.Array
+                && document.RootElement.EnumerateArray().Any(item => IsGIMacrosCommand(item, out var command) && IsKnownGIMacrosCommand(command));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsKnownGIMacrosCommand(string command)
+    {
+        return command is "kd" or "ku" or "md" or "mu" or "wait" or "view" or "loop" or "import";
+    }
+
+    private static bool IsGIMacrosCommand(JsonElement item, out string command)
+    {
+        command = string.Empty;
+        if (item.ValueKind != JsonValueKind.Array
+            || !TryGetJsonArrayItem(item, 0, out var commandElement)
+            || commandElement.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        command = commandElement.GetString()?.Trim().ToLowerInvariant() ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(command);
+    }
+
+    private static Dictionary<string, AuxiliaryMacroFile> BuildGIMacrosAuxiliaryMap(IReadOnlyList<AuxiliaryMacroFile> auxiliaryFiles, string? rootFileName)
+    {
+        var result = new Dictionary<string, AuxiliaryMacroFile>(StringComparer.OrdinalIgnoreCase);
+        var rootDirectory = !string.IsNullOrWhiteSpace(rootFileName) && Path.IsPathRooted(rootFileName)
+            ? Path.GetDirectoryName(rootFileName)
+            : null;
+
+        foreach (var file in auxiliaryFiles)
+        {
+            AddGIMacrosAuxiliaryPath(result, file.FileName, file);
+            AddGIMacrosAuxiliaryPath(result, Path.GetFileName(file.FileName), file);
+            if (!string.IsNullOrWhiteSpace(rootDirectory) && Path.IsPathRooted(file.FileName))
+            {
+                AddGIMacrosAuxiliaryPath(result, Path.GetRelativePath(rootDirectory, file.FileName), file);
+            }
+        }
+
+        return result;
+    }
+
+    private static void AddGIMacrosAuxiliaryPath(Dictionary<string, AuxiliaryMacroFile> map, string? path, AuxiliaryMacroFile file)
+    {
+        var normalized = NormalizeGIMacrosPath(path ?? string.Empty);
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            map.TryAdd(normalized, file);
+        }
+    }
+
+    private static IReadOnlyList<string> GIMacrosImportCandidates(string currentDirectory, string importName)
+    {
+        var normalized = NormalizeGIMacrosPath(importName);
+        var combined = string.IsNullOrWhiteSpace(currentDirectory)
+            ? normalized
+            : NormalizeGIMacrosPath(currentDirectory + "/" + normalized);
+        return [combined, normalized, Path.GetFileName(normalized)];
+    }
+
+    private static string NormalizeGIMacrosPath(string path)
+    {
+        var normalized = path.Trim().Replace('\\', '/');
+        while (normalized.StartsWith("./", StringComparison.Ordinal))
+        {
+            normalized = normalized[2..];
+        }
+
+        return normalized.TrimStart('/');
+    }
+
+    private static string GIMacrosDirectoryName(string path)
+    {
+        var normalized = NormalizeGIMacrosPath(path);
+        var slash = normalized.LastIndexOf('/');
+        return slash < 0 ? string.Empty : normalized[..slash];
+    }
+
+    private static bool TryGetJsonArrayItem(JsonElement array, int index, out JsonElement item)
+    {
+        item = default;
+        if (array.ValueKind != JsonValueKind.Array || index < 0)
+        {
+            return false;
+        }
+
+        var current = 0;
+        foreach (var value in array.EnumerateArray())
+        {
+            if (current == index)
+            {
+                item = value;
+                return true;
+            }
+
+            current++;
+        }
+
+        return false;
+    }
+
+    private static string GIMacrosStringAt(JsonElement array, int index, string defaultValue = "")
+    {
+        if (!TryGetJsonArrayItem(array, index, out var value))
+        {
+            return defaultValue;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? defaultValue,
+            JsonValueKind.Number => value.GetRawText(),
+            _ => defaultValue
+        };
+    }
+
+    private static double GIMacrosNumberAt(JsonElement array, int index, double defaultValue = 0)
+    {
+        if (!TryGetJsonArrayItem(array, index, out var value))
+        {
+            return defaultValue;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.Number when value.TryGetDouble(out var number) => number,
+            JsonValueKind.String when double.TryParse(value.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var number) => number,
+            _ => defaultValue
+        };
+    }
+
+    private static void AddWaitIfNeeded(List<MacroStep> steps, double milliseconds)
+    {
+        if (milliseconds > 0)
+        {
+            steps.Add(new WaitStep(TimeSpan.FromMilliseconds(milliseconds)));
+        }
+    }
+
+    private static object ToMillisecondsToken(TimeSpan duration)
+    {
+        var milliseconds = Math.Round(duration.TotalMilliseconds, 4, MidpointRounding.AwayFromZero);
+        return Math.Abs(milliseconds - Math.Round(milliseconds)) < 0.0001
+            ? (int)Math.Round(milliseconds, MidpointRounding.AwayFromZero)
+            : milliseconds;
+    }
+
+    private static string GIMacrosKeyName(HidKey key)
+    {
+        return key switch
+        {
+            HidKey.LeftControl or HidKey.RightControl => "ctrl",
+            HidKey.LeftShift or HidKey.RightShift => "shift",
+            HidKey.LeftAlt or HidKey.RightAlt => "alt",
+            HidKey.LeftGui or HidKey.RightGui => "win",
+            HidKey.Escape => "esc",
+            HidKey.Enter or HidKey.Return => "enter",
+            HidKey.Space => "space",
+            HidKey.Tab => "tab",
+            _ => KeyName(key, HidModifier.None).ToLowerInvariant()
+        };
     }
 
     private static MacroDocument ImportQMacro(string content, List<MacroConversionDiagnostic> diagnostics)

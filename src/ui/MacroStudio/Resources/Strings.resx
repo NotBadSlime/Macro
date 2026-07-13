@@ -261,7 +261,7 @@
     <value>Export macro</value>
   </data>
   <data name="ConverterImportFileFilter" xml:space="preserve">
-    <value>Supported macro files (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt|All files (*.*)|*.*</value>
+    <value>Supported macro files (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|All files (*.*)|*.*</value>
   </data>
   <data name="RazerModuleFileFilter" xml:space="preserve">
     <value>Razer XML (*.xml)|*.xml|All files (*.*)|*.*</value>
@@ -286,6 +286,8 @@
   <data name="AddText" xml:space="preserve"><value>Text Function</value></data>
   <data name="AddMacro" xml:space="preserve"><value>Macro</value></data>
   <data name="AddLoop" xml:space="preserve"><value>Loop</value></data>
+  <data name="AddStopCurrent" xml:space="preserve"><value>Stop Current Sequence</value></data>
+  <data name="AddStopAll" xml:space="preserve"><value>Stop All Sequences</value></data>
   <data name="AddPixel" xml:space="preserve"><value>Pixel Condition</value></data>
   <data name="AddDelayHint" xml:space="preserve"><value>Fixed or random wait</value></data>
   <data name="AddKeyboardHint" xml:space="preserve"><value>Press, release, or type</value></data>
@@ -295,6 +297,8 @@
   <data name="AddTextHint" xml:space="preserve"><value>Send Unicode text</value></data>
   <data name="AddMacroActionHint" xml:space="preserve"><value>Call a library macro</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>Repeat a group of steps</value></data>
+  <data name="AddStopCurrentHint" xml:space="preserve"><value>Exit this macro call and continue the caller</value></data>
+  <data name="AddStopAllHint" xml:space="preserve"><value>Immediately stop the entire playback</value></data>
   <data name="ActionPaletteDragHint" xml:space="preserve"><value>Click to add, or drag to a target position in the sequence.</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>Drag another macro from the library into the sequence to copy its steps.</value></data>
   <data name="StepProperties" xml:space="preserve"><value>Properties</value></data>

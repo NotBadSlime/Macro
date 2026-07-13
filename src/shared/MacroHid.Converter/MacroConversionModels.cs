@@ -10,7 +10,8 @@ public enum MacroConversionFormat
     RazerSynapseXml,
     Lua,
     XMouse,
-    QMacro
+    QMacro,
+    GIMacrosJson
 }
 
 public enum MacroDiagnosticSeverity

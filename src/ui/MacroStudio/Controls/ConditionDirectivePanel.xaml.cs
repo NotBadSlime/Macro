@@ -677,6 +677,7 @@ public partial class ConditionDirectivePanel : UserControl
         WindowStartMsBox.Text = cond.WindowStart is { } start ? FormatMs(start) : string.Empty;
         WindowEndMsBox.Text = cond.WindowEnd is { } end ? FormatMs(end) : string.Empty;
         SetTimeWindowValidity(true);
+        ExecutionModeCombo.SelectedIndex = cond.ExecutionMode == ConditionExecutionMode.PauseMainTimeline ? 1 : 0;
 
         var typeIndex = cond.Condition.Type switch
         {
@@ -738,6 +739,22 @@ public partial class ConditionDirectivePanel : UserControl
         };
         UpdateTypeVisibility(type);
         LoadEditor(conditions[editIndex]);
+        ConditionsModified?.Invoke(this, EventArgs.Empty);
+        ConditionSelectionChanged?.Invoke(this,
+            new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
+    }
+
+    private void ExecutionModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition)) return;
+        var mode = ExecutionModeCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse<ConditionExecutionMode>(tag, out var parsed)
+            ? parsed
+            : ConditionExecutionMode.Parallel;
+        conditions[editIndex] = condition with { ExecutionMode = mode };
+        RefreshList();
+        selectedIndex = editIndex;
+        ConditionList.SelectedIndex = editIndex;
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
             new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));

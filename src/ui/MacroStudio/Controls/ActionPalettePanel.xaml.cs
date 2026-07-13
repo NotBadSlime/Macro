@@ -29,6 +29,8 @@ public partial class ActionPalettePanel : UserControl
         AddTextActionText.Text = L("AddText");
         AddMacroText.Text = L("AddMacro");
         AddLoopText.Text = L("AddLoop");
+        AddStopCurrentText.Text = L("AddStopCurrent");
+        AddStopAllText.Text = L("AddStopAll");
         AddDelayHintText.Text = L("AddDelayHint");
         AddKeyboardHintText.Text = L("AddKeyboardHint");
         AddMouseHintText.Text = L("AddMouseButtonHint");
@@ -37,6 +39,8 @@ public partial class ActionPalettePanel : UserControl
         AddTextHintText.Text = L("AddTextHint");
         AddMacroActionHintText.Text = L("AddMacroActionHint");
         AddLoopHintText.Text = L("AddLoopHint");
+        AddStopCurrentHintText.Text = L("AddStopCurrentHint");
+        AddStopAllHintText.Text = L("AddStopAllHint");
         DragHint.Text = L("ActionPaletteDragHint");
         AddMacroHintText.Text = L("AddMacroHint");
     }

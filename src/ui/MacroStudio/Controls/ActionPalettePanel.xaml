@@ -218,6 +218,58 @@
                     </StackPanel>
                 </Grid>
             </Button>
+
+            <Button x:Name="AddStopCurrentButton"
+                    Tag="StopCurrent"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#FFF4E0">
+                        <TextBlock Text="&#xE71A;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource AccentOrange}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddStopCurrentText" Text="停止当前宏序列" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddStopCurrentHintText" Text="退出当前调用，外层继续" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddStopAllButton"
+                    Tag="StopAll"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#FFEDEE">
+                        <TextBlock Text="&#xE71A;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Danger}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddStopAllText" Text="停止所有宏序列" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddStopAllHintText" Text="立即终止整次宏播放" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
         </primitives:UniformGrid>
 
         <TextBlock x:Name="DragHint"
