@@ -282,6 +282,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio macro library right click delete keeps its target and reports failures", MacroStudioMacroLibraryRightClickDeleteKeepsItsTargetAndReportsFailures),
     ("MacroStudio macro library defers listening refresh while renaming", MacroStudioMacroLibraryDefersListeningRefreshWhileRenaming),
     ("MacroStudio macro library supports Explorer rename copy and paste", MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste),
+    ("MacroStudio macro library toolbar uses new dropdown only", MacroStudioMacroLibraryToolbarUsesNewDropdownOnly),
     ("MacroStudio rename uses themed inline text box", MacroStudioRenameUsesThemedInlineTextBox),
     ("MacroStudio polishes input chrome menus and empty states", MacroStudioPolishesInputChromeMenusAndEmptyStates),
     ("MacroStudio uses fluent window chrome and themed dialogs", MacroStudioUsesFluentWindowChromeAndThemedDialogs),
@@ -6989,8 +6990,8 @@ static void MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste()
 
     Assert.Contains("MacroTreeNode_MouseLeftButtonDown", libraryXaml);
     Assert.Contains("RenameTextBox", libraryXaml);
-    Assert.Contains("CopyMacroButton", libraryXaml);
-    Assert.Contains("PasteMacroButton", libraryXaml);
+    Assert.Contains("CopyMenuItem", libraryXaml);
+    Assert.Contains("PasteMenuItem", libraryXaml);
     Assert.Contains("MacroTreeView_KeyDown", libraryXaml);
     Assert.Contains("BeginRename", libraryCode);
     Assert.Contains("CommitRename", libraryCode);
@@ -6999,6 +7000,18 @@ static void MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste()
     Assert.Contains("RenameMacro", storeCode);
     Assert.Contains("RenameFolder", storeCode);
     Assert.Contains("IsRenaming", displayModels);
+}
+
+static void MacroStudioMacroLibraryToolbarUsesNewDropdownOnly()
+{
+    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    Assert.Contains("x:Name=\"NewMacroMenuButton\"", xaml);
+    Assert.Contains("ToolbarNewMacroMenuItem", xaml);
+    Assert.Contains("ToolbarNewFolderMenuItem", xaml);
+    Assert.DoesNotContain("x:Name=\"CopyMacroButton\"", xaml);
+    Assert.DoesNotContain("x:Name=\"PasteMacroButton\"", xaml);
+    Assert.DoesNotContain("x:Name=\"DeleteMacroButton\"", xaml);
+    Assert.DoesNotContain("x:Name=\"NewFolderButton\"", xaml);
 }
 
 static void MacroStudioMacroLibraryUsesDynamicThemeTextColors()

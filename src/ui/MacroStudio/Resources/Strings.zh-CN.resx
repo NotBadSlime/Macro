@@ -93,6 +93,7 @@
   <data name="ConverterImportFileFilter" xml:space="preserve"><value>支持的宏文件 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|所有文件 (*.*)|*.*</value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>宏数据库管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新建</value></data>
+  <data name="NewMacroFile" xml:space="preserve"><value>宏文件</value></data>
   <data name="NewFolder" xml:space="preserve"><value>文件夹</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>复制</value></data>
   <data name="Copy" xml:space="preserve"><value>复制</value></data>

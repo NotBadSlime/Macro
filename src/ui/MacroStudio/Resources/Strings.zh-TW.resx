@@ -93,6 +93,7 @@
   <data name="ConverterImportFileFilter" xml:space="preserve"><value>支援的巨集檔案 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|所有檔案 (*.*)|*.*</value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>巨集資料庫管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新增</value></data>
+  <data name="NewMacroFile" xml:space="preserve"><value>宏檔案</value></data>
   <data name="NewFolder" xml:space="preserve"><value>資料夾</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>複製</value></data>
   <data name="Copy" xml:space="preserve"><value>複製</value></data>

@@ -15,36 +15,52 @@ using Microsoft.Win32;
 
 namespace MacroStudio.Controls;
 
+public sealed record MacroLibraryDeleteItem(
+    string? MacroId,
+    string GroupId,
+    string FolderName,
+    string DisplayName,
+    bool IsFolder,
+    bool IsLocked);
+
 public partial class MacroLibraryPanel : UserControl
 {
     private const string MacroLibraryDragFormat = "MacroHID.MacroLibraryItem";
     private const int WM_MOUSEWHEEL = 0x020A;
+    private const int WM_MOUSEHWHEEL = 0x020E;
     private const int WM_MOUSEWHEEL_LOW_LEVEL = 0x020A;
     private const int WH_MOUSE_LL = 14;
     private const long LibraryAutoScrollIntervalMilliseconds = 120;
     private const double WheelDelta = 120.0;
 
     private readonly LowLevelMouseProc libraryDragMouseHookProc;
+    private readonly DispatcherTimer explorerHorizontalScrollTimer;
     private MacroEditorState? state;
     private bool suppressSelection;
-    private List<AuxiliaryMacroFile> razerModuleFiles = [];
     private readonly HashSet<string> expandedGroups = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> expandedFolders = new(StringComparer.Ordinal);
     private readonly HashSet<string> selectedManagerGroupIds = new(StringComparer.OrdinalIgnoreCase);
     private string selectedGroupId = MacroLibraryStore.GlobalGroupId;
     private string activeDatabaseGroupId = MacroLibraryStore.GlobalGroupId;
+    private string currentDatabaseFolder = string.Empty;
     private bool showingDatabaseContents;
     private bool managerSelectionInitialized;
     private string? selectedFolder;
-    private MacroLibraryClipboardItem? clipboard;
+    private IReadOnlyList<MacroLibraryClipboardItem> clipboard = [];
     private MacroLibraryTreeNode? renamingNode;
+    private MacroLibraryTreeNode? contextMenuTargetNode;
+    private bool renameCommitQueued;
+    private bool refreshTreeAfterRename;
     private bool updatingRuntimePrecisionControls;
     private bool updatingGroupControls;
     private bool libraryDragInProgress;
     private ScrollViewer? macroTreeScrollViewer;
+    private ScrollViewer? explorerScrollViewer;
     private HwndSource? macroTreeHwndSource;
     private IntPtr libraryDragMouseHookHandle;
     private long lastLibraryAutoScrollTick;
+    private double explorerHorizontalScrollTarget;
+    private Point? explorerDragStartPoint;
     private MacroLibraryTreeNode? macroDropIndicatorNode;
     private IReadOnlyDictionary<string, MacroLibraryListenState> listeningStates =
         new Dictionary<string, MacroLibraryListenState>(StringComparer.OrdinalIgnoreCase);
@@ -52,6 +68,8 @@ public partial class MacroLibraryPanel : UserControl
     public event Action<string>? MacroSelected;
     public event Action<string>? MacroDuplicated;
     public event Action<string>? MacroDeleted;
+    public event Action<IReadOnlyList<MacroLibraryDeleteItem>>? LibraryItemsDeleteRequested;
+    public event Action<string, bool>? MacroLockChanged;
     public event Action<MacroLibraryItem>? MacroCreated;
     public event Action<MacroDocument>? ImportApplied;
     public event Func<MacroDocument>? DocumentRequested;
@@ -66,6 +84,11 @@ public partial class MacroLibraryPanel : UserControl
     {
         libraryDragMouseHookProc = LibraryDragMouseHookCallback;
         InitializeComponent();
+        explorerHorizontalScrollTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+        explorerHorizontalScrollTimer.Tick += ExplorerHorizontalScrollTimer_Tick;
     }
 
     public void Initialize(MacroEditorState editorState)
@@ -81,11 +104,9 @@ public partial class MacroLibraryPanel : UserControl
         NewGroupButton.Content = L("NewDatabase");
         DeleteDatabaseButton.Content = L("DeleteDatabase");
         BackToManagerButton.Content = L("ReturnToManager");
-        NewMacroButton.Content = L("NewMacro");
-        NewFolderButton.Content = L("NewFolder");
-        CopyMacroButton.Content = L("Copy");
-        PasteMacroButton.Content = L("Paste");
-        DeleteMacroButton.Content = L("Delete");
+        NewMacroMenuButton.Content = L("NewMacro");
+        ToolbarNewMacroMenuItem.Header = L("NewMacroFile");
+        ToolbarNewFolderMenuItem.Header = L("NewFolder");
         GroupProcessFilterLabelText.Text = L("GroupProcessFilter");
         GroupProcessFilterBox.ToolTip = L("GroupProcessFilterHelp");
         SelectProcessButton.Content = L("SelectProcess");
@@ -102,12 +123,40 @@ public partial class MacroLibraryPanel : UserControl
         CopyMenuItem.Header = L("Copy");
         PasteMenuItem.Header = L("Paste");
         DeleteMenuItem.Header = L("Delete");
+        UpFolderButton.Content = L("UpOneLevel");
+        UpFolderButton.ToolTip = L("UpOneLevel");
+        ExplorerNameHeaderText.Text = L("Name");
+        ExplorerTypeHeaderText.Text = L("Type");
+        ExplorerTriggerHeaderText.Text = L("Trigger");
+        ExplorerModifiedHeaderText.Text = L("DateModified");
+        ExplorerOpenMenuItem.Header = L("Open");
+        ExplorerNewMenuItem.Header = L("New");
+        ExplorerNewMacroMenuItem.Header = L("NewMacro");
+        ExplorerNewFolderMenuItem.Header = L("NewFolder");
+        ExplorerRenameMenuItem.Header = L("Rename");
+        ExplorerCopyMenuItem.Header = L("Copy");
+        ExplorerPasteMenuItem.Header = L("Paste");
+        ExplorerDuplicateMenuItem.Header = L("Duplicate");
+        ExplorerToggleLockMenuItem.Header = L("LockSelected");
+        ExplorerSelectAllMenuItem.Header = L("SelectAll");
+        ExplorerViewMenuItem.Header = L("View");
+        ExplorerDetailsMenuItem.Header = L("ViewDetails");
+        ExplorerListMenuItem.Header = L("ViewList");
+        ExplorerSmallIconsMenuItem.Header = L("ViewSmallIcons");
+        ExplorerLargeIconsMenuItem.Header = L("ViewLargeIcons");
+        ExplorerSortMenuItem.Header = L("SortBy");
+        ExplorerSortManualMenuItem.Header = L("SortManual");
+        ExplorerSortNameMenuItem.Header = L("Name");
+        ExplorerSortUpdatedMenuItem.Header = L("DateModified");
+        ExplorerRefreshMenuItem.Header = L("Refresh");
+        ExplorerDeleteMenuItem.Header = L("Delete");
         ImportExportTitleText.Text = L("ImportExport");
         ImportMacroButton.Content = L("ImportMacro");
-        ImportRazerModulesButton.Content = L("ImportRazerModules");
         ExportFormatLabelText.Text = L("ExportFormat");
         ExportMacroButton.Content = L("ExportMacro");
         MacroSearchBox.ToolTip = L("SearchMacros");
+        MacroSearchPlaceholderText.Text = L("SearchMacros");
+        GroupProcessFilterPlaceholderText.Text = L("ProcessFilterPlaceholder");
         RefreshConversionText();
 
         foreach (var item in LibrarySortBox.Items.OfType<ComboBoxItem>())
@@ -182,16 +231,45 @@ public partial class MacroLibraryPanel : UserControl
     public void SetListeningStates(IReadOnlyDictionary<string, MacroLibraryListenState> states)
     {
         listeningStates = new Dictionary<string, MacroLibraryListenState>(states, StringComparer.OrdinalIgnoreCase);
+        if (renamingNode is not null)
+        {
+            refreshTreeAfterRename = true;
+            return;
+        }
+
+        foreach (var item in LibraryViewBox.Items.OfType<ComboBoxItem>())
+        {
+            item.Content = item.Tag?.ToString() switch
+            {
+                "list" => L("ViewList"),
+                "smallIcons" => L("ViewSmallIcons"),
+                "largeIcons" => L("ViewLargeIcons"),
+                _ => L("ViewDetails")
+            };
+        }
+
         RefreshTree();
     }
 
     public void RefreshTree()
     {
         if (state is null) return;
+        if (renamingNode is not null)
+        {
+            refreshTreeAfterRename = true;
+            return;
+        }
+
+        refreshTreeAfterRename = false;
 
         var search = MacroSearchBox.Text.Trim();
-        var previousScrollOffset = GetMacroTreeScrollViewer()?.VerticalOffset ?? 0;
-        if (string.IsNullOrWhiteSpace(search))
+        var previousScrollOffset = showingDatabaseContents
+            ? FindVisualChild<ScrollViewer>(ExplorerListView)?.VerticalOffset ?? 0
+            : GetMacroTreeScrollViewer()?.VerticalOffset ?? 0;
+        IReadOnlySet<string> selectedExplorerKeys = showingDatabaseContents
+            ? GetSelectedExplorerKeys()
+            : new HashSet<string>(StringComparer.Ordinal);
+        if (!showingDatabaseContents && string.IsNullOrWhiteSpace(search))
         {
             CaptureExpandedGroups();
             CaptureExpandedFolders();
@@ -216,7 +294,7 @@ public partial class MacroLibraryPanel : UserControl
         {
             suppressSelection = true;
             nodes = showingDatabaseContents
-                ? BuildDatabaseNodes(materializedItems, search, selectedId)
+                ? BuildExplorerNodes(materializedItems, search)
                 : BuildManagerNodes(materializedItems, search);
 
             if (!state.LibrarySnapshot.Groups.Any(group => string.Equals(group.Id, selectedGroupId, StringComparison.OrdinalIgnoreCase)))
@@ -227,7 +305,17 @@ public partial class MacroLibraryPanel : UserControl
             var selectedGroup = state.LibrarySnapshot.Groups.FirstOrDefault(group => string.Equals(group.Id, selectedGroupId, StringComparison.OrdinalIgnoreCase))
                 ?? state.LibrarySnapshot.Groups.FirstOrDefault();
             SetGroupEditor(selectedGroup);
-            MacroTreeView.ItemsSource = nodes;
+            if (showingDatabaseContents)
+            {
+                MacroTreeView.ItemsSource = null;
+                ExplorerListView.ItemsSource = nodes;
+                RestoreExplorerSelection(nodes, selectedExplorerKeys, selectedId);
+            }
+            else
+            {
+                ExplorerListView.ItemsSource = null;
+                MacroTreeView.ItemsSource = nodes;
+            }
             ApplyProgressiveViewState();
         }
         finally
@@ -235,7 +323,7 @@ public partial class MacroLibraryPanel : UserControl
             suppressSelection = false;
         }
 
-        RestoreMacroTreeScroll(previousScrollOffset);
+        RestoreLibraryScroll(previousScrollOffset);
     }
 
     private List<MacroLibraryTreeNode> BuildManagerNodes(IReadOnlyList<MacroLibraryItem> materializedItems, string search)
@@ -350,6 +438,52 @@ public partial class MacroLibraryPanel : UserControl
         return nodes;
     }
 
+    private List<MacroLibraryTreeNode> BuildExplorerNodes(IReadOnlyList<MacroLibraryItem> materializedItems, string search)
+    {
+        var group = GetActiveDatabaseGroup();
+        if (group is null)
+        {
+            return [];
+        }
+
+        var groupItems = materializedItems
+            .Where(item => string.Equals(item.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var nodes = new List<MacroLibraryTreeNode>();
+        if (string.IsNullOrWhiteSpace(currentDatabaseFolder))
+        {
+            var folderNames = state!.LibrarySnapshot.GroupFolders
+                .Where(folder => string.Equals(folder.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+                .Select(folder => folder.Name)
+                .Concat(groupItems.Select(item => item.Folder))
+                .Where(folder => !string.IsNullOrWhiteSpace(folder))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(folder => folder, StringComparer.CurrentCultureIgnoreCase);
+            foreach (var folder in folderNames)
+            {
+                var children = groupItems
+                    .Where(item => string.Equals(item.Folder, folder, StringComparison.Ordinal))
+                    .Select(CreateMacroNode)
+                    .ToList();
+                if (!string.IsNullOrWhiteSpace(search)
+                    && !folder.Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                    && !children.Any(child => child.Title.Contains(search, StringComparison.CurrentCultureIgnoreCase)))
+                {
+                    continue;
+                }
+
+                nodes.Add(MacroLibraryTreeNode.Folder(group.Id, folder, children));
+            }
+        }
+
+        nodes.AddRange(groupItems
+            .Where(item => string.Equals(item.Folder, currentDatabaseFolder, StringComparison.Ordinal))
+            .Where(item => string.IsNullOrWhiteSpace(search)
+                || item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase))
+            .Select(CreateMacroNode));
+        return nodes;
+    }
+
     private void EnsureActiveDatabaseGroup()
     {
         if (state is null) return;
@@ -365,7 +499,19 @@ public partial class MacroLibraryPanel : UserControl
         if (!groups.Any(group => string.Equals(activeDatabaseGroupId, group.Id, StringComparison.OrdinalIgnoreCase)))
         {
             activeDatabaseGroupId = groups.FirstOrDefault(group => group.IsGlobal)?.Id ?? groups[0].Id;
+            currentDatabaseFolder = string.Empty;
             showingDatabaseContents = false;
+        }
+
+        else if (showingDatabaseContents && !string.IsNullOrWhiteSpace(currentDatabaseFolder))
+        {
+            var folderStillExists = state.LibrarySnapshot.GroupFolders.Any(folder =>
+                    string.Equals(folder.GroupId, activeDatabaseGroupId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(folder.Name, currentDatabaseFolder, StringComparison.Ordinal))
+                || state.LibrarySnapshot.Items.Any(item =>
+                    string.Equals(item.GroupId, activeDatabaseGroupId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(item.Folder, currentDatabaseFolder, StringComparison.Ordinal));
+            if (!folderStillExists) currentDatabaseFolder = string.Empty;
         }
     }
 
@@ -429,15 +575,20 @@ public partial class MacroLibraryPanel : UserControl
         DatabaseOnlyControls.Visibility = databaseVisibility;
         DatabaseNavigationBar.Visibility = databaseVisibility;
         LibraryImportExportPanel.Visibility = databaseVisibility;
-        MacroTreeView.AllowDrop = showingDatabaseContents;
+        MacroTreeView.Visibility = managerVisibility;
+        ExplorerView.Visibility = databaseVisibility;
+        MacroTreeView.AllowDrop = false;
+        ExplorerListView.AllowDrop = showingDatabaseContents;
+        UpFolderButton.IsEnabled = showingDatabaseContents;
         ImportMacroButton.IsEnabled = showingDatabaseContents;
-        ImportRazerModulesButton.IsEnabled = showingDatabaseContents;
         ExportMacroButton.IsEnabled = showingDatabaseContents;
         CopyMenuItem.Visibility = databaseVisibility;
         PasteMenuItem.Visibility = databaseVisibility;
         CurrentDatabaseTitleText.Text = GetDatabaseTitleText();
         DeleteMenuItem.Header = showingDatabaseContents ? L("Delete") : L("DeleteDatabase");
         DeleteDatabaseButton.IsEnabled = !showingDatabaseContents && GetSelectedEditableGroup() is not null;
+        ApplyExplorerViewMode();
+        UpdateExplorerSelectionStatus();
         UpdateManagerListeningButtons();
     }
 
@@ -464,9 +615,14 @@ public partial class MacroLibraryPanel : UserControl
     private string GetDatabaseTitleText()
     {
         var group = GetActiveDatabaseGroup();
-        return group is null
-            ? L("MacroLibrary")
-            : $"{L("MacroLibrary")} / {group.Name}";
+        if (group is null)
+        {
+            return L("MacroLibrary");
+        }
+
+        return string.IsNullOrWhiteSpace(currentDatabaseFolder)
+            ? $"{L("MacroLibrary")} / {group.Name}"
+            : $"{L("MacroLibrary")} / {group.Name} / {currentDatabaseFolder}";
     }
 
     private void MacroSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshList();
@@ -514,6 +670,221 @@ public partial class MacroLibraryPanel : UserControl
         state!.SelectedMacroId = item.Id;
         state.LibraryStore.SetSelected(item.Id);
         MacroSelected?.Invoke(item.Id);
+    }
+
+    private void ExplorerListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (suppressSelection || state is null) return;
+        UpdateClipboardControls();
+        UpdateExplorerSelectionStatus();
+        var node = e.AddedItems.OfType<MacroLibraryTreeNode>().LastOrDefault()
+            ?? ExplorerListView.SelectedItem as MacroLibraryTreeNode;
+        if (node is null)
+        {
+            selectedFolder = null;
+            return;
+        }
+
+        selectedGroupId = node.GroupId;
+        selectedFolder = node.IsFolder ? node.FolderName : node.Item?.Folder;
+        if (node.Item is not { } item)
+        {
+            state.SelectedMacroId = null;
+            state.LibraryStore.SetSelected(null);
+            return;
+        }
+
+        state.SelectedMacroId = item.Id;
+        state.LibraryStore.SetSelected(item.Id);
+        MacroSelected?.Invoke(item.Id);
+    }
+
+    private void ExplorerListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        var container = FindVisualParent<ListViewItem>(e.OriginalSource as DependencyObject);
+        if (container?.DataContext is not MacroLibraryTreeNode node) return;
+        OpenExplorerNode(node);
+        e.Handled = true;
+    }
+
+    private void ExplorerListView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        contextMenuTargetNode = null;
+        var container = FindVisualParent<ListViewItem>(e.OriginalSource as DependencyObject);
+        if (container?.DataContext is not MacroLibraryTreeNode node)
+        {
+            ExplorerListView.SelectedItems.Clear();
+            return;
+        }
+        contextMenuTargetNode = node;
+        if (!container.IsSelected)
+        {
+            ExplorerListView.SelectedItems.Clear();
+            container.IsSelected = true;
+        }
+
+        container.Focus();
+    }
+
+    private void ExplorerContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        var selected = GetSelectedExplorerNodes();
+        var single = selected.Count == 1 ? selected[0] : null;
+        ExplorerOpenMenuItem.IsEnabled = single is not null;
+        ExplorerRenameMenuItem.IsEnabled = single is not null && single.Item?.IsLocked != true;
+        ExplorerCopyMenuItem.IsEnabled = selected.Count > 0;
+        ExplorerPasteMenuItem.IsEnabled = clipboard.Count > 0;
+        ExplorerDuplicateMenuItem.IsEnabled = selected.Any(node => node.Item is not null);
+        var selectedMacros = selected.Where(node => node.Item is not null).ToList();
+        ExplorerToggleLockMenuItem.IsEnabled = selectedMacros.Count > 0;
+        ExplorerToggleLockMenuItem.Header = selectedMacros.Count > 0 && selectedMacros.All(node => node.Item!.IsLocked)
+            ? L("UnlockSelected")
+            : L("LockSelected");
+        ExplorerDeleteMenuItem.IsEnabled = selected.Count > 0 && selected.Any(CanDeleteNode);
+        ApplyExplorerViewMode();
+    }
+
+    private void ExplorerOpenMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((contextMenuTargetNode ?? ExplorerListView.SelectedItem as MacroLibraryTreeNode) is { } node)
+        {
+            OpenExplorerNode(node);
+        }
+    }
+
+    private void OpenExplorerNode(MacroLibraryTreeNode node)
+    {
+        if (node.IsFolder)
+        {
+            currentDatabaseFolder = node.FolderName;
+            selectedFolder = null;
+            state!.SelectedMacroId = null;
+            state.LibraryStore.SetSelected(null);
+            RefreshTree();
+            return;
+        }
+
+        if (node.Item is { } item)
+        {
+            state!.SelectedMacroId = item.Id;
+            state.LibraryStore.SetSelected(item.Id);
+            MacroSelected?.Invoke(item.Id);
+        }
+    }
+
+    private void ExplorerSelectAllMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ExplorerListView.SelectAll();
+    }
+
+    private void ExplorerToggleLockMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (state is null) return;
+        var macros = GetSelectedExplorerNodes()
+            .Select(node => node.Item)
+            .Where(item => item is not null)
+            .Cast<MacroLibraryItem>()
+            .ToList();
+        if (macros.Count == 0) return;
+        var lockMacros = macros.Any(item => !item.IsLocked);
+        try
+        {
+            foreach (var item in macros)
+            {
+                state.LibraryStore.SetMacroLocked(item.Id, lockMacros);
+                MacroLockChanged?.Invoke(item.Id, lockMacros);
+            }
+
+            RefreshTree();
+            ResultMessage?.Invoke(lockMacros
+                ? LF("SelectedMacrosLocked", macros.Count)
+                : LF("SelectedMacrosUnlocked", macros.Count));
+        }
+        catch (Exception ex)
+        {
+            ResultMessage?.Invoke(ex.Message);
+        }
+    }
+
+    private void ExplorerRefreshMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshTree();
+    }
+
+    private void ExplorerViewMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: string mode })
+        {
+            SelectExplorerViewMode(mode);
+        }
+    }
+
+    private void ExplorerSortMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: string mode })
+        {
+            SelectLibrarySortMode(mode);
+        }
+    }
+
+    private void ExplorerListView_KeyDown(object sender, KeyEventArgs e)
+    {
+        var modifiers = Keyboard.Modifiers;
+        if (e.Key == Key.Enter && modifiers == ModifierKeys.None)
+        {
+            if (ExplorerListView.SelectedItem is MacroLibraryTreeNode node) OpenExplorerNode(node);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F2 && modifiers == ModifierKeys.None)
+        {
+            if (GetSelectedExplorerNodes().Count == 1) BeginRename(GetSelectedNode());
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete && modifiers == ModifierKeys.None)
+        {
+            DeleteSelectedNodes();
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.A)
+        {
+            ExplorerListView.SelectAll();
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.C)
+        {
+            CopySelectionToClipboard();
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.V)
+        {
+            PasteClipboard();
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.D)
+        {
+            DuplicateMacro_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.N)
+        {
+            NewMacro_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.N)
+        {
+            NewFolder_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Back && modifiers == ModifierKeys.None)
+        {
+            NavigateUpFromDatabase();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F5 && modifiers == ModifierKeys.None)
+        {
+            RefreshTree();
+            e.Handled = true;
+        }
     }
 
     private void MacroTreeNode_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -567,6 +938,7 @@ public partial class MacroLibraryPanel : UserControl
         if (state is null) return;
         showingDatabaseContents = true;
         activeDatabaseGroupId = groupId;
+        currentDatabaseFolder = string.Empty;
         selectedGroupId = groupId;
         selectedFolder = null;
         state.SelectedMacroId = null;
@@ -577,6 +949,7 @@ public partial class MacroLibraryPanel : UserControl
     private void ReturnToManagerView()
     {
         showingDatabaseContents = false;
+        currentDatabaseFolder = string.Empty;
         selectedFolder = null;
         state!.SelectedMacroId = null;
         state.LibraryStore.SetSelected(null);
@@ -589,16 +962,45 @@ public partial class MacroLibraryPanel : UserControl
         ReturnToManagerView();
     }
 
+    private void UpFolder_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateUpFromDatabase();
+    }
+
+    private void NavigateUpFromDatabase()
+    {
+        if (!showingDatabaseContents) return;
+        if (string.IsNullOrWhiteSpace(currentDatabaseFolder))
+        {
+            ReturnToManagerView();
+            return;
+        }
+
+        currentDatabaseFolder = string.Empty;
+        selectedFolder = null;
+        state!.SelectedMacroId = null;
+        state.LibraryStore.SetSelected(null);
+        RefreshTree();
+    }
+
     private void MacroTreeView_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.F2)
+        var modifiers = Keyboard.Modifiers;
+        if (e.Key == Key.F2 && modifiers == ModifierKeys.None)
         {
             BeginRename(GetSelectedNode());
             e.Handled = true;
             return;
         }
 
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && e.Key == Key.C)
+        if (e.Key == Key.Delete && modifiers == ModifierKeys.None)
+        {
+            DeleteNode(GetSelectedNode());
+            e.Handled = true;
+            return;
+        }
+
+        if (modifiers == ModifierKeys.Control && e.Key == Key.C)
         {
             if (!showingDatabaseContents) return;
             CopySelectionToClipboard();
@@ -606,12 +1008,32 @@ public partial class MacroLibraryPanel : UserControl
             return;
         }
 
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && e.Key == Key.V)
+        if (modifiers == ModifierKeys.Control && e.Key == Key.V)
         {
             if (!showingDatabaseContents) return;
             PasteClipboard();
             e.Handled = true;
             return;
+        }
+
+        if (showingDatabaseContents && modifiers == ModifierKeys.Control && e.Key == Key.D)
+        {
+            DuplicateMacro_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
+        if (showingDatabaseContents && modifiers == ModifierKeys.Control && e.Key == Key.N)
+        {
+            NewMacro_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
+        if (showingDatabaseContents && modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.N)
+        {
+            NewFolder_Click(this, new RoutedEventArgs());
+            e.Handled = true;
         }
     }
 
@@ -633,7 +1055,7 @@ public partial class MacroLibraryPanel : UserControl
 
         if (e.Key == Key.Enter)
         {
-            CommitRename(node);
+            QueueCommitRename(node);
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
@@ -648,16 +1070,136 @@ public partial class MacroLibraryPanel : UserControl
         if ((sender as FrameworkElement)?.DataContext is not MacroLibraryTreeNode node) return;
         if (!node.IsRenaming) return;
 
-        CommitRename(node);
+        QueueCommitRename(node);
+    }
+
+    private void LibraryViewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ExplorerListView is null) return;
+        ApplyExplorerViewMode();
+    }
+
+    private string GetExplorerViewMode()
+    {
+        return (LibraryViewBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "details";
+    }
+
+    private void ApplyExplorerViewMode()
+    {
+        if (ExplorerListView is null) return;
+        var mode = GetExplorerViewMode();
+        var templateKey = mode switch
+        {
+            "list" => "ExplorerListTemplate",
+            "smallIcons" => "ExplorerSmallIconTemplate",
+            "largeIcons" => "ExplorerLargeIconTemplate",
+            _ => "ExplorerDetailsTemplate"
+        };
+        var panelKey = mode is "smallIcons" or "largeIcons" ? "ExplorerTilesPanel" : "ExplorerRowsPanel";
+        ExplorerListView.ItemTemplate = (DataTemplate)Resources[templateKey];
+        ExplorerListView.ItemsPanel = (ItemsPanelTemplate)Resources[panelKey];
+        ExplorerDetailsHeader.Visibility = mode == "details" ? Visibility.Visible : Visibility.Collapsed;
+
+        if (ExplorerDetailsMenuItem is null) return;
+        ExplorerDetailsMenuItem.IsChecked = mode == "details";
+        ExplorerListMenuItem.IsChecked = mode == "list";
+        ExplorerSmallIconsMenuItem.IsChecked = mode == "smallIcons";
+        ExplorerLargeIconsMenuItem.IsChecked = mode == "largeIcons";
+    }
+
+    private IReadOnlyList<MacroLibraryTreeNode> GetSelectedExplorerNodes()
+    {
+        return ExplorerListView.SelectedItems.OfType<MacroLibraryTreeNode>().ToList();
+    }
+
+    private IReadOnlySet<string> GetSelectedExplorerKeys()
+    {
+        return GetSelectedExplorerNodes()
+            .Select(GetExplorerNodeKey)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static string GetExplorerNodeKey(MacroLibraryTreeNode node)
+    {
+        return node.Item is { } item ? $"M:{item.Id}" : $"F:{node.GroupId}:{node.FolderName}";
+    }
+
+    private void RestoreExplorerSelection(
+        IReadOnlyList<MacroLibraryTreeNode> nodes,
+        IReadOnlySet<string> selectedKeys,
+        string? selectedMacroId)
+    {
+        ExplorerListView.SelectedItems.Clear();
+        foreach (var node in nodes)
+        {
+            if (selectedKeys.Contains(GetExplorerNodeKey(node))
+                || (selectedKeys.Count == 0 && string.Equals(node.Item?.Id, selectedMacroId, StringComparison.Ordinal)))
+            {
+                ExplorerListView.SelectedItems.Add(node);
+            }
+        }
+    }
+
+    private void UpdateExplorerSelectionStatus()
+    {
+        if (ExplorerSelectionStatusText is null) return;
+        var selectedCount = ExplorerListView?.SelectedItems.Count ?? 0;
+        var totalCount = ExplorerListView?.Items.Count ?? 0;
+        ExplorerSelectionStatusText.Text = selectedCount > 0
+            ? LF("ExplorerSelectedCount", selectedCount, totalCount)
+            : LF("ExplorerItemCount", totalCount);
+    }
+
+    private void QueueCommitRename(MacroLibraryTreeNode node)
+    {
+        if (renameCommitQueued) return;
+        renameCommitQueued = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            renameCommitQueued = false;
+            if (node.IsRenaming && ReferenceEquals(renamingNode, node))
+            {
+                CommitRename(node);
+            }
+        }), DispatcherPriority.Input);
     }
 
     private void MacroTreeView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
+        contextMenuTargetNode = null;
         var treeViewItem = FindVisualParent<TreeViewItem>(e.OriginalSource as DependencyObject);
         if (treeViewItem is null) return;
+        if (treeViewItem.DataContext is not MacroLibraryTreeNode node) return;
 
+        contextMenuTargetNode = node;
         treeViewItem.Focus();
         treeViewItem.IsSelected = true;
+    }
+
+    private void MacroTreeContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        var node = contextMenuTargetNode ?? GetSelectedNode();
+        RenameMenuItem.IsEnabled = node is not null && node.Item?.IsLocked != true;
+        CopyMenuItem.IsEnabled = showingDatabaseContents && node is not null && !node.IsGroup;
+        DeleteMenuItem.IsEnabled = CanDeleteNode(node);
+    }
+
+    private void MacroTreeContextMenu_Closed(object sender, RoutedEventArgs e)
+    {
+        Dispatcher.BeginInvoke(
+            () => contextMenuTargetNode = null,
+            DispatcherPriority.ContextIdle);
+    }
+
+    private static bool CanDeleteNode(MacroLibraryTreeNode? node)
+    {
+        return node switch
+        {
+            null => false,
+            { IsGroup: true, ProcessGroup.IsGlobal: true } => false,
+            { Item.IsLocked: true } => false,
+            _ => true
+        };
     }
 
     private void MacroTreeView_Loaded(object sender, RoutedEventArgs e)
@@ -668,12 +1210,73 @@ public partial class MacroLibraryPanel : UserControl
         macroTreeHwndSource?.AddHook(MacroTreeWndProc);
     }
 
+    private void ExplorerListView_Loaded(object sender, RoutedEventArgs e)
+    {
+        explorerScrollViewer = FindVisualChild<ScrollViewer>(ExplorerListView);
+        explorerHorizontalScrollTarget = explorerScrollViewer?.HorizontalOffset ?? 0;
+    }
+
     private void MacroTreeView_Unloaded(object sender, RoutedEventArgs e)
     {
         StopLibraryDragWheelHook();
         macroTreeHwndSource?.RemoveHook(MacroTreeWndProc);
         macroTreeHwndSource = null;
         macroTreeScrollViewer = null;
+        explorerScrollViewer = null;
+        explorerHorizontalScrollTimer.Stop();
+    }
+
+    private void ExplorerListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0)
+        {
+            return;
+        }
+
+        e.Handled = QueueExplorerHorizontalScroll(-e.Delta / WheelDelta * 72.0);
+    }
+
+    private bool QueueExplorerHorizontalScroll(double pixelDelta)
+    {
+        explorerScrollViewer ??= FindVisualChild<ScrollViewer>(ExplorerListView);
+        if (explorerScrollViewer is null)
+        {
+            return false;
+        }
+
+        var maximum = Math.Max(0, explorerScrollViewer.ExtentWidth - explorerScrollViewer.ViewportWidth);
+        if (maximum <= 0.5)
+        {
+            return false;
+        }
+
+        var start = explorerHorizontalScrollTimer.IsEnabled
+            ? explorerHorizontalScrollTarget
+            : explorerScrollViewer.HorizontalOffset;
+        explorerHorizontalScrollTarget = Math.Clamp(start + pixelDelta, 0, maximum);
+        explorerHorizontalScrollTimer.Start();
+        return true;
+    }
+
+    private void ExplorerHorizontalScrollTimer_Tick(object? sender, EventArgs e)
+    {
+        if (explorerScrollViewer is null)
+        {
+            explorerHorizontalScrollTimer.Stop();
+            return;
+        }
+
+        var maximum = Math.Max(0, explorerScrollViewer.ExtentWidth - explorerScrollViewer.ViewportWidth);
+        explorerHorizontalScrollTarget = Math.Clamp(explorerHorizontalScrollTarget, 0, maximum);
+        var remaining = explorerHorizontalScrollTarget - explorerScrollViewer.HorizontalOffset;
+        if (Math.Abs(remaining) <= 0.5)
+        {
+            explorerScrollViewer.ScrollToHorizontalOffset(explorerHorizontalScrollTarget);
+            explorerHorizontalScrollTimer.Stop();
+            return;
+        }
+
+        explorerScrollViewer.ScrollToHorizontalOffset(explorerScrollViewer.HorizontalOffset + remaining * 0.34);
     }
 
     private void MacroTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -750,6 +1353,11 @@ public partial class MacroLibraryPanel : UserControl
 
     private IntPtr MacroTreeWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == WM_MOUSEHWHEEL && showingDatabaseContents && IsScreenPointInsideExplorer(lParam))
+        {
+            handled = QueueExplorerHorizontalScroll(GetWheelDelta(wParam) / WheelDelta * 72.0);
+        }
+
         if (msg == WM_MOUSEWHEEL && libraryDragInProgress && IsScreenPointInsideMacroTree(lParam))
         {
             ScrollMacroTreeByWheelDelta(GetWheelDelta(wParam));
@@ -757,6 +1365,24 @@ public partial class MacroLibraryPanel : UserControl
         }
 
         return IntPtr.Zero;
+    }
+
+    private bool IsScreenPointInsideExplorer(IntPtr lParam)
+    {
+        if (!ExplorerListView.IsLoaded || !ExplorerListView.IsVisible)
+        {
+            return false;
+        }
+
+        var packed = lParam.ToInt64();
+        var screenPoint = new Point(
+            unchecked((short)(packed & 0xFFFF)),
+            unchecked((short)((packed >> 16) & 0xFFFF)));
+        var localPoint = ExplorerListView.PointFromScreen(screenPoint);
+        return localPoint.X >= 0
+            && localPoint.Y >= 0
+            && localPoint.X <= ExplorerListView.ActualWidth
+            && localPoint.Y <= ExplorerListView.ActualHeight;
     }
 
     private void StartLibraryDragWheelHook()
@@ -942,20 +1568,13 @@ public partial class MacroLibraryPanel : UserControl
     private void DeleteDatabase_Click(object sender, RoutedEventArgs e)
     {
         if (state is null) return;
-        if (GetSelectedEditableGroup() is not { } group) return;
+        if (GetSelectedEditableGroup() is not { } group)
+        {
+            ResultMessage?.Invoke(L("SelectDatabaseToDelete"));
+            return;
+        }
 
-        state.LibraryStore.DeleteGroup(group.Id);
-        state.SelectedMacroId = null;
-        selectedManagerGroupIds.Remove(group.Id);
-        selectedManagerGroupIds.Clear();
-        selectedManagerGroupIds.Add(MacroLibraryStore.GlobalGroupId);
-        selectedGroupId = MacroLibraryStore.GlobalGroupId;
-        activeDatabaseGroupId = MacroLibraryStore.GlobalGroupId;
-        selectedFolder = null;
-        showingDatabaseContents = false;
-        RefreshTree();
-        LibraryStructureEdited?.Invoke();
-        ResultMessage?.Invoke(LF("GroupDeleted", group.Name));
+        DeleteGroupWithConfirmation(group);
     }
 
     private void ApplyGroup_Click(object sender, RoutedEventArgs e)
@@ -1063,6 +1682,18 @@ public partial class MacroLibraryPanel : UserControl
         }
     }
 
+    private void NewMacroMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (NewMacroContextMenu is null)
+        {
+            return;
+        }
+
+        NewMacroContextMenu.PlacementTarget = NewMacroMenuButton;
+        NewMacroContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        NewMacroContextMenu.IsOpen = true;
+    }
+
     private void NewMacro_Click(object sender, RoutedEventArgs e)
     {
         if (state is null) return;
@@ -1094,42 +1725,277 @@ public partial class MacroLibraryPanel : UserControl
 
     private void PasteMenuItem_Click(object sender, RoutedEventArgs e) => PasteClipboard();
 
-    private void DeleteMenuItem_Click(object sender, RoutedEventArgs e) => DeleteMacro_Click(sender, e);
+    private void DeleteMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (showingDatabaseContents)
+        {
+            DeleteSelectedNodes();
+            return;
+        }
+
+        DeleteNode(contextMenuTargetNode ?? GetSelectedNode());
+    }
+
+    private void ExplorerListView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        explorerDragStartPoint = e.GetPosition(ExplorerListView);
+        if (FindVisualParent<ListViewItem>(e.OriginalSource as DependencyObject) is null
+            && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0)
+        {
+            ExplorerListView.SelectedItems.Clear();
+        }
+    }
+
+    private void ExplorerListView_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || explorerDragStartPoint is not { } start)
+        {
+            return;
+        }
+
+        var current = e.GetPosition(ExplorerListView);
+        if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        explorerDragStartPoint = null;
+        var sourceItem = FindVisualParent<ListViewItem>(e.OriginalSource as DependencyObject);
+        if (sourceItem?.DataContext is not MacroLibraryTreeNode { Item: not null } sourceNode) return;
+        if (!sourceItem.IsSelected)
+        {
+            ExplorerListView.SelectedItems.Clear();
+            sourceItem.IsSelected = true;
+        }
+
+        var macroIds = GetSelectedExplorerNodes()
+            .Select(node => node.Item?.Id)
+            .Where(id => id is not null)
+            .Cast<string>()
+            .ToArray();
+        if (macroIds.Length == 0) return;
+
+        DragDrop.DoDragDrop(
+            ExplorerListView,
+            new DataObject(MacroLibraryDragFormat, macroIds),
+            DragDropEffects.Move);
+    }
+
+    private void ExplorerListView_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(MacroLibraryDragFormat)
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void ExplorerListView_Drop(object sender, DragEventArgs e)
+    {
+        if (state is null || e.Data.GetData(MacroLibraryDragFormat) is not string[] macroIds || macroIds.Length == 0)
+        {
+            return;
+        }
+
+        var targetContainer = FindVisualParent<ListViewItem>(e.OriginalSource as DependencyObject);
+        var targetNode = targetContainer?.DataContext as MacroLibraryTreeNode;
+        var targetFolder = targetNode?.IsFolder == true ? targetNode.FolderName : currentDatabaseFolder;
+        var beforeMacroId = targetNode?.Item?.Id;
+        try
+        {
+            foreach (var macroId in macroIds)
+            {
+                if (string.Equals(macroId, beforeMacroId, StringComparison.Ordinal)) continue;
+                state.LibraryStore.MoveMacro(macroId, targetFolder, beforeMacroId, activeDatabaseGroupId);
+                beforeMacroId = null;
+            }
+
+            selectedFolder = targetFolder;
+            SelectLibrarySortMode("manual");
+            RefreshTree();
+            LibraryStructureEdited?.Invoke();
+            ResultMessage?.Invoke(LF("SelectedItemsMoved", macroIds.Length));
+            e.Effects = DragDropEffects.Move;
+            e.Handled = true;
+        }
+        catch (Exception ex)
+        {
+            ResultMessage?.Invoke(ex.Message);
+        }
+    }
 
     private void DuplicateMacro_Click(object sender, RoutedEventArgs e)
     {
-        if (state?.SelectedMacroId is null) return;
-        MacroDuplicated?.Invoke(state.SelectedMacroId);
+        var macroIds = showingDatabaseContents
+            ? GetSelectedExplorerNodes().Select(node => node.Item?.Id).Where(id => id is not null).Cast<string>().ToList()
+            : state?.SelectedMacroId is { } id ? [id] : [];
+        foreach (var macroId in macroIds)
+        {
+            MacroDuplicated?.Invoke(macroId);
+        }
     }
 
     private void DeleteMacro_Click(object sender, RoutedEventArgs e)
     {
-        if (state is null) return;
-        if (MacroTreeView.SelectedItem is MacroLibraryTreeNode { IsGroup: true, ProcessGroup: { } group })
+        DeleteSelectedNodes();
+    }
+
+    private void DeleteSelectedNodes()
+    {
+        var selected = showingDatabaseContents
+            ? GetSelectedExplorerNodes()
+            : GetSelectedNode() is { } node ? [node] : [];
+        if (selected.Count <= 1)
         {
-            if (group.IsGlobal) return;
+            DeleteNode(selected.FirstOrDefault() ?? FindMacroNode(state?.SelectedMacroId));
+            return;
+        }
+
+        var requests = selected
+            .Where(node => !node.IsGroup)
+            .Select(node => new MacroLibraryDeleteItem(
+                node.Item?.Id,
+                node.GroupId,
+                node.FolderName,
+                node.Title,
+                node.IsFolder,
+                node.Item?.IsLocked == true))
+            .ToList();
+        if (requests.Count == 0)
+        {
+            ResultMessage?.Invoke(L("SelectItemToDelete"));
+            return;
+        }
+
+        LibraryItemsDeleteRequested?.Invoke(requests);
+    }
+
+    private void DeleteNode(MacroLibraryTreeNode? node)
+    {
+        if (state is null) return;
+        if (node is null)
+        {
+            ResultMessage?.Invoke(L("SelectItemToDelete"));
+            return;
+        }
+
+        if (node is { IsGroup: true, ProcessGroup: { } group })
+        {
+            if (group.IsGlobal)
+            {
+                ResultMessage?.Invoke(L("GlobalDatabaseCannotDelete"));
+                return;
+            }
+
+            DeleteGroupWithConfirmation(group);
+            return;
+        }
+
+        if (node is { IsFolder: true } folder)
+        {
+            if (!ConfirmDelete(LF("DeleteFolderConfirm", folder.FolderName), L("Delete"))) return;
+
+            try
+            {
+                state.LibraryStore.DeleteFolder(folder.FolderName, deleteMacros: false, folder.GroupId);
+                state.SelectedMacroId = null;
+                selectedFolder = null;
+                RefreshTree();
+                LibraryStructureEdited?.Invoke();
+                ResultMessage?.Invoke(LF("FolderDeleted", folder.FolderName));
+            }
+            catch (Exception ex)
+            {
+                ReportDeleteFailure(ex);
+            }
+
+            return;
+        }
+
+        if (node.Item is { } item)
+        {
+            if (item.IsLocked)
+            {
+                ResultMessage?.Invoke(L("MacroLockedReadOnly"));
+                return;
+            }
+
+            MacroDeleted?.Invoke(item.Id);
+            return;
+        }
+
+        ResultMessage?.Invoke(L("SelectItemToDelete"));
+    }
+
+    private void DeleteGroupWithConfirmation(MacroLibraryGroup group)
+    {
+        if (state is null) return;
+        if (!ConfirmDelete(LF("DeleteDatabaseConfirm", group.Name), L("DeleteDatabase"))) return;
+
+        try
+        {
             state.LibraryStore.DeleteGroup(group.Id);
             state.SelectedMacroId = null;
+            selectedManagerGroupIds.Remove(group.Id);
+            selectedManagerGroupIds.Clear();
+            selectedManagerGroupIds.Add(MacroLibraryStore.GlobalGroupId);
             selectedGroupId = MacroLibraryStore.GlobalGroupId;
+            activeDatabaseGroupId = MacroLibraryStore.GlobalGroupId;
             selectedFolder = null;
+            showingDatabaseContents = false;
             RefreshTree();
             LibraryStructureEdited?.Invoke();
             ResultMessage?.Invoke(LF("GroupDeleted", group.Name));
-            return;
         }
-
-        if (MacroTreeView.SelectedItem is MacroLibraryTreeNode { IsFolder: true } folder)
+        catch (Exception ex)
         {
-            state.LibraryStore.DeleteFolder(folder.FolderName, deleteMacros: false, folder.GroupId);
-            state.SelectedMacroId = null;
-            selectedFolder = null;
-            RefreshTree();
-            ResultMessage?.Invoke(LF("FolderDeleted", folder.FolderName));
-            return;
+            ReportDeleteFailure(ex);
+        }
+    }
+
+    private bool ConfirmDelete(string message, string caption)
+    {
+        return DialogOwnerService.MessageBoxSafe(
+            this,
+            message,
+            caption,
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning) == MessageBoxResult.Yes;
+    }
+
+    private void ReportDeleteFailure(Exception exception)
+    {
+        var message = LF("DeleteFailed", exception.Message);
+        ResultMessage?.Invoke(message);
+        DialogOwnerService.MessageBoxSafe(
+            this,
+            message,
+            L("Delete"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+    }
+
+    private MacroLibraryTreeNode? FindMacroNode(string? macroId)
+    {
+        if (string.IsNullOrWhiteSpace(macroId)
+            || MacroTreeView.ItemsSource is not IEnumerable<MacroLibraryTreeNode> nodes)
+        {
+            return null;
         }
 
-        if (state.SelectedMacroId is null) return;
-        MacroDeleted?.Invoke(state.SelectedMacroId);
+        return FindMacroNode(nodes, macroId);
+    }
+
+    private static MacroLibraryTreeNode? FindMacroNode(IEnumerable<MacroLibraryTreeNode> nodes, string macroId)
+    {
+        foreach (var node in nodes)
+        {
+            if (string.Equals(node.Item?.Id, macroId, StringComparison.Ordinal)) return node;
+            var childMatch = FindMacroNode(node.Children, macroId);
+            if (childMatch is not null) return childMatch;
+        }
+
+        return null;
     }
 
     private void StartAllListening_Click(object sender, RoutedEventArgs e)
@@ -1169,7 +2035,7 @@ public partial class MacroLibraryPanel : UserControl
                 Content = format.Label
             };
             ExportFormatBox.Items.Add(item);
-            if (format.Format == MacroConversionFormat.MacroConverterXml)
+            if (format.Format == MacroConversionFormat.MacroHidMcrx)
                 ExportFormatBox.SelectedItem = item;
         }
 
@@ -1179,39 +2045,218 @@ public partial class MacroLibraryPanel : UserControl
 
     private void RefreshConversionText()
     {
-        ConversionText.Text = razerModuleFiles.Count > 0
-            ? LF("ConversionModulesLoaded", razerModuleFiles.Count)
-            : L("ConversionReady");
+        ConversionText.Text = L("ConversionAutoDetectHelp");
     }
 
     private void ImportMacro_Click(object sender, RoutedEventArgs e)
     {
-        if (!showingDatabaseContents) return;
+        if (state is null || !showingDatabaseContents) return;
         var dialog = new OpenFileDialog
         {
             Filter = L("ConverterImportFileFilter"),
-            Title = L("ImportMacroTitle")
+            Title = L("ImportMacroTitle"),
+            Multiselect = true
         };
 
         if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
 
-        try
+        var selectedFiles = new List<SmartImportFile>();
+        var failureMessages = new List<string>();
+        foreach (var fileName in dialog.FileNames)
         {
-            var content = File.ReadAllText(dialog.FileName);
-            var auxiliaryFiles = LoadConversionAuxiliaryFiles(dialog.FileName);
-            var import = MacroConversionService.ImportToMcrx(new MacroImportRequest(
-                content, dialog.FileName, MacroConversionFormat.Auto, auxiliaryFiles));
-            ImportApplied?.Invoke(import.Document);
-            var message = LF("ConversionImported", import.SourceFormat, import.Document.Steps.Count);
-            ConversionText.Text = message + Environment.NewLine + FormatDiagnostics(import.Diagnostics);
-            ResultMessage?.Invoke(message);
+            try
+            {
+                var content = File.ReadAllText(fileName);
+                var format = MacroConversionService.DetectFormat(content, fileName);
+                MacroConversionService.TryGetRazerMacroGuid(content, out var razerGuid);
+                selectedFiles.Add(new SmartImportFile(
+                    Path.GetFullPath(fileName),
+                    Path.GetFileName(fileName),
+                    content,
+                    format,
+                    string.IsNullOrWhiteSpace(razerGuid) ? null : razerGuid));
+            }
+            catch (Exception ex)
+            {
+                failureMessages.Add(FormatImportFailure(Path.GetFileName(fileName), ex));
+            }
         }
-        catch (Exception ex)
+
+        var auxiliaryFiles = BuildSmartImportCatalog(selectedFiles);
+        var modulesByGuid = auxiliaryFiles
+            .Select(file => MacroConversionService.TryGetRazerMacroGuid(file.Content, out var guid)
+                ? (Guid: guid, File: file)
+                : (Guid: string.Empty, File: file))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Guid))
+            .GroupBy(item => item.Guid, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().File, StringComparer.OrdinalIgnoreCase);
+        var referencedModuleGuids = ResolveReferencedRazerModuleClosure(selectedFiles, modulesByGuid);
+        var selectedModuleGuids = selectedFiles
+            .Where(file => file.RazerGuid is not null && referencedModuleGuids.Contains(file.RazerGuid))
+            .Select(file => file.RazerGuid!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var importedCount = 0;
+        var automaticallyDetectedCount = 0;
+        var diagnosticLines = new List<string>();
+        string? singleSourceFormat = null;
+        var singleStepCount = 0;
+        MacroLibraryItem? lastImportedMacro = null;
+        var pendingDocuments = new List<MacroDocument>();
+
+        foreach (var guid in referencedModuleGuids)
         {
-            var message = LF("ConversionImportFailed", ex.Message);
-            ConversionText.Text = message;
-            ResultMessage?.Invoke(ex.Message);
+            if (!modulesByGuid.TryGetValue(guid, out var module)) continue;
+            try
+            {
+                var imported = ImportRazerWithNestedCalls(module, auxiliaryFiles);
+                lastImportedMacro = StoreRazerMacro(imported, module.Content);
+                importedCount++;
+                if (!selectedModuleGuids.Contains(guid)) automaticallyDetectedCount++;
+                diagnosticLines.Add($"{module.FileName}: {FormatDiagnostics(imported.Diagnostics)}");
+            }
+            catch (Exception ex)
+            {
+                failureMessages.Add(FormatImportFailure(module.FileName, ex));
+            }
         }
+
+        foreach (var file in selectedFiles.Where(file => file.RazerGuid is null || !referencedModuleGuids.Contains(file.RazerGuid)))
+        {
+            try
+            {
+                var import = file.Format == MacroConversionFormat.RazerSynapseXml
+                    ? ImportRazerWithNestedCalls(new AuxiliaryMacroFile(file.DisplayName, file.Content), auxiliaryFiles)
+                    : MacroConversionService.ImportToMcrx(new MacroImportRequest(
+                        file.Content,
+                        file.FullPath,
+                        file.Format,
+                        auxiliaryFiles));
+                if (file.Format == MacroConversionFormat.RazerSynapseXml)
+                {
+                    lastImportedMacro = StoreRazerMacro(import, file.Content);
+                }
+                else
+                {
+                    pendingDocuments.Add(import.Document);
+                }
+
+                importedCount++;
+                singleSourceFormat = import.SourceFormat.ToString();
+                singleStepCount = import.Document.Steps.Count;
+                diagnosticLines.Add($"{file.DisplayName}: {FormatDiagnostics(import.Diagnostics)}");
+            }
+            catch (Exception ex)
+            {
+                failureMessages.Add(FormatImportFailure(file.DisplayName, ex));
+            }
+        }
+
+        if (pendingDocuments.Count > 0)
+        {
+            var importedItems = state.LibraryStore.ImportMacros(
+                pendingDocuments,
+                GetCurrentFolder(),
+                CurrentDatabaseGroupId);
+            if (importedItems.Count > 0)
+            {
+                lastImportedMacro = importedItems[^1];
+                ImportApplied?.Invoke(state.LibraryStore.ReadMacro(lastImportedMacro.Id));
+            }
+        }
+
+        if (lastImportedMacro is not null)
+        {
+            state.SelectedMacroId = lastImportedMacro.Id;
+            RefreshTree();
+            MacroSelected?.Invoke(lastImportedMacro.Id);
+        }
+
+        var message = selectedFiles.Count == 1 && importedCount == 1 && automaticallyDetectedCount == 0
+            ? LF("ConversionImported", singleSourceFormat ?? L("Macro"), singleStepCount)
+            : LF("ConversionSmartImported", importedCount, selectedFiles.Count, automaticallyDetectedCount);
+        var details = diagnosticLines.Concat(failureMessages).ToList();
+        ConversionText.Text = details.Count == 0
+            ? message
+            : message + Environment.NewLine + string.Join(Environment.NewLine, details);
+        ResultMessage?.Invoke(message);
+
+        if (failureMessages.Count > 0)
+        {
+            var failureSummary = LF("ConversionBatchImportFailed", failureMessages.Count);
+            ResultMessage?.Invoke(failureSummary);
+            DialogOwnerService.MessageBoxSafe(
+                this,
+                failureSummary + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine + Environment.NewLine, failureMessages),
+                L("ConversionImportErrorTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private MacroImportResult ImportRazerWithNestedCalls(
+        AuxiliaryMacroFile file,
+        IReadOnlyList<AuxiliaryMacroFile> auxiliaryFiles)
+    {
+        var referencedMacros = auxiliaryFiles
+            .Where(candidate => MacroConversionService.TryGetRazerMacroGuid(candidate.Content, out _))
+            .ToList();
+        return MacroConversionService.ImportToMcrx(new MacroImportRequest(
+            file.Content,
+            file.FileName,
+            MacroConversionFormat.RazerSynapseXml,
+            referencedMacros,
+            PreserveRazerModuleCalls: true));
+    }
+
+    private MacroLibraryItem StoreRazerMacro(MacroImportResult imported, string content)
+    {
+        IReadOnlyList<string> aliases = MacroConversionService.TryGetRazerMacroGuid(content, out var guid)
+            ? [guid]
+            : [];
+        var targetGroupId = CurrentDatabaseGroupId;
+        var existing = state!.LibraryStore.Load().Items.FirstOrDefault(item =>
+            string.Equals(item.GroupId, targetGroupId, StringComparison.OrdinalIgnoreCase)
+            && (item.MatchesReference(guid) || string.Equals(item.Name, imported.Document.Name, StringComparison.CurrentCultureIgnoreCase)));
+        return existing is not null
+            ? state.LibraryStore.AddAliasesToMacro(existing.Id, aliases)
+            : state.LibraryStore.CreateMacro(imported.Document, aliases: aliases, groupId: targetGroupId);
+    }
+
+    private static IReadOnlyList<AuxiliaryMacroFile> BuildSmartImportCatalog(IReadOnlyList<SmartImportFile> selectedFiles)
+    {
+        var files = selectedFiles
+            .Select(file => new AuxiliaryMacroFile(file.DisplayName, file.Content))
+            .ToList();
+        foreach (var selectedFile in selectedFiles)
+        {
+            files.AddRange(LoadConversionAuxiliaryFiles(selectedFile.FullPath));
+        }
+
+        return files
+            .DistinctBy(file => $"{file.FileName}\n{file.Content}", StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static IReadOnlySet<string> ResolveReferencedRazerModuleClosure(
+        IReadOnlyList<SmartImportFile> selectedFiles,
+        IReadOnlyDictionary<string, AuxiliaryMacroFile> modulesByGuid)
+    {
+        var resolved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Queue<string>(selectedFiles
+            .Where(file => file.Format == MacroConversionFormat.RazerSynapseXml)
+            .SelectMany(file => MacroConversionService.GetRazerModuleReferences(file.Content))
+            .Select(reference => reference.Guid));
+        while (pending.TryDequeue(out var guid))
+        {
+            if (!resolved.Add(guid) || !modulesByGuid.TryGetValue(guid, out var module)) continue;
+            foreach (var nested in MacroConversionService.GetRazerModuleReferences(module.Content))
+            {
+                pending.Enqueue(nested.Guid);
+            }
+        }
+
+        return resolved;
     }
 
     private static IReadOnlyList<AuxiliaryMacroFile> LoadConversionAuxiliaryFiles(string selectedFileName)
@@ -1255,87 +2300,11 @@ public partial class MacroLibraryPanel : UserControl
         return files;
     }
 
-    private void ImportRazerModules_Click(object sender, RoutedEventArgs e)
-    {
-        if (state is null) return;
-        if (!showingDatabaseContents) return;
-
-        var dialog = new OpenFileDialog
-        {
-            Filter = L("RazerModuleFileFilter"),
-            Title = L("ImportRazerModulesTitle"),
-            Multiselect = true
-        };
-
-        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
-
-        razerModuleFiles = dialog.FileNames
-            .Select(fileName => new AuxiliaryMacroFile(Path.GetFileName(fileName), File.ReadAllText(fileName)))
-            .ToList();
-
-        var importedCount = 0;
-        MacroLibraryItem? lastImported = null;
-        foreach (var file in razerModuleFiles)
-        {
-            try
-            {
-                var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(
-                    file.Content, file.FileName, MacroConversionFormat.RazerSynapseXml, []));
-                IReadOnlyList<string> aliases = MacroConversionService.TryGetRazerMacroGuid(file.Content, out var guid)
-                    ? [guid]
-                    : [];
-                var targetGroupId = CurrentDatabaseGroupId;
-                var existing = state.LibraryStore.Load().Items.FirstOrDefault(item =>
-                    string.Equals(item.GroupId, targetGroupId, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(item.Name, imported.Document.Name, StringComparison.CurrentCultureIgnoreCase));
-                lastImported = existing is not null && aliases.Count > 0
-                    ? state.LibraryStore.AddAliasesToMacro(existing.Id, aliases)
-                    : state.LibraryStore.CreateMacro(imported.Document, aliases: aliases, groupId: targetGroupId);
-                importedCount++;
-            }
-            catch
-            {
-                // Keep importing the rest of a module batch even if one file is malformed.
-            }
-        }
-
-        if (lastImported is not null)
-        {
-            state.SelectedMacroId = lastImported.Id;
-        }
-
-        RefreshTree();
-        if (lastImported is not null)
-        {
-            MacroSelected?.Invoke(lastImported.Id);
-        }
-
-        var message = LF("ConversionModulesImported", razerModuleFiles.Count, importedCount);
-        ConversionText.Text = message;
-        ResultMessage?.Invoke(message);
-    }
-
     private void ExportMacro_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var document = DocumentRequested?.Invoke()
-                ?? throw new InvalidOperationException("No document available.");
-            var format = GetSelectedExportFormat();
-            var export = MacroConversionService.ExportFromMcrx(document, format);
-            var dialog = new SaveFileDialog
-            {
-                Filter = FormatFilter(format),
-                Title = L("ExportMacroTitle"),
-                DefaultExt = MacroConversionService.GetDefaultExtension(format),
-                FileName = export.FileName
-            };
-
-            if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
-
-            File.WriteAllText(dialog.FileName, export.Output);
-            ConversionText.Text = FormatDiagnostics(export.Diagnostics);
-            ResultMessage?.Invoke(LF("ConversionExported", Path.GetFileName(dialog.FileName)));
+            ExportSelectedMacros();
         }
         catch (Exception ex)
         {
@@ -1345,11 +2314,140 @@ public partial class MacroLibraryPanel : UserControl
         }
     }
 
+    private void ExportSelectedMacros()
+    {
+        if (state is null) return;
+        var format = GetSelectedExportFormat();
+        var selected = GetSelectedExplorerNodes()
+            .Select(node => node.Item)
+            .Where(item => item is not null)
+            .Cast<MacroLibraryItem>()
+            .ToList();
+        if (selected.Count == 0 && state.SelectedMacroId is { } selectedId)
+        {
+            var current = state.LibraryStore.Load().Items.FirstOrDefault(item =>
+                string.Equals(item.Id, selectedId, StringComparison.OrdinalIgnoreCase));
+            if (current is not null)
+            {
+                selected.Add(current);
+            }
+        }
+
+        if (selected.Count <= 1)
+        {
+            var item = selected.FirstOrDefault();
+            var document = PrepareExportDocument(item);
+            var export = MacroConversionService.ExportFromMcrx(document, format);
+            var dialog = new SaveFileDialog
+            {
+                Filter = FormatFilter(format),
+                Title = L("ExportMacroTitle"),
+                DefaultExt = MacroConversionService.GetDefaultExtension(format),
+                FileName = export.FileName
+            };
+            if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
+            File.WriteAllText(dialog.FileName, export.Output);
+            ConversionText.Text = FormatDiagnostics(export.Diagnostics);
+            ResultMessage?.Invoke(LF("ConversionExported", Path.GetFileName(dialog.FileName)));
+            return;
+        }
+
+        var primary = selected.FirstOrDefault(item =>
+                string.Equals(item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase))
+            ?? selected[0];
+        var primaryExport = MacroConversionService.ExportFromMcrx(PrepareExportDocument(primary), format);
+        var multiDialog = new SaveFileDialog
+        {
+            Filter = FormatFilter(format),
+            Title = L("ExportMacroTitle"),
+            DefaultExt = MacroConversionService.GetDefaultExtension(format),
+            FileName = primaryExport.FileName
+        };
+        if (DialogOwnerService.ShowDialogSafe(multiDialog, this) != true) return;
+
+        var directory = Path.GetDirectoryName(multiDialog.FileName);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            throw new InvalidOperationException("Export directory is not available.");
+        }
+
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(multiDialog.FileName, primaryExport.Output);
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            Path.GetFullPath(multiDialog.FileName)
+        };
+        var diagnostics = primaryExport.Diagnostics.ToList();
+        var exportedNames = new List<string> { Path.GetFileName(multiDialog.FileName) };
+        foreach (var item in selected.Where(item =>
+            !string.Equals(item.Id, primary.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            var export = MacroConversionService.ExportFromMcrx(PrepareExportDocument(item), format);
+            var path = AllocateExportPath(directory, export.FileName, written);
+            File.WriteAllText(path, export.Output);
+            written.Add(Path.GetFullPath(path));
+            diagnostics.AddRange(export.Diagnostics);
+            exportedNames.Add(Path.GetFileName(path));
+        }
+
+        ConversionText.Text = FormatDiagnostics(diagnostics);
+        ResultMessage?.Invoke(LF("ConversionExported", string.Join(", ", exportedNames)));
+    }
+
+    private MacroDocument PrepareExportDocument(MacroLibraryItem? item)
+    {
+        MacroDocument document;
+        if (item is not null
+            && state is not null
+            && string.Equals(item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase)
+            && DocumentRequested is not null)
+        {
+            document = DocumentRequested.Invoke()
+                ?? throw new InvalidOperationException("No document available.");
+        }
+        else if (item is not null && state is not null)
+        {
+            document = state.LibraryStore.ReadMacro(item.Id);
+        }
+        else
+        {
+            document = DocumentRequested?.Invoke()
+                ?? throw new InvalidOperationException("No document available.");
+        }
+
+        return item is null ? document : document with { Id = item.Id };
+    }
+
+    private static string AllocateExportPath(string directory, string fileName, IReadOnlySet<string> written)
+    {
+        var extension = Path.GetExtension(fileName);
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(stem))
+        {
+            stem = "macro";
+        }
+
+        for (var index = 0; ; index++)
+        {
+            var candidateName = index == 0 ? $"{stem}{extension}" : $"{stem}-{index}{extension}";
+            var path = Path.GetFullPath(Path.Combine(directory, candidateName));
+            if (!written.Contains(path) && !File.Exists(path))
+            {
+                return path;
+            }
+
+            if (index >= 999)
+            {
+                return Path.GetFullPath(Path.Combine(directory, $"{stem}-{Guid.NewGuid():N}{extension}"));
+            }
+        }
+    }
+
     private MacroConversionFormat GetSelectedExportFormat()
     {
         return ExportFormatBox.SelectedItem is ComboBoxItem { Tag: MacroConversionFormat format }
             ? format
-            : MacroConversionFormat.MacroConverterXml;
+            : MacroConversionFormat.MacroHidMcrx;
     }
 
     private static string FormatFilter(MacroConversionFormat format)
@@ -1361,7 +2459,29 @@ public partial class MacroLibraryPanel : UserControl
     private static string FormatDiagnostics(IReadOnlyList<MacroConversionDiagnostic> diagnostics)
     {
         if (diagnostics.Count == 0) return L("ConversionDiagnosticsNone");
-        return string.Join(Environment.NewLine, diagnostics.Select(item => $"{item.Severity}: {item.Message}"));
+        return string.Join(Environment.NewLine, diagnostics.Select(item =>
+        {
+            var location = item.LineNumber is { } line
+                ? LF("ConversionDiagnosticLocation", line, item.ColumnNumber ?? 1)
+                : string.Empty;
+            return $"{item.Severity}: {location}{item.Message}";
+        }));
+    }
+
+    private static string FormatImportFailure(string fileName, Exception exception)
+    {
+        if (exception is not MacroImportException importException)
+        {
+            return $"{fileName}: {exception.Message}";
+        }
+
+        var location = importException.LineNumber is { } line
+            ? LF("ConversionImportLocation", line, importException.ColumnNumber ?? 1)
+            : L("ConversionImportUnknownLocation");
+        var source = string.IsNullOrWhiteSpace(importException.SourceLine)
+            ? string.Empty
+            : Environment.NewLine + LF("ConversionImportSourceLine", importException.SourceLine);
+        return $"{fileName}: {location}{Environment.NewLine}{importException.Reason}{source}";
     }
 
     private string NextMacroName(string prefix)
@@ -1413,6 +2533,11 @@ public partial class MacroLibraryPanel : UserControl
     private void BeginRename(MacroLibraryTreeNode? node)
     {
         if (node is null) return;
+        if (node.Item?.IsLocked == true)
+        {
+            ResultMessage?.Invoke(L("MacroLockedReadOnly"));
+            return;
+        }
         if (renamingNode is not null && !ReferenceEquals(renamingNode, node))
         {
             CancelRename(renamingNode);
@@ -1433,6 +2558,7 @@ public partial class MacroLibraryPanel : UserControl
         if (string.IsNullOrWhiteSpace(requestedName) || string.Equals(requestedName, node.Title, StringComparison.CurrentCulture))
         {
             node.IsRenaming = false;
+            RefreshAfterRenameIfNeeded();
             return;
         }
 
@@ -1472,6 +2598,7 @@ public partial class MacroLibraryPanel : UserControl
         {
             node.IsRenaming = false;
             ResultMessage?.Invoke(ex.Message);
+            RefreshAfterRenameIfNeeded();
         }
     }
 
@@ -1484,25 +2611,38 @@ public partial class MacroLibraryPanel : UserControl
 
         node.RenameText = node.Title;
         node.IsRenaming = false;
+        RefreshAfterRenameIfNeeded();
+    }
+
+    private void RefreshAfterRenameIfNeeded()
+    {
+        if (!refreshTreeAfterRename) return;
+        refreshTreeAfterRename = false;
+        RefreshTree();
     }
 
     private void CopySelectionToClipboard()
     {
-        var node = GetSelectedNode();
-        if (node is null) return;
-        if (node.IsGroup) return;
-
-        clipboard = node.IsFolder
-            ? new MacroLibraryClipboardItem(MacroLibraryClipboardKind.Folder, node.FolderName, node.GroupId)
-            : new MacroLibraryClipboardItem(MacroLibraryClipboardKind.Macro, node.Item!.Id, node.GroupId);
+        var nodes = showingDatabaseContents
+            ? GetSelectedExplorerNodes()
+            : GetSelectedNode() is { } selected ? [selected] : [];
+        clipboard = nodes
+            .Where(node => !node.IsGroup)
+            .Select(node => node.IsFolder
+                ? new MacroLibraryClipboardItem(MacroLibraryClipboardKind.Folder, node.FolderName, node.GroupId)
+                : new MacroLibraryClipboardItem(MacroLibraryClipboardKind.Macro, node.Item!.Id, node.GroupId))
+            .ToList();
+        if (clipboard.Count == 0) return;
         UpdateClipboardControls();
-        ResultMessage?.Invoke(node.IsFolder ? LF("FolderCopied", node.FolderName) : LF("MacroCopied", node.Title));
+        ResultMessage?.Invoke(clipboard.Count == 1
+            ? (nodes[0].IsFolder ? LF("FolderCopied", nodes[0].FolderName) : LF("MacroCopied", nodes[0].Title))
+            : LF("SelectedItemsCopied", clipboard.Count));
     }
 
     private void PasteClipboard()
     {
         if (state is null) return;
-        if (clipboard is null)
+        if (clipboard.Count == 0)
         {
             ResultMessage?.Invoke(L("ClipboardEmpty"));
             return;
@@ -1512,14 +2652,17 @@ public partial class MacroLibraryPanel : UserControl
         {
             var targetGroupId = GetCurrentGroupId();
             var targetFolder = GetCurrentFolder();
-            switch (clipboard.Kind)
+            foreach (var clipboardItem in clipboard.ToList())
             {
-                case MacroLibraryClipboardKind.Macro:
-                    PasteMacro(clipboard.Value, targetGroupId, targetFolder);
-                    break;
-                case MacroLibraryClipboardKind.Folder:
-                    PasteFolder(clipboard.Value, clipboard.GroupId, targetGroupId);
-                    break;
+                switch (clipboardItem.Kind)
+                {
+                    case MacroLibraryClipboardKind.Macro:
+                        PasteMacro(clipboardItem.Value, targetGroupId, targetFolder);
+                        break;
+                    case MacroLibraryClipboardKind.Folder:
+                        PasteFolder(clipboardItem.Value, clipboardItem.GroupId, targetGroupId);
+                        break;
+                }
             }
         }
         catch (Exception ex)
@@ -1567,20 +2710,22 @@ public partial class MacroLibraryPanel : UserControl
 
     private void UpdateClipboardControls()
     {
-        if (PasteMacroButton is not null)
-        {
-            PasteMacroButton.IsEnabled = clipboard is not null;
-        }
-
         if (PasteMenuItem is not null)
         {
-            PasteMenuItem.IsEnabled = clipboard is not null;
+            PasteMenuItem.IsEnabled = clipboard.Count > 0;
+        }
+
+        if (ExplorerPasteMenuItem is not null)
+        {
+            ExplorerPasteMenuItem.IsEnabled = clipboard.Count > 0;
         }
     }
 
     private MacroLibraryTreeNode? GetSelectedNode()
     {
-        return MacroTreeView.SelectedItem as MacroLibraryTreeNode;
+        return showingDatabaseContents
+            ? contextMenuTargetNode ?? ExplorerListView.SelectedItem as MacroLibraryTreeNode
+            : contextMenuTargetNode ?? MacroTreeView.SelectedItem as MacroLibraryTreeNode;
     }
 
     private string CreateUniqueGroupName(string requestedName, string? excludingGroupId)
@@ -1709,6 +2854,20 @@ public partial class MacroLibraryPanel : UserControl
         }), DispatcherPriority.Loaded);
     }
 
+    private void RestoreLibraryScroll(double verticalOffset)
+    {
+        if (!showingDatabaseContents)
+        {
+            RestoreMacroTreeScroll(verticalOffset);
+            return;
+        }
+
+        ExplorerListView.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            FindVisualChild<ScrollViewer>(ExplorerListView)?.ScrollToVerticalOffset(verticalOffset);
+        }), DispatcherPriority.Loaded);
+    }
+
     private ScrollViewer? GetMacroTreeScrollViewer()
     {
         return macroTreeScrollViewer ??= FindVisualChild<ScrollViewer>(MacroTreeView);
@@ -1721,12 +2880,12 @@ public partial class MacroLibraryPanel : UserControl
             return string.Empty;
         }
 
-        if (MacroTreeView.SelectedItem is MacroLibraryTreeNode node)
+        if (contextMenuTargetNode is { IsFolder: true } contextFolder)
         {
-            return node.IsFolder ? node.FolderName : node.Item?.Folder ?? string.Empty;
+            return contextFolder.FolderName;
         }
 
-        return selectedFolder ?? string.Empty;
+        return currentDatabaseFolder;
     }
 
     private string GetCurrentGroupId()
@@ -1765,6 +2924,17 @@ public partial class MacroLibraryPanel : UserControl
                 LibrarySortBox.SelectedItem = item;
             }
 
+            return;
+        }
+    }
+
+    private void SelectExplorerViewMode(string tag)
+    {
+        foreach (var item in LibraryViewBox.Items.OfType<ComboBoxItem>())
+        {
+            if (!string.Equals(item.Tag?.ToString(), tag, StringComparison.Ordinal)) continue;
+            if (!ReferenceEquals(LibraryViewBox.SelectedItem, item)) LibraryViewBox.SelectedItem = item;
+            ApplyExplorerViewMode();
             return;
         }
     }
@@ -1954,6 +3124,13 @@ public partial class MacroLibraryPanel : UserControl
     private static string LF(string key, params object[] args) => LocalizationService.Format(key, args);
 
     private sealed record MacroLibraryClipboardItem(MacroLibraryClipboardKind Kind, string Value, string GroupId);
+
+    private sealed record SmartImportFile(
+        string FullPath,
+        string DisplayName,
+        string Content,
+        MacroConversionFormat Format,
+        string? RazerGuid);
 
     private sealed record RunningProcessChoice(string ProcessName, string WindowTitle);
 

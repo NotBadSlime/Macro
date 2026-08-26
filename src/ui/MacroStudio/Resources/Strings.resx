@@ -272,6 +272,7 @@
   <data name="ConversionDiagnosticLocation" xml:space="preserve"><value>Line {0}, column {1}: </value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>Macro Library Manager</value></data>
   <data name="NewMacro" xml:space="preserve"><value>New</value></data>
+  <data name="NewMacroFile" xml:space="preserve"><value>Macro file</value></data>
   <data name="NewFolder" xml:space="preserve"><value>Folder</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>Duplicate</value></data>
   <data name="Copy" xml:space="preserve"><value>Copy</value></data>
