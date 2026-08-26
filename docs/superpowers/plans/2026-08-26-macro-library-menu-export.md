@@ -51,7 +51,7 @@ static void MacroCallReferenceCollectorWalksNestedStructures()
             new MacroCallStep("child-id"),
             new RepeatStep(2, [new MacroCallStep("loop-child")]),
             new PixelWhenStep(
-                new PixelCondition(ScreenScope.Screen, 1, 2, new RgbColor(1, 2, 3), 4),
+                new PixelCondition(new PixelCoordinate(CoordinateScope.Screen, 1, 2), new RgbColor(1, 2, 3), 4),
                 [new MacroCallStep("pixel-child")])
         ],
         [
@@ -241,13 +241,34 @@ public static class MacroLibraryExportBundle
         MacroLibrarySnapshot snapshot,
         IReadOnlyList<MacroLibraryItem> items)
     {
-        // Same dependency walk; Primary = selected items; Dependencies = resolved outside the selected id set.
-        ...
+        var primaryItems = items.ToList();
+        var primary = primaryItems
+            .Select(item => new MacroLibraryExportEntry(item, store.ReadMacro(item.Id) with { Id = item.Id }, item.FileName))
+            .ToList();
+        var primaryIds = primaryItems.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var deps = new Dictionary<string, MacroLibraryExportEntry>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Queue<string>(primary.SelectMany(entry => MacroCallReferenceCollector.Collect(entry.Document)));
+        var visitedRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        while (pending.TryDequeue(out var reference))
+        {
+            if (!visitedRefs.Add(reference)) continue;
+            var item = snapshot.Items.FirstOrDefault(candidate => candidate.MatchesReference(reference));
+            if (item is null || primaryIds.Contains(item.Id) || deps.ContainsKey(item.Id)) continue;
+            var document = store.ReadMacro(item.Id) with { Id = item.Id };
+            deps[item.Id] = new MacroLibraryExportEntry(item, document, item.FileName);
+            foreach (var nested in MacroCallReferenceCollector.Collect(document))
+            {
+                pending.Enqueue(nested);
+            }
+        }
+
+        return new MacroLibraryExportBundle(primary, deps.Values.ToList());
     }
 }
 ```
 
-Implement `FromItems` fully (same queue logic; `primaryIds` = selected ids). Do not leave `...` in the real file.
+Implement the class exactly as above (no omitted methods).
 
 - [ ] **Step 4: Run tests — expect pass**
 
@@ -550,10 +571,29 @@ public static void WriteTwoFolders(
 ZIP API:
 
 ```csharp
-public static void WriteZip(..., string zipPath, ...)
+public static void WriteZip(
+    MacroLibraryExportBundle bundle,
+    string zipPath,
+    string exportRootName,
+    string primaryFolderName,
+    string dependenciesFolderName,
+    MacroConversionFormat format)
+{
+    var tempRoot = Path.Combine(Path.GetTempPath(), "MacroHID-export", Guid.NewGuid().ToString("N"));
+    try
+    {
+        WriteTwoFolders(bundle, tempRoot, exportRootName, primaryFolderName, dependenciesFolderName, format);
+        if (File.Exists(zipPath)) File.Delete(zipPath);
+        ZipFile.CreateFromDirectory(Path.Combine(tempRoot, exportRootName), zipPath);
+    }
+    finally
+    {
+        if (Directory.Exists(tempRoot)) Directory.Delete(tempRoot, recursive: true);
+    }
+}
 ```
 
-Uses `System.IO.Compression.ZipFile` after writing to a temp directory then zipping (or zip entries directly).
+Uses `System.IO.Compression.ZipFile`.
 
 - [ ] **Step 2: Run — expect fail**
 
@@ -564,11 +604,16 @@ Uses `System.IO.Compression.ZipFile` after writing to a temp directory then zipp
 3. Replace `ExportSelectedMacros` flow:
 
 ```csharp
-private void ExportMacro_Click(...) => BeginExport(ExportTarget.FromSelection());
+private void ExportMacro_Click(object sender, RoutedEventArgs e) => BeginExport(ExportTarget.FromSelection(this));
 
 private void BeginExport(ExportTarget target)
 {
-    if (target.IsEmpty) { ResultMessage?.Invoke(L("ExportNothingSelected")); return; }
+    if (target.IsEmpty)
+    {
+        ResultMessage?.Invoke(L("ExportNothingSelected"));
+        return;
+    }
+
     var wizard = new ExportWizardDialog(showPackagingStep: target.IsFolder);
     wizard.Owner = Window.GetWindow(this);
     if (DialogOwnerService.ShowDialogSafe(wizard, this) != true || wizard.Result is null) return;
@@ -576,6 +621,7 @@ private void BeginExport(ExportTarget target)
 }
 ```
 
+Define a small private `ExportTarget` record in the panel (or nested type) with `IsEmpty`, `IsFolder`, selected macros/folder fields, and `FromSelection` reading explorer selection.
 - Folder → `FromFolder` + packaging TwoFolders/Zip via folder browser / save zip dialog.
 - Single macro → SaveFileDialog.
 - Multi macros → pick folder (`OpenFolderDialog` on net8-windows) + `FromItems` + write primary flat + `依赖子宏` if any.
