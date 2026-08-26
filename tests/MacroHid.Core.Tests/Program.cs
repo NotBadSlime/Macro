@@ -283,6 +283,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio macro library defers listening refresh while renaming", MacroStudioMacroLibraryDefersListeningRefreshWhileRenaming),
     ("MacroStudio macro library supports Explorer rename copy and paste", MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste),
     ("MacroStudio macro library toolbar uses new dropdown only", MacroStudioMacroLibraryToolbarUsesNewDropdownOnly),
+    ("MacroStudio explorer context menu switches by target kind", MacroStudioExplorerContextMenuSwitchesByTargetKind),
     ("MacroStudio rename uses themed inline text box", MacroStudioRenameUsesThemedInlineTextBox),
     ("MacroStudio polishes input chrome menus and empty states", MacroStudioPolishesInputChromeMenusAndEmptyStates),
     ("MacroStudio uses fluent window chrome and themed dialogs", MacroStudioUsesFluentWindowChromeAndThemedDialogs),
@@ -7014,6 +7015,18 @@ static void MacroStudioMacroLibraryToolbarUsesNewDropdownOnly()
     Assert.DoesNotContain("x:Name=\"NewFolderButton\"", xaml);
 }
 
+static void MacroStudioExplorerContextMenuSwitchesByTargetKind()
+{
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    Assert.Contains("ConfigureExplorerContextMenu", libraryCode);
+    Assert.Contains("ExplorerExportFolderMenuItem", libraryXaml);
+    Assert.Contains("ExplorerExportMacroMenuItem", libraryXaml);
+    Assert.DoesNotContain("x:Name=\"ExplorerOpenMenuItem\"", libraryXaml);
+    Assert.DoesNotContain("x:Name=\"ExplorerDuplicateMenuItem\"", libraryXaml);
+    Assert.DoesNotContain("x:Name=\"ExplorerSelectAllMenuItem\"", libraryXaml);
+}
+
 static void MacroStudioMacroLibraryUsesDynamicThemeTextColors()
 {
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
@@ -7466,7 +7479,7 @@ static void MacroStudioMacroLibrarySupportsExplorerMultiSelectAndViewModes()
     Assert.Contains("Tag=\"list\"", libraryXaml);
     Assert.Contains("Tag=\"smallIcons\"", libraryXaml);
     Assert.Contains("Tag=\"largeIcons\"", libraryXaml);
-    Assert.Contains("ExplorerSelectAllMenuItem", libraryXaml);
+    Assert.Contains("ExplorerListView.SelectAll()", libraryCode);
     Assert.Contains("ExplorerViewMenuItem", libraryXaml);
     Assert.Contains("ExplorerSortMenuItem", libraryXaml);
     Assert.Contains("ExplorerToggleLockMenuItem", libraryXaml);

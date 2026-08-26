@@ -442,6 +442,9 @@
   <data name="SelectedItemsDeleted" xml:space="preserve"><value>Deleted {0} selected item(s).</value></data>
   <data name="Refresh" xml:space="preserve"><value>Refresh</value></data>
   <data name="LockSelected" xml:space="preserve"><value>Lock selected</value></data>
+  <data name="LockMacroFile" xml:space="preserve"><value>Lock macro file</value></data>
+  <data name="ExportThisFolder" xml:space="preserve"><value>Export this folder</value></data>
+  <data name="DeleteMacroFolder" xml:space="preserve"><value>Delete macro folder</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>Unlock selected</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>Locked {0} selected macro(s).</value></data>
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>Unlocked {0} selected macro(s).</value></data>

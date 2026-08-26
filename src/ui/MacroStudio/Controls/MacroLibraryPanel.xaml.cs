@@ -129,16 +129,15 @@ public partial class MacroLibraryPanel : UserControl
         ExplorerTypeHeaderText.Text = L("Type");
         ExplorerTriggerHeaderText.Text = L("Trigger");
         ExplorerModifiedHeaderText.Text = L("DateModified");
-        ExplorerOpenMenuItem.Header = L("Open");
+        ExplorerExportMacroMenuItem.Header = L("ExportMacro");
+        ExplorerExportFolderMenuItem.Header = L("ExportThisFolder");
         ExplorerNewMenuItem.Header = L("New");
-        ExplorerNewMacroMenuItem.Header = L("NewMacro");
+        ExplorerNewMacroMenuItem.Header = L("NewMacroFile");
         ExplorerNewFolderMenuItem.Header = L("NewFolder");
         ExplorerRenameMenuItem.Header = L("Rename");
         ExplorerCopyMenuItem.Header = L("Copy");
         ExplorerPasteMenuItem.Header = L("Paste");
-        ExplorerDuplicateMenuItem.Header = L("Duplicate");
-        ExplorerToggleLockMenuItem.Header = L("LockSelected");
-        ExplorerSelectAllMenuItem.Header = L("SelectAll");
+        ExplorerToggleLockMenuItem.Header = L("LockMacroFile");
         ExplorerViewMenuItem.Header = L("View");
         ExplorerDetailsMenuItem.Header = L("ViewDetails");
         ExplorerListMenuItem.Header = L("ViewList");
@@ -729,27 +728,57 @@ public partial class MacroLibraryPanel : UserControl
     private void ExplorerContextMenu_Opened(object sender, RoutedEventArgs e)
     {
         var selected = GetSelectedExplorerNodes();
+        var kind = selected.Count == 0
+            ? ExplorerContextMenuKind.Blank
+            : selected.Count == 1 && selected[0].IsFolder
+                ? ExplorerContextMenuKind.Folder
+                : selected.All(node => node.Item is not null)
+                    ? ExplorerContextMenuKind.Macro
+                    : ExplorerContextMenuKind.Blank;
+
+        ConfigureExplorerContextMenu(kind, selected);
+    }
+
+    private void ConfigureExplorerContextMenu(ExplorerContextMenuKind kind, IReadOnlyList<MacroLibraryTreeNode> selected)
+    {
+        var isMacro = kind == ExplorerContextMenuKind.Macro;
+        var isFolder = kind == ExplorerContextMenuKind.Folder;
+        var isBlank = kind == ExplorerContextMenuKind.Blank;
+
+        ExplorerExportMacroMenuItem.Visibility = isMacro ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerExportFolderMenuItem.Visibility = isFolder ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerNewMenuItem.Visibility = isBlank ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerRenameMenuItem.Visibility = (isMacro || isFolder) ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerCopyMenuItem.Visibility = (isMacro || isFolder) ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerPasteMenuItem.Visibility = Visibility.Visible;
+        ExplorerToggleLockMenuItem.Visibility = isMacro ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerViewMenuItem.Visibility = isBlank ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerSortMenuItem.Visibility = isBlank ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerRefreshMenuItem.Visibility = isBlank ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerDeleteMenuItem.Visibility = (isMacro || isFolder) ? Visibility.Visible : Visibility.Collapsed;
+
+        ExplorerContextMenuPrimarySeparator.Visibility = Visibility.Visible;
+        ExplorerContextMenuViewSeparator.Visibility = isBlank ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerContextMenuDeleteSeparator.Visibility = (isMacro || isFolder) ? Visibility.Visible : Visibility.Collapsed;
+
+        ExplorerDeleteMenuItem.Header = isFolder ? L("DeleteMacroFolder") : L("Delete");
+
         var single = selected.Count == 1 ? selected[0] : null;
-        ExplorerOpenMenuItem.IsEnabled = single is not null;
+        var selectedMacros = selected.Where(node => node.Item is not null).ToList();
         ExplorerRenameMenuItem.IsEnabled = single is not null && single.Item?.IsLocked != true;
         ExplorerCopyMenuItem.IsEnabled = selected.Count > 0;
         ExplorerPasteMenuItem.IsEnabled = clipboard.Count > 0;
-        ExplorerDuplicateMenuItem.IsEnabled = selected.Any(node => node.Item is not null);
-        var selectedMacros = selected.Where(node => node.Item is not null).ToList();
         ExplorerToggleLockMenuItem.IsEnabled = selectedMacros.Count > 0;
         ExplorerToggleLockMenuItem.Header = selectedMacros.Count > 0 && selectedMacros.All(node => node.Item!.IsLocked)
             ? L("UnlockSelected")
-            : L("LockSelected");
+            : L("LockMacroFile");
         ExplorerDeleteMenuItem.IsEnabled = selected.Count > 0 && selected.Any(CanDeleteNode);
         ApplyExplorerViewMode();
     }
 
-    private void ExplorerOpenMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ExportFolderMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if ((contextMenuTargetNode ?? ExplorerListView.SelectedItem as MacroLibraryTreeNode) is { } node)
-        {
-            OpenExplorerNode(node);
-        }
+        ExportMacro_Click(sender, e);
     }
 
     private void OpenExplorerNode(MacroLibraryTreeNode node)
@@ -770,11 +799,6 @@ public partial class MacroLibraryPanel : UserControl
             state.LibraryStore.SetSelected(item.Id);
             MacroSelected?.Invoke(item.Id);
         }
-    }
-
-    private void ExplorerSelectAllMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ExplorerListView.SelectAll();
     }
 
     private void ExplorerToggleLockMenuItem_Click(object sender, RoutedEventArgs e)
@@ -3170,6 +3194,13 @@ public partial class MacroLibraryPanel : UserControl
         int nCode,
         IntPtr wParam,
         IntPtr lParam);
+
+    private enum ExplorerContextMenuKind
+    {
+        Blank,
+        Folder,
+        Macro
+    }
 
     private enum MacroLibraryClipboardKind
     {

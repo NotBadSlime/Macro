@@ -268,6 +268,9 @@
   <data name="SelectedItemsDeleted" xml:space="preserve"><value>已删除所选的 {0} 个项目。</value></data>
   <data name="Refresh" xml:space="preserve"><value>刷新</value></data>
   <data name="LockSelected" xml:space="preserve"><value>锁定所选宏</value></data>
+  <data name="LockMacroFile" xml:space="preserve"><value>锁定宏文件</value></data>
+  <data name="ExportThisFolder" xml:space="preserve"><value>导出该宏文件夹</value></data>
+  <data name="DeleteMacroFolder" xml:space="preserve"><value>删除宏文件夹</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解锁所选宏</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已锁定所选的 {0} 个宏。</value></data>
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>已解锁所选的 {0} 个宏。</value></data>

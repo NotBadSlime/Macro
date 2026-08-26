@@ -268,6 +268,9 @@
   <data name="SelectedItemsDeleted" xml:space="preserve"><value>已刪除所選的 {0} 個項目。</value></data>
   <data name="Refresh" xml:space="preserve"><value>重新整理</value></data>
   <data name="LockSelected" xml:space="preserve"><value>鎖定所選巨集</value></data>
+  <data name="LockMacroFile" xml:space="preserve"><value>鎖定宏檔案</value></data>
+  <data name="ExportThisFolder" xml:space="preserve"><value>匯出該宏資料夾</value></data>
+  <data name="DeleteMacroFolder" xml:space="preserve"><value>刪除宏資料夾</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解除鎖定所選巨集</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已鎖定所選的 {0} 個巨集。</value></data>
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>已解除鎖定所選的 {0} 個巨集。</value></data>

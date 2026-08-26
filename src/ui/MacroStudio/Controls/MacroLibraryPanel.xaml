@@ -506,19 +506,18 @@
                               AllowDrop="True">
                         <ListView.ContextMenu>
                             <ContextMenu Opened="ExplorerContextMenu_Opened" Closed="MacroTreeContextMenu_Closed">
-                                <MenuItem x:Name="ExplorerOpenMenuItem" Header="打开" Click="ExplorerOpenMenuItem_Click" />
+                                <MenuItem x:Name="ExplorerExportMacroMenuItem" Header="导出" Click="ExportMacro_Click" />
+                                <MenuItem x:Name="ExplorerExportFolderMenuItem" Header="导出该宏文件夹" Click="ExportFolderMenuItem_Click" />
                                 <MenuItem x:Name="ExplorerNewMenuItem" Header="新建">
-                                    <MenuItem x:Name="ExplorerNewMacroMenuItem" Header="宏" InputGestureText="Ctrl+N" Click="NewMacro_Click" />
+                                    <MenuItem x:Name="ExplorerNewMacroMenuItem" Header="宏文件" InputGestureText="Ctrl+N" Click="NewMacro_Click" />
                                     <MenuItem x:Name="ExplorerNewFolderMenuItem" Header="文件夹" InputGestureText="Ctrl+Shift+N" Click="NewFolder_Click" />
                                 </MenuItem>
-                                <Separator />
+                                <Separator x:Name="ExplorerContextMenuPrimarySeparator" />
                                 <MenuItem x:Name="ExplorerRenameMenuItem" Header="重命名" InputGestureText="F2" Click="RenameMenuItem_Click" />
                                 <MenuItem x:Name="ExplorerCopyMenuItem" Header="复制" InputGestureText="Ctrl+C" Click="CopyMenuItem_Click" />
                                 <MenuItem x:Name="ExplorerPasteMenuItem" Header="粘贴" InputGestureText="Ctrl+V" Click="PasteMenuItem_Click" />
-                                <MenuItem x:Name="ExplorerDuplicateMenuItem" Header="创建副本" InputGestureText="Ctrl+D" Click="DuplicateMacro_Click" />
-                                <MenuItem x:Name="ExplorerToggleLockMenuItem" Header="锁定" Click="ExplorerToggleLockMenuItem_Click" />
-                                <MenuItem x:Name="ExplorerSelectAllMenuItem" Header="全选" InputGestureText="Ctrl+A" Click="ExplorerSelectAllMenuItem_Click" />
-                                <Separator />
+                                <MenuItem x:Name="ExplorerToggleLockMenuItem" Header="锁定宏文件" Click="ExplorerToggleLockMenuItem_Click" />
+                                <Separator x:Name="ExplorerContextMenuViewSeparator" />
                                 <MenuItem x:Name="ExplorerViewMenuItem" Header="查看">
                                     <MenuItem x:Name="ExplorerDetailsMenuItem" Header="详细信息" Tag="details" IsCheckable="True" Click="ExplorerViewMenuItem_Click" />
                                     <MenuItem x:Name="ExplorerListMenuItem" Header="列表" Tag="list" IsCheckable="True" Click="ExplorerViewMenuItem_Click" />
@@ -531,7 +530,7 @@
                                     <MenuItem x:Name="ExplorerSortUpdatedMenuItem" Header="修改日期" Tag="updated" Click="ExplorerSortMenuItem_Click" />
                                 </MenuItem>
                                 <MenuItem x:Name="ExplorerRefreshMenuItem" Header="刷新" InputGestureText="F5" Click="ExplorerRefreshMenuItem_Click" />
-                                <Separator />
+                                <Separator x:Name="ExplorerContextMenuDeleteSeparator" />
                                 <MenuItem x:Name="ExplorerDeleteMenuItem" Header="删除" InputGestureText="Delete" Click="DeleteMenuItem_Click" />
                             </ContextMenu>
                         </ListView.ContextMenu>
