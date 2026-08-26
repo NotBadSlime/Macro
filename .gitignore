@@ -13,3 +13,4 @@ TestResults/
 *.cat
 *.sys
 *.pdb
+.worktrees/
