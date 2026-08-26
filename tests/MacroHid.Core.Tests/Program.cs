@@ -53,6 +53,9 @@ var tests = new (string Name, Action Body)[]
     ("Macro recording session preserves keyboard mouse and delays", MacroRecordingSessionPreservesKeyboardMouseAndDelays),
     ("Macro recording session samples movement and safely releases held inputs", MacroRecordingSessionSamplesMovementAndReleasesHeldInputs),
     ("Macro recording session removes the stop hotkey", MacroRecordingSessionRemovesStopHotkey),
+    ("Macro recording session ignores mouse move by default", MacroRecordingSessionIgnoresMouseMoveByDefault),
+    ("Macro recording session uses a fixed delay between inputs", MacroRecordingSessionUsesFixedDelayBetweenInputs),
+    ("Macro recording session can omit delays", MacroRecordingSessionCanOmitDelays),
     ("MCRX parser defaults missing playback settings", McrxParserDefaultsMissingPlaybackSettings),
     ("MCRX parser rejects invalid playback settings", McrxParserRejectsInvalidPlaybackSettings),
     ("Sample baseline macro remains parseable", SampleBaselineMacroRemainsParseable),
@@ -1802,6 +1805,7 @@ static void MacroRecordingSessionPreservesKeyboardMouseAndDelays()
 static void MacroRecordingSessionSamplesMovementAndReleasesHeldInputs()
 {
     var recording = new MacroRecordingSession(new MacroRecordingOptions(
+        RecordMouseMove: true,
         MinimumDelay: TimeSpan.FromMilliseconds(1),
         MouseMoveSampleInterval: TimeSpan.FromMilliseconds(16),
         MouseMoveMinimumDistance: 2));
@@ -1838,6 +1842,40 @@ static void MacroRecordingSessionRemovesStopHotkey()
     Assert.Equal(HidKey.A, Assert.IsType<KeyStep>(steps[0]).Key);
     Assert.Equal(TimeSpan.FromMilliseconds(10), Assert.IsType<WaitStep>(steps[1]).Duration);
     Assert.Equal(HidKey.A, Assert.IsType<KeyStep>(steps[2]).Key);
+}
+
+static void MacroRecordingSessionIgnoresMouseMoveByDefault()
+{
+    var recording = new MacroRecordingSession();
+    Assert.False(recording.RecordMouseMove(TimeSpan.Zero, 100, 100));
+    Assert.True(recording.RecordKey(TimeSpan.FromMilliseconds(10), HidKey.A, true));
+    var steps = recording.Complete();
+    Assert.False(steps.OfType<MouseMoveStep>().Any());
+    Assert.Equal(KeyActionKind.Down, Assert.IsType<KeyStep>(steps[0]).Kind);
+}
+
+static void MacroRecordingSessionUsesFixedDelayBetweenInputs()
+{
+    var recording = new MacroRecordingSession(new MacroRecordingOptions(
+        Mode: MacroRecordingMode.FixedDelay,
+        RecordMouseMove: false));
+    Assert.True(recording.RecordKey(TimeSpan.Zero, HidKey.A, true));
+    Assert.True(recording.RecordKey(TimeSpan.FromMilliseconds(250), HidKey.A, false));
+    var steps = recording.Complete();
+    Assert.Equal(3, steps.Count);
+    Assert.Equal(InputPressTiming.DefaultPressReleaseGap, Assert.IsType<WaitStep>(steps[1]).Duration);
+}
+
+static void MacroRecordingSessionCanOmitDelays()
+{
+    var recording = new MacroRecordingSession(new MacroRecordingOptions(
+        Mode: MacroRecordingMode.NoDelay,
+        RecordMouseMove: false));
+    Assert.True(recording.RecordKey(TimeSpan.Zero, HidKey.A, true));
+    Assert.True(recording.RecordKey(TimeSpan.FromMilliseconds(80), HidKey.A, false));
+    var steps = recording.Complete();
+    Assert.Equal(2, steps.Count);
+    Assert.False(steps.OfType<WaitStep>().Any());
 }
 
 static void McrxParserDefaultsMissingPlaybackSettings()
