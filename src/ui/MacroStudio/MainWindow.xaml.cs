@@ -51,6 +51,8 @@ public partial class MainWindow : Window
     private string activeRightToolPanelId = "actions";
     private string? activeEditorMacroId;
     private WindowState windowStateBeforeRecording = WindowState.Normal;
+    private readonly Stack<string> macroNavigationStack = new();
+    private bool suppressMacroNavigationStackClear;
 
     private sealed record ListeningCandidate(
         MacroLibraryItem Item,
@@ -128,6 +130,8 @@ public partial class MainWindow : Window
         SequencePanelControl.SequenceActivated += ConditionPanel.DeactivateThenActionSequence;
         SequencePanelControl.EditorTextChanged += OnSequenceEditorTextChanged;
         SequencePanelControl.EditLockChanged += OnEditLockChanged;
+        SequencePanelControl.OpenReferencedMacroRequested += OnOpenReferencedMacroRequested;
+        SequencePanelControl.ReturnPreviousMacroRequested += OnReturnPreviousMacroRequested;
 
         JsonPanel.EditorTextChanged += OnJsonPanelEditorTextChanged;
         JsonPanel.ApplyJsonRequested += OnApplyJsonRequested;
@@ -982,21 +986,26 @@ public partial class MainWindow : Window
 
     private void OnMacroSelected(string id)
     {
+        ClearMacroNavigationStackUnlessSuppressed();
         SaveActiveEditorBeforeSwitch(id);
         LoadMacroFromLibrary(id);
+        RefreshMacroNavigationUi();
     }
 
     private void OnMacroCreated(MacroLibraryItem item)
     {
+        ClearMacroNavigationStack();
         SaveActiveEditorBeforeSwitch(item.Id);
         editorState.SelectedMacroId = item.Id;
         LoadMacroFromLibrary(item.Id);
+        RefreshMacroNavigationUi();
     }
 
     private void OnMacroDuplicated(string id)
     {
         try
         {
+            ClearMacroNavigationStack();
             var source = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
             var document = source?.IsLocked == true
                 ? libraryStore.ReadMacro(id)
@@ -1009,6 +1018,7 @@ public partial class MainWindow : Window
             editorState.SelectedMacroId = item.Id;
             LibraryPanel.RefreshList();
             LoadMacroFromLibrary(item.Id);
+            RefreshMacroNavigationUi();
         }
         catch (Exception ex)
         {
@@ -1030,6 +1040,7 @@ public partial class MainWindow : Window
 
         try
         {
+            ClearMacroNavigationStack();
             libraryStore.DeleteMacro(id);
             editorState.ReloadLibrary();
             editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
@@ -1283,6 +1294,140 @@ public partial class MainWindow : Window
     private void OnStepSelectionChanged(int stepIndex)
     {
         editorState.SelectedStepIndex = stepIndex;
+    }
+
+    private void OnOpenReferencedMacroRequested(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return;
+        }
+
+        var snapshot = libraryStore.Load();
+        var target = snapshot.Items.FirstOrDefault(item => item.MatchesReference(reference));
+        if (target is null)
+        {
+            SetStatus(LocalizationService.Format("SubmacroNotFound", reference.Trim()));
+            return;
+        }
+
+        var currentId = editorState.SelectedMacroId ?? activeEditorMacroId;
+        if (currentId is not null
+            && string.Equals(currentId, target.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus(L("AlreadyEditingMacro"));
+            return;
+        }
+
+        if (!TrySaveActiveEditorForNavigation(target.Id))
+        {
+            return;
+        }
+
+        if (currentId is not null)
+        {
+            macroNavigationStack.Push(currentId);
+        }
+
+        suppressMacroNavigationStackClear = true;
+        try
+        {
+            LoadMacroFromLibrary(target.Id);
+            LibraryPanel.RefreshList();
+        }
+        finally
+        {
+            suppressMacroNavigationStackClear = false;
+        }
+
+        RefreshMacroNavigationUi();
+    }
+
+    private void OnReturnPreviousMacroRequested()
+    {
+        if (macroNavigationStack.Count == 0)
+        {
+            RefreshMacroNavigationUi();
+            return;
+        }
+
+        var previousId = macroNavigationStack.Pop();
+        var previous = libraryStore.Load().Items.FirstOrDefault(item =>
+            string.Equals(item.Id, previousId, StringComparison.OrdinalIgnoreCase));
+        if (previous is null)
+        {
+            ClearMacroNavigationStack();
+            RefreshMacroNavigationUi();
+            SetStatus(L("ReturnMacroMissing"));
+            return;
+        }
+
+        if (!TrySaveActiveEditorForNavigation(previous.Id))
+        {
+            macroNavigationStack.Push(previousId);
+            RefreshMacroNavigationUi();
+            return;
+        }
+
+        suppressMacroNavigationStackClear = true;
+        try
+        {
+            LoadMacroFromLibrary(previous.Id);
+            LibraryPanel.RefreshList();
+        }
+        finally
+        {
+            suppressMacroNavigationStackClear = false;
+        }
+
+        RefreshMacroNavigationUi();
+    }
+
+    private bool TrySaveActiveEditorForNavigation(string? nextMacroId)
+    {
+        if (activeEditorMacroId is not { } activeId
+            || string.Equals(activeId, nextMacroId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        autoSaveTimer.Stop();
+        var activeItem = libraryStore.Load().Items.FirstOrDefault(item =>
+            string.Equals(item.Id, activeId, StringComparison.OrdinalIgnoreCase));
+        if (activeItem is null || activeItem.IsLocked)
+        {
+            return true;
+        }
+
+        try
+        {
+            libraryStore.SaveMacro(activeId, GetDocumentWithPlayback());
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
+            return false;
+        }
+    }
+
+    private void ClearMacroNavigationStackUnlessSuppressed()
+    {
+        if (!suppressMacroNavigationStackClear)
+        {
+            ClearMacroNavigationStack();
+        }
+    }
+
+    private void ClearMacroNavigationStack()
+    {
+        macroNavigationStack.Clear();
+        RefreshMacroNavigationUi();
+    }
+
+    private void RefreshMacroNavigationUi()
+    {
+        SequencePanelControl.SetCanReturnPreviousMacro(macroNavigationStack.Count > 0);
     }
 
     private void SaveActiveEditorBeforeSwitch(string? nextMacroId)
@@ -1979,6 +2124,7 @@ public partial class MainWindow : Window
 
     private void OnImportApplied(MacroDocument document)
     {
+        ClearMacroNavigationStack();
         SaveActiveEditorBeforeSwitch(nextMacroId: null);
         var item = !string.IsNullOrWhiteSpace(document.Id)
             ? libraryStore.Load().Items.FirstOrDefault(candidate =>
@@ -2530,6 +2676,7 @@ public partial class MainWindow : Window
 
         try
         {
+            ClearMacroNavigationStack();
             var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(
                 File.ReadAllText(dialog.FileName),
                 dialog.FileName,

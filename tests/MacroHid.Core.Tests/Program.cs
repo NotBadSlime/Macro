@@ -265,6 +265,7 @@ var tests = new (string Name, Action Body)[]
     ("Macro library export bundle collects dependencies for a single primary macro", MacroLibraryExportBundleCollectsDependenciesForSinglePrimaryMacro),
     ("MacroStudio export wizard has format and packaging steps", MacroStudioExportWizardHasFormatAndPackagingSteps),
     ("MacroStudio export uses wizard instead of format combo", MacroStudioExportUsesWizardInsteadOfFormatCombo),
+    ("MacroStudio can open referenced submacros from sequence steps", MacroStudioCanOpenReferencedSubmacrosFromSequenceSteps),
     ("Macro library export writer materializes two-folder layout", MacroLibraryExportWriterMaterializesTwoFolderLayout),
     ("Embedded converter round trips macro call steps", EmbeddedConverterRoundTripsMacroCallSteps),
     ("Macro library store persists empty folders and moves macros like files", MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles),
@@ -6376,6 +6377,33 @@ static void MacroStudioExportUsesWizardInsteadOfFormatCombo()
     Assert.True(
         libraryCode.Contains("MacroLibraryExportWriter", StringComparison.Ordinal)
         || libraryCode.Contains("WriteTwoFolders", StringComparison.Ordinal));
+}
+
+static void MacroStudioCanOpenReferencedSubmacrosFromSequenceSteps()
+{
+    var stepXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml"));
+    var stepCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs"));
+    var sequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
+    var mainCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var english = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.resx"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("MouseLeftButtonDown=\"StepRow_MouseLeftButtonDown\"", stepXaml);
+    Assert.Contains("x:Name=\"EnterSubmacroMenuItem\"", stepXaml);
+    Assert.Contains("x:Name=\"ReturnPreviousMacroButton\"", stepXaml);
+    Assert.Contains("OpenReferencedMacroRequested", stepCode);
+    Assert.Contains("ReturnPreviousMacroRequested", stepCode);
+    Assert.Contains("TryRequestOpenReferencedMacro", stepCode);
+    Assert.Contains("OpenReferencedMacroRequested", sequenceCode);
+    Assert.Contains("OnOpenReferencedMacroRequested", mainCode);
+    Assert.Contains("OnReturnPreviousMacroRequested", mainCode);
+    Assert.Contains("macroNavigationStack", mainCode);
+    Assert.Contains("ClearMacroNavigationStackUnlessSuppressed", mainCode);
+    Assert.Contains("TrySaveActiveEditorForNavigation", mainCode);
+    Assert.Contains("name=\"EnterSubmacro\"", english);
+    Assert.Contains("name=\"ReturnPreviousMacro\"", english);
+    Assert.Contains("<value>进入子宏</value>", simplified);
+    Assert.Contains("<value>返回上一宏</value>", simplified);
 }
 
 static void MacroLibraryExportWriterMaterializesTwoFolderLayout()

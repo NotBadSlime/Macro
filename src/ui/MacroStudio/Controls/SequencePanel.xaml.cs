@@ -34,6 +34,8 @@ public partial class SequencePanel : UserControl
     public event Action? SequenceActivated;
     public event Action<string>? EditorTextChanged;
     public event Action<bool>? EditLockChanged;
+    public event Action<string>? OpenReferencedMacroRequested;
+    public event Action? ReturnPreviousMacroRequested;
 
     public SequencePanel()
     {
@@ -82,6 +84,8 @@ public partial class SequencePanel : UserControl
         StepSequenceControl.RedoRequested += RedoLastChange;
         StepSequenceControl.ClearRequested += ClearAllSteps;
         StepSequenceControl.Activated += () => SequenceActivated?.Invoke();
+        StepSequenceControl.OpenReferencedMacroRequested += reference => OpenReferencedMacroRequested?.Invoke(reference);
+        StepSequenceControl.ReturnPreviousMacroRequested += () => ReturnPreviousMacroRequested?.Invoke();
     }
 
     public void ApplyLocalization()
@@ -247,6 +251,7 @@ public partial class SequencePanel : UserControl
     public void CloseInlineStepEditorOnExternalPointerDown(DependencyObject? source) => StepSequenceControl.CloseInlineStepEditorOnExternalPointerDown(source);
     public void SetConditionHighlights(IReadOnlyList<ConditionalDirective>? conditions, Func<int, Brush>? colorSelector = null) => StepSequenceControl.SetConditionHighlights(conditions, colorSelector);
     public void HighlightSingleCondition(int conditionIndex, ConditionalDirective? directive, Brush? color = null) => StepSequenceControl.HighlightSingleCondition(conditionIndex, directive, color);
+    public void SetCanReturnPreviousMacro(bool canReturn) => StepSequenceControl.SetCanReturnPreviousMacro(canReturn);
 
     public void ClearAllSteps()
     {

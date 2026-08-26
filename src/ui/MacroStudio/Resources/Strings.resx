@@ -454,6 +454,11 @@
   <data name="ExportDependenciesFolder" xml:space="preserve"><value>Dependencies</value></data>
   <data name="ExportFolderRootSuffix" xml:space="preserve"><value>-export</value></data>
   <data name="ExportSelectedMacrosFolder" xml:space="preserve"><value>Selected macros</value></data>
+  <data name="EnterSubmacro" xml:space="preserve"><value>Enter submacro</value></data>
+  <data name="ReturnPreviousMacro" xml:space="preserve"><value>Return to previous macro</value></data>
+  <data name="SubmacroNotFound" xml:space="preserve"><value>Could not find submacro “{0}”.</value></data>
+  <data name="AlreadyEditingMacro" xml:space="preserve"><value>Already editing this macro.</value></data>
+  <data name="ReturnMacroMissing" xml:space="preserve"><value>Previous macro is missing. Navigation history cleared.</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>Delete macro folder</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>Unlock selected</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>Locked {0} selected macro(s).</value></data>

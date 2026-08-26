@@ -65,6 +65,8 @@ public partial class StepSequencePanel : UserControl
     public event Action<int>? StepSelectionChanged;
     public event Action<MacroActionTemplateKind, string, int>? ActionTemplateDropped;
     public event Action<string, string, int>? MacroLibraryDropped;
+    public event Action<string>? OpenReferencedMacroRequested;
+    public event Action? ReturnPreviousMacroRequested;
 
     public IReadOnlyList<MacroStep> Steps => steps;
 
@@ -122,6 +124,7 @@ public partial class StepSequencePanel : UserControl
     public void ApplyLocalization()
     {
         SequenceTitleText.Text = LocalizationService.Get("Sequence");
+        ReturnPreviousMacroText.Text = LocalizationService.Get("ReturnPreviousMacro");
         StepUndoText.Text = LocalizationService.Get("Undo");
         StepRedoText.Text = LocalizationService.Get("Redo");
         StepUpText.Text = LocalizationService.Get("MoveUp");
@@ -129,12 +132,19 @@ public partial class StepSequencePanel : UserControl
         StepDeleteText.Text = LocalizationService.Get("Delete");
         StepClearText.Text = LocalizationService.Get("ClearAll");
         EmptySequenceOverlay.Text = LocalizationService.Get("DropActionsHint");
+        EnterSubmacroMenuItem.Header = LocalizationService.Get("EnterSubmacro");
         InlineStepEditor.ApplyLocalization();
     }
 
     public void SetTitle(string title)
     {
         SequenceTitleText.Text = title;
+    }
+
+    public void SetCanReturnPreviousMacro(bool canReturn)
+    {
+        ReturnPreviousMacroButton.Visibility = canReturn ? Visibility.Visible : Visibility.Collapsed;
+        ReturnPreviousMacroButton.IsEnabled = canReturn;
     }
 
     public void SetCanUndo(bool canUndo)
@@ -655,6 +665,23 @@ public partial class StepSequencePanel : UserControl
         dragSelectionSnapshot = [];
     }
 
+    private void StepRow_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount < 2
+            || FindVisualParent<Button>(e.OriginalSource as DependencyObject) is not null
+            || stepDragStarted
+            || StepList.SelectedItems.Count > 1
+            || sender is not FrameworkElement { DataContext: StepDisplayItem item })
+        {
+            return;
+        }
+
+        if (TryRequestOpenReferencedMacro(item))
+        {
+            e.Handled = true;
+        }
+    }
+
     private void StepRow_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (FindVisualParent<Button>(e.OriginalSource as DependencyObject) is not null)
@@ -662,7 +689,10 @@ public partial class StepSequencePanel : UserControl
             return;
         }
 
-        if (stepDragStarted || IsMultiSelectionGesture() || sender is not FrameworkElement { DataContext: StepDisplayItem item })
+        if (e.ClickCount >= 2
+            || stepDragStarted
+            || IsMultiSelectionGesture()
+            || sender is not FrameworkElement { DataContext: StepDisplayItem item })
         {
             return;
         }
@@ -673,13 +703,83 @@ public partial class StepSequencePanel : UserControl
 
     private void StepTitle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (stepDragStarted || IsMultiSelectionGesture() || sender is not FrameworkElement { DataContext: StepDisplayItem item })
+        if (e.ClickCount >= 2
+            || stepDragStarted
+            || IsMultiSelectionGesture()
+            || sender is not FrameworkElement { DataContext: StepDisplayItem item })
         {
             return;
         }
 
         BeginStepVisualEdit(item, sender as UIElement);
         e.Handled = true;
+    }
+
+    private void StepListContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        EnterSubmacroMenuItem.Visibility = TryGetSingleSelectedMacroCall(out _)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private void EnterSubmacroMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (StepList.SelectedItem is StepDisplayItem item)
+        {
+            TryRequestOpenReferencedMacro(item);
+        }
+    }
+
+    private void ReturnPreviousMacro_Click(object sender, RoutedEventArgs e) =>
+        ReturnPreviousMacroRequested?.Invoke();
+
+    private bool TryRequestOpenReferencedMacro(StepDisplayItem item)
+    {
+        if (!TryGetMacroCallReference(item, out var reference))
+        {
+            return false;
+        }
+
+        CloseInlineStepEditorForOutsideClick();
+        OpenReferencedMacroRequested?.Invoke(reference);
+        return true;
+    }
+
+    private bool TryGetSingleSelectedMacroCall(out string reference)
+    {
+        reference = string.Empty;
+        if (StepList.SelectedItems.Count != 1
+            || StepList.SelectedItem is not StepDisplayItem item)
+        {
+            return false;
+        }
+
+        return TryGetMacroCallReference(item, out reference);
+    }
+
+    private bool TryGetMacroCallReference(StepDisplayItem item, out string reference)
+    {
+        reference = string.Empty;
+        if (item.StepPath.Count == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (MacroStepTreeEditor.GetAtPath(steps, item.StepPath) is not MacroCallStep call
+                || string.IsNullOrWhiteSpace(call.Macro))
+            {
+                return false;
+            }
+
+            reference = call.Macro.Trim();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void BeginStepVisualEdit(StepDisplayItem item, UIElement? placementTarget)

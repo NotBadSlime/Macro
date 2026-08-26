@@ -280,6 +280,11 @@
   <data name="ExportDependenciesFolder" xml:space="preserve"><value>依赖子宏</value></data>
   <data name="ExportFolderRootSuffix" xml:space="preserve"><value>-导出</value></data>
   <data name="ExportSelectedMacrosFolder" xml:space="preserve"><value>所选宏</value></data>
+  <data name="EnterSubmacro" xml:space="preserve"><value>进入子宏</value></data>
+  <data name="ReturnPreviousMacro" xml:space="preserve"><value>返回上一宏</value></data>
+  <data name="SubmacroNotFound" xml:space="preserve"><value>找不到子宏“{0}”。</value></data>
+  <data name="AlreadyEditingMacro" xml:space="preserve"><value>已在编辑该宏。</value></data>
+  <data name="ReturnMacroMissing" xml:space="preserve"><value>上一宏已不存在，已清除返回记录。</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>删除宏文件夹</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解锁所选宏</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已锁定所选的 {0} 个宏。</value></data>

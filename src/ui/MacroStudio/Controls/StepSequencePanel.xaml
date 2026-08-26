@@ -52,6 +52,7 @@
                     Padding="8,7"
                     Margin="{Binding LeftMargin}"
                     Cursor="Hand"
+                    MouseLeftButtonDown="StepRow_MouseLeftButtonDown"
                     MouseLeftButtonUp="StepRow_MouseLeftButtonUp">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -163,6 +164,12 @@
                     BorderThickness="1"
                     CornerRadius="14">
                 <StackPanel x:Name="SequenceToolbarButtonStrip" Orientation="Horizontal">
+                    <Button x:Name="ReturnPreviousMacroButton"
+                            Style="{StaticResource SequenceToolbarIconButton}"
+                            Content="&#xE72B;"
+                            ToolTip="{Binding Text, ElementName=ReturnPreviousMacroText}"
+                            Click="ReturnPreviousMacro_Click"
+                            Visibility="Collapsed" />
                     <Button x:Name="StepUndoButton"
                             Style="{StaticResource SequenceToolbarIconButton}"
                             Content="&#xE7A7;"
@@ -199,6 +206,7 @@
             </Border>
             <Grid>
                 <TextBlock x:Name="SequenceTitleText" Text="序列" Style="{StaticResource PanelTitle}" />
+                <TextBlock x:Name="ReturnPreviousMacroText" Text="返回上一宏" Visibility="Collapsed" />
                 <TextBlock x:Name="StepUndoText" Text="撤回" Visibility="Collapsed" />
                 <TextBlock x:Name="StepRedoText" Text="还原" Visibility="Collapsed" />
                 <TextBlock x:Name="StepUpText" Text="上移" Visibility="Collapsed" />
@@ -221,7 +229,15 @@
                      DragOver="StepList_DragOver"
                      DragLeave="StepList_DragLeave"
                      Drop="StepList_Drop"
-                     HorizontalContentAlignment="Stretch" />
+                     HorizontalContentAlignment="Stretch">
+                <ListBox.ContextMenu>
+                    <ContextMenu Opened="StepListContextMenu_Opened">
+                        <MenuItem x:Name="EnterSubmacroMenuItem"
+                                  Header="进入子宏"
+                                  Click="EnterSubmacroMenuItem_Click" />
+                    </ContextMenu>
+                </ListBox.ContextMenu>
+            </ListBox>
             <TextBlock x:Name="EmptySequenceOverlay"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
