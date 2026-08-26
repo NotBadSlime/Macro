@@ -270,6 +270,12 @@
   <data name="LockSelected" xml:space="preserve"><value>鎖定所選巨集</value></data>
   <data name="LockMacroFile" xml:space="preserve"><value>鎖定宏檔案</value></data>
   <data name="ExportThisFolder" xml:space="preserve"><value>匯出該宏資料夾</value></data>
+  <data name="ExportWizardTitle" xml:space="preserve"><value>匯出</value></data>
+  <data name="ExportNext" xml:space="preserve"><value>下一步</value></data>
+  <data name="ExportPackagingTitle" xml:space="preserve"><value>打包方式</value></data>
+  <data name="ExportPackagingTwoFolders" xml:space="preserve"><value>兩個子資料夾</value></data>
+  <data name="ExportPackagingZip" xml:space="preserve"><value>ZIP 壓縮包</value></data>
+  <data name="ExportWeakFormatWarning" xml:space="preserve"><value>此格式可能無法完整保留巢狀的 macro.call 參照。分享含相依宏時，建議使用 MacroHID MCRX。</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>刪除宏資料夾</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解除鎖定所選巨集</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已鎖定所選的 {0} 個巨集。</value></data>

@@ -444,6 +444,12 @@
   <data name="LockSelected" xml:space="preserve"><value>Lock selected</value></data>
   <data name="LockMacroFile" xml:space="preserve"><value>Lock macro file</value></data>
   <data name="ExportThisFolder" xml:space="preserve"><value>Export this folder</value></data>
+  <data name="ExportWizardTitle" xml:space="preserve"><value>Export</value></data>
+  <data name="ExportNext" xml:space="preserve"><value>Next</value></data>
+  <data name="ExportPackagingTitle" xml:space="preserve"><value>Packaging</value></data>
+  <data name="ExportPackagingTwoFolders" xml:space="preserve"><value>Two subfolders</value></data>
+  <data name="ExportPackagingZip" xml:space="preserve"><value>ZIP archive</value></data>
+  <data name="ExportWeakFormatWarning" xml:space="preserve"><value>This format may not fully preserve nested macro.call references. Prefer MacroHID MCRX when sharing macros with dependencies.</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>Delete macro folder</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>Unlock selected</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>Locked {0} selected macro(s).</value></data>

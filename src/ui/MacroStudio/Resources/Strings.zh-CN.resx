@@ -270,6 +270,12 @@
   <data name="LockSelected" xml:space="preserve"><value>锁定所选宏</value></data>
   <data name="LockMacroFile" xml:space="preserve"><value>锁定宏文件</value></data>
   <data name="ExportThisFolder" xml:space="preserve"><value>导出该宏文件夹</value></data>
+  <data name="ExportWizardTitle" xml:space="preserve"><value>导出</value></data>
+  <data name="ExportNext" xml:space="preserve"><value>下一步</value></data>
+  <data name="ExportPackagingTitle" xml:space="preserve"><value>打包方式</value></data>
+  <data name="ExportPackagingTwoFolders" xml:space="preserve"><value>两个子文件夹</value></data>
+  <data name="ExportPackagingZip" xml:space="preserve"><value>ZIP 压缩包</value></data>
+  <data name="ExportWeakFormatWarning" xml:space="preserve"><value>该格式可能无法完整保留嵌套的 macro.call 引用。分享含依赖的宏时，建议使用 MacroHID MCRX。</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>删除宏文件夹</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解锁所选宏</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已锁定所选的 {0} 个宏。</value></data>

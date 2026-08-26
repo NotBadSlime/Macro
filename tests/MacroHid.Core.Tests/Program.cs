@@ -262,6 +262,7 @@ var tests = new (string Name, Action Body)[]
     ("Macro library import preserves nested macro call identity", MacroLibraryImportPreservesNestedMacroCallIdentity),
     ("Macro call reference collector walks nested structures", MacroCallReferenceCollectorWalksNestedStructures),
     ("Macro library export bundle separates folder macros from dependencies", MacroLibraryExportBundleSeparatesFolderMacrosFromDependencies),
+    ("MacroStudio export wizard has format and packaging steps", MacroStudioExportWizardHasFormatAndPackagingSteps),
     ("Embedded converter round trips macro call steps", EmbeddedConverterRoundTripsMacroCallSteps),
     ("Macro library store persists empty folders and moves macros like files", MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles),
     ("Macro library store reorders macros within folders", MacroLibraryStoreReordersMacrosWithinFolders),
@@ -6309,6 +6310,16 @@ static void MacroLibraryExportBundleSeparatesFolderMacrosFromDependencies()
     {
         if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
     }
+}
+
+static void MacroStudioExportWizardHasFormatAndPackagingSteps()
+{
+    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ExportWizardDialog.xaml"));
+    var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ExportWizardDialog.xaml.cs"));
+    Assert.Contains("x:Name=\"FormatList\"", xaml);
+    Assert.Contains("x:Name=\"PackagingPanel\"", xaml);
+    Assert.Contains("ExportPackagingMode", code);
+    Assert.Contains("ThemedDialogChrome.Apply", code);
 }
 
 static void MacroCallReferenceCollectorWalksNestedStructures()
