@@ -261,6 +261,7 @@ var tests = new (string Name, Action Body)[]
     ("Macro library store resolves external aliases", MacroLibraryStoreResolvesExternalAliases),
     ("Macro library import preserves nested macro call identity", MacroLibraryImportPreservesNestedMacroCallIdentity),
     ("Macro call reference collector walks nested structures", MacroCallReferenceCollectorWalksNestedStructures),
+    ("Macro library export bundle separates folder macros from dependencies", MacroLibraryExportBundleSeparatesFolderMacrosFromDependencies),
     ("Embedded converter round trips macro call steps", EmbeddedConverterRoundTripsMacroCallSteps),
     ("Macro library store persists empty folders and moves macros like files", MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles),
     ("Macro library store reorders macros within folders", MacroLibraryStoreReordersMacrosWithinFolders),
@@ -6275,6 +6276,36 @@ static void MacroLibraryStoreResolvesExternalAliases()
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+}
+
+static void MacroLibraryExportBundleSeparatesFolderMacrosFromDependencies()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var store = new MacroLibraryStore(root);
+        store.CreateFolder("Raid");
+        var dep = store.CreateMacro("Shared Burst", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+        var inside = store.CreateMacro(
+            new MacroDocument(1, "Opener", PlaybackSettings.Default, [new MacroCallStep(dep.Id)]),
+            folder: "Raid");
+
+        var snapshot = store.Load();
+        var bundle = MacroLibraryExportBundles.FromFolder(
+            store,
+            snapshot,
+            groupId: MacroLibraryStore.GlobalGroupId,
+            folder: "Raid");
+
+        Assert.Equal(1, bundle.Primary.Count);
+        Assert.Equal(inside.Id, bundle.Primary[0].Item.Id);
+        Assert.Equal(1, bundle.Dependencies.Count);
+        Assert.Equal(dep.Id, bundle.Dependencies[0].Item.Id);
+    }
+    finally
+    {
+        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
     }
 }
 
