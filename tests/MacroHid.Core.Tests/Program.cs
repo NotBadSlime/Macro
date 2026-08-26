@@ -263,6 +263,8 @@ var tests = new (string Name, Action Body)[]
     ("Macro call reference collector walks nested structures", MacroCallReferenceCollectorWalksNestedStructures),
     ("Macro library export bundle separates folder macros from dependencies", MacroLibraryExportBundleSeparatesFolderMacrosFromDependencies),
     ("MacroStudio export wizard has format and packaging steps", MacroStudioExportWizardHasFormatAndPackagingSteps),
+    ("MacroStudio export uses wizard instead of format combo", MacroStudioExportUsesWizardInsteadOfFormatCombo),
+    ("Macro library export writer materializes two-folder layout", MacroLibraryExportWriterMaterializesTwoFolderLayout),
     ("Embedded converter round trips macro call steps", EmbeddedConverterRoundTripsMacroCallSteps),
     ("Macro library store persists empty folders and moves macros like files", MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles),
     ("Macro library store reorders macros within folders", MacroLibraryStoreReordersMacrosWithinFolders),
@@ -4561,9 +4563,9 @@ static void MacroStudioMovesConversionIntoMacroLibraryAndRemovesDiagnosticsContr
 
     Assert.Contains("ImportMacroButton", libraryXaml);
     Assert.DoesNotContain("ImportRazerModulesButton", libraryXaml);
-    Assert.Contains("ExportFormatBox", libraryXaml);
+    Assert.DoesNotContain("ExportFormatBox", libraryXaml);
     Assert.Contains("ExportMacroButton", libraryXaml);
-    Assert.Contains("MacroConversionService.GetFormats", libraryCode);
+    Assert.Contains("ExportWizardDialog", libraryCode);
     Assert.Contains("TryGetRazerMacroGuid", libraryCode);
     Assert.Contains("GetRazerModuleReferences", libraryCode);
     Assert.Contains("ResolveReferencedRazerModuleClosure", libraryCode);
@@ -6322,6 +6324,70 @@ static void MacroStudioExportWizardHasFormatAndPackagingSteps()
     Assert.Contains("ThemedDialogChrome.Apply", code);
 }
 
+static void MacroStudioExportUsesWizardInsteadOfFormatCombo()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+
+    Assert.DoesNotContain("ExportFormatBox", libraryXaml);
+    Assert.DoesNotContain("ExportFormatLabelText", libraryXaml);
+    Assert.DoesNotContain("InitializeExportFormatBox", libraryCode);
+    Assert.Contains("ExportWizardDialog", libraryCode);
+    Assert.True(
+        libraryCode.Contains("MacroLibraryExportWriter", StringComparison.Ordinal)
+        || libraryCode.Contains("WriteTwoFolders", StringComparison.Ordinal));
+}
+
+static void MacroLibraryExportWriterMaterializesTwoFolderLayout()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    var parentDir = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        Directory.CreateDirectory(parentDir);
+        var store = new MacroLibraryStore(root);
+        store.CreateFolder("Raid");
+        var dep = store.CreateMacro("Shared Burst", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+        var inside = store.CreateMacro(
+            new MacroDocument(1, "Opener", PlaybackSettings.Default, [new MacroCallStep(dep.Id)]),
+            folder: "Raid");
+
+        var snapshot = store.Load();
+        var bundle = MacroLibraryExportBundles.FromFolder(
+            store,
+            snapshot,
+            groupId: MacroLibraryStore.GlobalGroupId,
+            folder: "Raid");
+
+        MacroLibraryExportWriter.WriteTwoFolders(
+            bundle,
+            parentDir,
+            exportRootName: "Raid-导出",
+            primaryFolderName: "Raid",
+            dependenciesFolderName: "依赖子宏",
+            format: MacroConversionFormat.MacroHidMcrx);
+
+        Assert.True(File.Exists(Path.Combine(parentDir, "Raid-导出", "Raid", inside.FileName)));
+        Assert.True(File.Exists(Path.Combine(parentDir, "Raid-导出", "依赖子宏", dep.FileName)));
+
+        var zipPath = Path.Combine(parentDir, "Raid-export.zip");
+        MacroLibraryExportWriter.WriteZip(
+            bundle,
+            zipPath,
+            exportRootName: "Raid-导出",
+            primaryFolderName: "Raid",
+            dependenciesFolderName: "依赖子宏",
+            format: MacroConversionFormat.MacroHidMcrx);
+        Assert.True(File.Exists(zipPath));
+        Assert.True(new FileInfo(zipPath).Length > 0);
+    }
+    finally
+    {
+        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        if (Directory.Exists(parentDir)) Directory.Delete(parentDir, recursive: true);
+    }
+}
+
 static void MacroCallReferenceCollectorWalksNestedStructures()
 {
     var document = new MacroDocument(
@@ -6856,8 +6922,8 @@ static void MacroStudioRemapsNestedMacroCallsWhenImportingMcrxFiles()
     Assert.Contains("ImportMacros(", storeCode);
     Assert.Contains("MacroCallRewriter.RemapReferences", storeCode);
     Assert.Contains("ImportMacros(", libraryCode);
-    Assert.Contains("format.Format == MacroConversionFormat.MacroHidMcrx", libraryCode);
-    Assert.Contains("ExportSelectedMacros", libraryCode);
+    Assert.Contains("BeginExport", libraryCode);
+    Assert.Contains("MacroLibraryExportWriter", libraryCode);
 }
 
 static void MacroStudioMacroLibraryRightClickDeleteKeepsItsTargetAndReportsFailures()

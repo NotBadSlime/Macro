@@ -623,24 +623,12 @@
                                    Margin="0,0,0,8" />
                         <WrapPanel Margin="0,0,0,8">
                             <Button x:Name="ImportMacroButton" MinWidth="120" Content="导入宏" Click="ImportMacro_Click" />
-                        </WrapPanel>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="72" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock x:Name="ExportFormatLabelText" Text="导出格式" Style="{StaticResource FieldLabel}" />
-                                <ComboBox x:Name="ExportFormatBox" Height="30" />
-                            </StackPanel>
                             <Button x:Name="ExportMacroButton"
-                                    Grid.Column="2"
-                                    Height="30"
-                                    Margin="0,18,0,0"
+                                    MinWidth="120"
+                                    Margin="8,0,0,0"
                                     Content="导出"
                                     Click="ExportMacro_Click" />
-                        </Grid>
+                        </WrapPanel>
                         <TextBlock x:Name="ConversionText"
                                    Text="转换器已内置"
                                    TextWrapping="Wrap"

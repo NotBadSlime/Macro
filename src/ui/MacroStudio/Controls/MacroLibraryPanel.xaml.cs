@@ -94,7 +94,6 @@ public partial class MacroLibraryPanel : UserControl
     public void Initialize(MacroEditorState editorState)
     {
         state = editorState;
-        InitializeExportFormatBox();
         RefreshConversionText();
         RefreshTree();
     }
@@ -151,7 +150,6 @@ public partial class MacroLibraryPanel : UserControl
         ExplorerDeleteMenuItem.Header = L("Delete");
         ImportExportTitleText.Text = L("ImportExport");
         ImportMacroButton.Content = L("ImportMacro");
-        ExportFormatLabelText.Text = L("ExportFormat");
         ExportMacroButton.Content = L("ExportMacro");
         MacroSearchBox.ToolTip = L("SearchMacros");
         MacroSearchPlaceholderText.Text = L("SearchMacros");
@@ -776,10 +774,8 @@ public partial class MacroLibraryPanel : UserControl
         ApplyExplorerViewMode();
     }
 
-    private void ExportFolderMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ExportMacro_Click(sender, e);
-    }
+    private void ExportFolderMenuItem_Click(object sender, RoutedEventArgs e) =>
+        BeginExport(BuildExportTarget(preferFolder: true));
 
     private void OpenExplorerNode(MacroLibraryTreeNode node)
     {
@@ -2048,25 +2044,6 @@ public partial class MacroLibraryPanel : UserControl
             : selectedManagerGroupIds.ToList();
     }
 
-    private void InitializeExportFormatBox()
-    {
-        ExportFormatBox.Items.Clear();
-        foreach (var format in MacroConversionService.GetFormats().Where(item => item.CanExport))
-        {
-            var item = new ComboBoxItem
-            {
-                Tag = format.Format,
-                Content = format.Label
-            };
-            ExportFormatBox.Items.Add(item);
-            if (format.Format == MacroConversionFormat.MacroHidMcrx)
-                ExportFormatBox.SelectedItem = item;
-        }
-
-        if (ExportFormatBox.SelectedItem is null && ExportFormatBox.Items.Count > 0)
-            ExportFormatBox.SelectedIndex = 0;
-    }
-
     private void RefreshConversionText()
     {
         ConversionText.Text = L("ConversionAutoDetectHelp");
@@ -2324,11 +2301,23 @@ public partial class MacroLibraryPanel : UserControl
         return files;
     }
 
-    private void ExportMacro_Click(object sender, RoutedEventArgs e)
+    private void ExportMacro_Click(object sender, RoutedEventArgs e) =>
+        BeginExport(BuildExportTarget(preferFolder: false));
+
+    private void BeginExport(ExportTarget target)
     {
+        if (target.IsEmpty)
+        {
+            ResultMessage?.Invoke(L("ExportNothingSelected"));
+            return;
+        }
+
         try
         {
-            ExportSelectedMacros();
+            var wizard = new ExportWizardDialog(showPackagingStep: target.IsFolder);
+            if (DialogOwnerService.ShowDialogSafe(wizard, this) != true || wizard.Result is null)
+                return;
+            ExecuteExport(target, wizard.Result);
         }
         catch (Exception ex)
         {
@@ -2338,11 +2327,27 @@ public partial class MacroLibraryPanel : UserControl
         }
     }
 
-    private void ExportSelectedMacros()
+    private ExportTarget BuildExportTarget(bool preferFolder)
     {
-        if (state is null) return;
-        var format = GetSelectedExportFormat();
-        var selected = GetSelectedExplorerNodes()
+        if (state is null || !showingDatabaseContents)
+            return ExportTarget.Empty;
+
+        var selectedNodes = GetSelectedExplorerNodes();
+        if (preferFolder)
+        {
+            var folderNode = selectedNodes.FirstOrDefault(node => node.IsFolder)
+                ?? (contextMenuTargetNode?.IsFolder == true ? contextMenuTargetNode : null);
+            if (folderNode is null || string.IsNullOrWhiteSpace(folderNode.FolderName))
+                return ExportTarget.Empty;
+
+            return new ExportTarget(
+                IsFolder: true,
+                FolderName: folderNode.FolderName,
+                GroupId: activeDatabaseGroupId,
+                Macros: []);
+        }
+
+        var selected = selectedNodes
             .Select(node => node.Item)
             .Where(item => item is not null)
             .Cast<MacroLibraryItem>()
@@ -2352,14 +2357,31 @@ public partial class MacroLibraryPanel : UserControl
             var current = state.LibraryStore.Load().Items.FirstOrDefault(item =>
                 string.Equals(item.Id, selectedId, StringComparison.OrdinalIgnoreCase));
             if (current is not null)
-            {
                 selected.Add(current);
-            }
         }
 
-        if (selected.Count <= 1)
+        return new ExportTarget(
+            IsFolder: false,
+            FolderName: null,
+            GroupId: activeDatabaseGroupId,
+            Macros: selected);
+    }
+
+    private void ExecuteExport(ExportTarget target, ExportWizardResult wizardResult)
+    {
+        if (state is null) return;
+        var format = wizardResult.Format;
+        var snapshot = state.LibraryStore.Load();
+
+        if (target.IsFolder)
         {
-            var item = selected.FirstOrDefault();
+            ExecuteFolderExport(target, wizardResult, snapshot);
+            return;
+        }
+
+        if (target.Macros.Count <= 1)
+        {
+            var item = target.Macros.FirstOrDefault();
             var document = PrepareExportDocument(item);
             var export = MacroConversionService.ExportFromMcrx(document, format);
             var dialog = new SaveFileDialog
@@ -2376,37 +2398,20 @@ public partial class MacroLibraryPanel : UserControl
             return;
         }
 
-        var primary = selected.FirstOrDefault(item =>
-                string.Equals(item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase))
-            ?? selected[0];
-        var primaryExport = MacroConversionService.ExportFromMcrx(PrepareExportDocument(primary), format);
-        var multiDialog = new SaveFileDialog
-        {
-            Filter = FormatFilter(format),
-            Title = L("ExportMacroTitle"),
-            DefaultExt = MacroConversionService.GetDefaultExtension(format),
-            FileName = primaryExport.FileName
-        };
-        if (DialogOwnerService.ShowDialogSafe(multiDialog, this) != true) return;
+        var directory = PromptForExportDirectory();
+        if (string.IsNullOrWhiteSpace(directory)) return;
 
-        var directory = Path.GetDirectoryName(multiDialog.FileName);
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            throw new InvalidOperationException("Export directory is not available.");
-        }
+        var bundle = MacroLibraryExportBundles.FromItems(state.LibraryStore, snapshot, target.Macros);
+        var diagnostics = new List<MacroConversionDiagnostic>();
+        var exportedNames = new List<string>();
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        Directory.CreateDirectory(directory);
-        File.WriteAllText(multiDialog.FileName, primaryExport.Output);
-        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        foreach (var entry in bundle.Primary)
         {
-            Path.GetFullPath(multiDialog.FileName)
-        };
-        var diagnostics = primaryExport.Diagnostics.ToList();
-        var exportedNames = new List<string> { Path.GetFileName(multiDialog.FileName) };
-        foreach (var item in selected.Where(item =>
-            !string.Equals(item.Id, primary.Id, StringComparison.OrdinalIgnoreCase)))
-        {
-            var export = MacroConversionService.ExportFromMcrx(PrepareExportDocument(item), format);
+            var document = string.Equals(entry.Item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase)
+                ? PrepareExportDocument(entry.Item)
+                : entry.Document;
+            var export = MacroConversionService.ExportFromMcrx(document, format, entry.RelativePath);
             var path = AllocateExportPath(directory, export.FileName, written);
             File.WriteAllText(path, export.Output);
             written.Add(Path.GetFullPath(path));
@@ -2414,8 +2419,90 @@ public partial class MacroLibraryPanel : UserControl
             exportedNames.Add(Path.GetFileName(path));
         }
 
+        if (bundle.Dependencies.Count > 0)
+        {
+            var depsDirectory = Path.Combine(directory, L("ExportDependenciesFolder"));
+            Directory.CreateDirectory(depsDirectory);
+            foreach (var entry in bundle.Dependencies)
+            {
+                var export = MacroConversionService.ExportFromMcrx(entry.Document, format, entry.RelativePath);
+                var path = AllocateExportPath(depsDirectory, export.FileName, written);
+                File.WriteAllText(path, export.Output);
+                written.Add(Path.GetFullPath(path));
+                diagnostics.AddRange(export.Diagnostics);
+                exportedNames.Add(Path.Combine(L("ExportDependenciesFolder"), Path.GetFileName(path)));
+            }
+        }
+
         ConversionText.Text = FormatDiagnostics(diagnostics);
         ResultMessage?.Invoke(LF("ConversionExported", string.Join(", ", exportedNames)));
+    }
+
+    private void ExecuteFolderExport(ExportTarget target, ExportWizardResult wizardResult, MacroLibrarySnapshot snapshot)
+    {
+        if (state is null || string.IsNullOrWhiteSpace(target.FolderName) || string.IsNullOrWhiteSpace(target.GroupId))
+            return;
+
+        var format = wizardResult.Format;
+        var packaging = wizardResult.Packaging ?? ExportPackagingMode.TwoFolders;
+        var folderName = target.FolderName!;
+        var exportRootName = folderName + L("ExportFolderRootSuffix");
+        var dependenciesFolderName = L("ExportDependenciesFolder");
+        var bundle = MacroLibraryExportBundles.FromFolder(
+            state.LibraryStore,
+            snapshot,
+            groupId: target.GroupId!,
+            folder: folderName);
+
+        if (packaging == ExportPackagingMode.Zip)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "ZIP (*.zip)|*.zip",
+                Title = L("ExportMacroTitle"),
+                DefaultExt = ".zip",
+                FileName = SanitizeExportFileName(exportRootName) + ".zip"
+            };
+            if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
+            MacroLibraryExportWriter.WriteZip(
+                bundle,
+                dialog.FileName,
+                exportRootName,
+                folderName,
+                dependenciesFolderName,
+                format);
+            ResultMessage?.Invoke(LF("ConversionExported", Path.GetFileName(dialog.FileName)));
+            return;
+        }
+
+        var parentDirectory = PromptForExportDirectory();
+        if (string.IsNullOrWhiteSpace(parentDirectory)) return;
+        MacroLibraryExportWriter.WriteTwoFolders(
+            bundle,
+            parentDirectory,
+            exportRootName,
+            folderName,
+            dependenciesFolderName,
+            format);
+        ResultMessage?.Invoke(LF("ConversionExported", exportRootName));
+    }
+
+    private string? PromptForExportDirectory()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = L("ExportMacroTitle")
+        };
+        return DialogOwnerService.ShowDialogSafe(dialog, this) == true
+            ? dialog.FolderName
+            : null;
+    }
+
+    private static string SanitizeExportFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = string.Join("_", name.Split(invalid, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return string.IsNullOrWhiteSpace(cleaned) ? "export" : cleaned;
     }
 
     private MacroDocument PrepareExportDocument(MacroLibraryItem? item)
@@ -2465,13 +2552,6 @@ public partial class MacroLibraryPanel : UserControl
                 return Path.GetFullPath(Path.Combine(directory, $"{stem}-{Guid.NewGuid():N}{extension}"));
             }
         }
-    }
-
-    private MacroConversionFormat GetSelectedExportFormat()
-    {
-        return ExportFormatBox.SelectedItem is ComboBoxItem { Tag: MacroConversionFormat format }
-            ? format
-            : MacroConversionFormat.MacroHidMcrx;
     }
 
     private static string FormatFilter(MacroConversionFormat format)
@@ -3146,6 +3226,19 @@ public partial class MacroLibraryPanel : UserControl
 
     private static string L(string key) => LocalizationService.Get(key);
     private static string LF(string key, params object[] args) => LocalizationService.Format(key, args);
+
+    private sealed record ExportTarget(
+        bool IsFolder,
+        string? FolderName,
+        string? GroupId,
+        IReadOnlyList<MacroLibraryItem> Macros)
+    {
+        public static ExportTarget Empty { get; } = new(false, null, null, []);
+
+        public bool IsEmpty => IsFolder
+            ? string.IsNullOrWhiteSpace(FolderName)
+            : Macros.Count == 0;
+    }
 
     private sealed record MacroLibraryClipboardItem(MacroLibraryClipboardKind Kind, string Value, string GroupId);
 

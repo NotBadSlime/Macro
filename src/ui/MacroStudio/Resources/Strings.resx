@@ -450,11 +450,14 @@
   <data name="ExportPackagingTwoFolders" xml:space="preserve"><value>Two subfolders</value></data>
   <data name="ExportPackagingZip" xml:space="preserve"><value>ZIP archive</value></data>
   <data name="ExportWeakFormatWarning" xml:space="preserve"><value>This format may not fully preserve nested macro.call references. Prefer MacroHID MCRX when sharing macros with dependencies.</value></data>
+  <data name="ExportNothingSelected" xml:space="preserve"><value>Select a macro or macro folder to export.</value></data>
+  <data name="ExportDependenciesFolder" xml:space="preserve"><value>Dependencies</value></data>
+  <data name="ExportFolderRootSuffix" xml:space="preserve"><value>-export</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>Delete macro folder</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>Unlock selected</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>Locked {0} selected macro(s).</value></data>
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>Unlocked {0} selected macro(s).</value></data>
-  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>Select main macros and submacros together. References between files are detected automatically.</value></data>
+  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>Select main macros and submacros together. References between files are detected automatically. Folder export packs dependency macros too—share the folder plus its Dependencies package.</value></data>
   <data name="ConversionSmartImported" xml:space="preserve"><value>Imported {0} macro(s) from {1} selected file(s); {2} submacro(s) were detected automatically.</value></data>
   <data name="AddOcrExtractText" xml:space="preserve"><value>OCR extract text</value></data>
   <data name="AddOcrExtractTextHint" xml:space="preserve"><value>Extract text from mixed OCR content to the clipboard</value></data>

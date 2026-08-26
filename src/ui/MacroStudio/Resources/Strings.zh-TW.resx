@@ -276,11 +276,14 @@
   <data name="ExportPackagingTwoFolders" xml:space="preserve"><value>兩個子資料夾</value></data>
   <data name="ExportPackagingZip" xml:space="preserve"><value>ZIP 壓縮包</value></data>
   <data name="ExportWeakFormatWarning" xml:space="preserve"><value>此格式可能無法完整保留巢狀的 macro.call 參照。分享含相依宏時，建議使用 MacroHID MCRX。</value></data>
+  <data name="ExportNothingSelected" xml:space="preserve"><value>請先選擇要匯出的巨集或巨集資料夾。</value></data>
+  <data name="ExportDependenciesFolder" xml:space="preserve"><value>相依子巨集</value></data>
+  <data name="ExportFolderRootSuffix" xml:space="preserve"><value>-匯出</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>刪除宏資料夾</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解除鎖定所選巨集</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已鎖定所選的 {0} 個巨集。</value></data>
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>已解除鎖定所選的 {0} 個巨集。</value></data>
-  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>可一次選取主巨集和子巨集；程式會自動識別檔案間的參照並建立巢狀巨集。</value></data>
+  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>可一次選取主巨集和子巨集；程式會自動識別檔案間的參照並建立巢狀巨集。匯出巨集資料夾時會一併打包相依子巨集，分享請帶上「巨集資料夾 + 相依子巨集」。</value></data>
   <data name="ConversionSmartImported" xml:space="preserve"><value>已匯入 {0} 個巨集（選取 {1} 個檔案，自動識別 {2} 個子巨集）。</value></data>
   <data name="AddOcrExtractText" xml:space="preserve"><value>OCR 取得文字</value></data>
   <data name="AddOcrExtractTextHint" xml:space="preserve"><value>從混合文字中擷取內容到剪貼簿</value></data>

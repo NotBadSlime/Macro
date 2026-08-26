@@ -276,11 +276,14 @@
   <data name="ExportPackagingTwoFolders" xml:space="preserve"><value>两个子文件夹</value></data>
   <data name="ExportPackagingZip" xml:space="preserve"><value>ZIP 压缩包</value></data>
   <data name="ExportWeakFormatWarning" xml:space="preserve"><value>该格式可能无法完整保留嵌套的 macro.call 引用。分享含依赖的宏时，建议使用 MacroHID MCRX。</value></data>
+  <data name="ExportNothingSelected" xml:space="preserve"><value>请先选择要导出的宏或宏文件夹。</value></data>
+  <data name="ExportDependenciesFolder" xml:space="preserve"><value>依赖子宏</value></data>
+  <data name="ExportFolderRootSuffix" xml:space="preserve"><value>-导出</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>删除宏文件夹</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解锁所选宏</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已锁定所选的 {0} 个宏。</value></data>
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>已解锁所选的 {0} 个宏。</value></data>
-  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>可一次选择主宏和子宏；程序会自动识别文件间的引用并建立嵌套宏。</value></data>
+  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>可一次选择主宏和子宏；程序会自动识别文件间的引用并建立嵌套宏。导出宏文件夹时会一并打包依赖子宏，分享请带上「宏文件夹 + 依赖子宏」。</value></data>
   <data name="ConversionSmartImported" xml:space="preserve"><value>已导入 {0} 个宏（选择 {1} 个文件，自动识别 {2} 个子宏）。</value></data>
   <data name="AddOcrExtractText" xml:space="preserve"><value>OCR 获取文本</value></data>
   <data name="AddOcrExtractTextHint" xml:space="preserve"><value>从混合文字中提取内容到剪贴板</value></data>

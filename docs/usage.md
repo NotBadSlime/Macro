@@ -121,8 +121,8 @@ MCRX JSON 面板显示当前宏的原始 JSON。修改 JSON 后，合法内容�
 
 宏数据库中提供导入/导出：
 
-- 导入：`.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro、GIMacros JSON；文件选择器支持多选批量导入。对于雷云 XML，可同时选择主宏和子宏；程序也会搜索同目录文件，自动识别 GUID 引用、先导入子宏，再在主宏中保留嵌套“调用宏”动作。
-- 导出：可将当前宏导出为支持的目标格式。
+- 导入：`.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro、GIMacros JSON；文件选择器支持多选批量导入。对 `.mcrx` 主宏+子宏会一起导入并重映射 `macro.call` 引用。对于雷云 XML，可同时选择主宏和子宏；程序也会搜索同目录文件，自动识别 GUID 引用、先导入子宏，再在主宏中保留嵌套“调用宏”动作。
+- 导出：点击导出打开向导选择格式；默认推荐 `MacroHID MCRX`。可多选宏后导出到同一目录（夹外依赖会写入「依赖子宏」）。导出宏文件夹时可选择两个子文件夹或 ZIP，自动打包文件夹内宏与依赖子宏；分享请带上「宏文件夹 + 依赖子宏」。
 
 导入失败时会弹出错误详情，包含文件名、解析失败的行号/列号、具体原因和对应原文；批量导入会继续处理其他文件并汇总所有失败项。
 
@@ -250,8 +250,8 @@ The MCRX JSON panel shows the current macro document. Valid edits update the bas
 
 Import/export lives in the macro library:
 
-- Import: `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, and GIMacros JSON. The file picker supports multi-select batch import. For Razer XML, select the main macro and submacros together—or keep them in the same folder—and MacroStudio automatically resolves GUID references, imports submacros first, and preserves nested macro-call actions in the main macro.
-- Export: save the current macro to supported target formats.
+- Import: `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, and GIMacros JSON. The file picker supports multi-select batch import. For `.mcrx` main/submacro sets, MacroStudio imports them together and remaps `macro.call` references. For Razer XML, select the main macro and submacros together—or keep them in the same folder—and MacroStudio automatically resolves GUID references, imports submacros first, and preserves nested macro-call actions in the main macro.
+- Export: open the export wizard to choose a format; prefer `MacroHID MCRX`. Multi-select macros to export them into the same folder (out-of-folder dependencies land under Dependencies). Folder export can write two subfolders or a ZIP and automatically packs macros plus dependencies—share the folder together with its Dependencies package.
 
 An import failure opens detailed diagnostics with the file name, failed line/column, reason, and source line. Batch import continues with the remaining files and summarizes every failure.
 
