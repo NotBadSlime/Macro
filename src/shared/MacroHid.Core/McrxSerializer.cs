@@ -28,6 +28,11 @@ public static class McrxSerializer
             root["conditions"] = SerializeConditions(conditions);
         }
 
+        if (!string.IsNullOrWhiteSpace(document.Id))
+        {
+            root["id"] = document.Id;
+        }
+
         return root.ToJsonString(Options);
     }
 
@@ -96,6 +101,9 @@ public static class McrxSerializer
             MouseMoveStep move => SerializeMouseMove(move),
             MouseButtonStep button => SerializeMouseButton(button),
             MouseWheelStep wheel => SerializeMouseWheel(wheel),
+            WindowActivateStep windowActivate => SerializeWindowActivate(windowActivate),
+            OcrExtractTextStep ocrExtractText => SerializeOcrExtractText(ocrExtractText),
+            OcrClickStep ocrClick => SerializeOcrClick(ocrClick),
             ConsumerStep consumer => SerializeConsumer(consumer),
             WaitStep wait => SerializeWait(wait),
             RepeatStep repeat => new JsonObject
@@ -112,6 +120,10 @@ public static class McrxSerializer
             StopCurrentSequenceStep => new JsonObject
             {
                 ["type"] = "sequence.stop-current"
+            },
+            StopCurrentIterationStep => new JsonObject
+            {
+                ["type"] = "sequence.stop-iteration"
             },
             StopAllSequencesStep => new JsonObject
             {
@@ -214,6 +226,59 @@ public static class McrxSerializer
         };
         AddButtons(result, step.Buttons);
         return result;
+    }
+
+    private static JsonObject SerializeWindowActivate(WindowActivateStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = "window.activate",
+            ["processName"] = step.ProcessName,
+            ["windowTitle"] = step.WindowTitle,
+            ["useTitleRegex"] = step.UseTitleRegex,
+            ["matchIndex"] = step.MatchIndex,
+            ["timeoutMs"] = ToMillisecondsValue(step.Timeout),
+            ["restore"] = step.Restore,
+            ["failIfNotFound"] = step.FailIfNotFound
+        };
+    }
+
+    private static JsonObject SerializeOcrClick(OcrClickStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = "ocr.click",
+            ["region"] = SerializeRegion(step.Region),
+            ["expectedText"] = step.ExpectedText,
+            ["contains"] = step.Contains,
+            ["useRegex"] = step.UseRegex,
+            ["language"] = step.Language,
+            ["button"] = step.Button.ToString(),
+            ["clickCount"] = step.ClickCount,
+            ["matchIndex"] = step.MatchIndex,
+            ["holdMs"] = ToMillisecondsValue(step.Hold),
+            ["intervalMs"] = ToMillisecondsValue(step.Interval),
+            ["offsetX"] = step.OffsetX,
+            ["offsetY"] = step.OffsetY
+        };
+    }
+
+    private static JsonObject SerializeOcrExtractText(OcrExtractTextStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = "ocr.extract-text",
+            ["region"] = SerializeRegion(step.Region),
+            ["pattern"] = step.Pattern,
+            ["language"] = step.Language,
+            ["useRegex"] = step.UseRegex,
+            ["matchIndex"] = step.MatchIndex,
+            ["captureGroup"] = step.CaptureGroup,
+            ["filterTerms"] = step.FilterTerms,
+            ["keepDigitsOnly"] = step.KeepDigitsOnly,
+            ["normalizeWhitespace"] = step.NormalizeWhitespace,
+            ["failIfNotFound"] = step.FailIfNotFound
+        };
     }
 
     private static JsonObject SerializeConsumer(ConsumerStep step)
@@ -387,6 +452,7 @@ public static class McrxSerializer
                 obj["expectedText"] = text.ExpectedText;
                 obj["contains"] = text.Contains;
                 obj["language"] = text.Language;
+                obj["useRegex"] = text.UseRegex;
                 break;
         }
     }

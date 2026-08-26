@@ -6,6 +6,7 @@ internal enum MacroControlFlowResult
 {
     Completed,
     StopCurrent,
+    StopIteration,
     StopAll
 }
 
@@ -47,6 +48,8 @@ internal sealed class ManagedMacroControlFlowRunner
         var elapsedTicks = 0L;
         var nextSequence = sequence;
         var submittedActions = actionsSubmitted;
+        var pressGaps = new PressReleaseGapTracker(qpcFrequency);
+        PaddleOcrBridge? ocrBridge = null;
 
         try
         {
@@ -76,6 +79,9 @@ internal sealed class ManagedMacroControlFlowRunner
                         return MacroControlFlowResult.StopCurrent;
                     }
                     break;
+
+                case StopCurrentIterationStep:
+                    return MacroControlFlowResult.StopIteration;
 
                 case StopAllSequencesStep:
                     return MacroControlFlowResult.StopAll;
@@ -142,6 +148,7 @@ internal sealed class ManagedMacroControlFlowRunner
                     else
                     {
                         Submit(new KeyInputAction(key.Kind, key.Key, key.Modifiers));
+                        elapsedTicks += ToTicks(key.Hold, qpcFrequency);
                     }
                     break;
 
@@ -164,6 +171,7 @@ internal sealed class ManagedMacroControlFlowRunner
                     else
                     {
                         Submit(new MouseButtonInputAction(button.Button, button.Kind));
+                        elapsedTicks += ToTicks(button.Hold, qpcFrequency);
                     }
                     break;
 
@@ -176,6 +184,102 @@ internal sealed class ManagedMacroControlFlowRunner
                     Submit(new MouseWheelInputAction(wheel.Vertical, wheel.Horizontal, wheel.Buttons));
                     break;
 
+                case WindowActivateStep windowActivate:
+                    WaitToCurrentTick();
+                    var activation = WindowActivationService.Activate(windowActivate, cancellationToken);
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    if (!activation.Success && windowActivate.FailIfNotFound)
+                    {
+                        throw new InvalidOperationException(
+                            $"Could not activate window '{windowActivate.ProcessName}': {activation.Error}");
+                    }
+                    break;
+
+                case OcrExtractTextStep ocrExtractText:
+                    WaitToCurrentTick();
+                    ocrBridge ??= new PaddleOcrBridge();
+                    var recognition = ocrBridge.RecognizeWithDiagnosticsAsync(
+                            ocrExtractText.Region,
+                            ocrExtractText.Language,
+                            cancellationToken)
+                        .GetAwaiter()
+                        .GetResult();
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    if (!recognition.Success)
+                    {
+                        if (ocrExtractText.FailIfNotFound)
+                        {
+                            throw new InvalidOperationException(
+                                $"OCR text extraction failed: {recognition.Error ?? "no text was recognized"}");
+                        }
+
+                        break;
+                    }
+
+                    if (!PaddleOcrBridge.TryExtractText(
+                            recognition.Text,
+                            ocrExtractText.Pattern,
+                            ocrExtractText.UseRegex,
+                            ocrExtractText.MatchIndex,
+                            ocrExtractText.CaptureGroup,
+                            ocrExtractText.FilterTerms,
+                            ocrExtractText.KeepDigitsOnly,
+                            ocrExtractText.NormalizeWhitespace,
+                            out var extractedText,
+                            out var extractionError))
+                    {
+                        if (ocrExtractText.FailIfNotFound)
+                        {
+                            throw new InvalidOperationException(
+                                $"OCR text extraction failed: {extractionError ?? "the requested text was not found"}");
+                        }
+
+                        break;
+                    }
+
+                    if (!WindowsClipboardService.TrySetText(extractedText, cancellationToken, out var clipboardError)
+                        && ocrExtractText.FailIfNotFound)
+                    {
+                        throw new InvalidOperationException(
+                            $"OCR text extraction could not update the clipboard: {clipboardError}");
+                    }
+                    break;
+
+                case OcrClickStep ocrClick:
+                    WaitToCurrentTick();
+                    ocrBridge ??= new PaddleOcrBridge();
+                    var location = ocrBridge.FindTextAsync(
+                            ocrClick.Region,
+                            ocrClick.ExpectedText,
+                            ocrClick.Contains,
+                            ocrClick.Language,
+                            ocrClick.UseRegex,
+                            ocrClick.MatchIndex,
+                            ocrClick.OffsetX,
+                            ocrClick.OffsetY,
+                            cancellationToken)
+                        .GetAwaiter()
+                        .GetResult();
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    if (location is null)
+                    {
+                        break;
+                    }
+
+                    Submit(new MouseMoveInputAction(MouseMoveMode.Absolute, location.X, location.Y));
+                    var clickCount = Math.Clamp(ocrClick.ClickCount, 1, 3);
+                    for (var clickIndex = 0; clickIndex < clickCount; clickIndex++)
+                    {
+                        Submit(new MouseButtonInputAction(ocrClick.Button, ButtonActionKind.Down));
+                        elapsedTicks += ToTicks(ocrClick.Hold, qpcFrequency);
+                        Submit(new MouseButtonInputAction(ocrClick.Button, ButtonActionKind.Up));
+                        if (clickIndex + 1 < clickCount)
+                        {
+                            elapsedTicks += ToTicks(ocrClick.Interval, qpcFrequency);
+                        }
+                    }
+                    break;
+
                 case ConsumerStep consumer:
                     if (consumer.Kind == ButtonActionKind.Click)
                     {
@@ -186,6 +290,7 @@ internal sealed class ManagedMacroControlFlowRunner
                     else
                     {
                         Submit(new ConsumerInputAction(consumer.Control, consumer.Kind));
+                        elapsedTicks += ToTicks(consumer.Hold, qpcFrequency);
                     }
                     break;
                 }
@@ -195,13 +300,15 @@ internal sealed class ManagedMacroControlFlowRunner
         }
         finally
         {
+            ocrBridge?.Dispose();
             sequence = nextSequence;
             actionsSubmitted = submittedActions;
         }
 
         void Submit(InputAction action)
         {
-            var dueTick = startTick + elapsedTicks;
+            var dueTick = pressGaps.AdjustDueTick(action, startTick + elapsedTicks);
+            elapsedTicks = Math.Max(elapsedTicks, dueTick - startTick);
             if (pauseCoordinator is null)
             {
                 delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait);
@@ -213,6 +320,20 @@ internal sealed class ManagedMacroControlFlowRunner
             cancellationToken.ThrowIfCancellationRequested();
             inputSink.Submit(nextSequence++, action);
             submittedActions++;
+        }
+
+        void WaitToCurrentTick()
+        {
+            var dueTick = startTick + elapsedTicks;
+            if (pauseCoordinator is null)
+            {
+                delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait);
+            }
+            else
+            {
+                pauseCoordinator.WaitUntil(dueTick, delayStrategy, qpcFrequency, cancellationToken, noWait);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 
@@ -406,7 +527,7 @@ internal static class MacroControlFlowInspector
     {
         foreach (var step in steps)
         {
-            if (step is StopCurrentSequenceStep or StopAllSequencesStep)
+            if (step is StopCurrentSequenceStep or StopCurrentIterationStep or StopAllSequencesStep)
             {
                 return true;
             }
@@ -437,7 +558,7 @@ internal static class MacroControlFlowInspector
         {
             switch (step)
             {
-                case StopCurrentSequenceStep or StopAllSequencesStep:
+                case StopCurrentSequenceStep or StopCurrentIterationStep or StopAllSequencesStep or WindowActivateStep or OcrExtractTextStep or OcrClickStep:
                     return true;
                 case RepeatStep repeat when InspectSteps(repeat.Steps, macroResolver, visitingDocuments, visitingNames, depth):
                     return true;

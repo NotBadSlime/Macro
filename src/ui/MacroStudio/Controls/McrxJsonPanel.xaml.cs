@@ -38,6 +38,12 @@ public partial class McrxJsonPanel : UserControl
         ApplyJsonButton.Content = LocalizationService.Get("Apply");
     }
 
+    public void SetReadOnly(bool value)
+    {
+        MacroEditor.IsReadOnly = value;
+        ApplyJsonButton.IsEnabled = !value;
+    }
+
     private void MacroEditor_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (updatingText)

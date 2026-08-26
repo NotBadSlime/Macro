@@ -125,7 +125,9 @@ public sealed class CompiledPlaybackPlan
                 batchActions.Add(actions[i].Action);
                 i++;
             }
-            while (i < actions.Count && actions[i].DueTick == dueTick);
+            while (i < actions.Count
+                && actions[i].DueTick == dueTick
+                && CanBatchWith(batchActions, actions[i].Action));
 
             var key = new ActionBatchKey(batchActions);
             if (!cache.TryGetValue(key, out var prepared))
@@ -138,6 +140,29 @@ public sealed class CompiledPlaybackPlan
         }
 
         return batches;
+    }
+
+    private static bool CanBatchWith(IReadOnlyList<InputAction> batchActions, InputAction next)
+    {
+        if (!PressIdentity.TryGet(next, out var nextIdentity, out var nextIsDown))
+        {
+            return true;
+        }
+
+        foreach (var existing in batchActions)
+        {
+            if (!PressIdentity.TryGet(existing, out var existingIdentity, out var existingIsDown))
+            {
+                continue;
+            }
+
+            if (existingIdentity == nextIdentity && existingIsDown != nextIsDown)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool ContainsRandomWait(IReadOnlyList<MacroStep> steps)

@@ -1980,7 +1980,11 @@ public partial class MainWindow : Window
     private void OnImportApplied(MacroDocument document)
     {
         SaveActiveEditorBeforeSwitch(nextMacroId: null);
-        var item = libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
+        var item = !string.IsNullOrWhiteSpace(document.Id)
+            ? libraryStore.Load().Items.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, document.Id, StringComparison.OrdinalIgnoreCase))
+            : null;
+        item ??= libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
         editorState.SelectedMacroId = item.Id;
         activeEditorMacroId = item.Id;
         LibraryPanel.RefreshList();

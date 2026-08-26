@@ -23,6 +23,7 @@ public class MacroEditorState
     public int SelectedStepIndex { get; set; } = -1;
     public bool IsPlaying { get; set; }
     public bool IsListening { get; set; }
+    public bool IsEditLocked { get; private set; }
 
     public event Action? StateChanged;
     public event Action<string>? StatusMessage;
@@ -30,6 +31,17 @@ public class MacroEditorState
     public void NotifyChanged() => StateChanged?.Invoke();
 
     public void SetStatus(string message) => StatusMessage?.Invoke(message);
+
+    public void SetEditLocked(bool isLocked)
+    {
+        if (IsEditLocked == isLocked)
+        {
+            return;
+        }
+
+        IsEditLocked = isLocked;
+        NotifyChanged();
+    }
 
     public MacroLibrarySnapshot ReloadLibrary()
     {

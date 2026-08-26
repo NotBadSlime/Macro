@@ -47,6 +47,8 @@
         <DataTemplate x:Key="StepTemplate">
             <Border x:Name="StepRow"
                     Style="{StaticResource SoftListItemBorder}"
+                    Background="{Binding BackgroundBrush}"
+                    BorderThickness="2"
                     Padding="8,7"
                     Margin="{Binding LeftMargin}"
                     Cursor="Hand"
@@ -60,28 +62,47 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
+                    <Border x:Name="HoverOverlay"
+                            Grid.ColumnSpan="5"
+                            Margin="-8,-7"
+                            Background="{DynamicResource ActionHoverOverlay}"
+                            CornerRadius="10"
+                            Visibility="Collapsed"
+                            IsHitTestVisible="False" />
+                    <Border x:Name="HoverRail"
+                            Grid.ColumnSpan="5"
+                            Width="4"
+                            Margin="-8,-5,0,-5"
+                            HorizontalAlignment="Left"
+                            Background="{DynamicResource Accent}"
+                            CornerRadius="2"
+                            Visibility="Collapsed"
+                            IsHitTestVisible="False" />
+
                     <TextBlock Text="{Binding Icon}"
                                FontSize="15"
+                               Foreground="{Binding IconBrush}"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1"
                                Text="{Binding ActionIndicator}"
                                FontSize="14"
                                FontWeight="Bold"
-                               Foreground="{DynamicResource SecondaryText}"
+                               Foreground="{Binding IconBrush}"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                     <TextBlock x:Name="StepTitleText"
                                Grid.Column="2"
                                Text="{Binding Title}"
-                               Foreground="{DynamicResource PrimaryText}"
+                               Foreground="{Binding ActionForeground}"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis"
                                Cursor="Hand"
                                MouseLeftButtonUp="StepTitle_MouseLeftButtonUp" />
                     <TextBlock Grid.Column="3"
                                Text="{Binding Badge}"
-                               Foreground="{DynamicResource SecondaryText}"
+                               Foreground="{Binding ActionForeground}"
+                               Opacity="0.72"
                                FontSize="12"
                                VerticalAlignment="Center"
                                Margin="8,0,4,0" />
@@ -105,16 +126,19 @@
             </Border>
             <DataTemplate.Triggers>
                 <Trigger SourceName="StepRow" Property="IsMouseOver" Value="True">
-                    <Setter TargetName="StepRow" Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+                    <Setter TargetName="StepRow" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                    <Setter TargetName="HoverOverlay" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="HoverRail" Property="Visibility" Value="Visible" />
                 </Trigger>
-                <DataTrigger Binding="{Binding IsStructural}" Value="True">
-                    <Setter TargetName="StepRow" Property="Background" Value="{DynamicResource ControlBackground}" />
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter TargetName="StepRow" Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
+                    <Setter TargetName="HoverOverlay" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="HoverRail" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Index}" Value="-1">
                     <Setter TargetName="RowActions" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsConditionEndpoint}" Value="True">
-                    <Setter TargetName="StepTitleText" Property="Foreground" Value="#FF3B30" />
                     <Setter TargetName="StepTitleText" Property="FontWeight" Value="SemiBold" />
                 </DataTrigger>
             </DataTemplate.Triggers>
@@ -145,6 +169,12 @@
                             ToolTip="{Binding Text, ElementName=StepUndoText}"
                             Click="StepUndo_Click"
                             IsEnabled="False" />
+                    <Button x:Name="StepRedoButton"
+                            Style="{StaticResource SequenceToolbarIconButton}"
+                            Content="&#xE7A6;"
+                            ToolTip="{Binding Text, ElementName=StepRedoText}"
+                            Click="StepRedo_Click"
+                            IsEnabled="False" />
                     <Button x:Name="StepUpButton"
                             Style="{StaticResource SequenceToolbarIconButton}"
                             Content="&#xE74A;"
@@ -170,6 +200,7 @@
             <Grid>
                 <TextBlock x:Name="SequenceTitleText" Text="序列" Style="{StaticResource PanelTitle}" />
                 <TextBlock x:Name="StepUndoText" Text="撤回" Visibility="Collapsed" />
+                <TextBlock x:Name="StepRedoText" Text="还原" Visibility="Collapsed" />
                 <TextBlock x:Name="StepUpText" Text="上移" Visibility="Collapsed" />
                 <TextBlock x:Name="StepDownText" Text="下移" Visibility="Collapsed" />
                 <TextBlock x:Name="StepDeleteText" Text="删除" Visibility="Collapsed" />
@@ -191,6 +222,16 @@
                      DragLeave="StepList_DragLeave"
                      Drop="StepList_Drop"
                      HorizontalContentAlignment="Stretch" />
+            <TextBlock x:Name="EmptySequenceOverlay"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       MaxWidth="280"
+                       TextAlignment="Center"
+                       Foreground="{DynamicResource Placeholder}"
+                       FontSize="13"
+                       TextWrapping="Wrap"
+                       IsHitTestVisible="False"
+                       Text="把动作拖到这里，或直接点击右侧添加项。" />
             <Border x:Name="SelectionRectangle"
                     Panel.ZIndex="20"
                     BorderBrush="{DynamicResource Accent}"

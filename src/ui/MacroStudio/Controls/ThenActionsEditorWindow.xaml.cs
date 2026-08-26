@@ -12,6 +12,7 @@ public partial class ThenActionsEditorWindow : Window
     public ThenActionsEditorWindow(IReadOnlyList<MacroStep> initialSteps, MacroEditorState? editorState = null)
     {
         InitializeComponent();
+        ThemedDialogChrome.Apply(this);
         steps = initialSteps.ToList();
         if (editorState is not null)
         {

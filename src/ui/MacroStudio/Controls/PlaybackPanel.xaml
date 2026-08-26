@@ -18,14 +18,45 @@
             <TextBlock x:Name="PlaybackTitleText" Grid.ColumnSpan="3" Style="{StaticResource PanelTitle}" Text="播放" Margin="0,0,0,12" />
             <StackPanel Grid.Row="1" Grid.ColumnSpan="3">
                 <TextBlock x:Name="TriggerLabelText" Text="触发键" Style="{StaticResource FieldLabel}" />
-                <DockPanel Margin="0,0,0,8">
-                    <Button x:Name="CaptureTriggerButton" DockPanel.Dock="Right" Width="78" Content="捕获" Click="CaptureTrigger_Click" />
+                <DockPanel Margin="0,0,0,8" LastChildFill="True">
+                    <Button x:Name="CaptureTriggerButton"
+                            DockPanel.Dock="Right"
+                            Width="78"
+                            Height="34"
+                            VerticalAlignment="Center"
+                            Content="捕获"
+                            Click="CaptureTrigger_Click" />
+                    <Grid Margin="0,0,8,0" VerticalAlignment="Center">
                     <TextBox x:Name="TriggerTextBox"
-                             Height="30"
-                             Margin="0,0,8,0"
+                             Height="34"
+                             VerticalContentAlignment="Center"
                              IsReadOnly="True"
                              TextChanged="PlaybackSettings_TextChanged" />
+                    <TextBlock x:Name="TriggerCaptureHintText"
+                               Text="按下触发键…">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderHintStyle}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding Text, ElementName=TriggerTextBox}" Value="" />
+                                            <Condition Binding="{Binding Tag, ElementName=TriggerTextBox}" Value="Capturing" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    </Grid>
                 </DockPanel>
+                <TextBlock x:Name="TriggerSupportHintText"
+                           Margin="0,0,0,8"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Text="支持主键盘、数字小键盘、符号键、F1–F24 和标准鼠标 1–5 键。" />
             </StackPanel>
 
             <StackPanel Grid.Row="3" Grid.Column="0">

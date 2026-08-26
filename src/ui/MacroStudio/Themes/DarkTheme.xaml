@@ -16,6 +16,7 @@
     <SolidColorBrush x:Key="Hover" Color="#333A45" />
     <SolidColorBrush x:Key="Selection" Color="#263B4F" />
     <SolidColorBrush x:Key="SelectionBorder" Color="#62B0FF" />
+    <SolidColorBrush x:Key="ActionHoverOverlay" Color="#3062B0FF" />
     <SolidColorBrush x:Key="ChromeBackground" Color="#252A32" />
     <SolidColorBrush x:Key="ChromeBorder" Color="#343B46" />
     <SolidColorBrush x:Key="ControlBackground" Color="#2B3038" />

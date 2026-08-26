@@ -9,6 +9,10 @@
                 <ResourceDictionary Source="Themes/LightTheme.xaml" />
                 <ResourceDictionary Source="Themes/SharedStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <Style TargetType="Window">
+                <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+                <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

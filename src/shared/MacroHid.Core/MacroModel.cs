@@ -5,7 +5,8 @@ public sealed record MacroDocument(
     string Name,
     PlaybackSettings Playback,
     IReadOnlyList<MacroStep> Steps,
-    IReadOnlyList<ConditionalDirective>? Conditions = null)
+    IReadOnlyList<ConditionalDirective>? Conditions = null,
+    string? Id = null)
 {
     public MacroDocument(int Version, string Name, IReadOnlyList<MacroStep> Steps)
         : this(Version, Name, PlaybackSettings.Default, Steps, null)
@@ -340,6 +341,41 @@ public sealed record MouseWheelStep(
     int Horizontal,
     MouseButton Buttons = MouseButton.None) : MacroStep;
 
+public sealed record WindowActivateStep(
+    string ProcessName,
+    string WindowTitle = "",
+    bool UseTitleRegex = false,
+    int MatchIndex = 1,
+    TimeSpan Timeout = default,
+    bool Restore = true,
+    bool FailIfNotFound = true) : MacroStep;
+
+public sealed record OcrExtractTextStep(
+    ScreenRegion Region,
+    string Pattern = @"(?i)UID\s*[:：=]?\s*([^\s，。！？,;；]+)",
+    string Language = "ch",
+    bool UseRegex = true,
+    int MatchIndex = 1,
+    int CaptureGroup = 1,
+    string FilterTerms = "",
+    bool KeepDigitsOnly = false,
+    bool NormalizeWhitespace = true,
+    bool FailIfNotFound = true) : MacroStep;
+
+public sealed record OcrClickStep(
+    ScreenRegion Region,
+    string ExpectedText,
+    bool Contains = true,
+    string Language = "ch",
+    bool UseRegex = false,
+    MouseButton Button = MouseButton.Left,
+    int ClickCount = 1,
+    int MatchIndex = 1,
+    TimeSpan Hold = default,
+    TimeSpan Interval = default,
+    int OffsetX = 0,
+    int OffsetY = 0) : MacroStep;
+
 public sealed record ConsumerStep(
     ConsumerControl Control,
     ButtonActionKind Kind,
@@ -374,6 +410,8 @@ public sealed record RepeatStep(int Count, IReadOnlyList<MacroStep> Steps) : Mac
 public sealed record MacroCallStep(string Macro) : MacroStep;
 
 public sealed record StopCurrentSequenceStep : MacroStep;
+
+public sealed record StopCurrentIterationStep : MacroStep;
 
 public sealed record StopAllSequencesStep : MacroStep;
 

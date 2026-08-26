@@ -314,6 +314,17 @@
                     <CheckBox x:Name="ContainsCheckBox" Content="包含匹配" IsChecked="True" Margin="0,6,0,0"
                               Checked="ContainsCheckBox_Changed"
                               Unchecked="ContainsCheckBox_Changed" />
+                    <CheckBox x:Name="RegexCheckBox"
+                              Content="使用正则表达式"
+                              Margin="0,6,0,0"
+                              Checked="RegexCheckBox_Changed"
+                              Unchecked="RegexCheckBox_Changed" />
+                    <TextBlock x:Name="RegexErrorText"
+                               Text="正则表达式无效"
+                               Foreground="{DynamicResource Danger}"
+                               FontSize="11"
+                               Margin="0,4,0,0"
+                               Visibility="Collapsed" />
                     <TextBlock x:Name="OcrStatusText"
                                Margin="0,6,0,0"
                                TextWrapping="Wrap"
@@ -324,15 +335,22 @@
                 <!-- Then actions -->
                 <StackPanel Grid.Row="7">
                     <DockPanel Margin="0,0,0,6">
-                        <TextBlock Text="触发后执行" Style="{StaticResource FieldLabel}" DockPanel.Dock="Left" />
-                        <Button x:Name="AddThenActionButton"
-                                Content="+"
-                                Style="{StaticResource PrimaryButton}"
-                                MinWidth="36"
-                                Height="30"
-                                DockPanel.Dock="Right"
-                                HorizontalAlignment="Right"
-                                Click="AddThenAction_Click" />
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button x:Name="RecordThenActionsButton"
+                                    Content="● 录制输入"
+                                    MinWidth="112"
+                                    Height="30"
+                                    ToolTip="记录键盘、鼠标和真实延迟；Ctrl+Shift+F12 停止"
+                                    Click="RecordThenActions_Click" />
+                            <Button x:Name="AddThenActionButton"
+                                    Content="+"
+                                    Style="{StaticResource PrimaryButton}"
+                                    MinWidth="36"
+                                    Height="30"
+                                    HorizontalAlignment="Right"
+                                    Click="AddThenAction_Click" />
+                        </StackPanel>
+                        <TextBlock Text="触发后执行" Style="{StaticResource FieldLabel}" />
                     </DockPanel>
                     <Popup x:Name="ThenActionPalettePopup"
                            PlacementTarget="{Binding ElementName=AddThenActionButton}"

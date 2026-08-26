@@ -734,6 +734,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         long qpcFrequency,
         PrecisionMode precision,
         Action stopAllRequested,
+        Action? stopIterationRequested = null,
         bool applyStepWindows = true,
         PlaybackPauseCoordinator? pauseCoordinator = null)
     {
@@ -752,6 +753,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 qpcFrequency,
                 precision,
                 stopAllRequested,
+                stopIterationRequested,
                 pauseCoordinator));
         }
         return monitors;
@@ -776,6 +778,15 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var iterationStartTick = clock.GetTimestamp();
+                using var iterationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                var iterationToken = iterationCancellation.Token;
+                var conditionStopIterationRequested = 0;
+                void StopIteration()
+                {
+                    Interlocked.Exchange(ref conditionStopIterationRequested, 1);
+                    iterationCancellation.Cancel();
+                }
+
                 using var pauseCoordinator = new PlaybackPauseCoordinator(clock);
                 var monitors = CreateConditionMonitors(
                     document,
@@ -784,6 +795,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     qpcFrequency,
                     options.Precision,
                     runCancellation.Cancel,
+                    StopIteration,
                     applyStepWindows: false,
                     pauseCoordinator: pauseCoordinator);
                 var runner = new ManagedMacroControlFlowRunner(
@@ -793,7 +805,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     GetPixelEvaluator(options.PixelMode),
                     macroResolver,
                     pauseCoordinator);
-                MacroControlFlowResult flow;
+                var flow = MacroControlFlowResult.Completed;
                 try
                 {
                     ActivateAllMonitors(monitors);
@@ -801,17 +813,29 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         document,
                         iterationStartTick,
                         qpcFrequency,
-                        cancellationToken,
+                        iterationToken,
                         options.NoWait,
                         ref sequence,
                         ref actionsSubmitted);
                     CompleteAllMonitorsAfterCurrentEvaluation(monitors);
-                    WaitForTriggeredConditionActions(monitors, cancellationToken);
+                    WaitForTriggeredConditionActions(monitors, iterationToken);
                     DeactivateAllMonitors(monitors);
+                }
+                catch (OperationCanceledException) when (
+                    Volatile.Read(ref conditionStopIterationRequested) != 0
+                    && !cancellationToken.IsCancellationRequested)
+                {
+                    flow = MacroControlFlowResult.StopIteration;
                 }
                 finally
                 {
                     DisposeMonitors(monitors);
+                }
+
+                var stoppedByCondition = Volatile.Read(ref conditionStopIterationRequested) != 0;
+                if (stoppedByCondition && flow != MacroControlFlowResult.StopAll)
+                {
+                    flow = MacroControlFlowResult.StopIteration;
                 }
 
                 if (flow == MacroControlFlowResult.StopAll)
@@ -825,10 +849,16 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         inputSink.GetStats());
                 }
 
+                if (flow == MacroControlFlowResult.StopIteration)
+                {
+                    iterationsCompleted++;
+                    continue;
+                }
+
                 if (flow == MacroControlFlowResult.StopCurrent)
                 {
                     iterationsCompleted++;
-                    break;
+                    continue;
                 }
 
                 iterationsCompleted++;
@@ -856,7 +886,16 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     private bool RequiresManagedControlFlow(MacroDocument document, PlaybackExecutionOptions options)
     {
         return MacroControlFlowInspector.RequiresManagedExecution(document, macroResolver)
+            || ConditionActionsRequireManagedControlFlow(document)
             || (HasPauseMainTimelineCondition(document) && !CanAttemptNativeIteration(options));
+    }
+
+    private bool ConditionActionsRequireManagedControlFlow(MacroDocument document)
+    {
+        return document.EffectiveConditions.Any(condition =>
+            MacroControlFlowInspector.RequiresManagedExecution(
+                new MacroDocument(1, "_condition_then", PlaybackSettings.Default, condition.ThenSteps, null),
+                macroResolver));
     }
 
     private static bool HasPauseMainTimelineCondition(MacroDocument document)
@@ -999,6 +1038,9 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             KeyStep key => ToTicks(key.Hold, qpcFrequency),
             MouseMoveStep move => ToTicks(move.Duration, qpcFrequency),
             MouseButtonStep button => ToTicks(button.Hold, qpcFrequency),
+            OcrClickStep ocrClick =>
+                ToTicks(ocrClick.Hold, qpcFrequency) * Math.Clamp(ocrClick.ClickCount, 1, 3)
+                + ToTicks(ocrClick.Interval, qpcFrequency) * Math.Max(0, Math.Clamp(ocrClick.ClickCount, 1, 3) - 1),
             ConsumerStep consumer => ToTicks(consumer.Hold, qpcFrequency),
             WaitStep wait => ToTicks(wait.MaxDuration ?? wait.Duration, qpcFrequency),
             RepeatStep repeat => EstimateStepsDurationTicks(repeat.Steps, qpcFrequency, depth + 1) * Math.Max(1, repeat.Count),

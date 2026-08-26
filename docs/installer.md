@@ -55,6 +55,8 @@ MacroStudio 的宏数据库位于：
 
 每个宏仍以普通 `.mcrx` 文件保存，`library.json` 保存文件夹、排序、选择状态、触发键、播放模式和更新时间等索引信息。
 
+卸载时默认保留该目录，以便重新安装后继续使用。普通卸载会询问是否同时清除宏数据库、设置和界面布局；只有连续两次确认才会删除 `%APPDATA%\MacroHID`，静默卸载始终保留用户数据。
+
 ### 无驱动说明
 
 MacroHID 当前版本完全使用 Windows `SendInput`：
@@ -64,7 +66,7 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 - 不需要测试签名模式。
 - 不需要关闭或修改 Secure Boot。
 - 不使用 `pnputil`、`devcon`、VHF/KMDF 或 IOCTL。
-- 卸载时只移除应用文件，不会卸载驱动或修改系统启动策略。
+- 卸载时不会卸载驱动或修改系统启动策略；用户数据默认保留，也可在卸载确认中主动清除。
 
 ### 常见问题
 
@@ -128,6 +130,8 @@ MacroStudio stores the local macro database in:
 
 Each macro is stored as a normal `.mcrx` file. `library.json` stores folders, ordering, selection state, trigger keys, playback modes, and timestamps.
 
+Uninstall keeps this directory by default so a later reinstall can reuse it. Interactive uninstall asks whether to remove the macro database, settings, and workspace layout, and requires a second confirmation before deleting `%APPDATA%\MacroHID`. Silent uninstall always preserves user data.
+
 ### No Driver
 
 MacroHID uses Windows `SendInput` only:
@@ -137,7 +141,7 @@ MacroHID uses Windows `SendInput` only:
 - No test-signing mode is required.
 - Secure Boot does not need to be changed.
 - `pnputil`, `devcon`, VHF/KMDF, and IOCTL paths are not used.
-- Uninstall removes application files only; there is no driver or boot policy to undo.
+- Uninstall does not remove a driver or modify boot policy. User data is preserved by default and can be explicitly removed from the uninstall confirmation.
 
 ### Troubleshooting
 

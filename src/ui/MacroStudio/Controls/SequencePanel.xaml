@@ -11,11 +11,14 @@
 
         <Border Style="{StaticResource PanelBorderStyle}" Padding="14" Margin="0,0,0,10">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="120" />
                     <ColumnDefinition Width="120" />
-                    <ColumnDefinition Width="220" />
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock x:Name="NameLabelText" Text="名称" Style="{StaticResource FieldLabel}" />
@@ -38,7 +41,27 @@
                     <TextBlock x:Name="DurationLabelText" Text="时长" Style="{StaticResource FieldLabel}" />
                     <TextBlock x:Name="DurationText" Text="0 ms" FontSize="24" FontWeight="SemiBold" />
                 </StackPanel>
-                <WrapPanel Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                <WrapPanel Grid.Row="1"
+                           Grid.ColumnSpan="3"
+                           Margin="0,10,0,0"
+                           HorizontalAlignment="Right">
+                    <TextBlock x:Name="RecordingStatusText"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource Danger}"
+                               FontWeight="SemiBold"
+                               Visibility="Collapsed" />
+                    <Button x:Name="RecordInputButton"
+                            MinWidth="112"
+                            Content="● 开始录制"
+                            ToolTip="记录键盘、鼠标和真实延迟；Ctrl+Shift+F12 停止"
+                            Click="RecordInputButton_Click" />
+                    <ToggleButton x:Name="MacroLockButton"
+                                  Style="{StaticResource ToolToggleButton}"
+                                  MinWidth="86"
+                                  Content="锁定编辑"
+                                  ToolTip="锁定后仍可运行和导出，但不能修改宏"
+                                  Click="MacroLockButton_Click" />
                     <Button x:Name="SaveLibraryButton" Style="{StaticResource PrimaryButton}" MinWidth="96" Content="保存到库" Click="SaveLibrary_Click" />
                     <Button x:Name="RunNowHeaderButton" MinWidth="86" Content="立即运行" Click="RunNow_Click" />
                     <Button x:Name="StopHeaderButton" MinWidth="70" Content="停止" Style="{StaticResource DangerButton}" Click="Stop_Click" />

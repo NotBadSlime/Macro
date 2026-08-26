@@ -25,8 +25,15 @@ public sealed class GlobalKeyboardHook : IDisposable
     private const int WmKeyUp = 0x0101;
     private const int WmSysKeyDown = 0x0104;
     private const int WmSysKeyUp = 0x0105;
+    private const int WmLeftButtonDown = 0x0201;
+    private const int WmLeftButtonUp = 0x0202;
+    private const int WmRightButtonDown = 0x0204;
+    private const int WmRightButtonUp = 0x0205;
+    private const int WmMiddleButtonDown = 0x0207;
+    private const int WmMiddleButtonUp = 0x0208;
     private const int WmXButtonDown = 0x020B;
     private const int WmXButtonUp = 0x020C;
+    private const int LlkHfExtended = 0x01;
     private const int LlkHfInjected = 0x10;
     private const int LlmHfInjected = 0x1;
     private const int XButton1 = 0x0001;
@@ -35,6 +42,7 @@ public sealed class GlobalKeyboardHook : IDisposable
     private readonly LowLevelHookProc keyboardHookProc;
     private readonly LowLevelHookProc mouseHookProc;
     private readonly HashSet<int> pressedKeys = [];
+    private readonly HashSet<HidKey> pressedHidKeys = [];
     private readonly HashSet<MouseButton> pressedMouseButtons = [];
     private readonly Dictionary<string, HotkeyGesture> gestures = [];
     private readonly HashSet<string> triggersDown = [];
@@ -77,6 +85,7 @@ public sealed class GlobalKeyboardHook : IDisposable
 
         triggersDown.Clear();
         pressedKeys.Clear();
+        pressedHidKeys.Clear();
         pressedMouseButtons.Clear();
         hookHandle = SetWindowsHookEx(WhKeyboardLl, keyboardHookProc, IntPtr.Zero, 0);
         if (hookHandle == IntPtr.Zero)
@@ -109,6 +118,7 @@ public sealed class GlobalKeyboardHook : IDisposable
         gestures.Clear();
         triggersDown.Clear();
         pressedKeys.Clear();
+        pressedHidKeys.Clear();
         pressedMouseButtons.Clear();
     }
 
@@ -119,6 +129,20 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     public static bool TryMapVirtualKeyToHidKey(int virtualKey, out HidKey key)
     {
+        return TryMapVirtualKeyToHidKey(virtualKey, scanCode: 0, isExtended: false, out key);
+    }
+
+    public static bool TryMapVirtualKeyToHidKey(
+        int virtualKey,
+        int scanCode,
+        bool isExtended,
+        out HidKey key)
+    {
+        if (TryMapNumpadScanCode(scanCode, isExtended, out key))
+        {
+            return true;
+        }
+
         if (virtualKey >= 0x41 && virtualKey <= 0x5A)
         {
             key = (HidKey)((int)HidKey.A + (virtualKey - 0x41));
@@ -137,6 +161,14 @@ public sealed class GlobalKeyboardHook : IDisposable
             return true;
         }
 
+        if (virtualKey >= 0x60 && virtualKey <= 0x69)
+        {
+            key = virtualKey == 0x60
+                ? HidKey.Numpad0
+                : (HidKey)((int)HidKey.Numpad1 + (virtualKey - 0x61));
+            return true;
+        }
+
         if (virtualKey >= 0x70 && virtualKey <= 0x87)
         {
             key = (HidKey)((int)HidKey.F1 + (virtualKey - 0x70));
@@ -147,11 +179,18 @@ public sealed class GlobalKeyboardHook : IDisposable
         {
             0x08 => HidKey.Backspace,
             0x09 => HidKey.Tab,
+            0x0C => HidKey.Clear,
             0x0D => HidKey.Enter,
+            0x13 => HidKey.Pause,
+            0x14 => HidKey.CapsLock,
             0x1B => HidKey.Escape,
             0x20 => HidKey.Space,
+            0x2C => HidKey.PrintScreen,
             0x2D => HidKey.Insert,
             0x2E => HidKey.Delete,
+            0x2F => HidKey.Help,
+            0x5B => HidKey.LeftGui,
+            0x5C => HidKey.RightGui,
             0x23 => HidKey.End,
             0x24 => HidKey.Home,
             0x21 => HidKey.PageUp,
@@ -160,6 +199,25 @@ public sealed class GlobalKeyboardHook : IDisposable
             0x26 => HidKey.UpArrow,
             0x27 => HidKey.RightArrow,
             0x28 => HidKey.DownArrow,
+            0x5D => HidKey.Application,
+            0x5F => HidKey.Power,
+            0x6A => HidKey.NumpadMultiply,
+            0x6B => HidKey.NumpadPlus,
+            0x6C => HidKey.Separator,
+            0x6D => HidKey.NumpadMinus,
+            0x6E => HidKey.NumpadDecimal,
+            0x6F => HidKey.NumpadDivide,
+            0x90 => HidKey.NumLock,
+            0x91 => HidKey.ScrollLock,
+            0xA0 => HidKey.LeftShift,
+            0xA1 => HidKey.RightShift,
+            0xA2 => HidKey.LeftControl,
+            0xA3 => HidKey.RightControl,
+            0xA4 => HidKey.LeftAlt,
+            0xA5 => HidKey.RightAlt,
+            0xAD => HidKey.Mute,
+            0xAE => HidKey.VolumeDown,
+            0xAF => HidKey.VolumeUp,
             0xBA => HidKey.Semicolon,
             0xBB => HidKey.Equal,
             0xBC => HidKey.Comma,
@@ -171,6 +229,35 @@ public sealed class GlobalKeyboardHook : IDisposable
             0xDC => HidKey.Backslash,
             0xDD => HidKey.RightBracket,
             0xDE => HidKey.Quote,
+            0xDF => HidKey.NonUsHash,
+            0xE2 => HidKey.NonUsBackslash,
+            0xFE => HidKey.ClearAgain,
+            _ => HidKey.None
+        };
+
+        return key != HidKey.None;
+    }
+
+    private static bool TryMapNumpadScanCode(int scanCode, bool isExtended, out HidKey key)
+    {
+        key = (scanCode, isExtended) switch
+        {
+            (0x1C, true) => HidKey.NumpadEnter,
+            (0x35, true) => HidKey.NumpadDivide,
+            (0x37, false) => HidKey.NumpadMultiply,
+            (0x47, false) => HidKey.Numpad7,
+            (0x48, false) => HidKey.Numpad8,
+            (0x49, false) => HidKey.Numpad9,
+            (0x4A, false) => HidKey.NumpadMinus,
+            (0x4B, false) => HidKey.Numpad4,
+            (0x4C, false) => HidKey.Numpad5,
+            (0x4D, false) => HidKey.Numpad6,
+            (0x4E, false) => HidKey.NumpadPlus,
+            (0x4F, false) => HidKey.Numpad1,
+            (0x50, false) => HidKey.Numpad2,
+            (0x51, false) => HidKey.Numpad3,
+            (0x52, false) => HidKey.Numpad0,
+            (0x53, false) => HidKey.NumpadDecimal,
             _ => HidKey.None
         };
 
@@ -187,11 +274,11 @@ public sealed class GlobalKeyboardHook : IDisposable
             {
                 if (message is WmKeyDown or WmSysKeyDown)
                 {
-                    HandleKeyDown(data.VirtualKeyCode);
+                    HandleKeyDown(data.VirtualKeyCode, data.ScanCode, (data.Flags & LlkHfExtended) != 0);
                 }
                 else if (message is WmKeyUp or WmSysKeyUp)
                 {
-                    HandleKeyUp(data.VirtualKeyCode);
+                    HandleKeyUp(data.VirtualKeyCode, data.ScanCode, (data.Flags & LlkHfExtended) != 0);
                 }
             }
         }
@@ -204,13 +291,14 @@ public sealed class GlobalKeyboardHook : IDisposable
         if (nCode >= 0 && gestures.Count > 0)
         {
             var message = wParam.ToInt32();
-            if (message is WmXButtonDown or WmXButtonUp)
+            if (TryMapMouseMessage(message, 0, out _, out _)
+                || message is WmXButtonDown or WmXButtonUp)
             {
                 var data = Marshal.PtrToStructure<MouseLlHookStruct>(lParam);
                 if ((data.Flags & LlmHfInjected) == 0
-                    && TryGetXButton(data.MouseData, out var button))
+                    && TryMapMouseMessage(message, data.MouseData, out var button, out var isDown))
                 {
-                    if (message == WmXButtonDown)
+                    if (isDown)
                     {
                         HandleMouseDown(button);
                     }
@@ -225,10 +313,12 @@ public sealed class GlobalKeyboardHook : IDisposable
         return CallNextHookEx(mouseHookHandle, nCode, wParam, lParam);
     }
 
-    private void HandleKeyDown(int virtualKey)
+    private void HandleKeyDown(int virtualKey, int scanCode, bool isExtended)
     {
         var wasAdded = pressedKeys.Add(virtualKey);
-        if (!wasAdded)
+        var hidWasAdded = TryMapVirtualKeyToHidKey(virtualKey, scanCode, isExtended, out var hidKey)
+            && pressedHidKeys.Add(hidKey);
+        if (!wasAdded && !hidWasAdded)
         {
             return;
         }
@@ -236,9 +326,13 @@ public sealed class GlobalKeyboardHook : IDisposable
         EvaluatePressedTriggers();
     }
 
-    private void HandleKeyUp(int virtualKey)
+    private void HandleKeyUp(int virtualKey, int scanCode, bool isExtended)
     {
         pressedKeys.Remove(virtualKey);
+        if (TryMapVirtualKeyToHidKey(virtualKey, scanCode, isExtended, out var hidKey))
+        {
+            pressedHidKeys.Remove(hidKey);
+        }
         EvaluateReleasedTriggers();
     }
 
@@ -301,6 +395,11 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     private bool IsKeyDown(HidKey key)
     {
+        if (pressedHidKeys.Count > 0)
+        {
+            return pressedHidKeys.Contains(key);
+        }
+
         return pressedKeys.Any(virtualKey => TryMapVirtualKeyToHidKey(virtualKey, out var pressed) && pressed == key);
     }
 
@@ -317,14 +416,33 @@ public sealed class GlobalKeyboardHook : IDisposable
         return (modifiers & mask) == 0 || pressedKeys.Contains(leftVirtualKey) || pressedKeys.Contains(rightVirtualKey);
     }
 
-    private static bool TryGetXButton(int mouseData, out MouseButton button)
+    public static bool TryMapMouseMessage(
+        int message,
+        int mouseData,
+        out MouseButton button,
+        out bool isDown)
     {
-        var highWord = (mouseData >> 16) & 0xFFFF;
-        button = highWord switch
+        (button, isDown) = message switch
         {
-            XButton1 => MouseButton.X1,
-            XButton2 => MouseButton.X2,
-            _ => MouseButton.None
+            WmLeftButtonDown => (MouseButton.Left, true),
+            WmLeftButtonUp => (MouseButton.Left, false),
+            WmRightButtonDown => (MouseButton.Right, true),
+            WmRightButtonUp => (MouseButton.Right, false),
+            WmMiddleButtonDown => (MouseButton.Middle, true),
+            WmMiddleButtonUp => (MouseButton.Middle, false),
+            WmXButtonDown => (((mouseData >> 16) & 0xFFFF) switch
+            {
+                XButton1 => MouseButton.X1,
+                XButton2 => MouseButton.X2,
+                _ => MouseButton.None
+            }, true),
+            WmXButtonUp => (((mouseData >> 16) & 0xFFFF) switch
+            {
+                XButton1 => MouseButton.X1,
+                XButton2 => MouseButton.X2,
+                _ => MouseButton.None
+            }, false),
+            _ => (MouseButton.None, false)
         };
 
         return button != MouseButton.None;

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 using MacroHid.Core;
 
@@ -82,12 +83,41 @@ public static class MacroConversionService
             return MacroConversionFormat.QMacro;
         }
 
-        if (LooksLikeGIMacrosJson(content))
+        if (LooksLikeGIMacrosJson(content)
+            || extension.Equals(".json", StringComparison.OrdinalIgnoreCase) && trimmed.StartsWith('['))
         {
             return MacroConversionFormat.GIMacrosJson;
         }
 
         return MacroConversionFormat.Auto;
+    }
+
+    public static IReadOnlyList<RazerModuleReference> GetRazerModuleReferences(string content)
+    {
+        try
+        {
+            var root = XDocument.Parse(content).Root;
+            if (root is null) return [];
+            return root.Descendants("MacroEvent")
+                .Where(element => ElementValue(element, "Type") == "7")
+                .Select(element =>
+                {
+                    var guid = ElementValue(element, "guid").Trim();
+                    var hasName = TryGetRazerModuleReferenceName(element, out var name)
+                        && !string.Equals(name, guid, StringComparison.OrdinalIgnoreCase);
+                    return string.IsNullOrWhiteSpace(guid)
+                        ? null
+                        : new RazerModuleReference(guid, hasName ? name : string.Empty);
+                })
+                .Where(reference => reference is not null)
+                .Cast<RazerModuleReference>()
+                .DistinctBy(reference => reference.Guid, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     public static MacroImportResult ImportToMcrx(MacroImportRequest request)
@@ -97,24 +127,191 @@ public static class MacroConversionService
             ? DetectFormat(request.Content, request.FileName)
             : request.Format;
 
-        if (format == MacroConversionFormat.Auto)
+        try
         {
-            throw new FormatException("Could not detect macro format.");
+            if (format == MacroConversionFormat.Auto)
+            {
+                throw new FormatException("Could not detect macro format.");
+            }
+
+            var document = format switch
+            {
+                MacroConversionFormat.MacroHidMcrx => McrxParser.Parse(request.Content),
+                MacroConversionFormat.MacroConverterXml => ImportMacroConverterXml(request.Content, diagnostics),
+                MacroConversionFormat.RazerSynapseXml => ImportRazerXml(
+                    request.Content,
+                    request.AuxiliaryFiles ?? [],
+                    diagnostics,
+                    request.PreserveRazerModuleCalls),
+                MacroConversionFormat.Lua => ImportLua(request.Content, diagnostics),
+                MacroConversionFormat.XMouse => ImportXMouse(request.Content, diagnostics),
+                MacroConversionFormat.QMacro => ImportQMacro(request.Content, diagnostics),
+                MacroConversionFormat.GIMacrosJson => ImportGIMacrosJson(request.Content, request.FileName, request.AuxiliaryFiles ?? [], diagnostics),
+                _ => throw new NotSupportedException($"Unsupported import format '{format}'.")
+            };
+
+            return new MacroImportResult(MacroStepNormalizer.Normalize(document), format, diagnostics);
+        }
+        catch (MacroImportException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw CreateImportException(ex, format, request.FileName, request.Content);
+        }
+    }
+
+    private static MacroImportException CreateImportException(
+        Exception exception,
+        MacroConversionFormat format,
+        string? fileName,
+        string content)
+    {
+        var lines = content.SplitLines();
+        int? lineNumber = null;
+        int? columnNumber = null;
+
+        switch (exception)
+        {
+            case JsonException json when json.LineNumber is { } jsonLine:
+                lineNumber = checked((int)jsonLine + 1);
+                columnNumber = json.BytePositionInLine is { } jsonColumn
+                    ? checked((int)jsonColumn + 1)
+                    : null;
+                (lineNumber, columnNumber) = RefineJsonFailureLocation(
+                    lines,
+                    exception.Message,
+                    lineNumber,
+                    columnNumber);
+                break;
+            case XmlException xml when xml.LineNumber > 0:
+                lineNumber = xml.LineNumber;
+                columnNumber = xml.LinePosition > 0 ? xml.LinePosition : null;
+                break;
         }
 
-        var document = format switch
+        if (lineNumber is null)
         {
-            MacroConversionFormat.MacroHidMcrx => McrxParser.Parse(request.Content),
-            MacroConversionFormat.MacroConverterXml => ImportMacroConverterXml(request.Content, diagnostics),
-            MacroConversionFormat.RazerSynapseXml => ImportRazerXml(request.Content, request.AuxiliaryFiles ?? [], diagnostics),
-            MacroConversionFormat.Lua => ImportLua(request.Content, diagnostics),
-            MacroConversionFormat.XMouse => ImportXMouse(request.Content, diagnostics),
-            MacroConversionFormat.QMacro => ImportQMacro(request.Content, diagnostics),
-            MacroConversionFormat.GIMacrosJson => ImportGIMacrosJson(request.Content, request.FileName, request.AuxiliaryFiles ?? [], diagnostics),
-            _ => throw new NotSupportedException($"Unsupported import format '{format}'.")
-        };
+            (lineNumber, columnNumber) = LocateSemanticFailure(content, exception.Message);
+        }
 
-        return new MacroImportResult(MacroStepNormalizer.Normalize(document), format, diagnostics);
+        lineNumber ??= FindFirstContentLine(lines);
+        columnNumber ??= lineNumber is null ? null : 1;
+        var sourceLine = lineNumber is { } line && line >= 1 && line <= lines.Length
+            ? TruncateSourceLine(lines[line - 1])
+            : null;
+        var reason = Regex.Replace(
+            exception.Message,
+            @"\s*(?:Path:\s*[^|]+\|\s*)?LineNumber:\s*\d+\s*\|\s*BytePositionInLine:\s*\d+\.?(?:\s*Path:.*)?$",
+            string.Empty,
+            RegexOptions.IgnoreCase).Trim();
+
+        return new MacroImportException(
+            reason,
+            format,
+            fileName,
+            lineNumber,
+            columnNumber,
+            sourceLine,
+            exception);
+    }
+
+    private static (int? Line, int? Column) RefineJsonFailureLocation(
+        IReadOnlyList<string> lines,
+        string message,
+        int? lineNumber,
+        int? columnNumber)
+    {
+        if (lineNumber is not { } reportedLine
+            || reportedLine < 1
+            || reportedLine > lines.Count
+            || !Regex.IsMatch(lines[reportedLine - 1].Trim(), @"^[}\]]+,?$", RegexOptions.CultureInvariant)
+            || !message.Contains("open JSON object or array", StringComparison.OrdinalIgnoreCase))
+        {
+            return (lineNumber, columnNumber);
+        }
+
+        // System.Text.Json reports the final closing token for an unterminated
+        // nested array/object. The preceding content line is the actionable one.
+        for (var index = reportedLine - 2; index >= 0; index--)
+        {
+            if (string.IsNullOrWhiteSpace(lines[index])) continue;
+            return (index + 1, lines[index].TrimEnd().Length + 1);
+        }
+
+        return (lineNumber, columnNumber);
+    }
+
+    private static (int? Line, int? Column) LocateSemanticFailure(string content, string message)
+    {
+        var candidates = Regex.Matches(message, "'([^']+)'", RegexOptions.CultureInvariant)
+            .Select(match => match.Groups[1].Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .SelectMany(value => value.Contains('.') ? [value, value.Split('.')[^1]] : new[] { value })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var candidate in candidates)
+        {
+            var escaped = Regex.Escape(candidate);
+            var patterns = new[]
+            {
+                $"\"{escaped}\"\\s*:",
+                $"\"{escaped}\"",
+                $"<\\s*{escaped}(?:\\s|>|/)",
+                Regex.Escape(candidate)
+            };
+            foreach (var pattern in patterns)
+            {
+                var match = Regex.Match(content, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                if (match.Success)
+                {
+                    return GetLineAndColumn(content, match.Index);
+                }
+            }
+        }
+
+        return (null, null);
+    }
+
+    private static (int Line, int Column) GetLineAndColumn(string content, int index)
+    {
+        var line = 1;
+        var lineStart = 0;
+        for (var i = 0; i < index && i < content.Length; i++)
+        {
+            if (content[i] != '\n') continue;
+            line++;
+            lineStart = i + 1;
+        }
+
+        return (line, Math.Max(1, index - lineStart + 1));
+    }
+
+    private static int? FindFirstContentLine(IReadOnlyList<string> lines)
+    {
+        for (var index = 0; index < lines.Count; index++)
+        {
+            if (!string.IsNullOrWhiteSpace(lines[index]))
+            {
+                return index + 1;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? TruncateSourceLine(string sourceLine)
+    {
+        var trimmed = sourceLine.Trim();
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        const int maximumLength = 240;
+        return trimmed.Length <= maximumLength ? trimmed : trimmed[..maximumLength] + "…";
     }
 
     public static MacroExportResult ExportFromMcrx(MacroDocument document, MacroConversionFormat targetFormat, string? sourceFileName = null)
@@ -383,7 +580,14 @@ public static class MacroConversionService
     private static string ExportGIMacrosJson(MacroDocument document, List<MacroConversionDiagnostic> diagnostics)
     {
         var commands = GIMacrosCommands(document.Steps, diagnostics);
-        return JsonSerializer.Serialize(commands, new JsonSerializerOptions { WriteIndented = true });
+        if (commands.Count == 0)
+        {
+            return "[]";
+        }
+
+        var newline = Environment.NewLine;
+        var commandLines = commands.Select(command => "  " + JsonSerializer.Serialize(command));
+        return "[" + newline + string.Join("," + newline, commandLines) + newline + "]";
     }
 
     private static List<object?> GIMacrosCommands(IReadOnlyList<MacroStep> steps, List<MacroConversionDiagnostic> diagnostics)
@@ -1039,6 +1243,8 @@ public static class MacroConversionService
                 return [new TextStep(Attribute(data, "text"))];
             case "wait":
                 return [new WaitStep(TimeSpan.FromMilliseconds(ToInt(Attribute(data, "ms"))))];
+            case "macro.call":
+                return [new MacroCallStep(Attribute(data, "macro"))];
             case "flow.loop":
                 diagnostics.Warning("macroxml.loopShape", "MacroConverter XML loop graph was imported as an empty repeat marker because the graph body is not linear.");
                 return [new RepeatStep(ToInt(Attribute(data, "count"), 1), [])];
@@ -1051,21 +1257,36 @@ public static class MacroConversionService
         }
     }
 
-    private static MacroDocument ImportRazerXml(string content, IReadOnlyList<AuxiliaryMacroFile> auxiliaryFiles, List<MacroConversionDiagnostic> diagnostics)
+    private static MacroDocument ImportRazerXml(
+        string content,
+        IReadOnlyList<AuxiliaryMacroFile> auxiliaryFiles,
+        List<MacroConversionDiagnostic> diagnostics,
+        bool preserveModuleCalls)
     {
         var root = XDocument.Parse(content).Root ?? throw new FormatException("Invalid Razer XML.");
         var modules = auxiliaryFiles
             .Select(file => TryReadRazerModule(file, diagnostics))
             .Where(module => module is not null)
-            .ToDictionary(module => module!.Guid, module => module!, StringComparer.OrdinalIgnoreCase);
-        var events = ExpandRazerModules(root.Descendants("MacroEvent").ToList(), modules, diagnostics, []);
+            .Cast<RazerModule>()
+            .GroupBy(module => module.Guid, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var rawEvents = root.Descendants("MacroEvent").ToList();
+        var events = preserveModuleCalls
+            ? rawEvents
+            : ExpandRazerModules(rawEvents, modules, diagnostics, []);
         var index = 0;
-        var steps = ParseRazerEventBlock(events, ref index, diagnostics, stopAtLoopEnd: false);
+        var moduleNames = modules.ToDictionary(pair => pair.Key, pair => pair.Value.Name, StringComparer.OrdinalIgnoreCase);
+        var steps = ParseRazerEventBlock(events, ref index, diagnostics, stopAtLoopEnd: false, moduleNames);
 
         return new MacroDocument(1, ElementValue(root, "Name", "Razer Macro"), steps);
     }
 
-    private static List<MacroStep> ParseRazerEventBlock(IReadOnlyList<XElement> events, ref int index, List<MacroConversionDiagnostic> diagnostics, bool stopAtLoopEnd)
+    private static List<MacroStep> ParseRazerEventBlock(
+        IReadOnlyList<XElement> events,
+        ref int index,
+        List<MacroConversionDiagnostic> diagnostics,
+        bool stopAtLoopEnd,
+        IReadOnlyDictionary<string, string>? moduleNames = null)
     {
         var steps = new List<MacroStep>();
         for (; index < events.Count; index++)
@@ -1089,7 +1310,7 @@ public static class MacroConversionService
                 {
                     var count = ToInt(ElementValue(current, "Number", "1"), 1);
                     index++;
-                    steps.Add(new RepeatStep(count, ParseRazerEventBlock(events, ref index, diagnostics, stopAtLoopEnd: true)));
+                    steps.Add(new RepeatStep(count, ParseRazerEventBlock(events, ref index, diagnostics, stopAtLoopEnd: true, moduleNames)));
                 }
 
                 continue;
@@ -1139,9 +1360,24 @@ public static class MacroConversionService
 
             if (type == "7")
             {
-                if (TryGetRazerModuleReferenceName(current, out var macroName))
+                var guid = ElementValue(current, "guid").Trim();
+                var hasExplicitName = TryGetRazerModuleReferenceName(current, out var macroName)
+                    && !string.Equals(macroName, guid, StringComparison.OrdinalIgnoreCase);
+                if (hasExplicitName)
                 {
                     steps.Add(new MacroCallStep(macroName));
+                }
+                else if (moduleNames?.TryGetValue(guid, out var resolvedName) == true)
+                {
+                    steps.Add(new MacroCallStep(resolvedName));
+                }
+                else if (!string.IsNullOrWhiteSpace(macroName))
+                {
+                    steps.Add(new MacroCallStep(macroName));
+                }
+                else
+                {
+                    diagnostics.Warning("razer.moduleNameMissing", $"Razer module '{guid}' did not include a resolvable macro name.");
                 }
 
                 continue;
@@ -1219,6 +1455,7 @@ public static class MacroConversionService
                 ("holdMs", ToMilliseconds(key.Hold)))),
             TextStep text => Node("keyboard.text", "Text", Data(("text", text.Text))),
             WaitStep wait => Node("wait", "Wait", Data(("ms", ToMilliseconds(wait.Duration)))),
+            MacroCallStep macro => Node("macro.call", "Call macro", Data(("macro", macro.Macro))),
             _ => Node("wait", "Unsupported", Data(("ms", 0)))
         };
 

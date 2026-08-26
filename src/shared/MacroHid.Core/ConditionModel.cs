@@ -73,7 +73,8 @@ public sealed record TextMatcher(
     ScreenRegion Region,
     string ExpectedText,
     bool Contains = true,
-    string Language = "ch") : IConditionMatcher
+    string Language = "ch",
+    bool UseRegex = false) : IConditionMatcher
 {
     public string Type => "text";
 }

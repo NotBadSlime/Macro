@@ -36,6 +36,7 @@ public partial class StepSequencePanel : UserControl
     private string inlineEditorPath = string.Empty;
     private string inlineKeyCapturePath = string.Empty;
     private bool inlineCoordinatePickerActive;
+    private bool isReadOnly;
     private bool boxSelectionActive;
     private Point boxSelectionStartPoint;
     private Point boxSelectionLastPoint;
@@ -44,6 +45,8 @@ public partial class StepSequencePanel : UserControl
     public StepSequencePanel()
     {
         InitializeComponent();
+        Loaded += StepSequencePanel_Loaded;
+        Unloaded += StepSequencePanel_Unloaded;
         boxSelectionAutoScrollTimer.Tick += (_, _) =>
         {
             if (boxSelectionActive)
@@ -57,6 +60,7 @@ public partial class StepSequencePanel : UserControl
     public event Action? BeforeStepsChanged;
     public event Action? StepsChanged;
     public event Action? UndoRequested;
+    public event Action? RedoRequested;
     public event Action? ClearRequested;
     public event Action<int>? StepSelectionChanged;
     public event Action<MacroActionTemplateKind, string, int>? ActionTemplateDropped;
@@ -91,14 +95,40 @@ public partial class StepSequencePanel : UserControl
         RefreshList(SelectedStepPath);
     }
 
+    private void StepSequencePanel_Loaded(object sender, RoutedEventArgs e)
+    {
+        ActionAppearanceService.AppearanceChanged -= OnActionAppearanceChanged;
+        ActionAppearanceService.AppearanceChanged += OnActionAppearanceChanged;
+        RefreshList(SelectedStepPath);
+    }
+
+    private void StepSequencePanel_Unloaded(object sender, RoutedEventArgs e)
+    {
+        ActionAppearanceService.AppearanceChanged -= OnActionAppearanceChanged;
+    }
+
+    private void OnActionAppearanceChanged()
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            RefreshList(SelectedStepPath);
+        }
+        else
+        {
+            Dispatcher.Invoke(() => RefreshList(SelectedStepPath));
+        }
+    }
+
     public void ApplyLocalization()
     {
         SequenceTitleText.Text = LocalizationService.Get("Sequence");
         StepUndoText.Text = LocalizationService.Get("Undo");
+        StepRedoText.Text = LocalizationService.Get("Redo");
         StepUpText.Text = LocalizationService.Get("MoveUp");
         StepDownText.Text = LocalizationService.Get("MoveDown");
         StepDeleteText.Text = LocalizationService.Get("Delete");
         StepClearText.Text = LocalizationService.Get("ClearAll");
+        EmptySequenceOverlay.Text = LocalizationService.Get("DropActionsHint");
         InlineStepEditor.ApplyLocalization();
     }
 
@@ -109,7 +139,29 @@ public partial class StepSequencePanel : UserControl
 
     public void SetCanUndo(bool canUndo)
     {
-        StepUndoButton.IsEnabled = canUndo;
+        StepUndoButton.IsEnabled = canUndo && !isReadOnly;
+    }
+
+    public void SetCanRedo(bool canRedo)
+    {
+        StepRedoButton.IsEnabled = canRedo && !isReadOnly;
+    }
+
+    public void SetReadOnly(bool value)
+    {
+        isReadOnly = value;
+        StepList.AllowDrop = !value;
+        StepUndoButton.IsEnabled = !value && StepUndoButton.IsEnabled;
+        StepRedoButton.IsEnabled = !value && StepRedoButton.IsEnabled;
+        StepUpButton.IsEnabled = !value;
+        StepDownButton.IsEnabled = !value;
+        StepDeleteButton.IsEnabled = !value;
+        StepClearButton.IsEnabled = !value;
+        if (value)
+        {
+            InlineStepEditorPopup.IsOpen = false;
+            FinishBoxSelection();
+        }
     }
 
     public void SetSteps(IReadOnlyList<MacroStep> newSteps)
@@ -129,6 +181,7 @@ public partial class StepSequencePanel : UserControl
 
     public void InsertSteps(IReadOnlyList<MacroStep> stepsToInsert)
     {
+        if (isReadOnly) return;
         if (stepsToInsert.Count == 0) return;
         InsertStepsAt(stepsToInsert, GetDefaultInsertTarget());
     }
@@ -156,6 +209,23 @@ public partial class StepSequencePanel : UserControl
 
     public bool HandleExplorerShortcut(Key key, ModifierKeys modifiers)
     {
+        if (isReadOnly)
+        {
+            if ((modifiers & ModifierKeys.Control) != 0
+                && (modifiers & (ModifierKeys.Alt | ModifierKeys.Shift)) == 0)
+            {
+                return key switch
+                {
+                    Key.A => SelectAllSteps(),
+                    Key.C => CopySelectedStepsToClipboard(),
+                    Key.X or Key.V => true,
+                    _ => false
+                };
+            }
+
+            return key == Key.Delete && modifiers == ModifierKeys.None;
+        }
+
         if (key == Key.Delete && modifiers == ModifierKeys.None)
         {
             DeleteSelectedStep();
@@ -195,6 +265,7 @@ public partial class StepSequencePanel : UserControl
 
     public bool CutSelectedStepsToClipboard()
     {
+        if (isReadOnly) return false;
         var selectedPaths = GetSelectedStepPaths();
         if (selectedPaths.Count == 0 || !CopyStepPathsToClipboard(selectedPaths))
         {
@@ -207,6 +278,7 @@ public partial class StepSequencePanel : UserControl
 
     public bool PasteStepsFromClipboard()
     {
+        if (isReadOnly) return false;
         if (!TryReadClipboardSteps(out var stepsToPaste) || stepsToPaste.Count == 0)
         {
             return false;
@@ -223,6 +295,7 @@ public partial class StepSequencePanel : UserControl
 
     public void MoveSelectedSteps(int offset)
     {
+        if (isReadOnly) return;
         var selectedPaths = GetSelectedStepPaths();
         if (selectedPaths.Count == 0 || offset == 0 || !AreSameParent(selectedPaths)) return;
 
@@ -238,6 +311,7 @@ public partial class StepSequencePanel : UserControl
 
     public void DeleteSelectedStep()
     {
+        if (isReadOnly) return;
         var paths = GetSelectedStepPaths();
         if (paths.Count == 0) return;
         if (paths.Count == 1)
@@ -257,6 +331,7 @@ public partial class StepSequencePanel : UserControl
 
     public void ClearSteps()
     {
+        if (isReadOnly) return;
         if (steps.Count == 0) return;
         ApplyStepMutation([], []);
     }
@@ -268,6 +343,7 @@ public partial class StepSequencePanel : UserControl
 
     public void DeleteStepAtPath(IReadOnlyList<int> stepPath)
     {
+        if (isReadOnly) return;
         if (stepPath.Count == 0) return;
         _ = MacroStepTreeEditor.GetAtPath(steps, stepPath);
         var updated = MacroStepTreeEditor.DeleteAtPath(steps, stepPath);
@@ -285,6 +361,7 @@ public partial class StepSequencePanel : UserControl
 
     public void DuplicateStepAtPath(IReadOnlyList<int> stepPath)
     {
+        if (isReadOnly) return;
         if (stepPath.Count == 0) return;
         var step = MacroStepTreeEditor.GetAtPath(steps, stepPath);
         var parentPath = stepPath.Take(stepPath.Count - 1).ToArray();
@@ -295,6 +372,7 @@ public partial class StepSequencePanel : UserControl
 
     public void ApplyEditedStep(MacroStep newStep)
     {
+        if (isReadOnly) return;
         if (StepList.SelectedItem is not StepDisplayItem { StepPath.Count: > 0 } selected) return;
         ApplyEditedStepAtPath(selected.StepPath, newStep);
     }
@@ -327,6 +405,7 @@ public partial class StepSequencePanel : UserControl
 
     private void ApplyStepMutation(IReadOnlyList<MacroStep> newSteps, IReadOnlyList<IReadOnlyList<int>> selectPaths)
     {
+        if (isReadOnly) return;
         BeforeStepsChanged?.Invoke();
         steps = newSteps.ToList();
         RefreshList();
@@ -349,6 +428,9 @@ public partial class StepSequencePanel : UserControl
         }
 
         RefreshSelectedStepText();
+        var empty = StepList.Items.Count == 0;
+        EmptySequenceOverlay.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        SelectedStepText.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private string ResolveMacroDisplayName(string value)
@@ -382,6 +464,13 @@ public partial class StepSequencePanel : UserControl
 
     private void StepList_Drop(object sender, DragEventArgs e)
     {
+        if (isReadOnly)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         var target = GetStepDropTargetFromPoint(e.GetPosition(StepList));
         if (e.Data.GetDataPresent(StepDragFormat)
             && e.Data.GetData(StepDragFormat) is string sourcePathText)
@@ -414,6 +503,13 @@ public partial class StepSequencePanel : UserControl
 
     private void StepList_DragOver(object sender, DragEventArgs e)
     {
+        if (isReadOnly)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         if (e.Data.GetDataPresent(StepDragFormat)
             || e.Data.GetDataPresent(ActionTemplateDragFormat)
             || e.Data.GetDataPresent(MacroLibraryDragFormat))
@@ -588,6 +684,7 @@ public partial class StepSequencePanel : UserControl
 
     private void BeginStepVisualEdit(StepDisplayItem item, UIElement? placementTarget)
     {
+        if (isReadOnly) return;
         if (item.StepPath.Count == 0 || StepList.SelectedItems.Count > 1)
         {
             return;
@@ -637,6 +734,7 @@ public partial class StepSequencePanel : UserControl
 
     private void ApplyEditedStepAtPath(IReadOnlyList<int> stepPath, MacroStep newStep)
     {
+        if (isReadOnly) return;
         if (stepPath.Count == 0) return;
         var current = MacroStepTreeEditor.GetAtPath(steps, stepPath);
         var replacement = MacroStepNormalizer.NormalizeSteps([newStep]);
@@ -732,7 +830,8 @@ public partial class StepSequencePanel : UserControl
     private void BeginInlineKeyCapture(IReadOnlyList<int> stepPath)
     {
         inlineKeyCapturePath = ToPathText(stepPath);
-        SelectedStepText.Text = "请按下新的键位";
+        SelectedStepText.Visibility = Visibility.Visible;
+        SelectedStepText.Text = LocalizationService.Get("CaptureTriggerHint");
         AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(InlineKeyCapture_KeyDown), true);
     }
 
@@ -1208,7 +1307,7 @@ public partial class StepSequencePanel : UserControl
         if (target.InsertIndex > 0)
         {
             var previousPath = target.ParentPath.Concat([target.InsertIndex - 1]).ToArray();
-            if (TryGetContainerByPath(previousPath, out var previous))
+            if (TryGetContainerByPath(previousPath, out var previous, preferContainerEnd: true))
             {
                 return previous.TranslatePoint(new Point(0, previous.ActualHeight), StepList).Y + 2;
             }
@@ -1222,17 +1321,28 @@ public partial class StepSequencePanel : UserControl
         return Math.Max(0, StepList.ActualHeight - 6);
     }
 
-    private bool TryGetContainerByPath(IReadOnlyList<int> stepPath, out ListBoxItem container)
+    private bool TryGetContainerByPath(IReadOnlyList<int> stepPath, out ListBoxItem container, bool preferContainerEnd = false)
     {
-        var pathText = ToPathText(stepPath);
+        var items = new List<StepDisplayItem>(StepList.Items.Count);
         for (var i = 0; i < StepList.Items.Count; i++)
         {
-            if (StepList.Items[i] is StepDisplayItem item
-                && string.Equals(item.StepPathText, pathText, StringComparison.Ordinal)
-                && StepList.ItemContainerGenerator.ContainerFromIndex(i) is ListBoxItem match)
+            if (StepList.Items[i] is StepDisplayItem item)
             {
-                container = match;
-                return true;
+                items.Add(item);
+            }
+        }
+
+        var anchor = StepDisplayItem.FindByPath(items, stepPath, preferContainerEnd);
+        if (anchor is not null)
+        {
+            for (var i = 0; i < StepList.Items.Count; i++)
+            {
+                if (ReferenceEquals(StepList.Items[i], anchor)
+                    && StepList.ItemContainerGenerator.ContainerFromIndex(i) is ListBoxItem match)
+                {
+                    container = match;
+                    return true;
+                }
             }
         }
 
@@ -1673,6 +1783,7 @@ public partial class StepSequencePanel : UserControl
     private void StepDown_Click(object sender, RoutedEventArgs e) => MoveSelectedStep(1);
     private void StepDelete_Click(object sender, RoutedEventArgs e) => DeleteSelectedStep();
     private void StepUndo_Click(object sender, RoutedEventArgs e) => UndoRequested?.Invoke();
+    private void StepRedo_Click(object sender, RoutedEventArgs e) => RedoRequested?.Invoke();
     private void StepClear_Click(object sender, RoutedEventArgs e)
     {
         if (ClearRequested is not null)

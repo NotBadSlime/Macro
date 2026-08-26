@@ -47,6 +47,7 @@ while (await Console.In.ReadLineAsync() is { } line)
         var pixels = Convert.FromBase64String(request.Pixels);
         var candidates = PrepareOcrCandidates(pixels, request.Width, request.Height);
         var bestText = string.Empty;
+        IReadOnlyList<OcrTextBoxResponse> bestBoxes = [];
 
         foreach (var engine in engines)
         {
@@ -64,11 +65,12 @@ while (await Console.In.ReadLineAsync() is { } line)
                 if (text.Length > bestText.Length)
                 {
                     bestText = text;
+                    bestBoxes = BuildOcrBoxes(result, candidate, request.Width, request.Height);
                 }
             }
         }
 
-        WriteResponse(bestText, null);
+        WriteResponse(bestText, null, bestBoxes);
     }
     catch (Exception ex)
     {
@@ -154,14 +156,58 @@ static IReadOnlyList<OcrImage> PrepareOcrCandidates(byte[] source, int width, in
     return
     [
         PrepareOcrPixels(source, width, height, OcrPixelMode.Preserve, out var preserveWidth, out var preserveHeight)
-            .ToImage(preserveWidth, preserveHeight),
+            .ToImage(preserveWidth, preserveHeight, width, height),
         PrepareOcrPixels(source, width, height, OcrPixelMode.Grayscale, out var grayscaleWidth, out var grayscaleHeight)
-            .ToImage(grayscaleWidth, grayscaleHeight),
+            .ToImage(grayscaleWidth, grayscaleHeight, width, height),
         PrepareOcrPixels(source, width, height, OcrPixelMode.Threshold, out var thresholdWidth, out var thresholdHeight)
-            .ToImage(thresholdWidth, thresholdHeight),
+            .ToImage(thresholdWidth, thresholdHeight, width, height),
         PrepareOcrPixels(source, width, height, OcrPixelMode.AutoInvertThreshold, out var invertWidth, out var invertHeight)
-            .ToImage(invertWidth, invertHeight)
+            .ToImage(invertWidth, invertHeight, width, height)
     ];
+}
+
+static IReadOnlyList<OcrTextBoxResponse> BuildOcrBoxes(
+    OcrResult result,
+    OcrImage image,
+    int sourceWidth,
+    int sourceHeight)
+{
+    var boxes = new List<OcrTextBoxResponse>();
+    foreach (var line in result.Lines)
+    {
+        var words = line.Words.ToList();
+        if (words.Count == 0) continue;
+
+        AddBox(line.Text, words);
+        foreach (var word in words)
+        {
+            AddBox(word.Text, [word]);
+        }
+    }
+
+    return boxes
+        .DistinctBy(box => $"{box.Text}\n{box.Left},{box.Top},{box.Width},{box.Height}", StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    void AddBox(string? text, IReadOnlyList<OcrWord> words)
+    {
+        if (string.IsNullOrWhiteSpace(text) || words.Count == 0) return;
+        var left = words.Min(word => word.BoundingRect.X);
+        var top = words.Min(word => word.BoundingRect.Y);
+        var right = words.Max(word => word.BoundingRect.X + word.BoundingRect.Width);
+        var bottom = words.Max(word => word.BoundingRect.Y + word.BoundingRect.Height);
+
+        var sourceLeft = Math.Clamp((int)Math.Floor((left - image.Padding) / image.Scale), 0, sourceWidth - 1);
+        var sourceTop = Math.Clamp((int)Math.Floor((top - image.Padding) / image.Scale), 0, sourceHeight - 1);
+        var sourceRight = Math.Clamp((int)Math.Ceiling((right - image.Padding) / image.Scale), sourceLeft + 1, sourceWidth);
+        var sourceBottom = Math.Clamp((int)Math.Ceiling((bottom - image.Padding) / image.Scale), sourceTop + 1, sourceHeight);
+        boxes.Add(new OcrTextBoxResponse(
+            text.Trim(),
+            sourceLeft,
+            sourceTop,
+            sourceRight - sourceLeft,
+            sourceBottom - sourceTop));
+    }
 }
 
 static byte[] PrepareOcrPixels(byte[] source, int width, int height, OcrPixelMode mode, out int preparedWidth, out int preparedHeight)
@@ -286,10 +332,10 @@ static int EstimateAverageLuma(byte[] source, int width, int height)
     return samples == 0 ? 255 : (int)(total / samples);
 }
 
-static void WriteResponse(string text, string? error)
+static void WriteResponse(string text, string? error, IReadOnlyList<OcrTextBoxResponse>? boxes = null)
 {
     var response = JsonSerializer.Serialize(
-        new OcrResponse(text, error),
+        new OcrResponse(text, error, boxes ?? []),
         JsonContext.Default.OcrResponse);
     Console.WriteLine(response);
     Console.Out.Flush();
@@ -303,7 +349,9 @@ public sealed class OcrRequest
     public string Language { get; set; } = "ch";
 }
 
-public sealed record OcrResponse(string Text, string? Error);
+public sealed record OcrTextBoxResponse(string Text, int Left, int Top, int Width, int Height);
+
+public sealed record OcrResponse(string Text, string? Error, IReadOnlyList<OcrTextBoxResponse> Boxes);
 
 internal enum OcrPixelMode
 {
@@ -313,11 +361,18 @@ internal enum OcrPixelMode
     AutoInvertThreshold
 }
 
-internal sealed record OcrImage(byte[] Pixels, int Width, int Height);
+internal sealed record OcrImage(byte[] Pixels, int Width, int Height, int Scale, int Padding);
 
 internal static class OcrImageExtensions
 {
-    public static OcrImage ToImage(this byte[] pixels, int width, int height) => new(pixels, width, height);
+    public static OcrImage ToImage(this byte[] pixels, int width, int height, int sourceWidth, int sourceHeight)
+    {
+        const int padding = 24;
+        var scale = Math.Max(1, Math.Min(
+            (width - padding * 2) / Math.Max(1, sourceWidth),
+            (height - padding * 2) / Math.Max(1, sourceHeight)));
+        return new OcrImage(pixels, width, height, scale, padding);
+    }
 }
 
 [JsonSerializable(typeof(OcrRequest))]

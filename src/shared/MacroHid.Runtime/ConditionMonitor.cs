@@ -17,6 +17,7 @@ public sealed class ConditionMonitor : IDisposable
     private readonly long qpcFrequency;
     private readonly PrecisionMode precision;
     private readonly Action? stopAllRequested;
+    private readonly Action? stopIterationRequested;
     private readonly PlaybackPauseCoordinator? pauseCoordinator;
     private readonly IHighResolutionClock clock = new QpcHighResolutionClock();
     private readonly IPlaybackDelayStrategy delayStrategy;
@@ -42,6 +43,7 @@ public sealed class ConditionMonitor : IDisposable
             qpcFrequency,
             PrecisionMode.ExtremeDuringPlayback,
             null,
+            null,
             null)
     {
     }
@@ -55,6 +57,7 @@ public sealed class ConditionMonitor : IDisposable
         long qpcFrequency,
         PrecisionMode precision = PrecisionMode.ExtremeDuringPlayback,
         Action? stopAllRequested = null,
+        Action? stopIterationRequested = null,
         PlaybackPauseCoordinator? pauseCoordinator = null)
     {
         this.directive = directive;
@@ -65,6 +68,7 @@ public sealed class ConditionMonitor : IDisposable
         this.qpcFrequency = qpcFrequency;
         this.precision = precision;
         this.stopAllRequested = stopAllRequested;
+        this.stopIterationRequested = stopIterationRequested;
         this.pauseCoordinator = pauseCoordinator;
         delayStrategy = new QpcPlaybackDelayStrategy(clock, precision);
     }
@@ -222,6 +226,10 @@ public sealed class ConditionMonitor : IDisposable
             {
                 stopAllRequested?.Invoke();
             }
+            else if (flow == MacroControlFlowResult.StopIteration)
+            {
+                stopIterationRequested?.Invoke();
+            }
             return;
         }
 
@@ -345,7 +353,12 @@ public sealed class CompositeConditionEvaluator : IConditionEvaluator, IDisposab
             return false;
         }
 
-        return ocrBridge.Value.ContainsText(text.Region, text.ExpectedText, text.Contains, text.Language);
+        return ocrBridge.Value.ContainsText(
+            text.Region,
+            text.ExpectedText,
+            text.Contains,
+            text.Language,
+            text.UseRegex);
     }
 
     public void Dispose()

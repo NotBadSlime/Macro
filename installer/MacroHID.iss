@@ -55,6 +55,18 @@ chinesetrad.DocumentationShortcut=文件
 english.LaunchMacroStudio=Launch MacroStudio
 chinesesimp.LaunchMacroStudio=启动 MacroStudio
 chinesetrad.LaunchMacroStudio=啟動 MacroStudio
+english.DeleteUserDataCaption=MacroHID user data
+chinesesimp.DeleteUserDataCaption=MacroHID 用户数据
+chinesetrad.DeleteUserDataCaption=MacroHID 使用者資料
+english.DeleteUserDataPrompt=Also delete this user's macro database, settings, and workspace layout?%n%nChoose No to keep them for a later reinstall. Keeping data is recommended.
+chinesesimp.DeleteUserDataPrompt=是否同时删除当前用户的宏数据库、设置和界面布局？%n%n选择“否”会保留数据，重新安装后仍可继续使用。建议保留。
+chinesetrad.DeleteUserDataPrompt=是否同時刪除目前使用者的巨集資料庫、設定和介面配置？%n%n選擇「否」會保留資料，重新安裝後仍可繼續使用。建議保留。
+english.DeleteUserDataFinalWarning=This permanently deletes all files under:%n%1%n%nThis cannot be undone. Delete them now?
+chinesesimp.DeleteUserDataFinalWarning=这将永久删除以下目录中的全部文件：%n%1%n%n此操作无法撤销，确定立即删除吗？
+chinesetrad.DeleteUserDataFinalWarning=這將永久刪除以下目錄中的全部檔案：%n%1%n%n此操作無法復原，確定立即刪除嗎？
+english.DeleteUserDataFailed=Some user data could not be deleted. You can remove it manually from:%n%1
+chinesesimp.DeleteUserDataFailed=部分用户数据无法删除，可稍后手动清理：%n%1
+chinesetrad.DeleteUserDataFailed=部分使用者資料無法刪除，可稍後手動清理：%n%1
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopShortcut}"; GroupDescription: "{cm:ShortcutsGroup}"; Flags: unchecked
@@ -77,3 +89,34 @@ Name: "{autodesktop}\MacroStudio"; Filename: "{app}\MacroStudio\{#AppExeName}"; 
 
 [Run]
 Filename: "{app}\MacroStudio\{#AppExeName}"; Description: "{cm:LaunchMacroStudio}"; Flags: nowait postinstall skipifsilent unchecked
+
+[Code]
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  UserDataPath: String;
+begin
+  if CurUninstallStep <> usUninstall then
+    Exit;
+
+  { SuppressibleMsgBox returns IDNO during silent uninstall, so user data is preserved by default. }
+  if SuppressibleMsgBox(
+       ExpandConstant('{cm:DeleteUserDataPrompt}'),
+       mbConfirmation,
+       MB_YESNO or MB_DEFBUTTON2,
+       IDNO) <> IDYES then
+    Exit;
+
+  UserDataPath := ExpandConstant('{userappdata}\MacroHID');
+  if SuppressibleMsgBox(
+       FmtMessage(ExpandConstant('{cm:DeleteUserDataFinalWarning}'), [UserDataPath]),
+       mbError,
+       MB_YESNO or MB_DEFBUTTON2,
+       IDNO) <> IDYES then
+    Exit;
+
+  if DirExists(UserDataPath) and (not DelTree(UserDataPath, True, True, True)) then
+    MsgBox(
+      FmtMessage(ExpandConstant('{cm:DeleteUserDataFailed}'), [UserDataPath]),
+      mbError,
+      MB_OK);
+end;

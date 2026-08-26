@@ -8,6 +8,8 @@ namespace MacroStudio;
 
 public partial class App : Application
 {
+    private bool dispatcherErrorDialogPending;
+
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "MacroHID", "crash.log");
@@ -44,11 +46,36 @@ public partial class App : Application
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
+        e.Handled = true;
         var inner = e.Exception;
         while (inner.InnerException != null) inner = inner.InnerException;
         Log($"[UI ERROR] {inner.GetType().Name}: {inner.Message}\nStack (first 5):\n{string.Join("\n", inner.StackTrace?.Split('\n').Take(5) ?? [])}");
-        DialogOwnerService.MessageBoxSafe(null, $"UI Error:\n{inner.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        e.Handled = true;
+        if (dispatcherErrorDialogPending) return;
+
+        dispatcherErrorDialogPending = true;
+        try
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    DialogOwnerService.MessageBoxSafe(null, $"UI Error:\n{inner.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                catch (Exception dialogException)
+                {
+                    Log($"[UI ERROR DIALOG FAILED] {dialogException.GetType().Name}: {dialogException.Message}");
+                }
+                finally
+                {
+                    dispatcherErrorDialogPending = false;
+                }
+            }), DispatcherPriority.ContextIdle);
+        }
+        catch (Exception dispatchException)
+        {
+            dispatcherErrorDialogPending = false;
+            Log($"[UI ERROR DISPATCH FAILED] {dispatchException.GetType().Name}: {dispatchException.Message}");
+        }
     }
 
     private static void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)

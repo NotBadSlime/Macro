@@ -5,10 +5,23 @@
              Tag="{StaticResource ActionPaletteDragAdornerStyle}"
              SizeChanged="ActionPalette_SizeChanged">
     <StackPanel Margin="2,0">
-        <TextBlock x:Name="AddTitleText"
-                   Text="添加"
-                   Style="{StaticResource PanelTitle}"
-                   Margin="0,0,0,12" />
+        <DockPanel Margin="0,0,0,12" LastChildFill="True">
+            <Button x:Name="ActionColorSettingsButton"
+                    DockPanel.Dock="Right"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    Content="&#xE790;"
+                    FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                    FontSize="15"
+                    Style="{StaticResource SequenceToolbarIconButton}"
+                    ToolTip="动作颜色"
+                    Click="ActionColorSettingsButton_Click" />
+            <TextBlock x:Name="AddTitleText"
+                       Text="添加"
+                       Style="{StaticResource PanelTitle}"
+                       VerticalAlignment="Center" />
+        </DockPanel>
 
         <primitives:UniformGrid x:Name="ActionCommandGrid" Columns="1">
             <Button x:Name="AddDelayButton"
@@ -141,6 +154,84 @@
                 </Grid>
             </Button>
 
+            <Button x:Name="AddWindowActivateButton"
+                    Tag="WindowActivate"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#EAF8EF">
+                        <TextBlock Text="&#xE737;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddWindowActivateText" Text="指定窗口到前台" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddWindowActivateHintText" Text="定位、恢复并确认目标窗口" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddOcrExtractTextButton"
+                    Tag="OcrExtractText"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#EAF3FF">
+                        <TextBlock Text="&#xE8D2;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource AccentBlue}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddOcrExtractTextText" Text="OCR 获取文本" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddOcrExtractTextHintText" Text="从混合文字中提取内容到剪贴板" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddOcrClickButton"
+                    Tag="OcrClick"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#F8EAF5">
+                        <TextBlock Text="&#xE721;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource AccentPink}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddOcrClickText" Text="OCR 文字点击" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddOcrClickHintText" Text="识别区域内的文字并点击" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
             <Button x:Name="AddTextButton"
                     Tag="Text"
                     Style="{StaticResource ActionPaletteCommandStyle}"
@@ -239,8 +330,34 @@
                                    VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddStopCurrentText" Text="停止当前宏序列" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddStopCurrentText" Text="停止本层宏动作" FontWeight="SemiBold" />
                         <TextBlock x:Name="AddStopCurrentHintText" Text="退出当前调用，外层继续" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddStopIterationButton"
+                    Tag="StopIteration"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#FFF0E5">
+                        <TextBlock Text="&#xE71A;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource AccentOrange}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddStopIterationText" Text="停止本轮播放" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddStopIterationHintText" Text="跳过本轮剩余步骤，循环继续" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
             </Button>
@@ -265,7 +382,7 @@
                                    VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddStopAllText" Text="停止所有宏序列" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddStopAllText" Text="停止本次播放" FontWeight="SemiBold" />
                         <TextBlock x:Name="AddStopAllHintText" Text="立即终止整次宏播放" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>

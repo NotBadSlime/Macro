@@ -102,7 +102,6 @@ public sealed record MacroLibraryListenState(
                 return $"部分监听 {ListeningCount}/{CandidateCount}";
             if (IsGroupSummary && ListeningCount > 0) return $"监听中 {ListeningCount}";
             if (IsListening) return "监听中";
-            if (!string.IsNullOrWhiteSpace(Trigger)) return "未监听";
             return string.Empty;
         }
     }
@@ -114,7 +113,6 @@ public sealed record MacroLibraryListenState(
             if (IsConflict) return new SolidColorBrush(Color.FromRgb(255, 59, 48));
             if (IsGroupSummary && ListeningCount > 0) return new SolidColorBrush(Color.FromRgb(0, 122, 255));
             if (IsListening) return new SolidColorBrush(Color.FromRgb(52, 199, 89));
-            if (!string.IsNullOrWhiteSpace(Trigger)) return new SolidColorBrush(Color.FromRgb(142, 142, 147));
             return Brushes.Transparent;
         }
     }
@@ -179,6 +177,16 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
     public Visibility ListeningBadgeVisibility => string.IsNullOrWhiteSpace(ListeningBadgeText)
         ? Visibility.Collapsed
         : Visibility.Visible;
+    public Visibility LockVisibility => Item?.IsLocked == true ? Visibility.Visible : Visibility.Collapsed;
+    public string LockToolTip => LocalizationService.Get("MacroLockedReadOnly");
+    public string ExplorerTypeText => IsFolder
+        ? LocalizationService.Get("FileFolderType")
+        : LocalizationService.Get("MacroFileType");
+    public string ExplorerModifiedText => Item is null
+        ? string.Empty
+        : Item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+    public string ExplorerTriggerText => ListenState?.Trigger ?? string.Empty;
+    public string ExplorerModeText => ListenState?.Mode ?? string.Empty;
     public Visibility ManagerSelectionDotVisibility => IsGroup && IsManagerSelected
         ? Visibility.Visible
         : Visibility.Collapsed;
@@ -251,7 +259,7 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
 
     public static MacroLibraryTreeNode Folder(string groupId, string title, IReadOnlyList<MacroLibraryTreeNode> children)
     {
-        return new MacroLibraryTreeNode(null, null, groupId, title, title, $"{children.Count} items", "F", FolderBrush, FontWeights.SemiBold, null, false, children);
+        return new MacroLibraryTreeNode(null, null, groupId, title, title, LocalizationService.Format("FolderItemCount", children.Count), "\uE8B7", FolderBrush, FontWeights.SemiBold, null, false, children);
     }
 
     public static MacroLibraryTreeNode Group(
@@ -264,7 +272,7 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
             ? LocalizationService.Get("AllProcesses")
             : group.ProcessFilter;
         var subtitle = LocalizationService.Format("ProcessGroupDatabaseSummary", activation);
-        return new MacroLibraryTreeNode(group, null, group.Id, string.Empty, group.Name, subtitle, "P", GroupBrush, FontWeights.SemiBold, listenState, isManagerSelected, children);
+        return new MacroLibraryTreeNode(group, null, group.Id, string.Empty, group.Name, subtitle, "\uE8B7", GroupBrush, FontWeights.SemiBold, listenState, isManagerSelected, children);
     }
 
     public static MacroLibraryTreeNode Macro(MacroLibraryItem item, MacroDocument? document, MacroLibraryListenState? listenState = null)
@@ -278,7 +286,7 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
             subtitle = string.Join(" · ", parts);
         }
 
-        return new MacroLibraryTreeNode(null, item, item.GroupId, item.Folder, entry.Title, subtitle, entry.Icon, entry.Accent, entry.Weight, listenState, false, []);
+        return new MacroLibraryTreeNode(null, item, item.GroupId, item.Folder, entry.Title, subtitle, "\uE8A5", entry.Accent, entry.Weight, listenState, false, []);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -307,7 +315,17 @@ public sealed class StepDisplayItem
     private static readonly Brush GrayBrush = new SolidColorBrush(Color.FromRgb(142, 142, 147));
     private static readonly Brush LoopBrush = new SolidColorBrush(Color.FromRgb(239, 108, 0));
 
-    private StepDisplayItem(int index, IReadOnlyList<int> stepPath, string icon, string actionIndicator, string title, string badge, Brush accentBrush, StepDisplayKind kind, int indent)
+    private StepDisplayItem(
+        int index,
+        IReadOnlyList<int> stepPath,
+        string icon,
+        string actionIndicator,
+        string title,
+        string badge,
+        Brush accentBrush,
+        StepDisplayKind kind,
+        int indent,
+        MacroActionTemplateKind appearanceKind)
     {
         Index = index;
         StepPath = stepPath.ToArray();
@@ -320,6 +338,10 @@ public sealed class StepDisplayItem
         Kind = kind;
         Indent = indent;
         LeftMargin = new Thickness(indent * 20, 0, 0, 0);
+        var appearance = ActionAppearanceService.GetBrushes(appearanceKind);
+        ActionForeground = appearance.Text;
+        IconBrush = appearance.Icon;
+        BackgroundBrush = appearance.Background;
     }
 
     public int Index { get; }
@@ -330,12 +352,43 @@ public sealed class StepDisplayItem
     public string Title { get; }
     public string Badge { get; }
     public Brush AccentBrush { get; }
+    public Brush ActionForeground { get; }
+    public Brush IconBrush { get; }
+    public Brush BackgroundBrush { get; }
     public StepDisplayKind Kind { get; }
     public int Indent { get; }
     public Thickness LeftMargin { get; }
     public bool IsStructural => Kind is StepDisplayKind.LoopStart or StepDisplayKind.LoopEnd or StepDisplayKind.ConditionStart or StepDisplayKind.ConditionEnd;
+    public bool IsContainerEnd => Kind is StepDisplayKind.LoopEnd or StepDisplayKind.ConditionEnd;
     public bool IsConditionEndpoint { get; set; }
     public List<Brush> ConditionBars { get; set; } = [];
+
+    public static StepDisplayItem? FindByPath(
+        IEnumerable<StepDisplayItem> items,
+        IReadOnlyList<int> stepPath,
+        bool preferContainerEnd = false)
+    {
+        var pathText = FormatPath(stepPath);
+        StepDisplayItem? startOrNormal = null;
+        StepDisplayItem? end = null;
+        foreach (var item in items)
+        {
+            if (!string.Equals(item.StepPathText, pathText, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (item.IsContainerEnd)
+            {
+                end = item;
+                continue;
+            }
+
+            startOrNormal ??= item;
+        }
+
+        return preferContainerEnd ? end ?? startOrNormal : startOrNormal ?? end;
+    }
 
     public static List<StepDisplayItem> FlattenSteps(
         IReadOnlyList<MacroStep> steps,
@@ -351,16 +404,16 @@ public sealed class StepDisplayItem
             var stepPath = basePath.Concat([i]).ToArray();
             if (step is RepeatStep repeat)
             {
-                result.Add(new StepDisplayItem(i, stepPath, "🔄", "", $"启动循环:  {repeat.Count}", FormatDuration(EstimateStepDuration(repeat)), LoopBrush, StepDisplayKind.LoopStart, indent));
+                result.Add(new StepDisplayItem(i, stepPath, "🔄", "", $"启动循环:  {repeat.Count}", FormatDuration(EstimateStepDuration(repeat)), LoopBrush, StepDisplayKind.LoopStart, indent, MacroActionTemplateKind.Loop));
                 result.AddRange(FlattenSteps(repeat.Steps, indent + 1, stepPath, macroNameResolver));
-                result.Add(new StepDisplayItem(i, stepPath, "🔄", "", $"结束循环:  {repeat.Count}", "", LoopBrush, StepDisplayKind.LoopEnd, indent));
+                result.Add(new StepDisplayItem(i, stepPath, "🔄", "", $"结束循环:  {repeat.Count}", "", LoopBrush, StepDisplayKind.LoopEnd, indent, MacroActionTemplateKind.Loop));
             }
             else if (step is PixelWhenStep pixel)
             {
                 var desc = $"像素条件 ({pixel.Condition.Coordinate.X},{pixel.Condition.Coordinate.Y})";
-                result.Add(new StepDisplayItem(i, stepPath, "🎯", "", desc, "", PinkBrush, StepDisplayKind.ConditionStart, indent));
+                result.Add(new StepDisplayItem(i, stepPath, "🎯", "", desc, "", PinkBrush, StepDisplayKind.ConditionStart, indent, MacroActionTemplateKind.Pixel));
                 result.AddRange(FlattenSteps(pixel.ThenSteps, indent + 1, stepPath, macroNameResolver));
-                result.Add(new StepDisplayItem(i, stepPath, "🎯", "", "结束条件", "", PinkBrush, StepDisplayKind.ConditionEnd, indent));
+                result.Add(new StepDisplayItem(i, stepPath, "🎯", "", "结束条件", "", PinkBrush, StepDisplayKind.ConditionEnd, indent, MacroActionTemplateKind.Pixel));
             }
             else
             {
@@ -380,23 +433,63 @@ public sealed class StepDisplayItem
         var path = stepPath?.ToArray() ?? [index];
         return step switch
         {
-            KeyStep key => new StepDisplayItem(index, path, "🔤", GetKeyIndicator(key), DescribeKey(key), FormatDuration(key.Hold), GreenBrush, StepDisplayKind.Normal, indent),
-            TextStep text => new StepDisplayItem(index, path, "📝", "", $"文本: \"{TrimText(text.Text)}\"", "", BlueBrush, StepDisplayKind.Normal, indent),
-            MouseMoveStep move => new StepDisplayItem(index, path, "🖱", "↗", $"移动 ({move.X}, {move.Y})", FormatDuration(move.Duration), OrangeBrush, StepDisplayKind.Normal, indent),
-            MouseButtonStep button => new StepDisplayItem(index, path, "🖱", GetMouseIndicator(button), DescribeMouseButton(button), FormatDuration(button.Hold), OrangeBrush, StepDisplayKind.Normal, indent),
-            MouseWheelStep wheel => new StepDisplayItem(index, path, "🖱", "⟳", $"滚轮 V={wheel.Vertical} H={wheel.Horizontal}", "", BlueBrush, StepDisplayKind.Normal, indent),
-            ConsumerStep consumer => new StepDisplayItem(index, path, "🎵", GetConsumerIndicator(consumer), $"媒体 {consumer.Control}", FormatDuration(consumer.Hold), PinkBrush, StepDisplayKind.Normal, indent),
-            WaitStep wait => new StepDisplayItem(index, path, "⏱", "", FormatWait(wait), "", GrayBrush, StepDisplayKind.Delay, indent),
-            MacroCallStep macro => new StepDisplayItem(index, path, "📦", "▶", $"调用宏: {ResolveMacroDisplayName(macro.Macro, macroNameResolver)}", "", GreenBrush, StepDisplayKind.Normal, indent),
-            StopCurrentSequenceStep => new StepDisplayItem(index, path, "■", "", "停止当前宏序列", "外层继续", OrangeBrush, StepDisplayKind.Normal, indent),
-            StopAllSequencesStep => new StepDisplayItem(index, path, "■", "", "停止所有宏序列", "立即停止", RedBrush, StepDisplayKind.Normal, indent),
-            _ => new StepDisplayItem(index, path, "?", "", step.GetType().Name, "", GrayBrush, StepDisplayKind.Normal, indent)
+            KeyStep key => new StepDisplayItem(index, path, "🔤", GetKeyIndicator(key), DescribeKey(key), FormatDuration(key.Hold), GreenBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Keyboard),
+            TextStep text => new StepDisplayItem(index, path, "📝", "", $"文本: \"{TrimText(text.Text)}\"", "", BlueBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Text),
+            MouseMoveStep move => new StepDisplayItem(index, path, "🖱", "↗", $"移动 ({move.X}, {move.Y})", FormatDuration(move.Duration), OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.MouseMove),
+            MouseButtonStep button => new StepDisplayItem(index, path, "🖱", GetMouseIndicator(button), DescribeMouseButton(button), FormatDuration(button.Hold), OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.MouseButton),
+            MouseWheelStep wheel => new StepDisplayItem(index, path, "🖱", "⟳", $"滚轮 V={wheel.Vertical} H={wheel.Horizontal}", "", BlueBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.MouseWheel),
+            WindowActivateStep window => new StepDisplayItem(
+                index,
+                path,
+                "▣",
+                "↗",
+                $"切换到窗口: {window.ProcessName}",
+                string.IsNullOrWhiteSpace(window.WindowTitle) ? string.Empty : TrimText(window.WindowTitle),
+                GreenBrush,
+                StepDisplayKind.Normal,
+                indent,
+                MacroActionTemplateKind.WindowActivate),
+            OcrExtractTextStep extract => new StepDisplayItem(
+                index,
+                path,
+                "T",
+                "→",
+                extract.UseRegex
+                    ? $"OCR 获取文本: /{TrimText(extract.Pattern)}/"
+                    : string.IsNullOrWhiteSpace(extract.Pattern)
+                        ? "OCR 获取全部文本"
+                        : $"OCR 获取文本: \"{TrimText(extract.Pattern)}\"",
+                extract.KeepDigitsOnly ? "过滤 → 仅数字" : "剪贴板",
+                BlueBrush,
+                StepDisplayKind.Normal,
+                indent,
+                MacroActionTemplateKind.OcrExtractText),
+            OcrClickStep ocr => new StepDisplayItem(
+                index,
+                path,
+                "T",
+                "⌖",
+                ocr.UseRegex
+                    ? $"OCR 点击: /{TrimText(ocr.ExpectedText)}/"
+                    : $"OCR 点击: \"{TrimText(ocr.ExpectedText)}\"",
+                ocr.ClickCount > 1 ? $"{ocr.ClickCount} 次" : string.Empty,
+                PinkBrush,
+                StepDisplayKind.Normal,
+                indent,
+                MacroActionTemplateKind.OcrClick),
+            ConsumerStep consumer => new StepDisplayItem(index, path, "🎵", GetConsumerIndicator(consumer), $"媒体 {consumer.Control}", FormatDuration(consumer.Hold), PinkBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Keyboard),
+            WaitStep wait => new StepDisplayItem(index, path, "⏱", "", FormatWait(wait), "", GrayBrush, StepDisplayKind.Delay, indent, MacroActionTemplateKind.Delay),
+            MacroCallStep macro => new StepDisplayItem(index, path, "📦", "▶", $"调用宏: {ResolveMacroDisplayName(macro.Macro, macroNameResolver)}", "", GreenBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Macro),
+            StopCurrentSequenceStep => new StepDisplayItem(index, path, "■", "", "停止本层宏动作", "外层继续", OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopCurrent),
+            StopCurrentIterationStep => new StepDisplayItem(index, path, "■", "", "停止本轮播放", "循环继续", OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopIteration),
+            StopAllSequencesStep => new StepDisplayItem(index, path, "■", "", "停止本次播放", "立即停止", RedBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopAll),
+            _ => new StepDisplayItem(index, path, "?", "", step.GetType().Name, "", GrayBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Delay)
         };
     }
 
     public static StepDisplayItem Error(string message)
     {
-        return new StepDisplayItem(-1, [], "⚠", "", message, "", RedBrush, StepDisplayKind.Normal, 0);
+        return new StepDisplayItem(-1, [], "⚠", "", message, "", RedBrush, StepDisplayKind.Normal, 0, MacroActionTemplateKind.StopAll);
     }
 
     private static string FormatPath(IReadOnlyList<int> path) => string.Join(".", path);
@@ -522,6 +615,9 @@ public sealed class StepDisplayItem
         KeyStep key => key.Hold,
         MouseMoveStep move => move.Duration,
         MouseButtonStep button => button.Hold,
+        OcrClickStep ocr => TimeSpan.FromTicks(
+            ocr.Hold.Ticks * Math.Clamp(ocr.ClickCount, 1, 3)
+            + ocr.Interval.Ticks * Math.Max(0, Math.Clamp(ocr.ClickCount, 1, 3) - 1)),
         ConsumerStep consumer => consumer.Hold,
         WaitStep wait => wait.MaxDuration ?? wait.Duration,
         RepeatStep repeat => TimeSpan.FromTicks(repeat.Steps.Sum(s => EstimateStepDuration(s).Ticks) * Math.Max(1, repeat.Count)),

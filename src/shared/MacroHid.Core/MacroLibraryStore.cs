@@ -10,7 +10,8 @@ public sealed record MacroLibraryItem(
     string FileName,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<string>? Aliases = null,
-    string GroupId = MacroLibraryStore.GlobalGroupId)
+    string GroupId = MacroLibraryStore.GlobalGroupId,
+    bool IsLocked = false)
 {
     public bool MatchesReference(string? reference)
     {
@@ -104,7 +105,7 @@ public sealed class MacroLibraryStore
             NormalizeFolder(folder),
             CreateFileName(document.Name, id),
             DateTimeOffset.UtcNow,
-            NormalizeAliases(aliases),
+            MergeAliases(aliases, document.Id),
             normalizedGroupId);
 
         EnsureGroupFolder(index, item.GroupId, item.Folder);
@@ -205,6 +206,7 @@ public sealed class MacroLibraryStore
         }
 
         var previous = index.Items[itemIndex];
+        EnsureMacroIsEditable(previous);
         var updated = previous with
         {
             Name = NormalizeName(document.Name),
@@ -226,7 +228,9 @@ public sealed class MacroLibraryStore
             throw new KeyNotFoundException($"Macro '{id}' was not found.");
         }
 
-        var updated = index.Items[itemIndex] with
+        var previous = index.Items[itemIndex];
+        EnsureMacroIsEditable(previous);
+        var updated = previous with
         {
             Name = NormalizeName(newName),
             UpdatedAt = DateTimeOffset.UtcNow
@@ -236,6 +240,31 @@ public sealed class MacroLibraryStore
 
         var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(updated)));
         SaveDocumentFile(updated, document with { Name = updated.Name });
+        SaveIndex(index);
+        return updated;
+    }
+
+    public MacroLibraryItem SetMacroLocked(string id, bool isLocked)
+    {
+        var index = LoadIndex();
+        var itemIndex = index.Items.FindIndex(item => item.Id == id);
+        if (itemIndex < 0)
+        {
+            throw new KeyNotFoundException($"Macro '{id}' was not found.");
+        }
+
+        var previous = index.Items[itemIndex];
+        if (previous.IsLocked == isLocked)
+        {
+            return previous;
+        }
+
+        var updated = previous with
+        {
+            IsLocked = isLocked,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        index.Items[itemIndex] = updated;
         SaveIndex(index);
         return updated;
     }
@@ -252,6 +281,7 @@ public sealed class MacroLibraryStore
     {
         var index = LoadIndex();
         var item = FindItem(index, id);
+        EnsureMacroIsEditable(item);
         index.Items.RemoveAll(candidate => candidate.Id == id);
 
         var path = GetMacroPath(item);
@@ -288,6 +318,38 @@ public sealed class MacroLibraryStore
         index.Items.Insert(GetMoveInsertIndex(index, normalizedGroupId, normalizedFolder, beforeMacroId), updated);
         SaveIndex(index);
         return updated;
+    }
+
+    public IReadOnlyList<MacroLibraryItem> ImportMacros(
+        IReadOnlyList<MacroDocument> documents,
+        string? folder = null,
+        string? groupId = null)
+    {
+        var created = new List<MacroLibraryItem>();
+        var idMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var document in documents)
+        {
+            var item = CreateMacro(document, folder, groupId: groupId);
+            if (!string.IsNullOrWhiteSpace(document.Id))
+            {
+                idMap[document.Id] = item.Id;
+            }
+
+            created.Add(item);
+        }
+
+        foreach (var item in created)
+        {
+            var stored = ReadMacro(item.Id);
+            var remapped = MacroCallRewriter.RemapReferences(stored, idMap);
+            if (!ReferenceEquals(stored, remapped)
+                && !string.Equals(McrxSerializer.Serialize(stored), McrxSerializer.Serialize(remapped), StringComparison.Ordinal))
+            {
+                SaveMacro(item.Id, remapped);
+            }
+        }
+
+        return created;
     }
 
     public MacroLibraryItem AddAliasesToMacro(string id, IReadOnlyList<string> aliases)
@@ -427,22 +489,28 @@ public sealed class MacroLibraryStore
 
         var index = JsonSerializer.Deserialize<MacroLibraryIndex>(File.ReadAllText(indexPath), Options)
             ?? new MacroLibraryIndex();
-        NormalizeIndex(index);
+        if (NormalizeIndex(index))
+        {
+            File.WriteAllText(indexPath, JsonSerializer.Serialize(index, Options));
+        }
+
         return index;
     }
 
-    private static void NormalizeIndex(MacroLibraryIndex index)
+    private static bool NormalizeIndex(MacroLibraryIndex index)
     {
+        var changed = false;
         index.Items ??= [];
         index.Folders ??= [];
         index.Groups ??= [];
         index.GroupFolders ??= [];
         var migrateLegacyFolders = index.Groups.Count == 0 && index.GroupFolders.Count == 0;
-        EnsureGlobalGroup(index);
+        changed |= EnsureGlobalGroup(index);
+        changed |= PruneDuplicateItems(index);
 
         foreach (var legacyFolder in migrateLegacyFolders ? index.Folders.ToList() : [])
         {
-            EnsureGroupFolder(index, GlobalGroupId, legacyFolder);
+            changed |= EnsureGroupFolder(index, GlobalGroupId, legacyFolder);
         }
 
         for (var i = 0; i < index.Items.Count; i++)
@@ -458,12 +526,21 @@ public sealed class MacroLibraryStore
             {
                 item = item with { GroupId = groupId };
                 index.Items[i] = item;
+                changed = true;
             }
 
-            EnsureGroupFolder(index, item.GroupId, item.Folder);
+            changed |= EnsureGroupFolder(index, item.GroupId, item.Folder);
         }
 
-        SyncLegacyFolders(index);
+        changed |= SyncLegacyFolders(index);
+        if (index.SelectedMacroId is not null
+            && !index.Items.Any(item => string.Equals(item.Id, index.SelectedMacroId, StringComparison.OrdinalIgnoreCase)))
+        {
+            index.SelectedMacroId = index.Items.FirstOrDefault()?.Id;
+            changed = true;
+        }
+
+        return changed;
     }
 
     private void SaveIndex(MacroLibraryIndex index)
@@ -476,7 +553,17 @@ public sealed class MacroLibraryStore
     private void SaveDocumentFile(MacroLibraryItem item, MacroDocument document)
     {
         Directory.CreateDirectory(rootDirectory);
-        File.WriteAllText(GetMacroPath(item), McrxSerializer.Serialize(document));
+        File.WriteAllText(GetMacroPath(item), McrxSerializer.Serialize(document with { Id = item.Id }));
+    }
+
+    private static IReadOnlyList<string> MergeAliases(IReadOnlyList<string>? aliases, string? identity)
+    {
+        if (string.IsNullOrWhiteSpace(identity))
+        {
+            return NormalizeAliases(aliases);
+        }
+
+        return NormalizeAliases([.. aliases ?? [], identity]);
     }
 
     private string GetMacroPath(MacroLibraryItem item)
@@ -551,23 +638,38 @@ public sealed class MacroLibraryStore
             .ToArray();
     }
 
-    private static void EnsureGlobalGroup(MacroLibraryIndex index)
+    private static bool EnsureGlobalGroup(MacroLibraryIndex index)
     {
         var existingIndex = index.Groups.FindIndex(group => string.Equals(group.Id, GlobalGroupId, StringComparison.OrdinalIgnoreCase));
         if (existingIndex >= 0)
         {
             var existing = index.Groups[existingIndex];
-            index.Groups[existingIndex] = existing with
+            var normalized = existing with
             {
                 Id = GlobalGroupId,
                 Name = string.IsNullOrWhiteSpace(existing.Name) ? GlobalGroupName : existing.Name,
                 ProcessFilter = string.Empty,
                 IsGlobal = true
             };
-            return;
+            if (Equals(existing, normalized))
+            {
+                return false;
+            }
+
+            index.Groups[existingIndex] = normalized;
+            return true;
         }
 
         index.Groups.Insert(0, new MacroLibraryGroup(GlobalGroupId, GlobalGroupName, string.Empty, true));
+        return true;
+    }
+
+    private static void EnsureMacroIsEditable(MacroLibraryItem item)
+    {
+        if (item.IsLocked)
+        {
+            throw new InvalidOperationException($"Macro '{item.Name}' is locked. Unlock it before making changes.");
+        }
     }
 
     private static void EnsureGroupExists(MacroLibraryIndex index, string groupId)
@@ -581,11 +683,11 @@ public sealed class MacroLibraryStore
         throw new KeyNotFoundException($"Macro group '{groupId}' was not found.");
     }
 
-    private static void EnsureGroupFolder(MacroLibraryIndex index, string groupId, string folder)
+    private static bool EnsureGroupFolder(MacroLibraryIndex index, string groupId, string folder)
     {
         if (string.IsNullOrWhiteSpace(folder))
         {
-            return;
+            return false;
         }
 
         var normalizedGroupId = NormalizeGroupId(groupId);
@@ -601,10 +703,13 @@ public sealed class MacroLibraryStore
                     ? groupCompare
                     : string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
             });
+            return true;
         }
+
+        return false;
     }
 
-    private static void SyncLegacyFolders(MacroLibraryIndex index)
+    private static bool SyncLegacyFolders(MacroLibraryIndex index)
     {
         var folders = index.GroupFolders
             .Select(folder => folder.Name)
@@ -614,8 +719,48 @@ public sealed class MacroLibraryStore
             .OrderBy(folder => folder, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        if (index.Folders.SequenceEqual(folders, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
         index.Folders.Clear();
         index.Folders.AddRange(folders);
+        return true;
+    }
+
+    private static bool PruneDuplicateItems(MacroLibraryIndex index)
+    {
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var deduped = new List<MacroLibraryItem>(index.Items.Count);
+        var changed = false;
+
+        foreach (var item in index.Items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Id) || string.IsNullOrWhiteSpace(item.FileName))
+            {
+                changed = true;
+                continue;
+            }
+
+            if (!seenIds.Add(item.Id) || !seenFileNames.Add(item.FileName))
+            {
+                changed = true;
+                continue;
+            }
+
+            deduped.Add(item);
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        index.Items.Clear();
+        index.Items.AddRange(deduped);
+        return true;
     }
 
     private static string CreateFileName(string name, string id)

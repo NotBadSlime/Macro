@@ -22,8 +22,15 @@ public static class McrxParser
         var conditions = root.TryGetProperty("conditions", out var conditionsProperty)
             ? ParseConditions(conditionsProperty)
             : null;
+        var id = root.TryGetProperty("id", out var idProperty)
+            ? idProperty.GetString()
+            : null;
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            id = null;
+        }
 
-        return MacroStepNormalizer.Normalize(new MacroDocument(version, name, playback, steps, conditions));
+        return MacroStepNormalizer.Normalize(new MacroDocument(version, name, playback, steps, conditions, id));
     }
 
     private static PlaybackSettings ParsePlayback(JsonElement playbackElement)
@@ -64,6 +71,8 @@ public static class McrxParser
         var modifiers = HidModifier.None;
         var keys = new List<HidKey>();
         var mouseButtons = new List<MouseButton>();
+        var trimmedValue = value.Trim();
+        var includesNumpadPlusAlias = trimmedValue.EndsWith('+');
         foreach (var rawPart in value.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (TryParseModifier(rawPart, out var modifier))
@@ -86,6 +95,11 @@ public static class McrxParser
             {
                 keys.Add(parsedKey);
             }
+        }
+
+        if (includesNumpadPlusAlias && !keys.Contains(HidKey.NumpadPlus))
+        {
+            keys.Add(HidKey.NumpadPlus);
         }
 
         if (keys.Count == 0 && mouseButtons.Count == 0 && modifiers == HidModifier.None)
@@ -126,6 +140,9 @@ public static class McrxParser
             "mouse.up" => ParseMouseButton(stepElement, ButtonActionKind.Up),
             "mouse.click" => ParseMouseButton(stepElement, ButtonActionKind.Click),
             "mouse.wheel" => ParseMouseWheel(stepElement),
+            "window.activate" => ParseWindowActivate(stepElement),
+            "ocr.extract-text" => ParseOcrExtractText(stepElement),
+            "ocr.click" => ParseOcrClick(stepElement),
             "consumer.down" => ParseConsumer(stepElement, ButtonActionKind.Down),
             "consumer.up" => ParseConsumer(stepElement, ButtonActionKind.Up),
             "consumer.tap" => ParseConsumer(stepElement, ButtonActionKind.Click),
@@ -133,6 +150,7 @@ public static class McrxParser
             "repeat" => new RepeatStep(GetInt(stepElement, "count", 1), ParseSteps(stepElement.GetProperty("steps"))),
             "macro.call" => new MacroCallStep(GetString(stepElement, "macro", string.Empty) ?? string.Empty),
             "sequence.stop-current" => new StopCurrentSequenceStep(),
+            "sequence.stop-iteration" => new StopCurrentIterationStep(),
             "sequence.stop-all" => new StopAllSequencesStep(),
             "pixel.when" => ParsePixelWhen(stepElement),
             _ => throw new JsonException($"Unsupported macro step type '{type}'.")
@@ -201,6 +219,50 @@ public static class McrxParser
             ParseMouseButtons(stepElement));
     }
 
+    private static WindowActivateStep ParseWindowActivate(JsonElement stepElement)
+    {
+        return new WindowActivateStep(
+            GetString(stepElement, "processName", string.Empty) ?? string.Empty,
+            GetString(stepElement, "windowTitle", string.Empty) ?? string.Empty,
+            stepElement.TryGetProperty("useTitleRegex", out var regexProperty) && regexProperty.GetBoolean(),
+            Math.Max(1, GetInt(stepElement, "matchIndex", 1)),
+            TimeSpan.FromMilliseconds(Math.Max(0, GetDouble(stepElement, "timeoutMs", 3000))),
+            !stepElement.TryGetProperty("restore", out var restoreProperty) || restoreProperty.GetBoolean(),
+            !stepElement.TryGetProperty("failIfNotFound", out var failProperty) || failProperty.GetBoolean());
+    }
+
+    private static OcrClickStep ParseOcrClick(JsonElement stepElement)
+    {
+        return new OcrClickStep(
+            ParseScreenRegion(stepElement),
+            GetString(stepElement, "expectedText", string.Empty) ?? string.Empty,
+            !stepElement.TryGetProperty("contains", out var containsProperty) || containsProperty.GetBoolean(),
+            GetString(stepElement, "language", "ch") ?? "ch",
+            stepElement.TryGetProperty("useRegex", out var regexProperty) && regexProperty.GetBoolean(),
+            ParseEnum<MouseButton>(GetString(stepElement, "button", "Left"), "OCR click mouse button"),
+            Math.Clamp(GetInt(stepElement, "clickCount", 1), 1, 3),
+            Math.Max(1, GetInt(stepElement, "matchIndex", 1)),
+            TimeSpan.FromMilliseconds(Math.Max(0, GetDouble(stepElement, "holdMs", 20))),
+            TimeSpan.FromMilliseconds(Math.Max(0, GetDouble(stepElement, "intervalMs", 80))),
+            GetInt(stepElement, "offsetX", 0),
+            GetInt(stepElement, "offsetY", 0));
+    }
+
+    private static OcrExtractTextStep ParseOcrExtractText(JsonElement stepElement)
+    {
+        return new OcrExtractTextStep(
+            ParseScreenRegion(stepElement),
+            GetString(stepElement, "pattern", string.Empty) ?? string.Empty,
+            GetString(stepElement, "language", "ch") ?? "ch",
+            !stepElement.TryGetProperty("useRegex", out var regexProperty) || regexProperty.GetBoolean(),
+            Math.Max(1, GetInt(stepElement, "matchIndex", 1)),
+            Math.Max(0, GetInt(stepElement, "captureGroup", 0)),
+            GetString(stepElement, "filterTerms", string.Empty) ?? string.Empty,
+            stepElement.TryGetProperty("keepDigitsOnly", out var digitsProperty) && digitsProperty.GetBoolean(),
+            !stepElement.TryGetProperty("normalizeWhitespace", out var normalizeProperty) || normalizeProperty.GetBoolean(),
+            !stepElement.TryGetProperty("failIfNotFound", out var failProperty) || failProperty.GetBoolean());
+    }
+
     private static ConsumerStep ParseConsumer(JsonElement stepElement, ButtonActionKind kind)
     {
         return new ConsumerStep(
@@ -263,12 +325,55 @@ public static class McrxParser
             throw new JsonException("HID key value is required.");
         }
 
-        if (value.Length == 1 && char.IsDigit(value[0]))
+        var trimmed = value.Trim();
+        if (trimmed.Length == 1 && char.IsDigit(trimmed[0]))
         {
-            return ParseEnum<HidKey>($"D{value}", "HID key");
+            return ParseEnum<HidKey>($"D{trimmed}", "HID key");
         }
 
-        return ParseEnum<HidKey>(value, "HID key");
+        if (TryParseHidKeyAlias(trimmed, out var alias))
+        {
+            return alias;
+        }
+
+        return ParseEnum<HidKey>(trimmed, "HID key");
+    }
+
+    private static bool TryParseHidKeyAlias(string value, out HidKey key)
+    {
+        key = value.ToLowerInvariant() switch
+        {
+            "-" or "_" or "oemminus" => HidKey.Minus,
+            "=" or "oemplus" => HidKey.Equal,
+            "[" or "{" or "oemopenbrackets" => HidKey.LeftBracket,
+            "]" or "}" or "oemclosebrackets" => HidKey.RightBracket,
+            "\\" or "|" or "oempipe" or "oem5" => HidKey.Backslash,
+            ";" or ":" or "oemsemicolon" => HidKey.Semicolon,
+            "'" or "\"" or "oemquotes" => HidKey.Quote,
+            "`" or "~" or "oemtilde" => HidKey.Grave,
+            "," or "<" or "oemcomma" => HidKey.Comma,
+            "." or ">" or "oemperiod" => HidKey.Period,
+            "/" or "?" or "oemquestion" => HidKey.Slash,
+            "num0" or "kp0" or "keypad0" => HidKey.Numpad0,
+            "num1" or "kp1" or "keypad1" => HidKey.Numpad1,
+            "num2" or "kp2" or "keypad2" => HidKey.Numpad2,
+            "num3" or "kp3" or "keypad3" => HidKey.Numpad3,
+            "num4" or "kp4" or "keypad4" => HidKey.Numpad4,
+            "num5" or "kp5" or "keypad5" => HidKey.Numpad5,
+            "num6" or "kp6" or "keypad6" => HidKey.Numpad6,
+            "num7" or "kp7" or "keypad7" => HidKey.Numpad7,
+            "num8" or "kp8" or "keypad8" => HidKey.Numpad8,
+            "num9" or "kp9" or "keypad9" => HidKey.Numpad9,
+            "numadd" or "kpadd" or "keypadadd" => HidKey.NumpadPlus,
+            "numsubtract" or "kpsubtract" or "keypadsubtract" => HidKey.NumpadMinus,
+            "nummultiply" or "kpmultiply" or "keypadmultiply" or "*" => HidKey.NumpadMultiply,
+            "numdivide" or "kpdivide" or "keypaddivide" => HidKey.NumpadDivide,
+            "numdecimal" or "kpdecimal" or "keypaddecimal" => HidKey.NumpadDecimal,
+            "numenter" or "kpenter" or "keypadenter" => HidKey.NumpadEnter,
+            _ => HidKey.None
+        };
+
+        return key != HidKey.None;
     }
 
     private static bool TryParseModifier(string value, out HidModifier modifier)
@@ -317,6 +422,24 @@ public static class McrxParser
     {
         switch (value.ToLowerInvariant())
         {
+            case "left":
+            case "mouseleft":
+            case "button1":
+            case "mouse1":
+                button = MouseButton.Left;
+                return true;
+            case "right":
+            case "mouseright":
+            case "button2":
+            case "mouse2":
+                button = MouseButton.Right;
+                return true;
+            case "middle":
+            case "mousemiddle":
+            case "button3":
+            case "mouse3":
+                button = MouseButton.Middle;
+                return true;
             case "x1":
             case "mousex1":
             case "button4":
@@ -530,7 +653,8 @@ public static class McrxParser
                 region,
                 GetString(elem, "expectedText", "") ?? "",
                 !elem.TryGetProperty("contains", out var containsProp) || containsProp.GetBoolean(),
-                GetString(elem, "language", "ch") ?? "ch"),
+                GetString(elem, "language", "ch") ?? "ch",
+                elem.TryGetProperty("useRegex", out var regexProp) && regexProp.GetBoolean()),
             _ => throw new JsonException($"Unsupported condition type '{type}'.")
         };
     }

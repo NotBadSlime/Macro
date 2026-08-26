@@ -2,16 +2,26 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MacroHid.Core;
 
 namespace MacroHid.Runtime;
+
+public sealed record OcrTextBox(string Text, int Left, int Top, int Width, int Height)
+{
+    public int CenterX => Left + Width / 2;
+    public int CenterY => Top + Height / 2;
+}
+
+public sealed record OcrTextLocation(string Text, int X, int Y, OcrTextBox Bounds);
 
 public sealed record OcrRecognitionResult(
     bool IsAvailable,
     bool Success,
     string BackendName,
     string Text,
-    string? Error);
+    string? Error,
+    IReadOnlyList<OcrTextBox>? Boxes = null);
 
 public sealed class PaddleOcrBridge : IDisposable
 {
@@ -147,7 +157,8 @@ public sealed class PaddleOcrBridge : IDisposable
                 false,
                 BackendName,
                 response.Text,
-                response.Error));
+                response.Error,
+                response.Boxes));
         }
 
         if (string.IsNullOrWhiteSpace(response.Text))
@@ -165,16 +176,22 @@ public sealed class PaddleOcrBridge : IDisposable
             true,
             BackendName,
             response.Text,
-            null));
+            null,
+            response.Boxes));
     }
 
-    public bool ContainsText(ScreenRegion region, string expectedText, bool contains = true, string language = "ch")
+    public bool ContainsText(
+        ScreenRegion region,
+        string expectedText,
+        bool contains = true,
+        string language = "ch",
+        bool useRegex = false)
     {
         try
         {
             var result = RecognizeWithDiagnosticsAsync(region, language, CancellationToken.None).GetAwaiter().GetResult();
             if (string.IsNullOrEmpty(result.Text)) return false;
-            return TextMatches(result.Text, expectedText, contains);
+            return TextMatches(result.Text, expectedText, contains, useRegex);
         }
         catch
         {
@@ -182,10 +199,72 @@ public sealed class PaddleOcrBridge : IDisposable
         }
     }
 
-    public static bool TextMatches(string recognizedText, string expectedText, bool contains = true)
+    public async Task<OcrTextLocation?> FindTextAsync(
+        ScreenRegion region,
+        string expectedText,
+        bool contains = true,
+        string language = "ch",
+        bool useRegex = false,
+        int matchIndex = 1,
+        int offsetX = 0,
+        int offsetY = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await RecognizeWithDiagnosticsAsync(region, language, cancellationToken);
+        if (!result.Success || result.Boxes is not { Count: > 0 }) return null;
+
+        return FindTextInBoxes(
+            region,
+            result.Boxes,
+            expectedText,
+            contains,
+            useRegex,
+            matchIndex,
+            offsetX,
+            offsetY);
+    }
+
+    public static OcrTextLocation? FindTextInBoxes(
+        ScreenRegion region,
+        IReadOnlyList<OcrTextBox> boxes,
+        string expectedText,
+        bool contains = true,
+        bool useRegex = false,
+        int matchIndex = 1,
+        int offsetX = 0,
+        int offsetY = 0)
+    {
+        var candidates = boxes
+            .Where(box => TextMatches(box.Text, expectedText, contains, useRegex))
+            .OrderBy(box => box.Top)
+            .ThenBy(box => box.Left)
+            .ThenBy(box => box.Width * box.Height)
+            .ToList();
+        if (candidates.Count == 0 || matchIndex < 1 || matchIndex > candidates.Count) return null;
+
+        var index = matchIndex - 1;
+        var match = candidates[index];
+        return new OcrTextLocation(
+            match.Text,
+            region.TopLeft.X + match.CenterX + offsetX,
+            region.TopLeft.Y + match.CenterY + offsetY,
+            match);
+    }
+
+    public static bool TextMatches(
+        string recognizedText,
+        string expectedText,
+        bool contains = true,
+        bool useRegex = false)
     {
         if (string.IsNullOrWhiteSpace(recognizedText) || string.IsNullOrWhiteSpace(expectedText))
             return false;
+
+        if (useRegex)
+        {
+            return RegexMatches(recognizedText, expectedText)
+                || RegexMatches(NormalizeOcrText(recognizedText), expectedText);
+        }
 
         if (contains
             ? recognizedText.Contains(expectedText, StringComparison.OrdinalIgnoreCase)
@@ -208,6 +287,269 @@ public sealed class PaddleOcrBridge : IDisposable
         }
 
         return Similarity(recognized, expected) >= 0.78;
+    }
+
+    public static bool IsValidRegex(string pattern, out string? error)
+    {
+        try
+        {
+            _ = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+            error = null;
+            return true;
+        }
+        catch (ArgumentException ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    public static bool TryExtractText(
+        string recognizedText,
+        string pattern,
+        bool useRegex,
+        int matchIndex,
+        int captureGroup,
+        bool normalizeWhitespace,
+        out string value,
+        out string? error)
+    {
+        return TryExtractText(
+            recognizedText,
+            pattern,
+            useRegex,
+            matchIndex,
+            captureGroup,
+            filterTerms: string.Empty,
+            keepDigitsOnly: false,
+            normalizeWhitespace,
+            out value,
+            out error);
+    }
+
+    public static bool TryExtractText(
+        string recognizedText,
+        string pattern,
+        bool useRegex,
+        int matchIndex,
+        int captureGroup,
+        string filterTerms,
+        bool keepDigitsOnly,
+        bool normalizeWhitespace,
+        out string value,
+        out string? error)
+    {
+        value = string.Empty;
+        error = null;
+        if (string.IsNullOrWhiteSpace(recognizedText))
+        {
+            error = "OCR did not recognize any text.";
+            return false;
+        }
+
+        var source = ApplyLiteralFilters(recognizedText.Trim(), filterTerms);
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            error = "No text remained after applying the filters.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            value = source;
+            return FinalizeExtractedText(ref value, keepDigitsOnly, out error);
+        }
+
+        if (matchIndex < 1)
+        {
+            error = "Match index must be at least 1.";
+            return false;
+        }
+
+        if (captureGroup < 0)
+        {
+            error = "Capture group cannot be negative.";
+            return false;
+        }
+
+        if (!useRegex)
+        {
+            var searchStart = 0;
+            for (var index = 1; index <= matchIndex; index++)
+            {
+                var found = source.IndexOf(pattern, searchStart, StringComparison.OrdinalIgnoreCase);
+                if (found < 0)
+                {
+                    error = $"Literal match {matchIndex} was not found.";
+                    return false;
+                }
+
+                if (index == matchIndex)
+                {
+                    value = source.Substring(found, pattern.Length);
+                    return FinalizeExtractedText(ref value, keepDigitsOnly, out error);
+                }
+
+                searchStart = found + Math.Max(1, pattern.Length);
+            }
+
+            error = $"Literal match {matchIndex} was not found.";
+            return false;
+        }
+
+        if (!IsValidRegex(pattern, out error))
+        {
+            return false;
+        }
+
+        if (TryExtractRegex(source, pattern, matchIndex, captureGroup, out value, out error))
+        {
+            return FinalizeExtractedText(ref value, keepDigitsOnly, out error);
+        }
+
+        if (!normalizeWhitespace)
+        {
+            return false;
+        }
+
+        var compactSource = RemoveWhitespace(source);
+        if (string.Equals(compactSource, source, StringComparison.Ordinal)
+            || !TryExtractRegex(compactSource, pattern, matchIndex, captureGroup, out value, out error))
+        {
+            return false;
+        }
+
+        return FinalizeExtractedText(ref value, keepDigitsOnly, out error);
+    }
+
+    private static string ApplyLiteralFilters(string value, string filterTerms)
+    {
+        if (string.IsNullOrWhiteSpace(filterTerms))
+        {
+            return value;
+        }
+
+        var result = value;
+        var terms = filterTerms
+            .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static term => term.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(static term => term.Length);
+        foreach (var term in terms)
+        {
+            result = result.Replace(term, string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return result.Trim();
+    }
+
+    private static bool FinalizeExtractedText(
+        ref string value,
+        bool keepDigitsOnly,
+        out string? error)
+    {
+        value = value.Trim();
+        if (keepDigitsOnly)
+        {
+            value = new string(value.Where(static ch => ch is >= '0' and <= '9').ToArray());
+        }
+
+        if (value.Length == 0)
+        {
+            error = keepDigitsOnly
+                ? "No digits remained after applying the filters."
+                : "The extracted text was empty.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static bool TryExtractRegex(
+        string source,
+        string pattern,
+        int matchIndex,
+        int captureGroup,
+        out string value,
+        out string? error)
+    {
+        value = string.Empty;
+        error = null;
+        try
+        {
+            var matches = Regex.Matches(
+                source,
+                pattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                TimeSpan.FromMilliseconds(100));
+            if (matchIndex > matches.Count)
+            {
+                error = $"Regex match {matchIndex} was not found.";
+                return false;
+            }
+
+            var match = matches[matchIndex - 1];
+            if (captureGroup >= match.Groups.Count)
+            {
+                error = $"Capture group {captureGroup} does not exist; the pattern has {match.Groups.Count - 1} capture group(s).";
+                return false;
+            }
+
+            var group = match.Groups[captureGroup];
+            if (!group.Success || string.IsNullOrWhiteSpace(group.Value))
+            {
+                error = $"Capture group {captureGroup} did not contain text.";
+                return false;
+            }
+
+            value = group.Value.Trim();
+            return true;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            error = "Regex matching timed out.";
+            return false;
+        }
+        catch (ArgumentException ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    private static string RemoveWhitespace(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            if (!char.IsWhiteSpace(ch))
+            {
+                builder.Append(ch);
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool RegexMatches(string input, string pattern)
+    {
+        try
+        {
+            return Regex.IsMatch(
+                input,
+                pattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                TimeSpan.FromMilliseconds(100));
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 
     private async Task EnsureProcessRunning(CancellationToken cancellationToken)
@@ -357,11 +699,12 @@ public sealed class PaddleOcrBridge : IDisposable
             var root = doc.RootElement;
             var responseError = ReadStringProperty(root, "error");
             var responseText = ReadStringProperty(root, "text");
+            var responseBoxes = ReadTextBoxes(root);
             if (!string.IsNullOrWhiteSpace(responseText))
-                return new OcrServerResponse(responseText, responseError);
+                return new OcrServerResponse(responseText, responseError, responseBoxes);
 
             if (root.TryGetProperty("text", out var textProp))
-                return new OcrServerResponse(textProp.GetString() ?? string.Empty, responseError);
+                return new OcrServerResponse(textProp.GetString() ?? string.Empty, responseError, responseBoxes);
 
             if (root.TryGetProperty("results", out var resultsProp) && resultsProp.ValueKind == JsonValueKind.Array)
             {
@@ -375,10 +718,10 @@ public sealed class PaddleOcrBridge : IDisposable
                         sb.Append(itemTextValue);
                     }
                 }
-                return new OcrServerResponse(sb.ToString(), responseError);
+                return new OcrServerResponse(sb.ToString(), responseError, responseBoxes);
             }
 
-            return new OcrServerResponse(string.Empty, responseError);
+            return new OcrServerResponse(string.Empty, responseError, responseBoxes);
         }
         finally
         {
@@ -399,6 +742,52 @@ public sealed class PaddleOcrBridge : IDisposable
         }
 
         return null;
+    }
+
+    private static IReadOnlyList<OcrTextBox> ReadTextBoxes(JsonElement root)
+    {
+        if (!TryGetPropertyIgnoreCase(root, "boxes", out var boxesElement)
+            || boxesElement.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var boxes = new List<OcrTextBox>();
+        foreach (var item in boxesElement.EnumerateArray())
+        {
+            var text = ReadStringProperty(item, "text") ?? string.Empty;
+            var left = ReadIntProperty(item, "left");
+            var top = ReadIntProperty(item, "top");
+            var width = ReadIntProperty(item, "width");
+            var height = ReadIntProperty(item, "height");
+            if (!string.IsNullOrWhiteSpace(text) && width > 0 && height > 0)
+            {
+                boxes.Add(new OcrTextBox(text, left, top, width, height));
+            }
+        }
+
+        return boxes;
+    }
+
+    private static int ReadIntProperty(JsonElement element, string propertyName)
+    {
+        if (!TryGetPropertyIgnoreCase(element, propertyName, out var value)) return 0;
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
+            ? number
+            : int.TryParse(value.ToString(), out var parsed) ? parsed : 0;
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonElement value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase)) continue;
+            value = property.Value;
+            return true;
+        }
+
+        value = default;
+        return false;
     }
 
     public void Dispose()
@@ -433,5 +822,8 @@ public sealed class PaddleOcrBridge : IDisposable
         public string Language { get; set; } = "ch";
     }
 
-    private sealed record OcrServerResponse(string Text, string? Error);
+    private sealed record OcrServerResponse(
+        string Text,
+        string? Error,
+        IReadOnlyList<OcrTextBox>? Boxes = null);
 }

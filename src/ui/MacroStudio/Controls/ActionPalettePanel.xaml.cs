@@ -1,7 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using MacroHid.Core;
+using MacroStudio.Services;
 
 namespace MacroStudio.Controls;
 
@@ -16,6 +18,8 @@ public partial class ActionPalettePanel : UserControl
     public ActionPalettePanel()
     {
         InitializeComponent();
+        Loaded += ActionPalettePanel_Loaded;
+        Unloaded += ActionPalettePanel_Unloaded;
     }
 
     public void ApplyLocalization()
@@ -26,23 +30,32 @@ public partial class ActionPalettePanel : UserControl
         AddMouseText.Text = L("AddMouseButton");
         AddMouseMoveText.Text = L("AddMouseMove");
         AddWheelText.Text = L("AddWheel");
+        AddWindowActivateText.Text = L("AddWindowActivate");
+        AddOcrExtractTextText.Text = L("AddOcrExtractText");
+        AddOcrClickText.Text = L("AddOcrClick");
         AddTextActionText.Text = L("AddText");
         AddMacroText.Text = L("AddMacro");
         AddLoopText.Text = L("AddLoop");
         AddStopCurrentText.Text = L("AddStopCurrent");
+        AddStopIterationText.Text = L("AddStopIteration");
         AddStopAllText.Text = L("AddStopAll");
         AddDelayHintText.Text = L("AddDelayHint");
         AddKeyboardHintText.Text = L("AddKeyboardHint");
         AddMouseHintText.Text = L("AddMouseButtonHint");
         AddMouseMoveHintText.Text = L("AddMouseMoveHint");
         AddWheelHintText.Text = L("AddWheelHint");
+        AddWindowActivateHintText.Text = L("AddWindowActivateHint");
+        AddOcrExtractTextHintText.Text = L("AddOcrExtractTextHint");
+        AddOcrClickHintText.Text = L("AddOcrClickHint");
         AddTextHintText.Text = L("AddTextHint");
         AddMacroActionHintText.Text = L("AddMacroActionHint");
         AddLoopHintText.Text = L("AddLoopHint");
         AddStopCurrentHintText.Text = L("AddStopCurrentHint");
+        AddStopIterationHintText.Text = L("AddStopIterationHint");
         AddStopAllHintText.Text = L("AddStopAllHint");
         DragHint.Text = L("ActionPaletteDragHint");
         AddMacroHintText.Text = L("AddMacroHint");
+        ActionColorSettingsButton.ToolTip = L("ActionColorSettingsTitle");
     }
 
     private void ActionPalette_Click(object sender, RoutedEventArgs e)
@@ -109,4 +122,88 @@ public partial class ActionPalettePanel : UserControl
     }
 
     private static string L(string key) => LocalizationService.Get(key);
+
+    private void ActionPalettePanel_Loaded(object sender, RoutedEventArgs e)
+    {
+        ActionAppearanceService.AppearanceChanged -= OnAppearanceChanged;
+        ActionAppearanceService.AppearanceChanged += OnAppearanceChanged;
+        ApplyActionAppearances();
+    }
+
+    public void SetReadOnly(bool value)
+    {
+        ActionCommandGrid.IsEnabled = !value;
+        DragHint.Text = value ? L("MacroLockedReadOnly") : L("ActionPaletteDragHint");
+    }
+
+    private void ActionPalettePanel_Unloaded(object sender, RoutedEventArgs e)
+    {
+        ActionAppearanceService.AppearanceChanged -= OnAppearanceChanged;
+    }
+
+    private void OnAppearanceChanged()
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            ApplyActionAppearances();
+        }
+        else
+        {
+            Dispatcher.Invoke(ApplyActionAppearances);
+        }
+    }
+
+    private void ApplyActionAppearances()
+    {
+        ApplyButtonAppearance(AddDelayButton, MacroActionTemplateKind.Delay);
+        ApplyButtonAppearance(AddKeyboardButton, MacroActionTemplateKind.Keyboard);
+        ApplyButtonAppearance(AddMouseButton, MacroActionTemplateKind.MouseButton);
+        ApplyButtonAppearance(AddMouseMoveButton, MacroActionTemplateKind.MouseMove);
+        ApplyButtonAppearance(AddWheelButton, MacroActionTemplateKind.MouseWheel);
+        ApplyButtonAppearance(AddWindowActivateButton, MacroActionTemplateKind.WindowActivate);
+        ApplyButtonAppearance(AddOcrExtractTextButton, MacroActionTemplateKind.OcrExtractText);
+        ApplyButtonAppearance(AddOcrClickButton, MacroActionTemplateKind.OcrClick);
+        ApplyButtonAppearance(AddTextButton, MacroActionTemplateKind.Text);
+        ApplyButtonAppearance(AddMacroButton, MacroActionTemplateKind.Macro);
+        ApplyButtonAppearance(AddLoopButton, MacroActionTemplateKind.Loop);
+        ApplyButtonAppearance(AddStopCurrentButton, MacroActionTemplateKind.StopCurrent);
+        ApplyButtonAppearance(AddStopIterationButton, MacroActionTemplateKind.StopIteration);
+        ApplyButtonAppearance(AddStopAllButton, MacroActionTemplateKind.StopAll);
+    }
+
+    private static void ApplyButtonAppearance(Button button, MacroActionTemplateKind kind)
+    {
+        var appearance = ActionAppearanceService.GetBrushes(kind);
+        button.Background = appearance.Background;
+        button.Foreground = appearance.Text;
+
+        if (button.Content is not Grid grid)
+        {
+            return;
+        }
+
+        var iconBadge = grid.Children.OfType<Border>().FirstOrDefault();
+        if (iconBadge?.Child is TextBlock icon)
+        {
+            icon.Foreground = appearance.Icon;
+            if (appearance.Icon is SolidColorBrush iconBrush)
+            {
+                var color = iconBrush.Color;
+                iconBadge.Background = new SolidColorBrush(Color.FromArgb(38, color.R, color.G, color.B));
+                iconBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(100, color.R, color.G, color.B));
+            }
+        }
+
+        var labels = grid.Children.OfType<StackPanel>().FirstOrDefault()?.Children.OfType<TextBlock>().ToList() ?? [];
+        for (var index = 0; index < labels.Count; index++)
+        {
+            labels[index].Foreground = appearance.Text;
+            labels[index].Opacity = index == 0 ? 1 : 0.7;
+        }
+    }
+
+    private void ActionColorSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        DialogOwnerService.ShowDialogSafe(new ActionAppearanceDialog(), this);
+    }
 }
