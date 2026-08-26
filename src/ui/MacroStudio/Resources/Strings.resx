@@ -66,6 +66,18 @@
   <data name="Capture" xml:space="preserve">
     <value>Capture</value>
   </data>
+  <data name="CaptureTriggerHint" xml:space="preserve">
+    <value>Press a trigger key…</value>
+  </data>
+  <data name="FilterWindowsPlaceholder" xml:space="preserve">
+    <value>Filter by process or title</value>
+  </data>
+  <data name="ProcessFilterPlaceholder" xml:space="preserve">
+    <value>e.g. chrome.exe</value>
+  </data>
+  <data name="TriggerSupportHint" xml:space="preserve">
+    <value>Supports the main keyboard, numpad, symbol keys, F1–F24, and standard mouse buttons 1–5.</value>
+  </data>
   <data name="Apply" xml:space="preserve">
     <value>Apply</value>
   </data>
@@ -212,9 +224,6 @@
   <data name="ImportMacro" xml:space="preserve">
     <value>Import</value>
   </data>
-  <data name="ImportRazerModules" xml:space="preserve">
-    <value>Razer Modules</value>
-  </data>
   <data name="ApplyImport" xml:space="preserve">
     <value>Apply</value>
   </data>
@@ -228,19 +237,13 @@
     <value>Converter built in</value>
   </data>
   <data name="ConversionImported" xml:space="preserve">
-    <value>Imported {0}: {1} steps ready</value>
+    <value>Imported {0}: {1} steps added to the library</value>
   </data>
   <data name="ConversionApplied" xml:space="preserve">
     <value>Imported macro applied to editor</value>
   </data>
   <data name="ConversionExported" xml:space="preserve">
     <value>Exported {0}</value>
-  </data>
-  <data name="ConversionModulesLoaded" xml:space="preserve">
-    <value>Razer modules loaded: {0}</value>
-  </data>
-  <data name="ConversionModulesImported" xml:space="preserve">
-    <value>Razer modules loaded: {0}; added to library: {1}</value>
   </data>
   <data name="ConversionDiagnosticsNone" xml:space="preserve">
     <value>No conversion warnings</value>
@@ -254,18 +257,19 @@
   <data name="ImportMacroTitle" xml:space="preserve">
     <value>Import macro</value>
   </data>
-  <data name="ImportRazerModulesTitle" xml:space="preserve">
-    <value>Import Razer module XML files</value>
-  </data>
   <data name="ExportMacroTitle" xml:space="preserve">
     <value>Export macro</value>
   </data>
   <data name="ConverterImportFileFilter" xml:space="preserve">
     <value>Supported macro files (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|All files (*.*)|*.*</value>
   </data>
-  <data name="RazerModuleFileFilter" xml:space="preserve">
-    <value>Razer XML (*.xml)|*.xml|All files (*.*)|*.*</value>
-  </data>
+  <data name="ConversionBatchImported" xml:space="preserve"><value>Imported {0} of {1} macros.</value></data>
+  <data name="ConversionBatchImportFailed" xml:space="preserve"><value>{0} macro files could not be imported. See the conversion panel for details.</value></data>
+  <data name="ConversionImportErrorTitle" xml:space="preserve"><value>Macro import failed</value></data>
+  <data name="ConversionImportLocation" xml:space="preserve"><value>Parse failed at line {0}, column {1}</value></data>
+  <data name="ConversionImportUnknownLocation" xml:space="preserve"><value>Parse location unavailable</value></data>
+  <data name="ConversionImportSourceLine" xml:space="preserve"><value>Source: {0}</value></data>
+  <data name="ConversionDiagnosticLocation" xml:space="preserve"><value>Line {0}, column {1}: </value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>Macro Library Manager</value></data>
   <data name="NewMacro" xml:space="preserve"><value>New</value></data>
   <data name="NewFolder" xml:space="preserve"><value>Folder</value></data>
@@ -276,6 +280,15 @@
   <data name="Undo" xml:space="preserve"><value>Undo</value></data>
   <data name="ClearAll" xml:space="preserve"><value>Clear All</value></data>
   <data name="Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="LockMacro" xml:space="preserve"><value>Lock editing</value></data>
+  <data name="UnlockMacro" xml:space="preserve"><value>Unlock</value></data>
+  <data name="LockMacroHelp" xml:space="preserve"><value>Prevent accidental changes while keeping run and export available</value></data>
+  <data name="UnlockMacroHelp" xml:space="preserve"><value>Allow this macro to be edited again</value></data>
+  <data name="MacroLocked" xml:space="preserve"><value>Macro locked; editing is now read-only</value></data>
+  <data name="MacroUnlocked" xml:space="preserve"><value>Macro unlocked; editing is enabled</value></data>
+  <data name="MacroLockedReadOnly" xml:space="preserve"><value>This macro is locked. Unlock it before making changes.</value></data>
+  <data name="SelectMacroToLock" xml:space="preserve"><value>Select a macro before changing its lock.</value></data>
+  <data name="ConditionValidationFailed" xml:space="preserve"><value>Fix the invalid condition time range before saving or running this macro.</value></data>
   <data name="SaveLibrary" xml:space="preserve"><value>Save Library</value></data>
   <data name="Add" xml:space="preserve"><value>Add</value></data>
   <data name="AddDelay" xml:space="preserve"><value>Delay</value></data>
@@ -286,8 +299,9 @@
   <data name="AddText" xml:space="preserve"><value>Text Function</value></data>
   <data name="AddMacro" xml:space="preserve"><value>Macro</value></data>
   <data name="AddLoop" xml:space="preserve"><value>Loop</value></data>
-  <data name="AddStopCurrent" xml:space="preserve"><value>Stop Current Sequence</value></data>
-  <data name="AddStopAll" xml:space="preserve"><value>Stop All Sequences</value></data>
+  <data name="AddStopCurrent" xml:space="preserve"><value>Stop Current Macro Layer</value></data>
+  <data name="AddStopIteration" xml:space="preserve"><value>Stop Current Iteration</value></data>
+  <data name="AddStopAll" xml:space="preserve"><value>Stop This Playback</value></data>
   <data name="AddPixel" xml:space="preserve"><value>Pixel Condition</value></data>
   <data name="AddDelayHint" xml:space="preserve"><value>Fixed or random wait</value></data>
   <data name="AddKeyboardHint" xml:space="preserve"><value>Press, release, or type</value></data>
@@ -298,6 +312,7 @@
   <data name="AddMacroActionHint" xml:space="preserve"><value>Call a library macro</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>Repeat a group of steps</value></data>
   <data name="AddStopCurrentHint" xml:space="preserve"><value>Exit this macro call and continue the caller</value></data>
+  <data name="AddStopIterationHint" xml:space="preserve"><value>Skip remaining steps in this iteration and keep the outer loop running</value></data>
   <data name="AddStopAllHint" xml:space="preserve"><value>Immediately stop the entire playback</value></data>
   <data name="ActionPaletteDragHint" xml:space="preserve"><value>Click to add, or drag to a target position in the sequence.</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>Drag another macro from the library into the sequence to copy its steps.</value></data>
@@ -356,6 +371,13 @@
   <data name="DropActionsHint" xml:space="preserve"><value>Drop actions here or choose an item from Add.</value></data>
   <data name="LibrarySaved" xml:space="preserve"><value>Macro library saved</value></data>
   <data name="DeleteMacroConfirm" xml:space="preserve"><value>Delete macro "{0}" from the local library?</value></data>
+  <data name="DeleteDatabaseConfirm" xml:space="preserve"><value>Delete database "{0}"? Its macros will be moved to the Global database.</value></data>
+  <data name="DeleteFolderConfirm" xml:space="preserve"><value>Delete folder "{0}"? Its macros will be moved to the database root.</value></data>
+  <data name="DeleteFailed" xml:space="preserve"><value>Delete failed: {0}</value></data>
+  <data name="MacroDeleted" xml:space="preserve"><value>Deleted macro: {0}</value></data>
+  <data name="SelectDatabaseToDelete" xml:space="preserve"><value>Select a database to delete.</value></data>
+  <data name="SelectItemToDelete" xml:space="preserve"><value>Select an item to delete.</value></data>
+  <data name="GlobalDatabaseCannotDelete" xml:space="preserve"><value>The Global database cannot be deleted.</value></data>
   <data name="ActionInserted" xml:space="preserve"><value>Inserted {0}</value></data>
   <data name="InsertedMacroSteps" xml:space="preserve"><value>Inserted macro "{0}" ({1} steps)</value></data>
   <data name="TemplateDelay" xml:space="preserve"><value>delay</value></data>
@@ -384,4 +406,123 @@
   <data name="WorkspacePanelPlayback" xml:space="preserve"><value>Playback</value></data>
   <data name="WorkspaceLayoutReset" xml:space="preserve"><value>Workspace layout reset</value></data>
   <data name="JsonApplied" xml:space="preserve"><value>JSON applied</value></data>
+  <data name="Redo" xml:space="preserve"><value>Redo</value></data>
+  <data name="ActionColorSettingsTitle" xml:space="preserve"><value>Action colors</value></data>
+  <data name="ActionColorType" xml:space="preserve"><value>Action type</value></data>
+  <data name="ActionTextColor" xml:space="preserve"><value>Text color</value></data>
+  <data name="ActionIconColor" xml:space="preserve"><value>Icon color</value></data>
+  <data name="ActionBackgroundColor" xml:space="preserve"><value>Background color</value></data>
+  <data name="ActionColorPreview" xml:space="preserve"><value>Action preview</value></data>
+  <data name="RestoreDefaults" xml:space="preserve"><value>Restore defaults</value></data>
+  <data name="Done" xml:space="preserve"><value>Done</value></data>
+  <data name="ChooseColor" xml:space="preserve"><value>Choose color</value></data>
+  <data name="Confirm" xml:space="preserve"><value>OK</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Type" xml:space="preserve"><value>Type</value></data>
+  <data name="New" xml:space="preserve"><value>New</value></data>
+  <data name="Duplicate" xml:space="preserve"><value>Duplicate</value></data>
+  <data name="SelectAll" xml:space="preserve"><value>Select all</value></data>
+  <data name="View" xml:space="preserve"><value>View</value></data>
+  <data name="SortBy" xml:space="preserve"><value>Sort by</value></data>
+  <data name="DateModified" xml:space="preserve"><value>Date modified</value></data>
+  <data name="FileFolderType" xml:space="preserve"><value>File folder</value></data>
+  <data name="MacroFileType" xml:space="preserve"><value>Macro</value></data>
+  <data name="FolderItemCount" xml:space="preserve"><value>{0} item(s)</value></data>
+  <data name="UpOneLevel" xml:space="preserve"><value>Back to parent</value></data>
+  <data name="ViewDetails" xml:space="preserve"><value>Details</value></data>
+  <data name="ViewList" xml:space="preserve"><value>List</value></data>
+  <data name="ViewSmallIcons" xml:space="preserve"><value>Small icons</value></data>
+  <data name="ViewLargeIcons" xml:space="preserve"><value>Large icons</value></data>
+  <data name="ExplorerItemCount" xml:space="preserve"><value>{0} item(s)</value></data>
+  <data name="ExplorerSelectedCount" xml:space="preserve"><value>{0} selected · {1} item(s)</value></data>
+  <data name="SelectedItemsCopied" xml:space="preserve"><value>Copied {0} selected item(s).</value></data>
+  <data name="SelectedItemsMoved" xml:space="preserve"><value>Moved {0} selected macro(s).</value></data>
+  <data name="DeleteSelectedItemsConfirm" xml:space="preserve"><value>Delete the {0} selected item(s)? Macros inside deleted folders will be moved to the database root.</value></data>
+  <data name="SelectedItemsDeleted" xml:space="preserve"><value>Deleted {0} selected item(s).</value></data>
+  <data name="Refresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="LockSelected" xml:space="preserve"><value>Lock selected</value></data>
+  <data name="UnlockSelected" xml:space="preserve"><value>Unlock selected</value></data>
+  <data name="SelectedMacrosLocked" xml:space="preserve"><value>Locked {0} selected macro(s).</value></data>
+  <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>Unlocked {0} selected macro(s).</value></data>
+  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>Select main macros and submacros together. References between files are detected automatically.</value></data>
+  <data name="ConversionSmartImported" xml:space="preserve"><value>Imported {0} macro(s) from {1} selected file(s); {2} submacro(s) were detected automatically.</value></data>
+  <data name="AddOcrExtractText" xml:space="preserve"><value>OCR extract text</value></data>
+  <data name="AddOcrExtractTextHint" xml:space="preserve"><value>Extract text from mixed OCR content to the clipboard</value></data>
+  <data name="TemplateOcrExtractText" xml:space="preserve"><value>OCR extract text</value></data>
+  <data name="OcrExtractPreset" xml:space="preserve"><value>Common rule</value></data>
+  <data name="OcrExtractPresetCustom" xml:space="preserve"><value>Custom</value></data>
+  <data name="OcrExtractPresetAllText" xml:space="preserve"><value>Copy all recognized text</value></data>
+  <data name="OcrExtractPresetDigits" xml:space="preserve"><value>Continuous digits only</value></data>
+  <data name="OcrExtractPresetFilterDigits" xml:space="preserve"><value>Filter example terms, then keep digits only</value></data>
+  <data name="OcrExtractPresetAlphaNumeric" xml:space="preserve"><value>Continuous letters, digits, hyphens, or underscores</value></data>
+  <data name="OcrExtractPresetUid" xml:space="preserve"><value>Content after UID</value></data>
+  <data name="OcrExtractPresetAfterSeparator" xml:space="preserve"><value>Content after a colon or equals sign</value></data>
+  <data name="OcrExtractFilterTerms" xml:space="preserve"><value>Filter terms (one per line; applied first)</value></data>
+  <data name="OcrExtractKeepDigitsOnly" xml:space="preserve"><value>Keep only 0-9 after filtering and extraction</value></data>
+  <data name="OcrExtractPattern" xml:space="preserve"><value>Extraction rule (blank copies all text)</value></data>
+  <data name="OcrExtractUseRegex" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="OcrExtractRegion" xml:space="preserve"><value>Screen recognition region</value></data>
+  <data name="OcrExtractLanguage" xml:space="preserve"><value>Recognition language</value></data>
+  <data name="OcrExtractMatchIndex" xml:space="preserve"><value>Match number</value></data>
+  <data name="OcrExtractCaptureGroup" xml:space="preserve"><value>Capture group to copy (0 = full match)</value></data>
+  <data name="OcrExtractNormalizeWhitespace" xml:space="preserve"><value>Ignore extra OCR whitespace if the first match fails</value></data>
+  <data name="OcrExtractFailStopsMacro" xml:space="preserve"><value>Stop macro when text cannot be extracted</value></data>
+  <data name="OcrExtractTest" xml:space="preserve"><value>Test extraction (do not update clipboard)</value></data>
+  <data name="OcrExtractTesting" xml:space="preserve"><value>Recognizing and extracting...</value></data>
+  <data name="OcrExtractFound" xml:space="preserve"><value>Extracted “{0}”; the clipboard was not changed.</value></data>
+  <data name="OcrExtractNotFound" xml:space="preserve"><value>No matching text could be extracted.</value></data>
+  <data name="AddOcrClick" xml:space="preserve"><value>OCR text click</value></data>
+  <data name="AddOcrClickHint" xml:space="preserve"><value>Recognize text in a screen region and click it</value></data>
+  <data name="TemplateOcrClick" xml:space="preserve"><value>OCR text click</value></data>
+  <data name="OcrClickExpectedText" xml:space="preserve"><value>Text or regular expression</value></data>
+  <data name="OcrClickUseRegex" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="OcrClickContains" xml:space="preserve"><value>Contains match</value></data>
+  <data name="InvalidRegex" xml:space="preserve"><value>Invalid regular expression</value></data>
+  <data name="OcrClickRegion" xml:space="preserve"><value>Screen recognition region</value></data>
+  <data name="SelectRegion" xml:space="preserve"><value>Select region...</value></data>
+  <data name="OcrClickLanguage" xml:space="preserve"><value>Recognition language</value></data>
+  <data name="OcrClickMouseButton" xml:space="preserve"><value>Mouse button</value></data>
+  <data name="OcrClickCount" xml:space="preserve"><value>Click count (1-3)</value></data>
+  <data name="OcrClickMatchIndex" xml:space="preserve"><value>Match number</value></data>
+  <data name="OcrClickHoldMs" xml:space="preserve"><value>Hold (ms)</value></data>
+  <data name="OcrClickIntervalMs" xml:space="preserve"><value>Multi-click interval (ms)</value></data>
+  <data name="OcrClickOffsetX" xml:space="preserve"><value>Click offset X</value></data>
+  <data name="OcrClickOffsetY" xml:space="preserve"><value>Click offset Y</value></data>
+  <data name="OcrClickTest" xml:space="preserve"><value>Test location (no click)</value></data>
+  <data name="OcrClickTesting" xml:space="preserve"><value>Recognizing...</value></data>
+  <data name="OcrClickFound" xml:space="preserve"><value>Found “{0}” at ({1}, {2}); no click was sent.</value></data>
+  <data name="OcrClickNotFound" xml:space="preserve"><value>No matching text was found.</value></data>
+  <data name="AddWindowActivate" xml:space="preserve"><value>Bring window to front</value></data>
+  <data name="AddWindowActivateHint" xml:space="preserve"><value>Locate, restore, and confirm a target window</value></data>
+  <data name="TemplateWindowActivate" xml:space="preserve"><value>bring window to front</value></data>
+  <data name="WindowProcessName" xml:space="preserve"><value>Target process</value></data>
+  <data name="WindowTitleOptional" xml:space="preserve"><value>Window title (optional)</value></data>
+  <data name="WindowTitleUseRegex" xml:space="preserve"><value>Use regular expression for title</value></data>
+  <data name="InvalidWindowTitleRegex" xml:space="preserve"><value>Invalid window-title regular expression</value></data>
+  <data name="WindowMatchIndex" xml:space="preserve"><value>Match number</value></data>
+  <data name="WindowActivationTimeoutMs" xml:space="preserve"><value>Confirmation timeout (ms)</value></data>
+  <data name="WindowRestore" xml:space="preserve"><value>Restore when minimized</value></data>
+  <data name="WindowFailStopsMacro" xml:space="preserve"><value>Stop macro if switching fails</value></data>
+  <data name="WindowActivationConfirmationHint" xml:space="preserve"><value>The next action runs only after the target process is confirmed in the foreground.</value></data>
+  <data name="WindowProcessRequired" xml:space="preserve"><value>Target process name is required.</value></data>
+  <data name="WindowSelected" xml:space="preserve"><value>Selected {0}: {1}</value></data>
+  <data name="WindowTargetPickerTitle" xml:space="preserve"><value>Select running window</value></data>
+  <data name="SelectWindow" xml:space="preserve"><value>Select window...</value></data>
+  <data name="NoWindowsFound" xml:space="preserve"><value>No running windows are available.</value></data>
+  <data name="StartRecording" xml:space="preserve"><value>● Record input</value></data>
+  <data name="StopRecording" xml:space="preserve"><value>■ Stop recording</value></data>
+  <data name="RecordingHelp" xml:space="preserve"><value>Record keyboard, mouse, and real delays. Press Ctrl+Shift+F12 to stop.</value></data>
+  <data name="RecordingActive" xml:space="preserve"><value>Recording… Ctrl+Shift+F12 to stop</value></data>
+  <data name="RecordingCaptured" xml:space="preserve"><value>Recording… {0} inputs captured</value></data>
+  <data name="RecordingStarted" xml:space="preserve"><value>Input recording started. Press Ctrl+Shift+F12 to stop.</value></data>
+  <data name="RecordingCompleted" xml:space="preserve"><value>Recorded {0} inputs and inserted {1} sequence steps.</value></data>
+  <data name="RecordingEmpty" xml:space="preserve"><value>Recording stopped; no input was captured.</value></data>
+  <data name="RecordingFailed" xml:space="preserve"><value>Recording failed: {0}</value></data>
+  <data name="RecordingLocked" xml:space="preserve"><value>Unlock this macro before recording input.</value></data>
+  <data name="RecordingListenerRestoreFailed" xml:space="preserve"><value>Recording stopped, but macro listening could not be restored: {0}</value></data>
+  <data name="ConditionRecordingUnavailable" xml:space="preserve"><value>Select an editable condition before recording its trigger actions.</value></data>
+  <data name="ActionKindDown" xml:space="preserve"><value>Down</value></data>
+  <data name="ActionKindUp" xml:space="preserve"><value>Up</value></data>
+  <data name="ActionKindTap" xml:space="preserve"><value>Tap</value></data>
+  <data name="ActionKindClick" xml:space="preserve"><value>Click</value></data>
 </root>

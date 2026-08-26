@@ -15,6 +15,9 @@ public partial class StepEditorPanel : UserControl
     private MacroEditorState? state;
     private bool capturingStepKey;
     private bool updatingEditor;
+    private bool applyingOcrExtractPreset;
+    private ScreenRegion ocrExtractRegion = ScreenRegion.FromRect(0, 0, 640, 360);
+    private ScreenRegion ocrClickRegion = ScreenRegion.FromRect(0, 0, 640, 360);
 
     public event Action<MacroStep>? StepEdited;
     public event EventHandler? CoordinatePickerStarted;
@@ -27,6 +30,8 @@ public partial class StepEditorPanel : UserControl
         FillEnumBox(MouseButtonBox, CoreMouseButton.Left);
         FillEnumBox(MouseButtonCoordinateModeBox, MouseMoveMode.Absolute);
         FillEnumBox(MoveModeBox, MouseMoveMode.Relative);
+        FillEnumBox(OcrClickMouseButtonBox, CoreMouseButton.Left);
+        OcrExtractRegexBox.IsChecked = true;
         StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
         ApplyStepEditButton.IsEnabled = false;
     }
@@ -49,6 +54,52 @@ public partial class StepEditorPanel : UserControl
         MouseButtonLabelText.Text = L("AddMouseButton");
         MoveModeLabelText.Text = L("MoveMode");
         WheelLabelText.Text = L("AddWheel");
+        WindowProcessLabelText.Text = L("WindowProcessName");
+        PickWindowTargetButton.Content = L("SelectWindow");
+        WindowTitleLabelText.Text = L("WindowTitleOptional");
+        WindowTitleRegexBox.Content = L("WindowTitleUseRegex");
+        WindowTitleRegexErrorText.Text = L("InvalidWindowTitleRegex");
+        WindowMatchIndexLabelText.Text = L("WindowMatchIndex");
+        WindowTimeoutLabelText.Text = L("WindowActivationTimeoutMs");
+        WindowRestoreBox.Content = L("WindowRestore");
+        WindowFailIfNotFoundBox.Content = L("WindowFailStopsMacro");
+        WindowActivateStatusText.Text = L("WindowActivationConfirmationHint");
+        OcrExtractPresetLabelText.Text = L("OcrExtractPreset");
+        OcrExtractPresetCustomItem.Content = L("OcrExtractPresetCustom");
+        OcrExtractPresetAllTextItem.Content = L("OcrExtractPresetAllText");
+        OcrExtractPresetDigitsItem.Content = L("OcrExtractPresetDigits");
+        OcrExtractPresetFilterDigitsItem.Content = L("OcrExtractPresetFilterDigits");
+        OcrExtractPresetAlphaNumericItem.Content = L("OcrExtractPresetAlphaNumeric");
+        OcrExtractPresetUidItem.Content = L("OcrExtractPresetUid");
+        OcrExtractPresetAfterSeparatorItem.Content = L("OcrExtractPresetAfterSeparator");
+        OcrExtractFilterTermsLabelText.Text = L("OcrExtractFilterTerms");
+        OcrExtractKeepDigitsOnlyBox.Content = L("OcrExtractKeepDigitsOnly");
+        OcrExtractPatternLabelText.Text = L("OcrExtractPattern");
+        OcrExtractRegexBox.Content = L("OcrExtractUseRegex");
+        OcrExtractRegexErrorText.Text = L("InvalidRegex");
+        OcrExtractRegionLabelText.Text = L("OcrExtractRegion");
+        PickOcrExtractRegionButton.Content = L("SelectRegion");
+        OcrExtractLanguageLabelText.Text = L("OcrExtractLanguage");
+        OcrExtractMatchIndexLabelText.Text = L("OcrExtractMatchIndex");
+        OcrExtractCaptureGroupLabelText.Text = L("OcrExtractCaptureGroup");
+        OcrExtractNormalizeWhitespaceBox.Content = L("OcrExtractNormalizeWhitespace");
+        OcrExtractFailIfNotFoundBox.Content = L("OcrExtractFailStopsMacro");
+        TestOcrExtractButton.Content = L("OcrExtractTest");
+        OcrClickExpectedLabelText.Text = L("OcrClickExpectedText");
+        OcrClickRegexBox.Content = L("OcrClickUseRegex");
+        OcrClickContainsBox.Content = L("OcrClickContains");
+        OcrClickRegexErrorText.Text = L("InvalidRegex");
+        OcrClickRegionLabelText.Text = L("OcrClickRegion");
+        PickOcrClickRegionButton.Content = L("SelectRegion");
+        OcrClickLanguageLabelText.Text = L("OcrClickLanguage");
+        OcrClickButtonLabelText.Text = L("OcrClickMouseButton");
+        OcrClickCountLabelText.Text = L("OcrClickCount");
+        OcrClickMatchIndexLabelText.Text = L("OcrClickMatchIndex");
+        OcrClickHoldLabelText.Text = L("OcrClickHoldMs");
+        OcrClickIntervalLabelText.Text = L("OcrClickIntervalMs");
+        OcrClickOffsetXLabelText.Text = L("OcrClickOffsetX");
+        OcrClickOffsetYLabelText.Text = L("OcrClickOffsetY");
+        TestOcrClickButton.Content = L("OcrClickTest");
         TimingLabelText.Text = L("TimingMs");
         DelayModeLabelText.Text = L("DelayMode");
         DelayFixedLabelText.Text = L("TimingMs");
@@ -62,6 +113,7 @@ public partial class StepEditorPanel : UserControl
         RefreshEnumBoxLocalization(MouseButtonBox);
         RefreshEnumBoxLocalization(MouseButtonCoordinateModeBox);
         RefreshEnumBoxLocalization(MoveModeBox);
+        RefreshEnumBoxLocalization(OcrClickMouseButtonBox);
     }
 
     public void RefreshMacroTargetBox(string? selected = null)
@@ -91,13 +143,16 @@ public partial class StepEditorPanel : UserControl
             return;
         }
 
-        if (step is StopCurrentSequenceStep or StopAllSequencesStep)
+        if (step is StopCurrentSequenceStep or StopCurrentIterationStep or StopAllSequencesStep)
         {
             StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
             ApplyStepEditButton.IsEnabled = false;
-            StepEditorHintText.Text = step is StopAllSequencesStep
-                ? L("AddStopAllHint")
-                : L("AddStopCurrentHint");
+            StepEditorHintText.Text = step switch
+            {
+                StopAllSequencesStep => L("AddStopAllHint"),
+                StopCurrentIterationStep => L("AddStopIterationHint"),
+                _ => L("AddStopCurrentHint")
+            };
             return;
         }
 
@@ -121,7 +176,10 @@ public partial class StepEditorPanel : UserControl
             mouseButton: step is MouseButtonStep,
             mouseMove: step is MouseMoveStep,
             wheel: step is MouseWheelStep,
-            timing: step is KeyStep or MouseButtonStep or ConsumerStep or MouseMoveStep or WaitStep,
+            windowActivate: step is WindowActivateStep,
+            ocrExtractText: step is OcrExtractTextStep,
+            ocrClick: step is OcrClickStep,
+            timing: step is MouseMoveStep,
             delay: step is WaitStep,
             text: step is TextStep,
             loop: step is RepeatStep,
@@ -131,19 +189,22 @@ public partial class StepEditorPanel : UserControl
         switch (step)
         {
             case KeyStep key:
+                FillEnumBox(ActionKindBox, key.Kind);
                 StepKeyBox.Text = key.Key.ToString();
-                SetModifierBoxes(key.Modifiers);
                 SetComboBox(ActionKindBox, key.Kind.ToString());
-                TimingMsBox.Text = FormatNumber(key.Hold.TotalMilliseconds);
                 break;
             case MouseButtonStep button:
+                FillEnumBox(ActionKindBox, button.Kind);
                 SetComboBox(MouseButtonBox, button.Button.ToString());
                 SetComboBox(ActionKindBox, button.Kind.ToString());
-                TimingMsBox.Text = FormatNumber(button.Hold.TotalMilliseconds);
                 MouseButtonCoordinateEnabledBox.IsChecked = button.HasCoordinate;
                 SetComboBox(MouseButtonCoordinateModeBox, (button.CoordinateMode ?? MouseMoveMode.Absolute).ToString());
                 MouseButtonXBox.Text = button.X?.ToString() ?? string.Empty;
                 MouseButtonYBox.Text = button.Y?.ToString() ?? string.Empty;
+                break;
+            case ConsumerStep consumer:
+                FillEnumBox(ActionKindBox, consumer.Kind);
+                SetComboBox(ActionKindBox, consumer.Kind.ToString());
                 break;
             case MouseMoveStep move:
                 SetComboBox(MoveModeBox, move.Mode.ToString());
@@ -154,6 +215,56 @@ public partial class StepEditorPanel : UserControl
             case MouseWheelStep wheel:
                 WheelVerticalBox.Text = wheel.Vertical.ToString();
                 WheelHorizontalBox.Text = wheel.Horizontal.ToString();
+                break;
+            case WindowActivateStep windowActivate:
+                WindowProcessBox.Text = windowActivate.ProcessName;
+                WindowTitleBox.Text = windowActivate.WindowTitle;
+                WindowTitleRegexBox.IsChecked = windowActivate.UseTitleRegex;
+                WindowMatchIndexBox.Text = windowActivate.MatchIndex.ToString();
+                WindowTimeoutMsBox.Text = FormatNumber(
+                    (windowActivate.Timeout > TimeSpan.Zero
+                        ? windowActivate.Timeout
+                        : TimeSpan.FromSeconds(3)).TotalMilliseconds);
+                WindowRestoreBox.IsChecked = windowActivate.Restore;
+                WindowFailIfNotFoundBox.IsChecked = windowActivate.FailIfNotFound;
+                ValidateWindowTitleRegex();
+                break;
+            case OcrExtractTextStep ocrExtractText:
+                ocrExtractRegion = ocrExtractText.Region;
+                OcrExtractPatternBox.Text = ocrExtractText.Pattern;
+                OcrExtractRegexBox.IsChecked = ocrExtractText.UseRegex;
+                SetComboBox(OcrExtractLanguageBox, ocrExtractText.Language);
+                OcrExtractMatchIndexBox.Text = ocrExtractText.MatchIndex.ToString();
+                OcrExtractCaptureGroupBox.Text = ocrExtractText.CaptureGroup.ToString();
+                OcrExtractFilterTermsBox.Text = ocrExtractText.FilterTerms;
+                OcrExtractKeepDigitsOnlyBox.IsChecked = ocrExtractText.KeepDigitsOnly;
+                OcrExtractNormalizeWhitespaceBox.IsChecked = ocrExtractText.NormalizeWhitespace;
+                OcrExtractFailIfNotFoundBox.IsChecked = ocrExtractText.FailIfNotFound;
+                SelectOcrExtractPreset(
+                    ocrExtractText.Pattern,
+                    ocrExtractText.CaptureGroup,
+                    ocrExtractText.FilterTerms,
+                    ocrExtractText.KeepDigitsOnly);
+                OcrExtractStatusText.Text = PaddleOcrBridge.DefaultStatusText;
+                UpdateOcrExtractRegionInfo();
+                ValidateOcrExtractRegex();
+                break;
+            case OcrClickStep ocrClick:
+                ocrClickRegion = ocrClick.Region;
+                OcrClickExpectedTextBox.Text = ocrClick.ExpectedText;
+                OcrClickRegexBox.IsChecked = ocrClick.UseRegex;
+                OcrClickContainsBox.IsChecked = ocrClick.Contains;
+                SetComboBox(OcrClickLanguageBox, ocrClick.Language);
+                SetComboBox(OcrClickMouseButtonBox, ocrClick.Button.ToString());
+                OcrClickCountBox.Text = ocrClick.ClickCount.ToString();
+                OcrClickMatchIndexBox.Text = ocrClick.MatchIndex.ToString();
+                OcrClickHoldMsBox.Text = FormatNumber(ocrClick.Hold.TotalMilliseconds);
+                OcrClickIntervalMsBox.Text = FormatNumber(ocrClick.Interval.TotalMilliseconds);
+                OcrClickOffsetXBox.Text = ocrClick.OffsetX.ToString();
+                OcrClickOffsetYBox.Text = ocrClick.OffsetY.ToString();
+                OcrClickStatusText.Text = PaddleOcrBridge.DefaultStatusText;
+                UpdateOcrClickRegionInfo();
+                ValidateOcrClickRegex();
                 break;
             case WaitStep wait:
                 PopulateDelayEditor(wait);
@@ -196,14 +307,16 @@ public partial class StepEditorPanel : UserControl
             {
                 Key = ParseHidKeyFromText(StepKeyBox.Text),
                 Kind = GetComboBoxEnum<KeyActionKind>(ActionKindBox),
-                Modifiers = ReadStepModifiers(),
-                Hold = TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0))
+                Modifiers = IsModifierHidKey(ParseHidKeyFromText(StepKeyBox.Text))
+                    ? HidModifier.None
+                    : key.Modifiers,
+                Hold = TimeSpan.Zero
             },
             MouseButtonStep button => button with
             {
                 Button = GetComboBoxEnum<CoreMouseButton>(MouseButtonBox),
                 Kind = GetComboBoxEnum<ButtonActionKind>(ActionKindBox),
-                Hold = TimeSpan.FromMilliseconds(ReadDouble(TimingMsBox.Text, 0)),
+                Hold = TimeSpan.Zero,
                 CoordinateMode = MouseButtonCoordinateEnabledBox.IsChecked == true
                     ? GetComboBoxEnum<MouseMoveMode>(MouseButtonCoordinateModeBox)
                     : null,
@@ -222,12 +335,97 @@ public partial class StepEditorPanel : UserControl
                 Vertical = ReadInt(WheelVerticalBox.Text, 0),
                 Horizontal = ReadInt(WheelHorizontalBox.Text, 0)
             },
+            ConsumerStep consumer => consumer with
+            {
+                Kind = GetComboBoxEnum<ButtonActionKind>(ActionKindBox),
+                Hold = TimeSpan.Zero
+            },
+            WindowActivateStep windowActivate => BuildEditedWindowActivateStep(windowActivate),
+            OcrExtractTextStep ocrExtractText => BuildEditedOcrExtractTextStep(ocrExtractText),
+            OcrClickStep ocrClick => BuildEditedOcrClickStep(ocrClick),
             WaitStep wait => BuildEditedWaitStep(wait),
             TextStep => new TextStep(StepTextBox.Text),
             RepeatStep repeat => repeat with { Count = Math.Max(1, ReadInt(LoopCountBox.Text, repeat.Count)) },
             MacroCallStep => new MacroCallStep(ReadSelectedMacroName()),
             PixelWhenStep pixel => BuildEditedPixelStep(pixel),
             _ => current
+        };
+    }
+
+    private WindowActivateStep BuildEditedWindowActivateStep(WindowActivateStep current)
+    {
+        if (WindowTitleRegexBox.IsChecked == true
+            && !WindowActivationService.IsValidTitleRegex(WindowTitleBox.Text, out var regexError))
+        {
+            throw new InvalidOperationException($"{L("InvalidWindowTitleRegex")}: {regexError}");
+        }
+
+        var processName = WindowProcessBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            throw new InvalidOperationException(L("WindowProcessRequired"));
+        }
+
+        return current with
+        {
+            ProcessName = processName,
+            WindowTitle = WindowTitleBox.Text.Trim(),
+            UseTitleRegex = WindowTitleRegexBox.IsChecked == true,
+            MatchIndex = Math.Max(1, ReadInt(WindowMatchIndexBox.Text, current.MatchIndex)),
+            Timeout = TimeSpan.FromMilliseconds(Math.Max(
+                0,
+                ReadDouble(
+                    WindowTimeoutMsBox.Text,
+                    current.Timeout > TimeSpan.Zero ? current.Timeout.TotalMilliseconds : 3000))),
+            Restore = WindowRestoreBox.IsChecked != false,
+            FailIfNotFound = WindowFailIfNotFoundBox.IsChecked != false
+        };
+    }
+
+    private OcrClickStep BuildEditedOcrClickStep(OcrClickStep current)
+    {
+        if (OcrClickRegexBox.IsChecked == true
+            && !PaddleOcrBridge.IsValidRegex(OcrClickExpectedTextBox.Text, out var regexError))
+        {
+            throw new InvalidOperationException($"{L("InvalidRegex")}: {regexError}");
+        }
+
+        return current with
+        {
+            Region = ocrClickRegion,
+            ExpectedText = OcrClickExpectedTextBox.Text.Trim(),
+            Contains = OcrClickContainsBox.IsChecked != false,
+            Language = ReadComboValue(OcrClickLanguageBox, "ch"),
+            UseRegex = OcrClickRegexBox.IsChecked == true,
+            Button = GetComboBoxEnum<CoreMouseButton>(OcrClickMouseButtonBox),
+            ClickCount = Math.Clamp(ReadInt(OcrClickCountBox.Text, current.ClickCount), 1, 3),
+            MatchIndex = Math.Max(1, ReadInt(OcrClickMatchIndexBox.Text, current.MatchIndex)),
+            Hold = TimeSpan.FromMilliseconds(Math.Max(0, ReadDouble(OcrClickHoldMsBox.Text, current.Hold.TotalMilliseconds))),
+            Interval = TimeSpan.FromMilliseconds(Math.Max(0, ReadDouble(OcrClickIntervalMsBox.Text, current.Interval.TotalMilliseconds))),
+            OffsetX = ReadInt(OcrClickOffsetXBox.Text, current.OffsetX),
+            OffsetY = ReadInt(OcrClickOffsetYBox.Text, current.OffsetY)
+        };
+    }
+
+    private OcrExtractTextStep BuildEditedOcrExtractTextStep(OcrExtractTextStep current)
+    {
+        if (!ValidateOcrExtractRegex())
+        {
+            throw new InvalidOperationException(L("InvalidRegex"));
+        }
+
+        return current with
+        {
+            Region = ocrExtractRegion,
+            Pattern = OcrExtractPatternBox.Text.Trim(),
+            Language = ReadComboValue(OcrExtractLanguageBox, "ch"),
+            UseRegex = OcrExtractRegexBox.IsChecked == true,
+            MatchIndex = Math.Max(1, ReadInt(OcrExtractMatchIndexBox.Text, current.MatchIndex)),
+            CaptureGroup = Math.Max(0, ReadInt(OcrExtractCaptureGroupBox.Text, current.CaptureGroup)),
+            FilterTerms = OcrExtractFilterTermsBox.Text.Trim(),
+            KeepDigitsOnly = OcrExtractKeepDigitsOnlyBox.IsChecked == true,
+            NormalizeWhitespace = OcrExtractNormalizeWhitespaceBox.IsChecked != false,
+            FailIfNotFound = OcrExtractFailIfNotFoundBox.IsChecked != false
         };
     }
 
@@ -265,7 +463,6 @@ public partial class StepEditorPanel : UserControl
     private void CaptureStepKey_KeyDown(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (IsModifierKey(key)) return;
 
         var virtualKey = KeyInterop.VirtualKeyFromKey(key);
         if (GlobalKeyboardHook.TryMapVirtualKeyToHidKey(virtualKey, out var hidKey))
@@ -311,6 +508,321 @@ public partial class StepEditorPanel : UserControl
         {
             CoordinatePickerFinished?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private void PickOcrClickRegion_Click(object sender, RoutedEventArgs e)
+    {
+        CoordinatePickerStarted?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            var selected = ScreenRegionPicker.PickRegion(Window.GetWindow(this));
+            if (selected is null) return;
+            ocrClickRegion = selected;
+            UpdateOcrClickRegionInfo();
+        }
+        finally
+        {
+            CoordinatePickerFinished?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void PickOcrExtractRegion_Click(object sender, RoutedEventArgs e)
+    {
+        CoordinatePickerStarted?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            var selected = ScreenRegionPicker.PickRegion(Window.GetWindow(this));
+            if (selected is null) return;
+            ocrExtractRegion = selected;
+            UpdateOcrExtractRegionInfo();
+        }
+        finally
+        {
+            CoordinatePickerFinished?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void PickWindowTarget_Click(object sender, RoutedEventArgs e)
+    {
+        CoordinatePickerStarted?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            var picker = new WindowTargetPickerDialog();
+            if (DialogOwnerService.ShowDialogSafe(picker, this) != true
+                || picker.SelectedTarget is not { } target)
+            {
+                return;
+            }
+
+            WindowProcessBox.Text = target.ProcessName;
+            WindowTitleBox.Text = target.WindowTitle;
+            WindowTitleRegexBox.IsChecked = false;
+            WindowMatchIndexBox.Text = "1";
+            WindowActivateStatusText.Text = string.Format(
+                L("WindowSelected"),
+                target.ProcessName,
+                target.WindowTitle);
+        }
+        finally
+        {
+            CoordinatePickerFinished?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void WindowTitleRegexBox_Changed(object sender, RoutedEventArgs e)
+    {
+        ValidateWindowTitleRegex();
+    }
+
+    private void WindowTitleBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        ValidateWindowTitleRegex();
+    }
+
+    private bool ValidateWindowTitleRegex()
+    {
+        var valid = WindowTitleRegexBox.IsChecked != true
+            || WindowActivationService.IsValidTitleRegex(WindowTitleBox.Text, out _);
+        WindowTitleRegexErrorText.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
+        WindowTitleBox.BorderBrush = valid ? null : Brushes.Red;
+        return valid;
+    }
+
+    private async void TestOcrClick_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ValidateOcrClickRegex()) return;
+
+        TestOcrClickButton.IsEnabled = false;
+        OcrClickStatusText.Text = L("OcrClickTesting");
+        try
+        {
+            using var bridge = new PaddleOcrBridge();
+            var location = await bridge.FindTextAsync(
+                ocrClickRegion,
+                OcrClickExpectedTextBox.Text.Trim(),
+                OcrClickContainsBox.IsChecked != false,
+                ReadComboValue(OcrClickLanguageBox, "ch"),
+                OcrClickRegexBox.IsChecked == true,
+                Math.Max(1, ReadInt(OcrClickMatchIndexBox.Text, 1)),
+                ReadInt(OcrClickOffsetXBox.Text, 0),
+                ReadInt(OcrClickOffsetYBox.Text, 0));
+            OcrClickStatusText.Text = location is null
+                ? L("OcrClickNotFound")
+                : string.Format(L("OcrClickFound"), location.Text, location.X, location.Y);
+        }
+        catch (Exception ex)
+        {
+            OcrClickStatusText.Text = $"{L("OcrClickNotFound")}: {ex.Message}";
+        }
+        finally
+        {
+            TestOcrClickButton.IsEnabled = true;
+        }
+    }
+
+    private async void TestOcrExtract_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ValidateOcrExtractRegex()) return;
+
+        TestOcrExtractButton.IsEnabled = false;
+        OcrExtractStatusText.Text = L("OcrExtractTesting");
+        try
+        {
+            using var bridge = new PaddleOcrBridge();
+            var recognition = await bridge.RecognizeWithDiagnosticsAsync(
+                ocrExtractRegion,
+                ReadComboValue(OcrExtractLanguageBox, "ch"));
+            if (!recognition.Success)
+            {
+                OcrExtractStatusText.Text = $"{L("OcrExtractNotFound")}: {recognition.Error}";
+                return;
+            }
+
+            var extracted = PaddleOcrBridge.TryExtractText(
+                recognition.Text,
+                OcrExtractPatternBox.Text.Trim(),
+                OcrExtractRegexBox.IsChecked == true,
+                Math.Max(1, ReadInt(OcrExtractMatchIndexBox.Text, 1)),
+                Math.Max(0, ReadInt(OcrExtractCaptureGroupBox.Text, 0)),
+                OcrExtractFilterTermsBox.Text,
+                OcrExtractKeepDigitsOnlyBox.IsChecked == true,
+                OcrExtractNormalizeWhitespaceBox.IsChecked != false,
+                out var value,
+                out var error);
+            OcrExtractStatusText.Text = extracted
+                ? string.Format(L("OcrExtractFound"), value)
+                : $"{L("OcrExtractNotFound")}: {error}";
+        }
+        catch (Exception ex)
+        {
+            OcrExtractStatusText.Text = $"{L("OcrExtractNotFound")}: {ex.Message}";
+        }
+        finally
+        {
+            TestOcrExtractButton.IsEnabled = true;
+        }
+    }
+
+    private void OcrExtractRegexBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (OcrExtractRegexBox is null
+            || OcrExtractCaptureGroupBox is null
+            || OcrExtractPatternBox is null
+            || OcrExtractRegexErrorText is null)
+        {
+            return;
+        }
+
+        OcrExtractCaptureGroupBox.IsEnabled = OcrExtractRegexBox.IsChecked == true;
+        ValidateOcrExtractRegex();
+    }
+
+    private void OcrExtractPatternBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!updatingEditor && !applyingOcrExtractPreset)
+        {
+            SelectOcrExtractPresetItem("Custom");
+        }
+        ValidateOcrExtractRegex();
+    }
+
+    private void OcrExtractPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (updatingEditor
+            || applyingOcrExtractPreset
+            || OcrExtractPresetBox.SelectedItem is not ComboBoxItem item)
+        {
+            return;
+        }
+
+        var preset = item.Tag?.ToString();
+        if (string.IsNullOrWhiteSpace(preset) || string.Equals(preset, "Custom", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        applyingOcrExtractPreset = true;
+        try
+        {
+            OcrExtractRegexBox.IsChecked = true;
+            OcrExtractFilterTermsBox.Text = string.Empty;
+            OcrExtractKeepDigitsOnlyBox.IsChecked = false;
+            (OcrExtractPatternBox.Text, OcrExtractCaptureGroupBox.Text) = preset switch
+            {
+                "AllText" => (string.Empty, "0"),
+                "Digits" => (@"\d+", "0"),
+                "FilterDigits" => (string.Empty, "0"),
+                "AlphaNumeric" => (@"[A-Za-z0-9_-]+", "0"),
+                "Uid" => (@"(?i)UID\s*[:：=]?\s*([^\s，。！？,;；]+)", "1"),
+                "AfterSeparator" => (@"[:：=]\s*([^\s，。！？,;；]+)", "1"),
+                _ => (OcrExtractPatternBox.Text, OcrExtractCaptureGroupBox.Text)
+            };
+            if (string.Equals(preset, "FilterDigits", StringComparison.Ordinal))
+            {
+                OcrExtractFilterTermsBox.Text = $"-6{Environment.NewLine}4=3";
+                OcrExtractKeepDigitsOnlyBox.IsChecked = true;
+            }
+            ValidateOcrExtractRegex();
+        }
+        finally
+        {
+            applyingOcrExtractPreset = false;
+        }
+    }
+
+    private void SelectOcrExtractPreset(
+        string pattern,
+        int captureGroup,
+        string filterTerms,
+        bool keepDigitsOnly)
+    {
+        var normalizedFilters = filterTerms.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+        var preset = (pattern, captureGroup, normalizedFilters, keepDigitsOnly) switch
+        {
+            ("", 0, "-6\n4=3", true) => "FilterDigits",
+            ("", 0, "", false) => "AllText",
+            (@"\d+", 0, "", false) => "Digits",
+            (@"[A-Za-z0-9_-]+", 0, "", false) => "AlphaNumeric",
+            (@"(?i)UID\s*[:：=]?\s*([^\s，。！？,;；]+)", 1, "", false) => "Uid",
+            (@"[:：=]\s*([^\s，。！？,;；]+)", 1, "", false) => "AfterSeparator",
+            _ => "Custom"
+        };
+        SelectOcrExtractPresetItem(preset);
+    }
+
+    private void OcrExtractFilterTermsBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        MarkOcrExtractPresetCustom();
+    }
+
+    private void OcrExtractKeepDigitsOnlyBox_Changed(object sender, RoutedEventArgs e)
+    {
+        MarkOcrExtractPresetCustom();
+    }
+
+    private void MarkOcrExtractPresetCustom()
+    {
+        if (!updatingEditor && !applyingOcrExtractPreset)
+        {
+            SelectOcrExtractPresetItem("Custom");
+        }
+    }
+
+    private void SelectOcrExtractPresetItem(string preset)
+    {
+        foreach (var item in OcrExtractPresetBox.Items.OfType<ComboBoxItem>())
+        {
+            if (!string.Equals(item.Tag?.ToString(), preset, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            OcrExtractPresetBox.SelectedItem = item;
+            return;
+        }
+    }
+
+    private bool ValidateOcrExtractRegex()
+    {
+        var pattern = OcrExtractPatternBox.Text;
+        var valid = OcrExtractRegexBox.IsChecked != true
+            || string.IsNullOrWhiteSpace(pattern)
+            || PaddleOcrBridge.IsValidRegex(pattern, out _);
+        OcrExtractRegexErrorText.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
+        OcrExtractPatternBox.BorderBrush = valid ? null : Brushes.Red;
+        return valid;
+    }
+
+    private void UpdateOcrExtractRegionInfo()
+    {
+        OcrExtractRegionInfoText.Text =
+            $"({ocrExtractRegion.TopLeft.X},{ocrExtractRegion.TopLeft.Y}) – ({ocrExtractRegion.BottomRight.X},{ocrExtractRegion.BottomRight.Y})";
+    }
+
+    private void OcrClickRegexBox_Changed(object sender, RoutedEventArgs e)
+    {
+        OcrClickContainsBox.IsEnabled = OcrClickRegexBox.IsChecked != true;
+        ValidateOcrClickRegex();
+    }
+
+    private void OcrClickExpectedTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        ValidateOcrClickRegex();
+    }
+
+    private bool ValidateOcrClickRegex()
+    {
+        var valid = OcrClickRegexBox.IsChecked != true
+            || PaddleOcrBridge.IsValidRegex(OcrClickExpectedTextBox.Text, out _);
+        OcrClickRegexErrorText.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
+        OcrClickExpectedTextBox.BorderBrush = valid ? null : Brushes.Red;
+        return valid;
+    }
+
+    private void UpdateOcrClickRegionInfo()
+    {
+        OcrClickRegionInfoText.Text =
+            $"({ocrClickRegion.TopLeft.X},{ocrClickRegion.TopLeft.Y}) – ({ocrClickRegion.BottomRight.X},{ocrClickRegion.BottomRight.Y})";
     }
 
     private WaitStep BuildEditedWaitStep(WaitStep current)
@@ -363,13 +875,16 @@ public partial class StepEditorPanel : UserControl
         }
     }
 
-    private void SetEditorPanels(bool keyboard, bool action, bool mouseButton, bool mouseMove, bool wheel, bool timing, bool delay, bool text, bool loop, bool macro, bool pixel)
+    private void SetEditorPanels(bool keyboard, bool action, bool mouseButton, bool mouseMove, bool wheel, bool windowActivate, bool ocrExtractText, bool ocrClick, bool timing, bool delay, bool text, bool loop, bool macro, bool pixel)
     {
         KeyboardEditPanel.Visibility = ToVis(keyboard);
         ButtonEditPanel.Visibility = ToVis(action);
         MouseButtonEditPanel.Visibility = ToVis(mouseButton);
         MouseMoveEditPanel.Visibility = ToVis(mouseMove);
         WheelEditPanel.Visibility = ToVis(wheel);
+        WindowActivateEditPanel.Visibility = ToVis(windowActivate);
+        OcrExtractTextEditPanel.Visibility = ToVis(ocrExtractText);
+        OcrClickEditPanel.Visibility = ToVis(ocrClick);
         TimingEditPanel.Visibility = ToVis(timing && !delay);
         DelayEditPanel.Visibility = ToVis(delay);
         TextEditPanel.Visibility = ToVis(text);
@@ -378,27 +893,19 @@ public partial class StepEditorPanel : UserControl
         PixelEditPanel.Visibility = ToVis(pixel);
     }
 
-    private void SetModifierBoxes(HidModifier modifiers)
-    {
-        StepCtrlBox.IsChecked = (modifiers & (HidModifier.LeftCtrl | HidModifier.RightCtrl)) != 0;
-        StepShiftBox.IsChecked = (modifiers & (HidModifier.LeftShift | HidModifier.RightShift)) != 0;
-        StepAltBox.IsChecked = (modifiers & (HidModifier.LeftAlt | HidModifier.RightAlt)) != 0;
-        StepWinBox.IsChecked = (modifiers & (HidModifier.LeftGui | HidModifier.RightGui)) != 0;
-    }
-
-    private HidModifier ReadStepModifiers()
-    {
-        var m = HidModifier.None;
-        if (StepCtrlBox.IsChecked == true) m |= HidModifier.LeftCtrl;
-        if (StepShiftBox.IsChecked == true) m |= HidModifier.LeftShift;
-        if (StepAltBox.IsChecked == true) m |= HidModifier.LeftAlt;
-        if (StepWinBox.IsChecked == true) m |= HidModifier.LeftGui;
-        return m;
-    }
-
     private string ReadSelectedMacroName()
     {
         return (MacroTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? MacroTargetBox.Text.Trim();
+    }
+
+    private static string ReadComboValue(ComboBox comboBox, string fallback)
+    {
+        if (comboBox.SelectedItem is ComboBoxItem item && item.Tag is not null)
+        {
+            return item.Tag.ToString() ?? fallback;
+        }
+
+        return string.IsNullOrWhiteSpace(comboBox.Text) ? fallback : comboBox.Text.Trim();
     }
 
     private void UpdatePixelPreview(RgbColor color)
@@ -433,7 +940,12 @@ public partial class StepEditorPanel : UserControl
     }
 
     private static Visibility ToVis(bool v) => v ? Visibility.Visible : Visibility.Collapsed;
-    private static bool IsModifierKey(Key key) => key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
+
+    private static bool IsModifierHidKey(HidKey key) =>
+        key is HidKey.LeftControl or HidKey.RightControl
+            or HidKey.LeftShift or HidKey.RightShift
+            or HidKey.LeftAlt or HidKey.RightAlt
+            or HidKey.LeftGui or HidKey.RightGui;
 
     private static void FillEnumBox<TEnum>(ComboBox comboBox, TEnum selected) where TEnum : struct, Enum
     {
@@ -470,6 +982,10 @@ public partial class StepEditorPanel : UserControl
         {
             MouseMoveMode.Relative => L("MoveModeRelative"),
             MouseMoveMode.Absolute => L("MoveModeAbsolute"),
+            KeyActionKind.Down or ButtonActionKind.Down => L("ActionKindDown"),
+            KeyActionKind.Up or ButtonActionKind.Up => L("ActionKindUp"),
+            KeyActionKind.Tap => L("ActionKindTap"),
+            ButtonActionKind.Click => L("ActionKindClick"),
             _ => value.ToString() ?? string.Empty
         };
     }
@@ -493,7 +1009,12 @@ public partial class StepEditorPanel : UserControl
 
     private static TEnum GetComboBoxEnum<TEnum>(ComboBox comboBox) where TEnum : struct, Enum
     {
-        if (comboBox.SelectedItem is ComboBoxItem { Tag: TEnum value }) return value;
+        if (comboBox.SelectedItem is ComboBoxItem { Tag: Enum tag }
+            && Enum.TryParse<TEnum>(tag.ToString(), ignoreCase: true, out var fromTag))
+        {
+            return fromTag;
+        }
+
         return ResolveComboBoxEnumFromText<TEnum>(comboBox) ?? Enum.GetValues<TEnum>()[0];
     }
 

@@ -29,12 +29,6 @@
                         <Button x:Name="CaptureStepKeyButton" DockPanel.Dock="Right" Width="78" Content="捕获" Click="CaptureStepKey_Click" />
                         <TextBox x:Name="StepKeyBox" Height="30" Margin="0,0,8,0" />
                     </DockPanel>
-                    <WrapPanel Margin="0,8,0,0">
-                        <CheckBox x:Name="StepCtrlBox" Content="Ctrl" Foreground="{DynamicResource PrimaryText}" Margin="0,0,12,0" />
-                        <CheckBox x:Name="StepShiftBox" Content="Shift" Foreground="{DynamicResource PrimaryText}" Margin="0,0,12,0" />
-                        <CheckBox x:Name="StepAltBox" Content="Alt" Foreground="{DynamicResource PrimaryText}" Margin="0,0,12,0" />
-                        <CheckBox x:Name="StepWinBox" Content="Win" Foreground="{DynamicResource PrimaryText}" />
-                    </WrapPanel>
                 </StackPanel>
 
                 <StackPanel x:Name="ButtonEditPanel" Margin="0,0,0,10">
@@ -93,6 +87,281 @@
                         <TextBox x:Name="WheelVerticalBox" Height="30" />
                         <TextBox x:Name="WheelHorizontalBox" Grid.Column="2" Height="30" />
                     </Grid>
+                </StackPanel>
+
+                <StackPanel x:Name="WindowActivateEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="WindowProcessLabelText" Text="目标进程" Style="{StaticResource FieldLabel}" />
+                    <DockPanel>
+                        <Button x:Name="PickWindowTargetButton"
+                                DockPanel.Dock="Right"
+                                MinWidth="96"
+                                Margin="8,0,0,0"
+                                Content="选择窗口..."
+                                Click="PickWindowTarget_Click" />
+                        <TextBox x:Name="WindowProcessBox" Height="30" />
+                    </DockPanel>
+
+                    <TextBlock x:Name="WindowTitleLabelText" Text="窗口标题（可选）" Style="{StaticResource FieldLabel}" Margin="0,9,0,0" />
+                    <TextBox x:Name="WindowTitleBox"
+                             Height="30"
+                             TextChanged="WindowTitleBox_TextChanged" />
+                    <CheckBox x:Name="WindowTitleRegexBox"
+                              Content="标题使用正则表达式"
+                              Margin="0,7,0,0"
+                              Checked="WindowTitleRegexBox_Changed"
+                              Unchecked="WindowTitleRegexBox_Changed" />
+                    <TextBlock x:Name="WindowTitleRegexErrorText"
+                               Text="窗口标题正则表达式无效"
+                               Foreground="{DynamicResource Danger}"
+                               FontSize="11"
+                               Margin="0,4,0,0"
+                               Visibility="Collapsed" />
+
+                    <Grid Margin="0,9,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="WindowMatchIndexLabelText" Text="第几个匹配窗口" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="WindowMatchIndexBox" Height="30" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="WindowTimeoutLabelText" Text="确认超时 (ms)" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="WindowTimeoutMsBox" Height="30" />
+                        </StackPanel>
+                    </Grid>
+
+                    <CheckBox x:Name="WindowRestoreBox"
+                              Content="最小化时自动恢复"
+                              Margin="0,8,0,0"
+                              IsChecked="True" />
+                    <CheckBox x:Name="WindowFailIfNotFoundBox"
+                              Content="切换失败时停止宏"
+                              Margin="0,6,0,0"
+                              IsChecked="True" />
+                    <TextBlock x:Name="WindowActivateStatusText"
+                               Margin="0,6,0,0"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="切换后会确认目标进程已经成为前台。" />
+                </StackPanel>
+
+                <StackPanel x:Name="OcrExtractTextEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="OcrExtractPresetLabelText" Text="常用规则" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="OcrExtractPresetBox"
+                              Height="30"
+                              SelectionChanged="OcrExtractPresetBox_SelectionChanged">
+                        <ComboBoxItem x:Name="OcrExtractPresetCustomItem" Tag="Custom" Content="自定义" IsSelected="True" />
+                        <ComboBoxItem x:Name="OcrExtractPresetAllTextItem" Tag="AllText" Content="获取全部文字" />
+                        <ComboBoxItem x:Name="OcrExtractPresetDigitsItem" Tag="Digits" Content="只获取连续数字" />
+                        <ComboBoxItem x:Name="OcrExtractPresetFilterDigitsItem" Tag="FilterDigits" Content="先过滤示例词，再只保留数字" />
+                        <ComboBoxItem x:Name="OcrExtractPresetAlphaNumericItem" Tag="AlphaNumeric" Content="连续字母、数字、横线或下划线" />
+                        <ComboBoxItem x:Name="OcrExtractPresetUidItem" Tag="Uid" Content="获取 UID 后面的内容" />
+                        <ComboBoxItem x:Name="OcrExtractPresetAfterSeparatorItem" Tag="AfterSeparator" Content="获取冒号或等号后面的内容" />
+                    </ComboBox>
+
+                    <TextBlock x:Name="OcrExtractFilterTermsLabelText"
+                               Text="过滤词（每行一个，最先执行）"
+                               Style="{StaticResource FieldLabel}"
+                               Margin="0,8,0,0" />
+                    <TextBox x:Name="OcrExtractFilterTermsBox"
+                             MinHeight="54"
+                             MaxHeight="90"
+                             AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
+                             TextWrapping="Wrap"
+                             TextChanged="OcrExtractFilterTermsBox_TextChanged" />
+                    <CheckBox x:Name="OcrExtractKeepDigitsOnlyBox"
+                              Content="过滤和提取后只保留 0-9"
+                              Margin="0,7,0,0"
+                              Checked="OcrExtractKeepDigitsOnlyBox_Changed"
+                              Unchecked="OcrExtractKeepDigitsOnlyBox_Changed" />
+
+                    <TextBlock x:Name="OcrExtractPatternLabelText" Text="提取规则（留空获取全部文字）" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="OcrExtractPatternBox"
+                             Height="30"
+                             TextChanged="OcrExtractPatternBox_TextChanged" />
+                    <CheckBox x:Name="OcrExtractRegexBox"
+                              Content="使用正则表达式"
+                              Margin="0,7,0,0"
+                              Checked="OcrExtractRegexBox_Changed"
+                              Unchecked="OcrExtractRegexBox_Changed" />
+                    <TextBlock x:Name="OcrExtractRegexErrorText"
+                               Foreground="{DynamicResource Danger}"
+                               FontSize="11"
+                               Margin="0,4,0,0"
+                               Visibility="Collapsed"
+                               Text="正则表达式无效" />
+
+                    <TextBlock x:Name="OcrExtractRegionLabelText" Text="屏幕识别区域" Style="{StaticResource FieldLabel}" Margin="0,9,0,0" />
+                    <DockPanel>
+                        <Button x:Name="PickOcrExtractRegionButton"
+                                DockPanel.Dock="Right"
+                                MinWidth="96"
+                                Content="选择区域..."
+                                Click="PickOcrExtractRegion_Click" />
+                        <TextBlock x:Name="OcrExtractRegionInfoText"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+
+                    <Grid Margin="0,9,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="OcrExtractLanguageLabelText" Text="识别语言" Style="{StaticResource FieldLabel}" />
+                            <ComboBox x:Name="OcrExtractLanguageBox" Height="30" IsEditable="True">
+                                <ComboBoxItem Content="中文 / English" Tag="ch" />
+                                <ComboBoxItem Content="English" Tag="en" />
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="OcrExtractMatchIndexLabelText" Text="第几个匹配" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="OcrExtractMatchIndexBox" Height="30" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock x:Name="OcrExtractCaptureGroupLabelText"
+                               Text="复制捕获组（0=完整匹配）"
+                               Style="{StaticResource FieldLabel}"
+                               Margin="0,8,0,0" />
+                    <TextBox x:Name="OcrExtractCaptureGroupBox" Height="30" />
+                    <CheckBox x:Name="OcrExtractNormalizeWhitespaceBox"
+                              Content="匹配失败时忽略 OCR 多余空格"
+                              Margin="0,8,0,0"
+                              IsChecked="True" />
+                    <CheckBox x:Name="OcrExtractFailIfNotFoundBox"
+                              Content="未提取到文字时停止宏"
+                              Margin="0,6,0,0"
+                              IsChecked="True" />
+
+                    <Button x:Name="TestOcrExtractButton"
+                            Content="测试提取（不写剪贴板）"
+                            Margin="0,9,0,0"
+                            Click="TestOcrExtract_Click" />
+                    <TextBlock x:Name="OcrExtractStatusText"
+                               Margin="0,5,0,0"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="11"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel x:Name="OcrClickEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="OcrClickExpectedLabelText" Text="要点击的文字" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="OcrClickExpectedTextBox"
+                             Height="30"
+                             TextChanged="OcrClickExpectedTextBox_TextChanged" />
+                    <WrapPanel Margin="0,8,0,0">
+                        <CheckBox x:Name="OcrClickRegexBox"
+                                  Content="使用正则表达式"
+                                  Margin="0,0,16,0"
+                                  Checked="OcrClickRegexBox_Changed"
+                                  Unchecked="OcrClickRegexBox_Changed" />
+                        <CheckBox x:Name="OcrClickContainsBox" Content="包含匹配" IsChecked="True" />
+                    </WrapPanel>
+                    <TextBlock x:Name="OcrClickRegexErrorText"
+                               Foreground="{DynamicResource Danger}"
+                               FontSize="11"
+                               Margin="0,4,0,0"
+                               Visibility="Collapsed"
+                               Text="正则表达式无效" />
+
+                    <TextBlock x:Name="OcrClickRegionLabelText" Text="屏幕识别区域" Style="{StaticResource FieldLabel}" Margin="0,9,0,0" />
+                    <DockPanel>
+                        <Button x:Name="PickOcrClickRegionButton"
+                                DockPanel.Dock="Right"
+                                MinWidth="96"
+                                Content="选择区域..."
+                                Click="PickOcrClickRegion_Click" />
+                        <TextBlock x:Name="OcrClickRegionInfoText"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+
+                    <Grid Margin="0,9,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="OcrClickLanguageLabelText" Text="识别语言" Style="{StaticResource FieldLabel}" />
+                            <ComboBox x:Name="OcrClickLanguageBox" Height="30" IsEditable="True">
+                                <ComboBoxItem Content="中文 / English" Tag="ch" />
+                                <ComboBoxItem Content="English" Tag="en" />
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="OcrClickButtonLabelText" Text="鼠标按键" Style="{StaticResource FieldLabel}" />
+                            <ComboBox x:Name="OcrClickMouseButtonBox" Height="30" IsEditable="True" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="OcrClickCountLabelText" Text="点击次数 (1-3)" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="OcrClickCountBox" Height="30" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="OcrClickMatchIndexLabelText" Text="第几个匹配" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="OcrClickMatchIndexBox" Height="30" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="OcrClickHoldLabelText" Text="按住 (ms)" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="OcrClickHoldMsBox" Height="30" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="OcrClickIntervalLabelText" Text="多击间隔 (ms)" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="OcrClickIntervalMsBox" Height="30" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="OcrClickOffsetXLabelText" Text="点击偏移 X" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="OcrClickOffsetXBox" Height="30" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="OcrClickOffsetYLabelText" Text="点击偏移 Y" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="OcrClickOffsetYBox" Height="30" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Button x:Name="TestOcrClickButton"
+                            Content="测试定位（不点击）"
+                            Margin="0,9,0,0"
+                            Click="TestOcrClick_Click" />
+                    <TextBlock x:Name="OcrClickStatusText"
+                               Margin="0,5,0,0"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="11"
+                               TextWrapping="Wrap" />
                 </StackPanel>
 
                 <StackPanel x:Name="TimingEditPanel" Margin="0,0,0,10">

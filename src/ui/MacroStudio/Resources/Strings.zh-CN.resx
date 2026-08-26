@@ -19,6 +19,10 @@
   <data name="Playback" xml:space="preserve"><value>播放</value></data>
   <data name="Trigger" xml:space="preserve"><value>触发键</value></data>
   <data name="Capture" xml:space="preserve"><value>捕获</value></data>
+  <data name="CaptureTriggerHint" xml:space="preserve"><value>按下触发键…</value></data>
+  <data name="FilterWindowsPlaceholder" xml:space="preserve"><value>筛选进程名或窗口标题</value></data>
+  <data name="ProcessFilterPlaceholder" xml:space="preserve"><value>例如 chrome.exe</value></data>
+  <data name="TriggerSupportHint" xml:space="preserve"><value>支持主键盘、数字小键盘、符号键、F1–F24 和标准鼠标 1–5 键。</value></data>
   <data name="Apply" xml:space="preserve"><value>应用</value></data>
   <data name="Mode" xml:space="preserve"><value>模式</value></data>
   <data name="Count" xml:space="preserve"><value>次数</value></data>
@@ -67,24 +71,26 @@
   <data name="MacroFileFilter" xml:space="preserve"><value>MacroHID 宏 (*.mcrx)|*.mcrx|JSON (*.json)|*.json|所有文件 (*.*)|*.*</value></data>
   <data name="ImportExport" xml:space="preserve"><value>导入 / 导出</value></data>
   <data name="ImportMacro" xml:space="preserve"><value>导入</value></data>
-  <data name="ImportRazerModules" xml:space="preserve"><value>雷云模块</value></data>
   <data name="ApplyImport" xml:space="preserve"><value>应用</value></data>
   <data name="ExportFormat" xml:space="preserve"><value>导出格式</value></data>
   <data name="ExportMacro" xml:space="preserve"><value>导出</value></data>
   <data name="ConversionReady" xml:space="preserve"><value>转换器已内置</value></data>
-  <data name="ConversionImported" xml:space="preserve"><value>已导入 {0}：{1} 个步骤待应用</value></data>
+  <data name="ConversionImported" xml:space="preserve"><value>已导入 {0}：{1} 个步骤已加入宏数据库</value></data>
+  <data name="ConversionBatchImported" xml:space="preserve"><value>已导入 {0}/{1} 个宏。</value></data>
+  <data name="ConversionBatchImportFailed" xml:space="preserve"><value>有 {0} 个宏文件导入失败，请在转换面板查看详情。</value></data>
+  <data name="ConversionImportErrorTitle" xml:space="preserve"><value>宏导入失败</value></data>
+  <data name="ConversionImportLocation" xml:space="preserve"><value>第 {0} 行，第 {1} 列解析失败</value></data>
+  <data name="ConversionImportUnknownLocation" xml:space="preserve"><value>无法确定解析位置</value></data>
+  <data name="ConversionImportSourceLine" xml:space="preserve"><value>原文：{0}</value></data>
+  <data name="ConversionDiagnosticLocation" xml:space="preserve"><value>第 {0} 行，第 {1} 列：</value></data>
   <data name="ConversionApplied" xml:space="preserve"><value>已应用导入宏到编辑器</value></data>
   <data name="ConversionExported" xml:space="preserve"><value>已导出 {0}</value></data>
-  <data name="ConversionModulesLoaded" xml:space="preserve"><value>已加载雷云模块：{0}</value></data>
-  <data name="ConversionModulesImported" xml:space="preserve"><value>已加载雷云模块：{0}；加入宏数据库：{1}</value></data>
   <data name="ConversionDiagnosticsNone" xml:space="preserve"><value>没有转换警告</value></data>
   <data name="ConversionImportFailed" xml:space="preserve"><value>导入失败：{0}</value></data>
   <data name="ConversionExportFailed" xml:space="preserve"><value>导出失败：{0}</value></data>
   <data name="ImportMacroTitle" xml:space="preserve"><value>导入宏</value></data>
-  <data name="ImportRazerModulesTitle" xml:space="preserve"><value>导入雷云模块 XML</value></data>
   <data name="ExportMacroTitle" xml:space="preserve"><value>导出宏</value></data>
   <data name="ConverterImportFileFilter" xml:space="preserve"><value>支持的宏文件 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|所有文件 (*.*)|*.*</value></data>
-  <data name="RazerModuleFileFilter" xml:space="preserve"><value>雷云 XML (*.xml)|*.xml|所有文件 (*.*)|*.*</value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>宏数据库管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新建</value></data>
   <data name="NewFolder" xml:space="preserve"><value>文件夹</value></data>
@@ -95,6 +101,15 @@
   <data name="Undo" xml:space="preserve"><value>撤回</value></data>
   <data name="ClearAll" xml:space="preserve"><value>清空</value></data>
   <data name="Delete" xml:space="preserve"><value>删除</value></data>
+  <data name="LockMacro" xml:space="preserve"><value>锁定编辑</value></data>
+  <data name="UnlockMacro" xml:space="preserve"><value>解除锁定</value></data>
+  <data name="LockMacroHelp" xml:space="preserve"><value>防止误修改，锁定后仍可运行和导出</value></data>
+  <data name="UnlockMacroHelp" xml:space="preserve"><value>允许再次编辑这个宏</value></data>
+  <data name="MacroLocked" xml:space="preserve"><value>宏已锁定，编辑区现为只读</value></data>
+  <data name="MacroUnlocked" xml:space="preserve"><value>宏已解除锁定，可以继续编辑</value></data>
+  <data name="MacroLockedReadOnly" xml:space="preserve"><value>这个宏已锁定，请先解除锁定再修改。</value></data>
+  <data name="SelectMacroToLock" xml:space="preserve"><value>请先选择一个宏再更改锁定状态。</value></data>
+  <data name="ConditionValidationFailed" xml:space="preserve"><value>条件时间范围无效，请修正后再保存或运行宏。</value></data>
   <data name="SaveLibrary" xml:space="preserve"><value>保存到库</value></data>
   <data name="Add" xml:space="preserve"><value>添加</value></data>
   <data name="AddDelay" xml:space="preserve"><value>延迟</value></data>
@@ -105,8 +120,9 @@
   <data name="AddText" xml:space="preserve"><value>文本功能</value></data>
   <data name="AddMacro" xml:space="preserve"><value>宏</value></data>
   <data name="AddLoop" xml:space="preserve"><value>循环</value></data>
-  <data name="AddStopCurrent" xml:space="preserve"><value>停止当前宏序列</value></data>
-  <data name="AddStopAll" xml:space="preserve"><value>停止所有宏序列</value></data>
+  <data name="AddStopCurrent" xml:space="preserve"><value>停止本层宏动作</value></data>
+  <data name="AddStopIteration" xml:space="preserve"><value>停止本轮播放</value></data>
+  <data name="AddStopAll" xml:space="preserve"><value>停止本次播放</value></data>
   <data name="AddPixel" xml:space="preserve"><value>像素条件</value></data>
   <data name="AddDelayHint" xml:space="preserve"><value>固定或随机等待</value></data>
   <data name="AddKeyboardHint" xml:space="preserve"><value>按下、抬起或输入</value></data>
@@ -117,6 +133,7 @@
   <data name="AddMacroActionHint" xml:space="preserve"><value>调用宏数据库条目</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>重复一组步骤</value></data>
   <data name="AddStopCurrentHint" xml:space="preserve"><value>退出当前宏调用，外层继续执行</value></data>
+  <data name="AddStopIterationHint" xml:space="preserve"><value>跳过本轮剩余步骤，外层循环继续</value></data>
   <data name="AddStopAllHint" xml:space="preserve"><value>立即终止整次宏播放</value></data>
   <data name="ActionPaletteDragHint" xml:space="preserve"><value>点击添加，或拖到序列的目标位置。</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>把左侧宏拖到序列里，可以复制它的步骤。</value></data>
@@ -175,6 +192,13 @@
   <data name="DropActionsHint" xml:space="preserve"><value>把动作拖到这里，或直接点击右侧添加项。</value></data>
   <data name="LibrarySaved" xml:space="preserve"><value>宏数据库已保存</value></data>
   <data name="DeleteMacroConfirm" xml:space="preserve"><value>从本地数据库删除宏“{0}”？</value></data>
+  <data name="DeleteDatabaseConfirm" xml:space="preserve"><value>删除宏数据库“{0}”？其中的宏将移回“全局”数据库。</value></data>
+  <data name="DeleteFolderConfirm" xml:space="preserve"><value>删除文件夹“{0}”？其中的宏将移动到数据库根目录。</value></data>
+  <data name="DeleteFailed" xml:space="preserve"><value>删除失败：{0}</value></data>
+  <data name="MacroDeleted" xml:space="preserve"><value>已删除宏：{0}</value></data>
+  <data name="SelectDatabaseToDelete" xml:space="preserve"><value>请先选择要删除的宏数据库。</value></data>
+  <data name="SelectItemToDelete" xml:space="preserve"><value>请先选择要删除的项目。</value></data>
+  <data name="GlobalDatabaseCannotDelete" xml:space="preserve"><value>“全局”数据库不能删除。</value></data>
   <data name="ActionInserted" xml:space="preserve"><value>已插入{0}</value></data>
   <data name="InsertedMacroSteps" xml:space="preserve"><value>已插入宏“{0}”（{1} 个步骤）</value></data>
   <data name="TemplateDelay" xml:space="preserve"><value>延迟</value></data>
@@ -208,4 +232,123 @@
   <data name="WorkspacePanelPlayback" xml:space="preserve"><value>播放控制</value></data>
   <data name="WorkspaceLayoutReset" xml:space="preserve"><value>工作区布局已重置</value></data>
   <data name="JsonApplied" xml:space="preserve"><value>JSON 已应用</value></data>
+  <data name="Redo" xml:space="preserve"><value>还原</value></data>
+  <data name="ActionColorSettingsTitle" xml:space="preserve"><value>动作颜色</value></data>
+  <data name="ActionColorType" xml:space="preserve"><value>动作类别</value></data>
+  <data name="ActionTextColor" xml:space="preserve"><value>文字颜色</value></data>
+  <data name="ActionIconColor" xml:space="preserve"><value>图标颜色</value></data>
+  <data name="ActionBackgroundColor" xml:space="preserve"><value>底色</value></data>
+  <data name="ActionColorPreview" xml:space="preserve"><value>动作预览</value></data>
+  <data name="RestoreDefaults" xml:space="preserve"><value>恢复默认</value></data>
+  <data name="Done" xml:space="preserve"><value>完成</value></data>
+  <data name="ChooseColor" xml:space="preserve"><value>选择颜色</value></data>
+  <data name="Confirm" xml:space="preserve"><value>确定</value></data>
+  <data name="Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="Type" xml:space="preserve"><value>类型</value></data>
+  <data name="New" xml:space="preserve"><value>新建</value></data>
+  <data name="Duplicate" xml:space="preserve"><value>创建副本</value></data>
+  <data name="SelectAll" xml:space="preserve"><value>全选</value></data>
+  <data name="View" xml:space="preserve"><value>查看</value></data>
+  <data name="SortBy" xml:space="preserve"><value>排序方式</value></data>
+  <data name="DateModified" xml:space="preserve"><value>修改日期</value></data>
+  <data name="FileFolderType" xml:space="preserve"><value>文件夹</value></data>
+  <data name="MacroFileType" xml:space="preserve"><value>宏文件</value></data>
+  <data name="FolderItemCount" xml:space="preserve"><value>{0} 个项目</value></data>
+  <data name="UpOneLevel" xml:space="preserve"><value>返回上级</value></data>
+  <data name="ViewDetails" xml:space="preserve"><value>详细信息</value></data>
+  <data name="ViewList" xml:space="preserve"><value>列表</value></data>
+  <data name="ViewSmallIcons" xml:space="preserve"><value>小图标</value></data>
+  <data name="ViewLargeIcons" xml:space="preserve"><value>大图标</value></data>
+  <data name="ExplorerItemCount" xml:space="preserve"><value>{0} 个项目</value></data>
+  <data name="ExplorerSelectedCount" xml:space="preserve"><value>已选择 {0} 项，共 {1} 项</value></data>
+  <data name="SelectedItemsCopied" xml:space="preserve"><value>已复制所选的 {0} 个项目。</value></data>
+  <data name="SelectedItemsMoved" xml:space="preserve"><value>已移动所选的 {0} 个宏。</value></data>
+  <data name="DeleteSelectedItemsConfirm" xml:space="preserve"><value>删除所选的 {0} 个项目？被删除文件夹中的宏将移动到数据库根目录。</value></data>
+  <data name="SelectedItemsDeleted" xml:space="preserve"><value>已删除所选的 {0} 个项目。</value></data>
+  <data name="Refresh" xml:space="preserve"><value>刷新</value></data>
+  <data name="LockSelected" xml:space="preserve"><value>锁定所选宏</value></data>
+  <data name="UnlockSelected" xml:space="preserve"><value>解锁所选宏</value></data>
+  <data name="SelectedMacrosLocked" xml:space="preserve"><value>已锁定所选的 {0} 个宏。</value></data>
+  <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>已解锁所选的 {0} 个宏。</value></data>
+  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>可一次选择主宏和子宏；程序会自动识别文件间的引用并建立嵌套宏。</value></data>
+  <data name="ConversionSmartImported" xml:space="preserve"><value>已导入 {0} 个宏（选择 {1} 个文件，自动识别 {2} 个子宏）。</value></data>
+  <data name="AddOcrExtractText" xml:space="preserve"><value>OCR 获取文本</value></data>
+  <data name="AddOcrExtractTextHint" xml:space="preserve"><value>从混合文字中提取内容到剪贴板</value></data>
+  <data name="TemplateOcrExtractText" xml:space="preserve"><value>OCR 获取文本</value></data>
+  <data name="OcrExtractPreset" xml:space="preserve"><value>常用规则</value></data>
+  <data name="OcrExtractPresetCustom" xml:space="preserve"><value>自定义</value></data>
+  <data name="OcrExtractPresetAllText" xml:space="preserve"><value>获取全部文字</value></data>
+  <data name="OcrExtractPresetDigits" xml:space="preserve"><value>只获取连续数字</value></data>
+  <data name="OcrExtractPresetFilterDigits" xml:space="preserve"><value>先过滤示例词，再只保留数字</value></data>
+  <data name="OcrExtractPresetAlphaNumeric" xml:space="preserve"><value>连续字母、数字、横线或下划线</value></data>
+  <data name="OcrExtractPresetUid" xml:space="preserve"><value>获取 UID 后面的内容</value></data>
+  <data name="OcrExtractPresetAfterSeparator" xml:space="preserve"><value>获取冒号或等号后面的内容</value></data>
+  <data name="OcrExtractFilterTerms" xml:space="preserve"><value>过滤词（每行一个，最先执行）</value></data>
+  <data name="OcrExtractKeepDigitsOnly" xml:space="preserve"><value>过滤和提取后只保留 0-9</value></data>
+  <data name="OcrExtractPattern" xml:space="preserve"><value>提取规则（留空获取全部文字）</value></data>
+  <data name="OcrExtractUseRegex" xml:space="preserve"><value>使用正则表达式</value></data>
+  <data name="OcrExtractRegion" xml:space="preserve"><value>屏幕识别区域</value></data>
+  <data name="OcrExtractLanguage" xml:space="preserve"><value>识别语言</value></data>
+  <data name="OcrExtractMatchIndex" xml:space="preserve"><value>第几个匹配</value></data>
+  <data name="OcrExtractCaptureGroup" xml:space="preserve"><value>复制捕获组（0=完整匹配）</value></data>
+  <data name="OcrExtractNormalizeWhitespace" xml:space="preserve"><value>匹配失败时忽略 OCR 多余空格</value></data>
+  <data name="OcrExtractFailStopsMacro" xml:space="preserve"><value>未提取到文字时停止宏</value></data>
+  <data name="OcrExtractTest" xml:space="preserve"><value>测试提取（不写剪贴板）</value></data>
+  <data name="OcrExtractTesting" xml:space="preserve"><value>正在识别并提取...</value></data>
+  <data name="OcrExtractFound" xml:space="preserve"><value>已提取“{0}”；未写入剪贴板。</value></data>
+  <data name="OcrExtractNotFound" xml:space="preserve"><value>未提取到匹配文字。</value></data>
+  <data name="AddOcrClick" xml:space="preserve"><value>OCR 文字点击</value></data>
+  <data name="AddOcrClickHint" xml:space="preserve"><value>识别屏幕区域内的文字并点击</value></data>
+  <data name="TemplateOcrClick" xml:space="preserve"><value>OCR 文字点击</value></data>
+  <data name="OcrClickExpectedText" xml:space="preserve"><value>文字或正则表达式</value></data>
+  <data name="OcrClickUseRegex" xml:space="preserve"><value>使用正则表达式</value></data>
+  <data name="OcrClickContains" xml:space="preserve"><value>包含匹配</value></data>
+  <data name="InvalidRegex" xml:space="preserve"><value>正则表达式无效</value></data>
+  <data name="OcrClickRegion" xml:space="preserve"><value>屏幕识别区域</value></data>
+  <data name="SelectRegion" xml:space="preserve"><value>选择区域...</value></data>
+  <data name="OcrClickLanguage" xml:space="preserve"><value>识别语言</value></data>
+  <data name="OcrClickMouseButton" xml:space="preserve"><value>鼠标按键</value></data>
+  <data name="OcrClickCount" xml:space="preserve"><value>点击次数 (1-3)</value></data>
+  <data name="OcrClickMatchIndex" xml:space="preserve"><value>第几个匹配</value></data>
+  <data name="OcrClickHoldMs" xml:space="preserve"><value>按住 (ms)</value></data>
+  <data name="OcrClickIntervalMs" xml:space="preserve"><value>多击间隔 (ms)</value></data>
+  <data name="OcrClickOffsetX" xml:space="preserve"><value>点击偏移 X</value></data>
+  <data name="OcrClickOffsetY" xml:space="preserve"><value>点击偏移 Y</value></data>
+  <data name="OcrClickTest" xml:space="preserve"><value>测试定位（不点击）</value></data>
+  <data name="OcrClickTesting" xml:space="preserve"><value>正在识别...</value></data>
+  <data name="OcrClickFound" xml:space="preserve"><value>已找到“{0}”，坐标 ({1}, {2})；未执行点击。</value></data>
+  <data name="OcrClickNotFound" xml:space="preserve"><value>未找到匹配文字。</value></data>
+  <data name="AddWindowActivate" xml:space="preserve"><value>指定窗口到前台</value></data>
+  <data name="AddWindowActivateHint" xml:space="preserve"><value>定位、恢复并确认目标窗口</value></data>
+  <data name="TemplateWindowActivate" xml:space="preserve"><value>指定窗口到前台</value></data>
+  <data name="WindowProcessName" xml:space="preserve"><value>目标进程</value></data>
+  <data name="WindowTitleOptional" xml:space="preserve"><value>窗口标题（可选）</value></data>
+  <data name="WindowTitleUseRegex" xml:space="preserve"><value>标题使用正则表达式</value></data>
+  <data name="InvalidWindowTitleRegex" xml:space="preserve"><value>窗口标题正则表达式无效</value></data>
+  <data name="WindowMatchIndex" xml:space="preserve"><value>第几个匹配窗口</value></data>
+  <data name="WindowActivationTimeoutMs" xml:space="preserve"><value>前台确认超时 (ms)</value></data>
+  <data name="WindowRestore" xml:space="preserve"><value>最小化时自动恢复</value></data>
+  <data name="WindowFailStopsMacro" xml:space="preserve"><value>切换失败时停止宏</value></data>
+  <data name="WindowActivationConfirmationHint" xml:space="preserve"><value>确认目标进程已经成为前台后，才会执行下一条动作。</value></data>
+  <data name="WindowProcessRequired" xml:space="preserve"><value>必须填写目标进程名称。</value></data>
+  <data name="WindowSelected" xml:space="preserve"><value>已选择 {0}：{1}</value></data>
+  <data name="WindowTargetPickerTitle" xml:space="preserve"><value>选择运行窗口</value></data>
+  <data name="SelectWindow" xml:space="preserve"><value>选择窗口...</value></data>
+  <data name="NoWindowsFound" xml:space="preserve"><value>没有可选择的运行窗口。</value></data>
+  <data name="StartRecording" xml:space="preserve"><value>● 录制输入</value></data>
+  <data name="StopRecording" xml:space="preserve"><value>■ 停止录制</value></data>
+  <data name="RecordingHelp" xml:space="preserve"><value>记录键盘、鼠标和真实延迟；按 Ctrl+Shift+F12 停止</value></data>
+  <data name="RecordingActive" xml:space="preserve"><value>正在录制… Ctrl+Shift+F12 停止</value></data>
+  <data name="RecordingCaptured" xml:space="preserve"><value>正在录制… 已记录 {0} 个输入</value></data>
+  <data name="RecordingStarted" xml:space="preserve"><value>已开始记录键鼠输入，按 Ctrl+Shift+F12 停止。</value></data>
+  <data name="RecordingCompleted" xml:space="preserve"><value>已记录 {0} 个输入，并插入 {1} 个序列步骤。</value></data>
+  <data name="RecordingEmpty" xml:space="preserve"><value>录制已停止，没有捕获到输入。</value></data>
+  <data name="RecordingFailed" xml:space="preserve"><value>录制失败：{0}</value></data>
+  <data name="RecordingLocked" xml:space="preserve"><value>请先解锁当前宏，再录制输入。</value></data>
+  <data name="RecordingListenerRestoreFailed" xml:space="preserve"><value>录制已停止，但无法恢复宏监听：{0}</value></data>
+  <data name="ConditionRecordingUnavailable" xml:space="preserve"><value>请先选择一个可编辑的条件，再录制它的触发动作。</value></data>
+  <data name="ActionKindDown" xml:space="preserve"><value>按下</value></data>
+  <data name="ActionKindUp" xml:space="preserve"><value>抬起</value></data>
+  <data name="ActionKindTap" xml:space="preserve"><value>点按</value></data>
+  <data name="ActionKindClick" xml:space="preserve"><value>单击</value></data>
 </root>

@@ -19,6 +19,10 @@
   <data name="Playback" xml:space="preserve"><value>播放</value></data>
   <data name="Trigger" xml:space="preserve"><value>觸發鍵</value></data>
   <data name="Capture" xml:space="preserve"><value>擷取</value></data>
+  <data name="CaptureTriggerHint" xml:space="preserve"><value>按下觸發鍵…</value></data>
+  <data name="FilterWindowsPlaceholder" xml:space="preserve"><value>篩選處理程序名稱或視窗標題</value></data>
+  <data name="ProcessFilterPlaceholder" xml:space="preserve"><value>例如 chrome.exe</value></data>
+  <data name="TriggerSupportHint" xml:space="preserve"><value>支援主鍵盤、數字鍵盤、符號鍵、F1–F24 和標準滑鼠 1–5 鍵。</value></data>
   <data name="Apply" xml:space="preserve"><value>套用</value></data>
   <data name="Mode" xml:space="preserve"><value>模式</value></data>
   <data name="Count" xml:space="preserve"><value>次數</value></data>
@@ -67,24 +71,26 @@
   <data name="MacroFileFilter" xml:space="preserve"><value>MacroHID 巨集 (*.mcrx)|*.mcrx|JSON (*.json)|*.json|所有檔案 (*.*)|*.*</value></data>
   <data name="ImportExport" xml:space="preserve"><value>匯入 / 匯出</value></data>
   <data name="ImportMacro" xml:space="preserve"><value>匯入</value></data>
-  <data name="ImportRazerModules" xml:space="preserve"><value>雷雲模組</value></data>
   <data name="ApplyImport" xml:space="preserve"><value>套用</value></data>
   <data name="ExportFormat" xml:space="preserve"><value>匯出格式</value></data>
   <data name="ExportMacro" xml:space="preserve"><value>匯出</value></data>
   <data name="ConversionReady" xml:space="preserve"><value>轉換器已內建</value></data>
-  <data name="ConversionImported" xml:space="preserve"><value>已匯入 {0}：{1} 個步驟待套用</value></data>
+  <data name="ConversionImported" xml:space="preserve"><value>已匯入 {0}：{1} 個步驟已加入巨集資料庫</value></data>
+  <data name="ConversionBatchImported" xml:space="preserve"><value>已匯入 {0}/{1} 個巨集。</value></data>
+  <data name="ConversionBatchImportFailed" xml:space="preserve"><value>有 {0} 個巨集檔案匯入失敗，請在轉換面板查看詳情。</value></data>
+  <data name="ConversionImportErrorTitle" xml:space="preserve"><value>巨集匯入失敗</value></data>
+  <data name="ConversionImportLocation" xml:space="preserve"><value>第 {0} 行，第 {1} 欄剖析失敗</value></data>
+  <data name="ConversionImportUnknownLocation" xml:space="preserve"><value>無法確定剖析位置</value></data>
+  <data name="ConversionImportSourceLine" xml:space="preserve"><value>原文：{0}</value></data>
+  <data name="ConversionDiagnosticLocation" xml:space="preserve"><value>第 {0} 行，第 {1} 欄：</value></data>
   <data name="ConversionApplied" xml:space="preserve"><value>已套用匯入巨集到編輯器</value></data>
   <data name="ConversionExported" xml:space="preserve"><value>已匯出 {0}</value></data>
-  <data name="ConversionModulesLoaded" xml:space="preserve"><value>已載入雷雲模組：{0}</value></data>
-  <data name="ConversionModulesImported" xml:space="preserve"><value>已載入雷雲模組：{0}；加入巨集資料庫：{1}</value></data>
   <data name="ConversionDiagnosticsNone" xml:space="preserve"><value>沒有轉換警告</value></data>
   <data name="ConversionImportFailed" xml:space="preserve"><value>匯入失敗：{0}</value></data>
   <data name="ConversionExportFailed" xml:space="preserve"><value>匯出失敗：{0}</value></data>
   <data name="ImportMacroTitle" xml:space="preserve"><value>匯入巨集</value></data>
-  <data name="ImportRazerModulesTitle" xml:space="preserve"><value>匯入雷雲模組 XML</value></data>
   <data name="ExportMacroTitle" xml:space="preserve"><value>匯出巨集</value></data>
   <data name="ConverterImportFileFilter" xml:space="preserve"><value>支援的巨集檔案 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|所有檔案 (*.*)|*.*</value></data>
-  <data name="RazerModuleFileFilter" xml:space="preserve"><value>雷雲 XML (*.xml)|*.xml|所有檔案 (*.*)|*.*</value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>巨集資料庫管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新增</value></data>
   <data name="NewFolder" xml:space="preserve"><value>資料夾</value></data>
@@ -95,6 +101,15 @@
   <data name="Undo" xml:space="preserve"><value>撤回</value></data>
   <data name="ClearAll" xml:space="preserve"><value>清空</value></data>
   <data name="Delete" xml:space="preserve"><value>刪除</value></data>
+  <data name="LockMacro" xml:space="preserve"><value>鎖定編輯</value></data>
+  <data name="UnlockMacro" xml:space="preserve"><value>解除鎖定</value></data>
+  <data name="LockMacroHelp" xml:space="preserve"><value>防止誤修改，鎖定後仍可執行和匯出</value></data>
+  <data name="UnlockMacroHelp" xml:space="preserve"><value>允許再次編輯這個巨集</value></data>
+  <data name="MacroLocked" xml:space="preserve"><value>巨集已鎖定，編輯區現為唯讀</value></data>
+  <data name="MacroUnlocked" xml:space="preserve"><value>巨集已解除鎖定，可以繼續編輯</value></data>
+  <data name="MacroLockedReadOnly" xml:space="preserve"><value>這個巨集已鎖定，請先解除鎖定再修改。</value></data>
+  <data name="SelectMacroToLock" xml:space="preserve"><value>請先選擇一個巨集再變更鎖定狀態。</value></data>
+  <data name="ConditionValidationFailed" xml:space="preserve"><value>條件時間範圍無效，請修正後再儲存或執行巨集。</value></data>
   <data name="SaveLibrary" xml:space="preserve"><value>儲存到庫</value></data>
   <data name="Add" xml:space="preserve"><value>新增</value></data>
   <data name="AddDelay" xml:space="preserve"><value>延遲</value></data>
@@ -105,8 +120,9 @@
   <data name="AddText" xml:space="preserve"><value>文字功能</value></data>
   <data name="AddMacro" xml:space="preserve"><value>巨集</value></data>
   <data name="AddLoop" xml:space="preserve"><value>循環</value></data>
-  <data name="AddStopCurrent" xml:space="preserve"><value>停止目前巨集序列</value></data>
-  <data name="AddStopAll" xml:space="preserve"><value>停止所有巨集序列</value></data>
+  <data name="AddStopCurrent" xml:space="preserve"><value>停止本層巨集動作</value></data>
+  <data name="AddStopIteration" xml:space="preserve"><value>停止本輪播放</value></data>
+  <data name="AddStopAll" xml:space="preserve"><value>停止本次播放</value></data>
   <data name="AddPixel" xml:space="preserve"><value>像素條件</value></data>
   <data name="AddDelayHint" xml:space="preserve"><value>固定或隨機等待</value></data>
   <data name="AddKeyboardHint" xml:space="preserve"><value>按下、抬起或輸入</value></data>
@@ -117,6 +133,7 @@
   <data name="AddMacroActionHint" xml:space="preserve"><value>呼叫巨集資料庫項目</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>重複一組步驟</value></data>
   <data name="AddStopCurrentHint" xml:space="preserve"><value>退出目前巨集呼叫，外層繼續執行</value></data>
+  <data name="AddStopIterationHint" xml:space="preserve"><value>跳過本輪剩餘步驟，外層循環繼續</value></data>
   <data name="AddStopAllHint" xml:space="preserve"><value>立即終止整次巨集播放</value></data>
   <data name="ActionPaletteDragHint" xml:space="preserve"><value>點擊新增，或拖到序列的目標位置。</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>把左側巨集拖到序列裡，可以複製它的步驟。</value></data>
@@ -175,6 +192,13 @@
   <data name="DropActionsHint" xml:space="preserve"><value>把動作拖到這裡，或直接點擊右側新增項。</value></data>
   <data name="LibrarySaved" xml:space="preserve"><value>巨集資料庫已儲存</value></data>
   <data name="DeleteMacroConfirm" xml:space="preserve"><value>從本地資料庫刪除巨集「{0}」？</value></data>
+  <data name="DeleteDatabaseConfirm" xml:space="preserve"><value>刪除巨集資料庫「{0}」？其中的巨集將移回「全域」資料庫。</value></data>
+  <data name="DeleteFolderConfirm" xml:space="preserve"><value>刪除資料夾「{0}」？其中的巨集將移動到資料庫根目錄。</value></data>
+  <data name="DeleteFailed" xml:space="preserve"><value>刪除失敗：{0}</value></data>
+  <data name="MacroDeleted" xml:space="preserve"><value>已刪除巨集：{0}</value></data>
+  <data name="SelectDatabaseToDelete" xml:space="preserve"><value>請先選擇要刪除的巨集資料庫。</value></data>
+  <data name="SelectItemToDelete" xml:space="preserve"><value>請先選擇要刪除的項目。</value></data>
+  <data name="GlobalDatabaseCannotDelete" xml:space="preserve"><value>「全域」資料庫不能刪除。</value></data>
   <data name="ActionInserted" xml:space="preserve"><value>已插入{0}</value></data>
   <data name="InsertedMacroSteps" xml:space="preserve"><value>已插入巨集「{0}」（{1} 個步驟）</value></data>
   <data name="TemplateDelay" xml:space="preserve"><value>延遲</value></data>
@@ -208,4 +232,123 @@
   <data name="WorkspacePanelPlayback" xml:space="preserve"><value>播放控制</value></data>
   <data name="WorkspaceLayoutReset" xml:space="preserve"><value>工作區佈局已重設</value></data>
   <data name="JsonApplied" xml:space="preserve"><value>JSON 已套用</value></data>
+  <data name="Redo" xml:space="preserve"><value>重做</value></data>
+  <data name="ActionColorSettingsTitle" xml:space="preserve"><value>動作顏色</value></data>
+  <data name="ActionColorType" xml:space="preserve"><value>動作類別</value></data>
+  <data name="ActionTextColor" xml:space="preserve"><value>文字顏色</value></data>
+  <data name="ActionIconColor" xml:space="preserve"><value>圖示顏色</value></data>
+  <data name="ActionBackgroundColor" xml:space="preserve"><value>底色</value></data>
+  <data name="ActionColorPreview" xml:space="preserve"><value>動作預覽</value></data>
+  <data name="RestoreDefaults" xml:space="preserve"><value>恢復預設</value></data>
+  <data name="Done" xml:space="preserve"><value>完成</value></data>
+  <data name="ChooseColor" xml:space="preserve"><value>選擇顏色</value></data>
+  <data name="Confirm" xml:space="preserve"><value>確定</value></data>
+  <data name="Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="Type" xml:space="preserve"><value>類型</value></data>
+  <data name="New" xml:space="preserve"><value>新增</value></data>
+  <data name="Duplicate" xml:space="preserve"><value>建立副本</value></data>
+  <data name="SelectAll" xml:space="preserve"><value>全選</value></data>
+  <data name="View" xml:space="preserve"><value>檢視</value></data>
+  <data name="SortBy" xml:space="preserve"><value>排序方式</value></data>
+  <data name="DateModified" xml:space="preserve"><value>修改日期</value></data>
+  <data name="FileFolderType" xml:space="preserve"><value>資料夾</value></data>
+  <data name="MacroFileType" xml:space="preserve"><value>巨集檔案</value></data>
+  <data name="FolderItemCount" xml:space="preserve"><value>{0} 個項目</value></data>
+  <data name="UpOneLevel" xml:space="preserve"><value>返回上層</value></data>
+  <data name="ViewDetails" xml:space="preserve"><value>詳細資料</value></data>
+  <data name="ViewList" xml:space="preserve"><value>清單</value></data>
+  <data name="ViewSmallIcons" xml:space="preserve"><value>小圖示</value></data>
+  <data name="ViewLargeIcons" xml:space="preserve"><value>大圖示</value></data>
+  <data name="ExplorerItemCount" xml:space="preserve"><value>{0} 個項目</value></data>
+  <data name="ExplorerSelectedCount" xml:space="preserve"><value>已選取 {0} 項，共 {1} 項</value></data>
+  <data name="SelectedItemsCopied" xml:space="preserve"><value>已複製所選的 {0} 個項目。</value></data>
+  <data name="SelectedItemsMoved" xml:space="preserve"><value>已移動所選的 {0} 個巨集。</value></data>
+  <data name="DeleteSelectedItemsConfirm" xml:space="preserve"><value>刪除所選的 {0} 個項目？已刪除資料夾中的巨集將移至資料庫根目錄。</value></data>
+  <data name="SelectedItemsDeleted" xml:space="preserve"><value>已刪除所選的 {0} 個項目。</value></data>
+  <data name="Refresh" xml:space="preserve"><value>重新整理</value></data>
+  <data name="LockSelected" xml:space="preserve"><value>鎖定所選巨集</value></data>
+  <data name="UnlockSelected" xml:space="preserve"><value>解除鎖定所選巨集</value></data>
+  <data name="SelectedMacrosLocked" xml:space="preserve"><value>已鎖定所選的 {0} 個巨集。</value></data>
+  <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>已解除鎖定所選的 {0} 個巨集。</value></data>
+  <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>可一次選取主巨集和子巨集；程式會自動識別檔案間的參照並建立巢狀巨集。</value></data>
+  <data name="ConversionSmartImported" xml:space="preserve"><value>已匯入 {0} 個巨集（選取 {1} 個檔案，自動識別 {2} 個子巨集）。</value></data>
+  <data name="AddOcrExtractText" xml:space="preserve"><value>OCR 取得文字</value></data>
+  <data name="AddOcrExtractTextHint" xml:space="preserve"><value>從混合文字中擷取內容到剪貼簿</value></data>
+  <data name="TemplateOcrExtractText" xml:space="preserve"><value>OCR 取得文字</value></data>
+  <data name="OcrExtractPreset" xml:space="preserve"><value>常用規則</value></data>
+  <data name="OcrExtractPresetCustom" xml:space="preserve"><value>自訂</value></data>
+  <data name="OcrExtractPresetAllText" xml:space="preserve"><value>取得全部文字</value></data>
+  <data name="OcrExtractPresetDigits" xml:space="preserve"><value>只取得連續數字</value></data>
+  <data name="OcrExtractPresetFilterDigits" xml:space="preserve"><value>先過濾範例詞，再只保留數字</value></data>
+  <data name="OcrExtractPresetAlphaNumeric" xml:space="preserve"><value>連續字母、數字、連字號或底線</value></data>
+  <data name="OcrExtractPresetUid" xml:space="preserve"><value>取得 UID 後面的內容</value></data>
+  <data name="OcrExtractPresetAfterSeparator" xml:space="preserve"><value>取得冒號或等號後面的內容</value></data>
+  <data name="OcrExtractFilterTerms" xml:space="preserve"><value>過濾詞（每行一個，最先執行）</value></data>
+  <data name="OcrExtractKeepDigitsOnly" xml:space="preserve"><value>過濾和擷取後只保留 0-9</value></data>
+  <data name="OcrExtractPattern" xml:space="preserve"><value>擷取規則（留空取得全部文字）</value></data>
+  <data name="OcrExtractUseRegex" xml:space="preserve"><value>使用規則運算式</value></data>
+  <data name="OcrExtractRegion" xml:space="preserve"><value>螢幕辨識區域</value></data>
+  <data name="OcrExtractLanguage" xml:space="preserve"><value>辨識語言</value></data>
+  <data name="OcrExtractMatchIndex" xml:space="preserve"><value>第幾個符合項目</value></data>
+  <data name="OcrExtractCaptureGroup" xml:space="preserve"><value>複製擷取群組（0=完整符合）</value></data>
+  <data name="OcrExtractNormalizeWhitespace" xml:space="preserve"><value>比對失敗時忽略 OCR 多餘空白</value></data>
+  <data name="OcrExtractFailStopsMacro" xml:space="preserve"><value>無法擷取文字時停止巨集</value></data>
+  <data name="OcrExtractTest" xml:space="preserve"><value>測試擷取（不寫入剪貼簿）</value></data>
+  <data name="OcrExtractTesting" xml:space="preserve"><value>正在辨識並擷取...</value></data>
+  <data name="OcrExtractFound" xml:space="preserve"><value>已擷取「{0}」；未寫入剪貼簿。</value></data>
+  <data name="OcrExtractNotFound" xml:space="preserve"><value>無法擷取符合的文字。</value></data>
+  <data name="AddOcrClick" xml:space="preserve"><value>OCR 文字點擊</value></data>
+  <data name="AddOcrClickHint" xml:space="preserve"><value>辨識螢幕區域內的文字並點擊</value></data>
+  <data name="TemplateOcrClick" xml:space="preserve"><value>OCR 文字點擊</value></data>
+  <data name="OcrClickExpectedText" xml:space="preserve"><value>文字或規則運算式</value></data>
+  <data name="OcrClickUseRegex" xml:space="preserve"><value>使用規則運算式</value></data>
+  <data name="OcrClickContains" xml:space="preserve"><value>包含比對</value></data>
+  <data name="InvalidRegex" xml:space="preserve"><value>規則運算式無效</value></data>
+  <data name="OcrClickRegion" xml:space="preserve"><value>螢幕辨識區域</value></data>
+  <data name="SelectRegion" xml:space="preserve"><value>選取區域...</value></data>
+  <data name="OcrClickLanguage" xml:space="preserve"><value>辨識語言</value></data>
+  <data name="OcrClickMouseButton" xml:space="preserve"><value>滑鼠按鍵</value></data>
+  <data name="OcrClickCount" xml:space="preserve"><value>點擊次數 (1-3)</value></data>
+  <data name="OcrClickMatchIndex" xml:space="preserve"><value>第幾個符合項目</value></data>
+  <data name="OcrClickHoldMs" xml:space="preserve"><value>按住 (ms)</value></data>
+  <data name="OcrClickIntervalMs" xml:space="preserve"><value>多擊間隔 (ms)</value></data>
+  <data name="OcrClickOffsetX" xml:space="preserve"><value>點擊偏移 X</value></data>
+  <data name="OcrClickOffsetY" xml:space="preserve"><value>點擊偏移 Y</value></data>
+  <data name="OcrClickTest" xml:space="preserve"><value>測試定位（不點擊）</value></data>
+  <data name="OcrClickTesting" xml:space="preserve"><value>正在辨識...</value></data>
+  <data name="OcrClickFound" xml:space="preserve"><value>已找到「{0}」，座標 ({1}, {2})；未執行點擊。</value></data>
+  <data name="OcrClickNotFound" xml:space="preserve"><value>找不到符合的文字。</value></data>
+  <data name="AddWindowActivate" xml:space="preserve"><value>指定視窗到前景</value></data>
+  <data name="AddWindowActivateHint" xml:space="preserve"><value>定位、還原並確認目標視窗</value></data>
+  <data name="TemplateWindowActivate" xml:space="preserve"><value>指定視窗到前景</value></data>
+  <data name="WindowProcessName" xml:space="preserve"><value>目標程序</value></data>
+  <data name="WindowTitleOptional" xml:space="preserve"><value>視窗標題（選填）</value></data>
+  <data name="WindowTitleUseRegex" xml:space="preserve"><value>標題使用規則運算式</value></data>
+  <data name="InvalidWindowTitleRegex" xml:space="preserve"><value>視窗標題規則運算式無效</value></data>
+  <data name="WindowMatchIndex" xml:space="preserve"><value>第幾個符合視窗</value></data>
+  <data name="WindowActivationTimeoutMs" xml:space="preserve"><value>前景確認逾時 (ms)</value></data>
+  <data name="WindowRestore" xml:space="preserve"><value>最小化時自動還原</value></data>
+  <data name="WindowFailStopsMacro" xml:space="preserve"><value>切換失敗時停止巨集</value></data>
+  <data name="WindowActivationConfirmationHint" xml:space="preserve"><value>確認目標程序已成為前景後，才會執行下一個動作。</value></data>
+  <data name="WindowProcessRequired" xml:space="preserve"><value>必須填寫目標程序名稱。</value></data>
+  <data name="WindowSelected" xml:space="preserve"><value>已選取 {0}：{1}</value></data>
+  <data name="WindowTargetPickerTitle" xml:space="preserve"><value>選取執行中視窗</value></data>
+  <data name="SelectWindow" xml:space="preserve"><value>選取視窗...</value></data>
+  <data name="NoWindowsFound" xml:space="preserve"><value>沒有可選取的執行中視窗。</value></data>
+  <data name="StartRecording" xml:space="preserve"><value>● 錄製輸入</value></data>
+  <data name="StopRecording" xml:space="preserve"><value>■ 停止錄製</value></data>
+  <data name="RecordingHelp" xml:space="preserve"><value>記錄鍵盤、滑鼠和真實延遲；按 Ctrl+Shift+F12 停止</value></data>
+  <data name="RecordingActive" xml:space="preserve"><value>正在錄製… Ctrl+Shift+F12 停止</value></data>
+  <data name="RecordingCaptured" xml:space="preserve"><value>正在錄製… 已記錄 {0} 個輸入</value></data>
+  <data name="RecordingStarted" xml:space="preserve"><value>已開始記錄鍵鼠輸入，按 Ctrl+Shift+F12 停止。</value></data>
+  <data name="RecordingCompleted" xml:space="preserve"><value>已記錄 {0} 個輸入，並插入 {1} 個序列步驟。</value></data>
+  <data name="RecordingEmpty" xml:space="preserve"><value>錄製已停止，沒有擷取到輸入。</value></data>
+  <data name="RecordingFailed" xml:space="preserve"><value>錄製失敗：{0}</value></data>
+  <data name="RecordingLocked" xml:space="preserve"><value>請先解除鎖定目前巨集，再錄製輸入。</value></data>
+  <data name="RecordingListenerRestoreFailed" xml:space="preserve"><value>錄製已停止，但無法恢復巨集監聽：{0}</value></data>
+  <data name="ConditionRecordingUnavailable" xml:space="preserve"><value>請先選擇一個可編輯的條件，再錄製它的觸發動作。</value></data>
+  <data name="ActionKindDown" xml:space="preserve"><value>按下</value></data>
+  <data name="ActionKindUp" xml:space="preserve"><value>抬起</value></data>
+  <data name="ActionKindTap" xml:space="preserve"><value>點按</value></data>
+  <data name="ActionKindClick" xml:space="preserve"><value>單擊</value></data>
 </root>

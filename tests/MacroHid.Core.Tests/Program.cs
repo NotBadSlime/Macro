@@ -132,6 +132,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio exposes keyboard and mouse input recording", MacroStudioExposesKeyboardAndMouseInputRecording),
     ("MacroStudio records input into selected condition actions", MacroStudioRecordsInputIntoSelectedConditionActions),
     ("MacroStudio keeps step editor combo box values selectable", MacroStudioKeepsStepEditorComboBoxValuesSelectable),
+    ("MacroStudio step editor hides hold timing and captures modifier keys", MacroStudioStepEditorHidesHoldTimingAndCapturesModifierKeys),
     ("MacroStudio exposes undo for the last sequence edit", MacroStudioExposesUndoForLastSequenceEdit),
     ("MacroStudio supports Ctrl+Y redo history", MacroStudioSupportsCtrlYRedoHistory),
     ("MacroStudio gives every sequence row inline actions and styled menus", MacroStudioGivesEverySequenceRowInlineActionsAndStyledMenus),
@@ -3344,6 +3345,28 @@ static void MacroStudioKeepsStepEditorComboBoxValuesSelectable()
     Assert.Contains("MoveModeBox", stepEditorXaml);
     Assert.Contains("comboBox.Text = item.Content?.ToString()", stepEditorCode);
     Assert.Contains("ResolveComboBoxEnumFromText<TEnum>", stepEditorCode);
+}
+
+static void MacroStudioStepEditorHidesHoldTimingAndCapturesModifierKeys()
+{
+    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml"));
+    var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
+    var english = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.resx"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+    var traditional = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-TW.resx"));
+
+    Assert.DoesNotContain("StepCtrlBox", xaml);
+    Assert.DoesNotContain("StepShiftBox", xaml);
+    Assert.DoesNotContain("StepAltBox", xaml);
+    Assert.DoesNotContain("StepWinBox", xaml);
+    Assert.Contains("timing: step is MouseMoveStep", code);
+    Assert.Contains("Hold = TimeSpan.Zero", code);
+    Assert.Contains("ActionKindDown", code);
+    Assert.DoesNotContain("if (IsModifierKey(key)) return;", code);
+    Assert.Contains("name=\"ActionKindDown\"", english);
+    Assert.Contains("按下", simplified);
+    Assert.Contains("抬起", simplified);
+    Assert.Contains("點按", traditional);
 }
 
 static void MacroStudioExposesUndoForLastSequenceEdit()
