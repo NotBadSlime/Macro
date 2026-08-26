@@ -259,6 +259,9 @@ var tests = new (string Name, Action Body)[]
     ("Macro library store persists and duplicates macros", MacroLibraryStorePersistsAndDuplicatesMacros),
     ("Macro library store persists edit locks", MacroLibraryStorePersistsEditLocks),
     ("Macro library store resolves external aliases", MacroLibraryStoreResolvesExternalAliases),
+    ("Macro library import preserves nested macro call identity", MacroLibraryImportPreservesNestedMacroCallIdentity),
+    ("Macro call reference collector walks nested structures", MacroCallReferenceCollectorWalksNestedStructures),
+    ("Embedded converter round trips macro call steps", EmbeddedConverterRoundTripsMacroCallSteps),
     ("Macro library store persists empty folders and moves macros like files", MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles),
     ("Macro library store reorders macros within folders", MacroLibraryStoreReordersMacrosWithinFolders),
     ("Macro library store renames macros and folders", MacroLibraryStoreRenamesMacrosAndFolders),
@@ -273,6 +276,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio macro library exposes process group controls", MacroStudioMacroLibraryExposesProcessGroupControls),
     ("MacroStudio macro library can pick running processes and executable files for groups", MacroStudioMacroLibraryCanPickRunningProcessesAndExecutableFilesForGroups),
     ("MacroStudio macro library supports batch macro import", MacroStudioMacroLibrarySupportsBatchMacroImport),
+    ("MacroStudio remaps nested macro calls when importing MCRX files", MacroStudioRemapsNestedMacroCallsWhenImportingMcrxFiles),
     ("MacroStudio listeners apply process group filters", MacroStudioListenersApplyProcessGroupFilters),
     ("MacroStudio macro library right click delete keeps its target and reports failures", MacroStudioMacroLibraryRightClickDeleteKeepsItsTargetAndReportsFailures),
     ("MacroStudio macro library defers listening refresh while renaming", MacroStudioMacroLibraryDefersListeningRefreshWhileRenaming),
@@ -6274,6 +6278,126 @@ static void MacroLibraryStoreResolvesExternalAliases()
     }
 }
 
+static void MacroCallReferenceCollectorWalksNestedStructures()
+{
+    var document = new MacroDocument(
+        1,
+        "Main",
+        PlaybackSettings.Default,
+        [
+            new MacroCallStep("child-id"),
+            new RepeatStep(2, [new MacroCallStep("loop-child")]),
+            new PixelWhenStep(
+                new PixelCondition(new PixelCoordinate(CoordinateScope.Screen, 1, 2), new RgbColor(1, 2, 3), 4),
+                [new MacroCallStep("pixel-child")])
+        ],
+        [
+            new ConditionalDirective(
+                "c1",
+                "cond",
+                0,
+                0,
+                new PixelMatcher(ScreenRegion.FromSinglePixel(1, 1), new RgbColor(1, 2, 3), 4),
+                [new MacroCallStep("cond-child")])
+        ]);
+
+    var refs = MacroCallReferenceCollector.Collect(document);
+    Assert.Equal(4, refs.Count);
+    Assert.True(refs.Contains("child-id"));
+    Assert.True(refs.Contains("loop-child"));
+    Assert.True(refs.Contains("pixel-child"));
+    Assert.True(refs.Contains("cond-child"));
+}
+
+static void MacroLibraryImportPreservesNestedMacroCallIdentity()
+{
+    var sourceRoot = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    var targetRoot = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var source = new MacroLibraryStore(sourceRoot);
+        var child = source.CreateMacro(
+            "Child Burst",
+            steps: [new WaitStep(TimeSpan.FromMilliseconds(5))]);
+        var parent = source.CreateMacro(
+            new MacroDocument(
+                1,
+                "Main Combo",
+                PlaybackSettings.Default,
+                [
+                    new MacroCallStep(child.Id),
+                    new RepeatStep(2, [new MacroCallStep(child.Id)])
+                ],
+                [
+                    new ConditionalDirective(
+                        "cond1",
+                        "call child",
+                        0,
+                        0,
+                        new PixelMatcher(ScreenRegion.FromSinglePixel(1, 1), new RgbColor(1, 2, 3), 4),
+                        [new MacroCallStep(child.Id)])
+                ]));
+
+        var target = new MacroLibraryStore(targetRoot);
+        var imported = target.ImportMacros(
+        [
+            McrxParser.Parse(McrxSerializer.Serialize(source.ReadMacro(child.Id))),
+            McrxParser.Parse(McrxSerializer.Serialize(source.ReadMacro(parent.Id)))
+        ]);
+
+        Assert.Equal(2, imported.Count);
+        var snapshot = target.Load();
+        var importedChild = snapshot.Items.Single(item => item.Name == "Child Burst");
+        var importedParent = snapshot.Items.Single(item => item.Name == "Main Combo");
+        Assert.True(importedChild.MatchesReference(child.Id));
+        Assert.False(string.Equals(importedChild.Id, child.Id, StringComparison.OrdinalIgnoreCase));
+
+        var importedDocument = target.ReadMacro(importedParent.Id);
+        var call = Assert.IsType<MacroCallStep>(importedDocument.Steps[0]);
+        Assert.True(importedChild.MatchesReference(call.Macro));
+        Assert.Equal(importedChild.Id, call.Macro);
+
+        var nested = Assert.IsType<RepeatStep>(importedDocument.Steps[1]);
+        var nestedCall = Assert.IsType<MacroCallStep>(nested.Steps[0]);
+        Assert.Equal(importedChild.Id, nestedCall.Macro);
+
+        var conditionCall = Assert.IsType<MacroCallStep>(importedDocument.EffectiveConditions.Single().ThenSteps.Single());
+        Assert.Equal(importedChild.Id, conditionCall.Macro);
+    }
+    finally
+    {
+        if (Directory.Exists(sourceRoot))
+        {
+            Directory.Delete(sourceRoot, recursive: true);
+        }
+
+        if (Directory.Exists(targetRoot))
+        {
+            Directory.Delete(targetRoot, recursive: true);
+        }
+    }
+}
+
+static void EmbeddedConverterRoundTripsMacroCallSteps()
+{
+    var document = new MacroDocument(
+        1,
+        "Main Combo",
+        [
+            new MacroCallStep("Child Burst"),
+            new WaitStep(TimeSpan.FromMilliseconds(1))
+        ]);
+
+    var export = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.MacroConverterXml);
+    Assert.False(export.Diagnostics.Any(item => item.Severity == MacroDiagnosticSeverity.Warning));
+    Assert.Contains("macro.call", export.Output);
+    Assert.Contains("Child Burst", export.Output);
+
+    var import = MacroConversionService.ImportToMcrx(new MacroImportRequest(export.Output, "main.xml"));
+    var call = Assert.IsType<MacroCallStep>(import.Document.Steps[0]);
+    Assert.Equal("Child Burst", call.Macro);
+}
+
 static void MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles()
 {
     var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
@@ -6674,6 +6798,24 @@ static void MacroStudioMacroLibrarySupportsBatchMacroImport()
     Assert.DoesNotContain("雷云模块", simplified);
 }
 
+static void MacroStudioRemapsNestedMacroCallsWhenImportingMcrxFiles()
+{
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var storeCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Core", "MacroLibraryStore.cs"));
+    var serializerCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Core", "McrxSerializer.cs"));
+    var parserCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Core", "McrxParser.cs"));
+    var modelCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Core", "MacroModel.cs"));
+
+    Assert.Contains("string? Id = null", modelCode);
+    Assert.Contains("root[\"id\"] = document.Id", serializerCode);
+    Assert.Contains("root.TryGetProperty(\"id\"", parserCode);
+    Assert.Contains("ImportMacros(", storeCode);
+    Assert.Contains("MacroCallRewriter.RemapReferences", storeCode);
+    Assert.Contains("ImportMacros(", libraryCode);
+    Assert.Contains("format.Format == MacroConversionFormat.MacroHidMcrx", libraryCode);
+    Assert.Contains("ExportSelectedMacros", libraryCode);
+}
+
 static void MacroStudioMacroLibraryRightClickDeleteKeepsItsTargetAndReportsFailures()
 {
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
@@ -6752,6 +6894,9 @@ static void MacroStudioPolishesInputChromeMenusAndEmptyStates()
 
     Assert.Contains("x:Name=\"PART_ContentHost\"", sharedStyles);
     Assert.Contains("CornerRadius=\"11\"", sharedStyles);
+    Assert.Contains("Padding\" Value=\"10,0\"", sharedStyles);
+    Assert.Contains("VerticalAlignment=\"Center\"", sharedStyles);
+    Assert.Contains("VerticalScrollBarVisibility\" Value=\"Disabled\"", sharedStyles);
     Assert.Contains("x:Key=\"PlaceholderHintStyle\"", sharedStyles);
     Assert.Contains("x:Key=\"ToolToggleButton\"", sharedStyles);
     Assert.Contains("x:Key=\"MenuItemSubmenuHeaderTemplate\"", sharedStyles);
@@ -6764,6 +6909,7 @@ static void MacroStudioPolishesInputChromeMenusAndEmptyStates()
     Assert.Contains("x:Name=\"GroupProcessFilterPlaceholderText\"", libraryXaml);
     Assert.Contains("Style=\"{StaticResource ToolToggleButton}\"", sequenceXaml);
     Assert.Contains("x:Name=\"TriggerCaptureHintText\"", playbackXaml);
+    Assert.Contains("Height=\"34\"", playbackXaml);
     Assert.Contains("Tag = \"Capturing\"", playbackCode);
     Assert.Contains("x:Name=\"EmptySequenceOverlay\"", stepSequenceXaml);
     Assert.Contains("EmptySequenceOverlay.Visibility", stepSequenceCode);
