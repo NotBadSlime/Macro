@@ -19,6 +19,9 @@ public partial class StepEditorPanel : UserControl
     private ScreenRegion ocrExtractRegion = ScreenRegion.FromRect(0, 0, 640, 360);
     private ScreenRegion ocrClickRegion = ScreenRegion.FromRect(0, 0, 640, 360);
 
+    public static event Action? AnyKeyCaptureStarted;
+    public static event Action? AnyKeyCaptureFinished;
+
     public event Action<MacroStep>? StepEdited;
     public event EventHandler? CoordinatePickerStarted;
     public event EventHandler? CoordinatePickerFinished;
@@ -457,6 +460,7 @@ public partial class StepEditorPanel : UserControl
     {
         if (capturingStepKey) { StopStepKeyCapture(); return; }
         capturingStepKey = true;
+        AnyKeyCaptureStarted?.Invoke();
         AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureStepKey_KeyDown), true);
     }
 
@@ -477,6 +481,7 @@ public partial class StepEditorPanel : UserControl
         if (!capturingStepKey) return;
         capturingStepKey = false;
         RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureStepKey_KeyDown));
+        AnyKeyCaptureFinished?.Invoke();
     }
 
     private void PickPixelColor_Click(object sender, RoutedEventArgs e)

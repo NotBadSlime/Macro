@@ -40,6 +40,9 @@ public partial class MainWindow : Window
     private WorkspaceLayout workspaceLayout = new([], WorkspaceLayoutStore.CurrentVersion);
     private HwndSource? windowSource;
     private bool listening;
+    private bool listeningPaused;
+    private bool pauseOwnedByCapture;
+    private readonly List<string> pausedListeningIds = [];
     private bool updatingLanguageComboBox;
     private bool updatingWorkspaceMenu;
     private bool syncingJsonPanel;
@@ -136,6 +139,10 @@ public partial class MainWindow : Window
         PlaybackPanelControl.RunNowRequested += OnRunNow;
         PlaybackPanelControl.StopPlaybackRequested += OnStopPlayback;
         PlaybackPanelControl.PlaybackSettingsEdited += OnPlaybackSettingsEdited;
+        PlaybackPanelControl.TriggerCaptureStarted += PauseListeningForCapture;
+        PlaybackPanelControl.TriggerCaptureFinished += ResumeListeningAfterCapture;
+        StepEditorPanel.AnyKeyCaptureStarted += PauseListeningForCapture;
+        StepEditorPanel.AnyKeyCaptureFinished += ResumeListeningAfterCapture;
 
         ConditionPanel.ConditionSelectionChanged += OnConditionSelectionChanged;
         ConditionPanel.ConditionsModified += OnConditionsModified;
@@ -1398,6 +1405,11 @@ public partial class MainWindow : Window
 
     private async void OnStartListeningGroups(IReadOnlyList<string> groupIds)
     {
+        if (BlockListeningWhilePaused())
+        {
+            return;
+        }
+
         try
         {
             AutoSaveCurrentMacro(updateStatus: false);
@@ -1445,6 +1457,11 @@ public partial class MainWindow : Window
 
     private async void OnStartCurrentListening()
     {
+        if (BlockListeningWhilePaused())
+        {
+            return;
+        }
+
         try
         {
             AutoSaveCurrentMacro(updateStatus: false);
@@ -1481,10 +1498,125 @@ public partial class MainWindow : Window
         keyboardHook = null;
         StopListeningControllers();
         playbackController?.Stop();
+        if (listeningPaused)
+        {
+            pausedListeningIds.Clear();
+        }
+
         RefreshLibraryListeningState();
         PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusIdle"));
         PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
         SetStatus(L("Idle"));
+    }
+
+    private void PauseListeningButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (listeningPaused && !pauseOwnedByCapture)
+        {
+            ResumePausedListening();
+            return;
+        }
+
+        PauseListening(userRequested: true);
+    }
+
+    private void PauseListening(bool userRequested)
+    {
+        if (!listeningPaused)
+        {
+            pausedListeningIds.Clear();
+            pausedListeningIds.AddRange(listeningControllers.Keys);
+            OnStopPlayback();
+            listening = false;
+            keyboardHook?.Dispose();
+            keyboardHook = null;
+            StopListeningControllers();
+            RefreshLibraryListeningState();
+            PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusIdle"));
+            PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
+        }
+
+        listeningPaused = true;
+        if (userRequested)
+        {
+            pauseOwnedByCapture = false;
+        }
+
+        UpdatePauseListeningButton();
+        SetStatus(L("ListeningPausedStatus"));
+    }
+
+    private void ResumePausedListening()
+    {
+        listeningPaused = false;
+        pauseOwnedByCapture = false;
+        UpdatePauseListeningButton();
+        var ids = pausedListeningIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        pausedListeningIds.Clear();
+        if (ids.Count == 0)
+        {
+            SetStatus(L("Idle"));
+            return;
+        }
+
+        try
+        {
+            var candidates = BuildListeningCandidates()
+                .Where(candidate => ids.Contains(candidate.Item.Id))
+                .ToList();
+            if (candidates.Count == 0)
+            {
+                SetStatus(L("Idle"));
+                return;
+            }
+
+            var count = StartListeningCandidates(candidates, ids);
+            PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
+            SetStatus(LocalizationService.Format("ListeningResumePartial", count));
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
+        }
+    }
+
+    private void PauseListeningForCapture()
+    {
+        if (listeningPaused)
+        {
+            return;
+        }
+
+        PauseListening(userRequested: false);
+        pauseOwnedByCapture = true;
+    }
+
+    private void ResumeListeningAfterCapture()
+    {
+        if (!listeningPaused || !pauseOwnedByCapture)
+        {
+            return;
+        }
+
+        ResumePausedListening();
+    }
+
+    private bool BlockListeningWhilePaused()
+    {
+        if (!listeningPaused)
+        {
+            return false;
+        }
+
+        SetStatus(L("ListeningPausedHint"));
+        return true;
+    }
+
+    private void UpdatePauseListeningButton()
+    {
+        PauseListeningButton.Content = L(listeningPaused ? "ResumeListening" : "PauseListening");
+        PauseListeningButton.Style = (Style)FindResource(
+            listeningPaused ? "DangerButton" : "CommandBarButton");
     }
 
     private void OnStopCurrentListening()
@@ -2492,6 +2624,7 @@ public partial class MainWindow : Window
         JsonPanel.ApplyLocalization();
         ActionPalette.ApplyLocalization();
         PlaybackPanelControl.ApplyLocalization();
+        UpdatePauseListeningButton();
     }
 
     protected override void OnClosed(EventArgs e)

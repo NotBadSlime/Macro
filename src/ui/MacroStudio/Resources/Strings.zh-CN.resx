@@ -354,4 +354,9 @@
   <data name="ActionKindUp" xml:space="preserve"><value>抬起</value></data>
   <data name="ActionKindTap" xml:space="preserve"><value>点按</value></data>
   <data name="ActionKindClick" xml:space="preserve"><value>单击</value></data>
+  <data name="PauseListening" xml:space="preserve"><value>暂停监听</value></data>
+  <data name="ResumeListening" xml:space="preserve"><value>恢复监听</value></data>
+  <data name="ListeningPausedHint" xml:space="preserve"><value>请先恢复监听，再开始监听。</value></data>
+  <data name="ListeningPausedStatus" xml:space="preserve"><value>已暂停监听。已保存的触发键不会被删除。</value></data>
+  <data name="ListeningResumePartial" xml:space="preserve"><value>已恢复 {0} 个监听。</value></data>
 </root>

@@ -10,7 +10,7 @@
         MinWidth="1040"
         Icon="Assets/AppIcon.ico"
         Background="{DynamicResource PageBackground}"
-        FontFamily="Segoe UI"
+        FontFamily="Segoe UI Variable, Segoe UI"
         ResizeMode="CanResize"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
         PreviewMouseDown="MainWindow_PreviewMouseDown"
@@ -32,14 +32,19 @@
                     Background="{DynamicResource ChromeBackground}"
                     BorderBrush="{DynamicResource ChromeBorder}"
                     BorderThickness="0,0,0,1"
-                    Padding="14,8"
+                    Padding="16,7"
                     MouseLeftButtonDown="TopChromeBar_MouseLeftButtonDown">
                 <DockPanel LastChildFill="False">
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="8"
+                                Height="8"
+                                Margin="0,0,10,0"
+                                CornerRadius="3"
+                                Background="{DynamicResource Accent}" />
                         <TextBlock Text="MacroHID"
-                                   FontSize="18"
+                                   FontSize="15"
                                    FontWeight="SemiBold"
-                                   Margin="0,0,14,0" />
+                                   Margin="0,0,16,0" />
                         <Button x:Name="OpenButton"
                                 Style="{StaticResource CommandBarButton}"
                                 Content="打开宏文件"
@@ -97,6 +102,12 @@
                                        VerticalAlignment="Center"
                                        Text="Input backend ready" />
                         </Border>
+                        <Button x:Name="PauseListeningButton"
+                                Style="{StaticResource CommandBarButton}"
+                                MinWidth="88"
+                                Margin="0,0,12,0"
+                                Content="暂停监听"
+                                Click="PauseListeningButton_Click" />
                         <TextBlock x:Name="LanguageLabelText"
                                    Text="语言"
                                    Foreground="{DynamicResource SecondaryText}"
@@ -109,20 +120,20 @@
                                   SelectionChanged="LanguageComboBox_SelectionChanged" />
                         <Button x:Name="ThemeToggleButton"
                                 Style="{StaticResource WindowControlButton}"
-                                Content="☀"
+                                Content="&#xE706;"
                                 Click="ThemeToggle_Click"
                                 ToolTip="Toggle theme" />
                         <Button x:Name="MinimizeWindowButton"
                                 Style="{StaticResource WindowControlButton}"
-                                Content="-"
+                                Content="&#xE921;"
                                 Click="MinimizeWindow_Click" />
                         <Button x:Name="MaximizeWindowButton"
                                 Style="{StaticResource WindowControlButton}"
-                                Content="□"
+                                Content="&#xE922;"
                                 Click="MaximizeWindow_Click" />
                         <Button x:Name="CloseWindowButton"
                                 Style="{StaticResource CloseWindowButton}"
-                                Content="X"
+                                Content="&#xE8BB;"
                                 Click="CloseWindow_Click" />
                     </StackPanel>
                 </DockPanel>

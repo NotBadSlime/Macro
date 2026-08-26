@@ -12,6 +12,7 @@ public partial class PlaybackPanel : UserControl
 {
     private bool capturingTrigger;
     private bool updatingPlaybackControls;
+    private bool isReadOnly;
     private readonly DispatcherTimer triggerCaptureCommitTimer;
     private readonly List<HidKey> capturedTriggerKeys = [];
     private readonly List<MacroHid.Core.MouseButton> capturedTriggerMouseButtons = [];
@@ -21,6 +22,8 @@ public partial class PlaybackPanel : UserControl
     public event Action? RunNowRequested;
     public event Action? StopPlaybackRequested;
     public event Action? PlaybackSettingsEdited;
+    public event Action? TriggerCaptureStarted;
+    public event Action? TriggerCaptureFinished;
 
     public PlaybackPanel()
     {
@@ -64,12 +67,25 @@ public partial class PlaybackPanel : UserControl
                 }
             }
 
-            PlaybackCountTextBox.IsEnabled = settings.Mode == PlaybackMode.FixedCount;
+            PlaybackCountTextBox.IsEnabled = !isReadOnly && settings.Mode == PlaybackMode.FixedCount;
         }
         finally
         {
             updatingPlaybackControls = false;
         }
+    }
+
+    public void SetReadOnly(bool value)
+    {
+        isReadOnly = value;
+        if (value && capturingTrigger)
+        {
+            StopCapture();
+        }
+
+        CaptureTriggerButton.IsEnabled = !value;
+        PlaybackModeBox.IsEnabled = !value;
+        PlaybackCountTextBox.IsEnabled = !value && GetSelectedPlaybackMode() == PlaybackMode.FixedCount;
     }
 
     public void SetPlaybackStatus(string text)
@@ -86,7 +102,9 @@ public partial class PlaybackPanel : UserControl
     {
         PlaybackTitleText.Text = L("Playback");
         TriggerLabelText.Text = L("Trigger");
-        CaptureTriggerButton.Content = L("Capture");
+        CaptureTriggerButton.Content = capturingTrigger ? L("Cancel") : L("Capture");
+        TriggerCaptureHintText.Text = L("CaptureTriggerHint");
+        TriggerSupportHintText.Text = L("TriggerSupportHint");
         ModeLabelText.Text = L("Mode");
         PlaybackCountLabelText.Text = L("Count");
         StartListeningButton.Content = L("StartListening");
@@ -116,10 +134,13 @@ public partial class PlaybackPanel : UserControl
         }
 
         capturingTrigger = true;
+        TriggerCaptureStarted?.Invoke();
         capturedTriggerKeys.Clear();
         capturedTriggerMouseButtons.Clear();
         updatingPlaybackControls = true;
         TriggerTextBox.Text = string.Empty;
+        TriggerTextBox.Tag = "Capturing";
+        CaptureTriggerButton.Content = L("Cancel");
         updatingPlaybackControls = false;
         AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureTrigger_KeyDown), true);
         AddHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureTrigger_KeyUp), true);
@@ -173,6 +194,9 @@ public partial class PlaybackPanel : UserControl
     {
         var button = e.ChangedButton switch
         {
+            System.Windows.Input.MouseButton.Left => MacroHid.Core.MouseButton.Left,
+            System.Windows.Input.MouseButton.Right => MacroHid.Core.MouseButton.Right,
+            System.Windows.Input.MouseButton.Middle => MacroHid.Core.MouseButton.Middle,
             System.Windows.Input.MouseButton.XButton1 => MacroHid.Core.MouseButton.X1,
             System.Windows.Input.MouseButton.XButton2 => MacroHid.Core.MouseButton.X2,
             _ => MacroHid.Core.MouseButton.None
@@ -195,9 +219,12 @@ public partial class PlaybackPanel : UserControl
         if (!capturingTrigger) return;
         capturingTrigger = false;
         triggerCaptureCommitTimer.Stop();
+        TriggerTextBox.Tag = null;
+        CaptureTriggerButton.Content = L("Capture");
         RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureTrigger_KeyDown));
         RemoveHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureTrigger_KeyUp));
         RemoveHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(CaptureTrigger_MouseDown));
+        TriggerCaptureFinished?.Invoke();
     }
 
     private void UpdateTriggerCapturePreview(HidModifier modifiers)
@@ -239,7 +266,7 @@ public partial class PlaybackPanel : UserControl
     private void PlaybackModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (PlaybackCountTextBox is not null)
-            PlaybackCountTextBox.IsEnabled = GetSelectedPlaybackMode() == PlaybackMode.FixedCount;
+            PlaybackCountTextBox.IsEnabled = !isReadOnly && GetSelectedPlaybackMode() == PlaybackMode.FixedCount;
         NotifyPlaybackSettingsEdited();
     }
 

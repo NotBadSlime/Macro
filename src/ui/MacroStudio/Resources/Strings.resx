@@ -528,4 +528,9 @@
   <data name="ActionKindUp" xml:space="preserve"><value>Up</value></data>
   <data name="ActionKindTap" xml:space="preserve"><value>Tap</value></data>
   <data name="ActionKindClick" xml:space="preserve"><value>Click</value></data>
+  <data name="PauseListening" xml:space="preserve"><value>Pause listening</value></data>
+  <data name="ResumeListening" xml:space="preserve"><value>Resume listening</value></data>
+  <data name="ListeningPausedHint" xml:space="preserve"><value>Resume listening before starting listeners.</value></data>
+  <data name="ListeningPausedStatus" xml:space="preserve"><value>Listening paused. Saved triggers are unchanged.</value></data>
+  <data name="ListeningResumePartial" xml:space="preserve"><value>Restored {0} listener(s).</value></data>
 </root>

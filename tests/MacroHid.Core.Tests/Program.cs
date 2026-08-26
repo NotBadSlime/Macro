@@ -132,6 +132,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio exposes keyboard and mouse input recording", MacroStudioExposesKeyboardAndMouseInputRecording),
     ("MacroStudio records input into selected condition actions", MacroStudioRecordsInputIntoSelectedConditionActions),
     ("MacroStudio recording buttons choose a delay mode first", MacroStudioRecordingButtonsChooseADelayModeFirst),
+    ("MacroStudio can pause listening without clearing triggers", MacroStudioCanPauseListeningWithoutClearingTriggers),
     ("MacroStudio keeps step editor combo box values selectable", MacroStudioKeepsStepEditorComboBoxValuesSelectable),
     ("MacroStudio step editor hides hold timing and captures modifier keys", MacroStudioStepEditorHidesHoldTimingAndCapturesModifierKeys),
     ("MacroStudio exposes undo for the last sequence edit", MacroStudioExposesUndoForLastSequenceEdit),
@@ -3345,6 +3346,28 @@ static void MacroStudioRecordingButtonsChooseADelayModeFirst()
     Assert.Contains("Action<MacroRecordingMode>", sequence);
     Assert.Contains("MacroRecordingOptions.ForUserMode(mode)", mainWindow);
     Assert.Contains("new MacroInputRecorder(options)", mainWindow);
+}
+
+static void MacroStudioCanPauseListeningWithoutClearingTriggers()
+{
+    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml"));
+    var main = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var playback = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackPanel.xaml.cs"));
+    var editor = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("PauseListeningButton", xaml);
+    Assert.Contains("listeningPaused", main);
+    Assert.Contains("pausedListeningIds", main);
+    Assert.Contains("PauseListeningForCapture", main);
+    Assert.Contains("ResumeListeningAfterCapture", main);
+    Assert.Contains("ListeningPausedHint", main);
+    Assert.Contains("TriggerCaptureStarted", playback);
+    Assert.Contains("TriggerCaptureFinished", playback);
+    Assert.Contains("AnyKeyCaptureStarted", editor);
+    Assert.Contains("AnyKeyCaptureFinished", editor);
+    Assert.Contains("暂停监听", simplified);
+    Assert.Contains("恢复监听", simplified);
 }
 
 static void MacroStudioKeepsStepEditorComboBoxValuesSelectable()
