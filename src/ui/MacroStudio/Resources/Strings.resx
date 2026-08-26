@@ -453,6 +453,7 @@
   <data name="ExportNothingSelected" xml:space="preserve"><value>Select a macro or macro folder to export.</value></data>
   <data name="ExportDependenciesFolder" xml:space="preserve"><value>Dependencies</value></data>
   <data name="ExportFolderRootSuffix" xml:space="preserve"><value>-export</value></data>
+  <data name="ExportSelectedMacrosFolder" xml:space="preserve"><value>Selected macros</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>Delete macro folder</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>Unlock selected</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>Locked {0} selected macro(s).</value></data>

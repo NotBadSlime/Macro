@@ -48,11 +48,22 @@ public static class MacroLibraryExportBundles
     public static MacroLibraryExportBundle FromItems(
         MacroLibraryStore store,
         MacroLibrarySnapshot snapshot,
-        IReadOnlyList<MacroLibraryItem> items)
+        IReadOnlyList<MacroLibraryItem> items,
+        Func<MacroLibraryItem, MacroDocument>? readPrimaryDocument = null)
     {
         var primaryItems = items.ToList();
         var primary = primaryItems
-            .Select(item => new MacroLibraryExportEntry(item, store.ReadMacro(item.Id) with { Id = item.Id }, item.FileName))
+            .Select(item =>
+            {
+                var document = readPrimaryDocument?.Invoke(item)
+                    ?? (store.ReadMacro(item.Id) with { Id = item.Id });
+                if (string.IsNullOrWhiteSpace(document.Id))
+                {
+                    document = document with { Id = item.Id };
+                }
+
+                return new MacroLibraryExportEntry(item, document, item.FileName);
+            })
             .ToList();
         var primaryIds = primaryItems.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var deps = new Dictionary<string, MacroLibraryExportEntry>(StringComparer.OrdinalIgnoreCase);

@@ -2314,10 +2314,18 @@ public partial class MacroLibraryPanel : UserControl
 
         try
         {
-            var wizard = new ExportWizardDialog(showPackagingStep: target.IsFolder);
+            MacroLibraryExportBundle? itemBundle = null;
+            var showPackaging = target.IsFolder;
+            if (!target.IsFolder && state is not null)
+            {
+                itemBundle = BuildItemExportBundle(target, state.LibraryStore.Load());
+                showPackaging = itemBundle.Dependencies.Count > 0;
+            }
+
+            var wizard = new ExportWizardDialog(showPackagingStep: showPackaging);
             if (DialogOwnerService.ShowDialogSafe(wizard, this) != true || wizard.Result is null)
                 return;
-            ExecuteExport(target, wizard.Result);
+            ExecuteExport(target, wizard.Result, itemBundle);
         }
         catch (Exception ex)
         {
@@ -2367,7 +2375,10 @@ public partial class MacroLibraryPanel : UserControl
             Macros: selected);
     }
 
-    private void ExecuteExport(ExportTarget target, ExportWizardResult wizardResult)
+    private void ExecuteExport(
+        ExportTarget target,
+        ExportWizardResult wizardResult,
+        MacroLibraryExportBundle? precomputedItemBundle = null)
     {
         if (state is null) return;
         var format = wizardResult.Format;
@@ -2379,11 +2390,18 @@ public partial class MacroLibraryPanel : UserControl
             return;
         }
 
-        if (target.Macros.Count <= 1)
+        var bundle = precomputedItemBundle ?? BuildItemExportBundle(target, snapshot);
+        if (bundle.Primary.Count == 0)
         {
-            var item = target.Macros.FirstOrDefault();
-            var document = PrepareExportDocument(item);
-            var export = MacroConversionService.ExportFromMcrx(document, format);
+            ResultMessage?.Invoke(L("ExportNothingSelected"));
+            return;
+        }
+
+        // Single macro with no nested dependencies: keep classic Save As.
+        if (bundle.Primary.Count == 1 && bundle.Dependencies.Count == 0)
+        {
+            var entry = bundle.Primary[0];
+            var export = MacroConversionService.ExportFromMcrx(entry.Document, format);
             var dialog = new SaveFileDialog
             {
                 Filter = FormatFilter(format),
@@ -2398,20 +2416,58 @@ public partial class MacroLibraryPanel : UserControl
             return;
         }
 
+        var dependenciesFolderName = L("ExportDependenciesFolder");
+        var primaryFolderName = bundle.Primary.Count == 1
+            ? SanitizeExportFileName(bundle.Primary[0].Item.Name)
+            : SanitizeExportFileName(L("ExportSelectedMacrosFolder"));
+        var exportRootName = primaryFolderName + L("ExportFolderRootSuffix");
+
+        if (wizardResult.Packaging == ExportPackagingMode.Zip)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "ZIP (*.zip)|*.zip",
+                Title = L("ExportMacroTitle"),
+                DefaultExt = ".zip",
+                FileName = SanitizeExportFileName(exportRootName) + ".zip"
+            };
+            if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
+            MacroLibraryExportWriter.WriteZip(
+                bundle,
+                dialog.FileName,
+                exportRootName,
+                primaryFolderName,
+                dependenciesFolderName,
+                format);
+            ResultMessage?.Invoke(LF("ConversionExported", Path.GetFileName(dialog.FileName)));
+            return;
+        }
+
+        if (wizardResult.Packaging == ExportPackagingMode.TwoFolders)
+        {
+            var parentDirectory = PromptForExportDirectory();
+            if (string.IsNullOrWhiteSpace(parentDirectory)) return;
+            MacroLibraryExportWriter.WriteTwoFolders(
+                bundle,
+                parentDirectory,
+                exportRootName,
+                primaryFolderName,
+                dependenciesFolderName,
+                format);
+            ResultMessage?.Invoke(LF("ConversionExported", exportRootName));
+            return;
+        }
+
         var directory = PromptForExportDirectory();
         if (string.IsNullOrWhiteSpace(directory)) return;
 
-        var bundle = MacroLibraryExportBundles.FromItems(state.LibraryStore, snapshot, target.Macros);
         var diagnostics = new List<MacroConversionDiagnostic>();
         var exportedNames = new List<string>();
         var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var entry in bundle.Primary)
         {
-            var document = string.Equals(entry.Item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase)
-                ? PrepareExportDocument(entry.Item)
-                : entry.Document;
-            var export = MacroConversionService.ExportFromMcrx(document, format, entry.RelativePath);
+            var export = MacroConversionService.ExportFromMcrx(entry.Document, format, entry.RelativePath);
             var path = AllocateExportPath(directory, export.FileName, written);
             File.WriteAllText(path, export.Output);
             written.Add(Path.GetFullPath(path));
@@ -2421,7 +2477,7 @@ public partial class MacroLibraryPanel : UserControl
 
         if (bundle.Dependencies.Count > 0)
         {
-            var depsDirectory = Path.Combine(directory, L("ExportDependenciesFolder"));
+            var depsDirectory = Path.Combine(directory, dependenciesFolderName);
             Directory.CreateDirectory(depsDirectory);
             foreach (var entry in bundle.Dependencies)
             {
@@ -2430,12 +2486,24 @@ public partial class MacroLibraryPanel : UserControl
                 File.WriteAllText(path, export.Output);
                 written.Add(Path.GetFullPath(path));
                 diagnostics.AddRange(export.Diagnostics);
-                exportedNames.Add(Path.Combine(L("ExportDependenciesFolder"), Path.GetFileName(path)));
+                exportedNames.Add(Path.Combine(dependenciesFolderName, Path.GetFileName(path)));
             }
         }
 
         ConversionText.Text = FormatDiagnostics(diagnostics);
         ResultMessage?.Invoke(LF("ConversionExported", string.Join(", ", exportedNames)));
+    }
+
+    private MacroLibraryExportBundle BuildItemExportBundle(ExportTarget target, MacroLibrarySnapshot snapshot)
+    {
+        if (state is null)
+            return new MacroLibraryExportBundle([], []);
+
+        return MacroLibraryExportBundles.FromItems(
+            state.LibraryStore,
+            snapshot,
+            target.Macros,
+            item => PrepareExportDocument(item));
     }
 
     private void ExecuteFolderExport(ExportTarget target, ExportWizardResult wizardResult, MacroLibrarySnapshot snapshot)

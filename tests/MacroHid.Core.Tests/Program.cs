@@ -262,6 +262,7 @@ var tests = new (string Name, Action Body)[]
     ("Macro library import preserves nested macro call identity", MacroLibraryImportPreservesNestedMacroCallIdentity),
     ("Macro call reference collector walks nested structures", MacroCallReferenceCollectorWalksNestedStructures),
     ("Macro library export bundle separates folder macros from dependencies", MacroLibraryExportBundleSeparatesFolderMacrosFromDependencies),
+    ("Macro library export bundle collects dependencies for a single primary macro", MacroLibraryExportBundleCollectsDependenciesForSinglePrimaryMacro),
     ("MacroStudio export wizard has format and packaging steps", MacroStudioExportWizardHasFormatAndPackagingSteps),
     ("MacroStudio export uses wizard instead of format combo", MacroStudioExportUsesWizardInsteadOfFormatCombo),
     ("Macro library export writer materializes two-folder layout", MacroLibraryExportWriterMaterializesTwoFolderLayout),
@@ -6314,6 +6315,42 @@ static void MacroLibraryExportBundleSeparatesFolderMacrosFromDependencies()
     }
 }
 
+static void MacroLibraryExportBundleCollectsDependenciesForSinglePrimaryMacro()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var store = new MacroLibraryStore(root);
+        var nested = store.CreateMacro("2az", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+        var child = store.CreateMacro(
+            new MacroDocument(1, "2as", PlaybackSettings.Default, [new MacroCallStep(nested.Name)]));
+        var primary = store.CreateMacro(
+            new MacroDocument(
+                1,
+                "丝柯克0丝",
+                PlaybackSettings.Default,
+                [
+                    new MacroCallStep(child.Id),
+                    new MacroCallStep(child.Name),
+                    new WaitStep(TimeSpan.FromMilliseconds(210)),
+                    new MacroCallStep(nested.Name)
+                ]));
+
+        var snapshot = store.Load();
+        var bundle = MacroLibraryExportBundles.FromItems(store, snapshot, [primary]);
+
+        Assert.Equal(1, bundle.Primary.Count);
+        Assert.Equal(primary.Id, bundle.Primary[0].Item.Id);
+        Assert.Equal(2, bundle.Dependencies.Count);
+        Assert.True(bundle.Dependencies.Any(entry => entry.Item.Id == child.Id));
+        Assert.True(bundle.Dependencies.Any(entry => entry.Item.Id == nested.Id));
+    }
+    finally
+    {
+        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+    }
+}
+
 static void MacroStudioExportWizardHasFormatAndPackagingSteps()
 {
     var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ExportWizardDialog.xaml"));
@@ -6333,6 +6370,9 @@ static void MacroStudioExportUsesWizardInsteadOfFormatCombo()
     Assert.DoesNotContain("ExportFormatLabelText", libraryXaml);
     Assert.DoesNotContain("InitializeExportFormatBox", libraryCode);
     Assert.Contains("ExportWizardDialog", libraryCode);
+    Assert.Contains("BuildItemExportBundle", libraryCode);
+    Assert.Contains("bundle.Dependencies.Count == 0", libraryCode);
+    Assert.DoesNotContain("target.Macros.Count <= 1", libraryCode);
     Assert.True(
         libraryCode.Contains("MacroLibraryExportWriter", StringComparison.Ordinal)
         || libraryCode.Contains("WriteTwoFolders", StringComparison.Ordinal));

@@ -279,6 +279,7 @@
   <data name="ExportNothingSelected" xml:space="preserve"><value>请先选择要导出的宏或宏文件夹。</value></data>
   <data name="ExportDependenciesFolder" xml:space="preserve"><value>依赖子宏</value></data>
   <data name="ExportFolderRootSuffix" xml:space="preserve"><value>-导出</value></data>
+  <data name="ExportSelectedMacrosFolder" xml:space="preserve"><value>所选宏</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>删除宏文件夹</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解锁所选宏</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已锁定所选的 {0} 个宏。</value></data>

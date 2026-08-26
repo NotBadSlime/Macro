@@ -279,6 +279,7 @@
   <data name="ExportNothingSelected" xml:space="preserve"><value>請先選擇要匯出的巨集或巨集資料夾。</value></data>
   <data name="ExportDependenciesFolder" xml:space="preserve"><value>相依子巨集</value></data>
   <data name="ExportFolderRootSuffix" xml:space="preserve"><value>-匯出</value></data>
+  <data name="ExportSelectedMacrosFolder" xml:space="preserve"><value>所選巨集</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>刪除宏資料夾</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解除鎖定所選巨集</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已鎖定所選的 {0} 個巨集。</value></data>
