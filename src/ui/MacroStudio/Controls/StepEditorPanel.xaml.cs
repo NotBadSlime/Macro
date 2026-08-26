@@ -138,6 +138,7 @@ public partial class StepEditorPanel : UserControl
 
     public void ShowStep(MacroStep? step)
     {
+        StopStepKeyCapture();
         if (step is null)
         {
             StepEditorFieldsPanel.Visibility = Visibility.Collapsed;

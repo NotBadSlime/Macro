@@ -669,6 +669,7 @@ public partial class StepSequencePanel : UserControl
         inlineEditorPath = string.Empty;
         inlineCoordinatePickerActive = false;
         ResetStepDragState();
+        InlineStepEditor.ShowStep(null);
     }
 
     private bool IsClickInsideInlineEditor(DependencyObject? source)

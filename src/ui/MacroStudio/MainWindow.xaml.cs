@@ -1511,7 +1511,7 @@ public partial class MainWindow : Window
 
     private void PauseListeningButton_Click(object sender, RoutedEventArgs e)
     {
-        if (listeningPaused && !pauseOwnedByCapture)
+        if (listeningPaused)
         {
             ResumePausedListening();
             return;

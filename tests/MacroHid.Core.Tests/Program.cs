@@ -3354,6 +3354,7 @@ static void MacroStudioCanPauseListeningWithoutClearingTriggers()
     var main = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
     var playback = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackPanel.xaml.cs"));
     var editor = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
+    var sequence = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs"));
     var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
 
     Assert.Contains("PauseListeningButton", xaml);
@@ -3362,10 +3363,13 @@ static void MacroStudioCanPauseListeningWithoutClearingTriggers()
     Assert.Contains("PauseListeningForCapture", main);
     Assert.Contains("ResumeListeningAfterCapture", main);
     Assert.Contains("ListeningPausedHint", main);
+    Assert.DoesNotContain("listeningPaused && !pauseOwnedByCapture", main);
     Assert.Contains("TriggerCaptureStarted", playback);
     Assert.Contains("TriggerCaptureFinished", playback);
     Assert.Contains("AnyKeyCaptureStarted", editor);
     Assert.Contains("AnyKeyCaptureFinished", editor);
+    Assert.Contains("StopStepKeyCapture();", editor);
+    Assert.Contains("InlineStepEditor.ShowStep(null)", sequence);
     Assert.Contains("暂停监听", simplified);
     Assert.Contains("恢复监听", simplified);
 }
