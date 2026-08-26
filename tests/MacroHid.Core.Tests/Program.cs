@@ -27,6 +27,9 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers wheel and consumer control steps", McrxParserCoversWheelAndConsumerSteps),
     ("MCRX parser covers key text steps", McrxParserCoversKeyTextSteps),
     ("MCRX parser covers mouse button coordinates", McrxParserCoversMouseButtonCoordinates),
+    ("MCRX parser round trips OCR click and regex text conditions", McrxParserRoundTripsOcrClickAndRegexTextConditions),
+    ("MCRX parser round trips OCR text extraction", McrxParserRoundTripsOcrTextExtraction),
+    ("MCRX parser round trips target window activation", McrxParserRoundTripsTargetWindowActivation),
     ("MCRX parser preserves fractional millisecond timing", McrxParserPreservesFractionalMillisecondTiming),
     ("MCRX parser expands tap and click steps into press release steps", McrxParserExpandsTapAndClickStepsIntoPressReleaseSteps),
     ("MCRX serializer works when JSON reflection defaults are disabled", McrxSerializerWorksWhenJsonReflectionDefaultsAreDisabled),
@@ -43,6 +46,13 @@ var tests = new (string Name, Action Body)[]
     ("Global keyboard hook separates duplicate Tab bindings by foreground process", GlobalKeyboardHookSeparatesDuplicateTabBindingsByForegroundProcess),
     ("MCRX parser covers modifier-only and mouse side button triggers", McrxParserCoversModifierOnlyAndMouseSideButtonTriggers),
     ("MCRX parser covers multi-key and mouse combo triggers", McrxParserCoversMultiKeyAndMouseComboTriggers),
+    ("MCRX parser covers numpad symbol and mouse trigger aliases", McrxParserCoversNumpadSymbolAndMouseTriggerAliases),
+    ("Global keyboard hook maps numpad OEM and lock keys", GlobalKeyboardHookMapsNumpadOemAndLockKeys),
+    ("Global keyboard hook distinguishes physical numpad keys", GlobalKeyboardHookDistinguishesPhysicalNumpadKeys),
+    ("Global mouse hook maps all five standard buttons", GlobalMouseHookMapsAllFiveStandardButtons),
+    ("Macro recording session preserves keyboard mouse and delays", MacroRecordingSessionPreservesKeyboardMouseAndDelays),
+    ("Macro recording session samples movement and safely releases held inputs", MacroRecordingSessionSamplesMovementAndReleasesHeldInputs),
+    ("Macro recording session removes the stop hotkey", MacroRecordingSessionRemovesStopHotkey),
     ("MCRX parser defaults missing playback settings", McrxParserDefaultsMissingPlaybackSettings),
     ("MCRX parser rejects invalid playback settings", McrxParserRejectsInvalidPlaybackSettings),
     ("Sample baseline macro remains parseable", SampleBaselineMacroRemainsParseable),
@@ -57,6 +67,10 @@ var tests = new (string Name, Action Body)[]
     ("Playback executor waits for slow condition evaluation started inside window", PlaybackExecutorWaitsForSlowConditionEvaluationStartedInsideWindow),
     ("Playback executor lets triggered condition actions finish after window", PlaybackExecutorLetsTriggeredConditionActionsFinishAfterWindow),
     ("Input action compiler expands hold actions into timed actions", InputActionCompilerExpandsHoldActions),
+    ("Input action compiler keeps a hold gap for zero-delay key down and up", InputActionCompilerKeepsHoldGapForZeroDelayKeyDownAndUp),
+    ("Input action compiler applies key down hold before matching key up", InputActionCompilerAppliesKeyDownHoldBeforeMatchingKeyUp),
+    ("Input action compiler keeps simultaneous distinct key downs on the same tick", InputActionCompilerKeepsSimultaneousDistinctKeyDownsOnTheSameTick),
+    ("Compiled playback plan does not batch zero-delay key down and up", CompiledPlaybackPlanDoesNotBatchZeroDelayKeyDownAndUp),
     ("Input action compiler emits text actions", InputActionCompilerEmitsTextActions),
     ("Input action compiler expands macro calls and pixel windows", InputActionCompilerExpandsMacroCallsAndPixelWindows),
     ("Input action compiler evaluates pixel branches before emitting actions", InputActionCompilerEvaluatesPixelBranches),
@@ -67,6 +81,9 @@ var tests = new (string Name, Action Body)[]
     ("Pixel conditions match expected colors within tolerance", PixelConditionsMatchWithinTolerance),
     ("Composite condition evaluator handles all supported matcher types", CompositeConditionEvaluatorHandlesAllSupportedMatcherTypes),
     ("OCR text matching tolerates short Chinese recognition misses", OcrTextMatchingToleratesShortChineseRecognitionMisses),
+    ("OCR text matching supports safe regex and text box coordinates", OcrTextMatchingSupportsSafeRegexAndTextBoxCoordinates),
+    ("OCR text extraction handles mixed and nonnumeric UIDs", OcrTextExtractionHandlesMixedAndNonnumericUids),
+    ("Window activation matcher normalizes process names and title regex", WindowActivationMatcherNormalizesProcessNamesAndTitleRegex),
     ("Latency histogram computes p50 p95 p99 from microsecond samples", LatencyHistogramComputesPercentiles),
     ("Playback controller starts and stops toggle loop on trigger press", PlaybackControllerStopsToggleLoopOnTriggerPress),
     ("Playback controller runs fixed count once by default", PlaybackControllerRunsFixedCountOnceByDefault),
@@ -75,10 +92,16 @@ var tests = new (string Name, Action Body)[]
     ("Playback executor checks cancellation before submitting delayed actions", PlaybackExecutorChecksCancellationBeforeDelayedActions),
     ("Playback executor resolves macro call steps", PlaybackExecutorResolvesMacroCallSteps),
     ("Playback executor stops only the current nested macro sequence", PlaybackExecutorStopsOnlyCurrentNestedSequence),
+    ("Stop current macro layer advances root playback iterations", StopCurrentMacroLayerAdvancesRootPlaybackIterations),
     ("Playback executor stops all fixed count iterations", PlaybackExecutorStopsAllFixedCountIterations),
     ("Playback executor allows cancellable tail self calls", PlaybackExecutorAllowsCancellableTailSelfCalls),
     ("Condition stop all cancels the main timeline", ConditionStopAllCancelsMainTimeline),
     ("Pause condition mode shifts the remaining main timeline", PauseConditionModeShiftsRemainingMainTimeline),
+    ("Condition actions call nested macros and stop only the current child", ConditionActionsCallNestedMacrosAndStopOnlyCurrentChild),
+    ("Condition stop-current layer keeps the main iteration running", ConditionStopCurrentLayerKeepsMainIterationRunning),
+    ("Nested condition stop all cancels the main timeline", NestedConditionStopAllCancelsMainTimeline),
+    ("Toggle loop rearms visual conditions after stop-iteration then actions", ToggleLoopRearmsVisualConditionsAfterStopIterationThenActions),
+    ("Condition self calls do not recursively rearm condition monitors", ConditionSelfCallsDoNotRecursivelyRearmConditionMonitors),
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
@@ -101,8 +124,13 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio condition then-actions expose local add menu", MacroStudioConditionThenActionsExposeLocalAddMenu),
     ("MacroStudio condition then-actions use action palette popup", MacroStudioConditionThenActionsUseActionPalettePopup),
     ("MacroStudio exposes mouse button coordinate editor", MacroStudioExposesMouseButtonCoordinateEditor),
+    ("MacroStudio exposes OCR regex condition and text click editor", MacroStudioExposesOcrRegexConditionAndTextClickEditor),
+    ("MacroStudio exposes target window foreground action", MacroStudioExposesTargetWindowForegroundAction),
+    ("MacroStudio exposes keyboard and mouse input recording", MacroStudioExposesKeyboardAndMouseInputRecording),
+    ("MacroStudio records input into selected condition actions", MacroStudioRecordsInputIntoSelectedConditionActions),
     ("MacroStudio keeps step editor combo box values selectable", MacroStudioKeepsStepEditorComboBoxValuesSelectable),
     ("MacroStudio exposes undo for the last sequence edit", MacroStudioExposesUndoForLastSequenceEdit),
+    ("MacroStudio supports Ctrl+Y redo history", MacroStudioSupportsCtrlYRedoHistory),
     ("MacroStudio gives every sequence row inline actions and styled menus", MacroStudioGivesEverySequenceRowInlineActionsAndStyledMenus),
     ("MacroStudio supports undo shortcut and clearing the whole sequence", MacroStudioSupportsUndoShortcutAndClearingWholeSequence),
     ("MacroStudio supports macro call selection and playback autosave", MacroStudioSupportsMacroCallSelectionAndPlaybackAutosave),
@@ -112,6 +140,9 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
+    ("MacroStudio reports trigger conflicts only for simultaneous listeners", MacroStudioReportsTriggerConflictsOnlyForSimultaneousListeners),
+    ("Listening trigger resolver lets preferred macros override earlier conflicts", ListeningTriggerResolverLetsPreferredMacrosOverrideEarlierConflicts),
+    ("MacroStudio listening overrides previous conflicting triggers", MacroStudioListeningOverridesPreviousConflictingTriggers),
     ("MacroStudio separates library batch listening from playback current listening", MacroStudioSeparatesLibraryBatchListeningFromPlaybackCurrentListening),
     ("MacroStudio supports selected database batch listening", MacroStudioSupportsSelectedDatabaseBatchListening),
     ("MacroStudio uses compact database selection indicators", MacroStudioUsesCompactDatabaseSelectionIndicators),
@@ -136,6 +167,8 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio tool windows use a unified chrome", MacroStudioToolWindowsUseUnifiedChrome),
     ("MacroStudio floating tool windows use custom chrome", MacroStudioFloatingToolWindowsUseCustomChrome),
     ("MacroStudio action palette uses icon command cards", MacroStudioActionPaletteUsesIconCommandCards),
+    ("MacroStudio exposes persistent action colors in shared sequences", MacroStudioExposesPersistentActionColorsInSharedSequences),
+    ("MacroStudio uses stronger action hover and a dimmed light theme", MacroStudioUsesStrongerActionHoverAndDimmedLightTheme),
     ("MacroStudio sequence toolbar uses soft command buttons", MacroStudioSequenceToolbarUsesSoftCommandButtons),
     ("MacroStudio sequence toolbar uses compact icon command group", MacroStudioSequenceToolbarUsesCompactIconCommandGroup),
     ("MacroStudio uses a real dock host without stacked right scroll clipping", MacroStudioUsesRealDockHostWithoutStackedRightScrollClipping),
@@ -163,6 +196,8 @@ var tests = new (string Name, Action Body)[]
     ("Macro step tree editor moves multiple selected steps into loops by path", MacroStepTreeEditorMovesMultipleSelectedStepsIntoLoopsByPath),
     ("Macro step tree editor edits linked press release pairs", MacroStepTreeEditorEditsLinkedPressReleasePairs),
     ("Step display labels use press release wording", StepDisplayLabelsUsePressReleaseWording),
+    ("Step display finds loop end when preferring container end", StepDisplayFindsLoopEndWhenPreferringContainerEnd),
+    ("MacroStudio drop indicator uses loop end when inserting after a loop", MacroStudioDropIndicatorUsesLoopEndWhenInsertingAfterALoop),
     ("MacroStudio displays random delay and total duration ranges", MacroStudioDisplaysRandomDelayAndTotalDurationRanges),
     ("Step display labels resolve macro call ids to names", StepDisplayLabelsResolveMacroCallIdsToNames),
     ("MacroStudio resolves macro call aliases for display and playback", MacroStudioResolvesMacroCallAliasesForDisplayAndPlayback),
@@ -200,22 +235,29 @@ var tests = new (string Name, Action Body)[]
     ("Latency affinity tuner includes edge drop mask variants", LatencyAffinityTunerIncludesEdgeDropMaskVariants),
     ("Precision profile benchmark script validates all target tiers", PrecisionProfileBenchmarkScriptValidatesAllTargetTiers),
     ("Build scripts package native playback engine", BuildScriptsPackageNativePlaybackEngine),
+    ("Installer preserves user data unless uninstall explicitly confirms deletion", InstallerPreservesUserDataUnlessExplicitlyConfirmed),
     ("Razer sample XML separates direct import macros from module references", RazerSampleXmlSeparatesDirectImportMacrosFromModuleReferences),
     ("Hardware event probe captures Raw Input startup and cadence metrics", HardwareEventProbeCapturesRawInputStartupAndCadenceMetrics),
     ("Embedded converter imports MacroConverter formats", EmbeddedConverterImportsMacroConverterFormats),
     ("Embedded converter preserves Razer sub-millisecond timing", EmbeddedConverterPreservesRazerSubMillisecondTiming),
     ("Embedded converter preserves Razer overlapping press release order", EmbeddedConverterPreservesRazerOverlappingPressReleaseOrder),
     ("Embedded converter imports Razer module references as macro calls", EmbeddedConverterImportsRazerModuleReferencesAsMacroCalls),
+    ("Embedded converter preserves supplied Razer modules as nested calls", EmbeddedConverterPreservesSuppliedRazerModulesAsNestedCalls),
     ("Embedded converter imports GIMacros JSON", EmbeddedConverterImportsGIMacrosJson),
     ("Embedded converter exports GIMacros JSON", EmbeddedConverterExportsGIMacrosJson),
     ("Embedded converter exports MacroConverter formats", EmbeddedConverterExportsMacroConverterFormats),
     ("Embedded converter reports warnings for unsupported external features", EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures),
+    ("Embedded converter reports syntax import failures with source lines", EmbeddedConverterReportsSyntaxImportFailuresWithSourceLines),
+    ("Embedded converter locates semantic MCRX failures", EmbeddedConverterLocatesSemanticMcrxFailures),
+    ("Imported conditional macros execute then actions", ImportedConditionalMacrosExecuteThenActions),
     ("Macro library store persists and duplicates macros", MacroLibraryStorePersistsAndDuplicatesMacros),
+    ("Macro library store persists edit locks", MacroLibraryStorePersistsEditLocks),
     ("Macro library store resolves external aliases", MacroLibraryStoreResolvesExternalAliases),
     ("Macro library store persists empty folders and moves macros like files", MacroLibraryStorePersistsEmptyFoldersAndMovesMacrosLikeFiles),
     ("Macro library store reorders macros within folders", MacroLibraryStoreReordersMacrosWithinFolders),
     ("Macro library store renames macros and folders", MacroLibraryStoreRenamesMacrosAndFolders),
     ("Macro library store migrates legacy macros into global process group", MacroLibraryStoreMigratesLegacyMacrosIntoGlobalProcessGroup),
+    ("Macro library store repairs duplicate index entries", MacroLibraryStoreRepairsDuplicateIndexEntries),
     ("Macro library store creates edits and deletes process groups", MacroLibraryStoreCreatesEditsAndDeletesProcessGroups),
     ("Macro library store moves macros across process groups", MacroLibraryStoreMovesMacrosAcrossProcessGroups),
     ("Macro library activation filter uses process group filters", MacroLibraryActivationFilterUsesProcessGroupFilters),
@@ -224,8 +266,17 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio macro library uses progressive database views", MacroStudioMacroLibraryUsesProgressiveDatabaseViews),
     ("MacroStudio macro library exposes process group controls", MacroStudioMacroLibraryExposesProcessGroupControls),
     ("MacroStudio macro library can pick running processes and executable files for groups", MacroStudioMacroLibraryCanPickRunningProcessesAndExecutableFilesForGroups),
+    ("MacroStudio macro library supports batch macro import", MacroStudioMacroLibrarySupportsBatchMacroImport),
     ("MacroStudio listeners apply process group filters", MacroStudioListenersApplyProcessGroupFilters),
+    ("MacroStudio macro library right click delete keeps its target and reports failures", MacroStudioMacroLibraryRightClickDeleteKeepsItsTargetAndReportsFailures),
+    ("MacroStudio macro library defers listening refresh while renaming", MacroStudioMacroLibraryDefersListeningRefreshWhileRenaming),
     ("MacroStudio macro library supports Explorer rename copy and paste", MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste),
+    ("MacroStudio rename uses themed inline text box", MacroStudioRenameUsesThemedInlineTextBox),
+    ("MacroStudio polishes input chrome menus and empty states", MacroStudioPolishesInputChromeMenusAndEmptyStates),
+    ("MacroStudio uses fluent window chrome and themed dialogs", MacroStudioUsesFluentWindowChromeAndThemedDialogs),
+    ("MacroStudio macro library supports Explorer multi-select and view modes", MacroStudioMacroLibrarySupportsExplorerMultiSelectAndViewModes),
+    ("MacroStudio locks every macro editing surface", MacroStudioLocksEveryMacroEditingSurface),
+    ("MacroStudio scopes Delete shortcuts and preserves imported conditions", MacroStudioScopesDeleteShortcutsAndPreservesImportedConditions),
     ("MacroStudio macro library uses dynamic theme text colors", MacroStudioMacroLibraryUsesDynamicThemeTextColors),
     ("MacroStudio macro library scrollbar drag is not captured as macro drag", MacroStudioMacroLibraryScrollbarDragIsNotCapturedAsMacroDrag),
     ("MacroStudio macro library keeps viewport stable while refreshing and dragging", MacroStudioMacroLibraryKeepsViewportStableWhileRefreshingAndDragging),
@@ -605,6 +656,86 @@ static void InputActionCompilerExpandsHoldActions()
     Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Up), actions[5].Action);
 }
 
+static void InputActionCompilerKeepsHoldGapForZeroDelayKeyDownAndUp()
+{
+    const long frequency = 1_000_000;
+    var document = new MacroDocument(
+        1,
+        "zero-delay-key",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.W, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, HidKey.W, HidModifier.None, TimeSpan.Zero)
+        ]);
+
+    var actions = InputActionCompiler.Compile(document, startTick: 0, qpcFrequency: frequency);
+
+    Assert.Equal(2, actions.Count);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.W, HidModifier.None), actions[0].Action);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Up, HidKey.W, HidModifier.None), actions[1].Action);
+    Assert.Equal(0, actions[0].DueTick);
+    Assert.Equal(10_000, actions[1].DueTick);
+}
+
+static void InputActionCompilerAppliesKeyDownHoldBeforeMatchingKeyUp()
+{
+    const long frequency = 1_000_000;
+    var document = new MacroDocument(
+        1,
+        "held-key",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.FromMilliseconds(5)),
+            new KeyStep(KeyActionKind.Up, HidKey.A, HidModifier.None, TimeSpan.Zero)
+        ]);
+
+    var actions = InputActionCompiler.Compile(document, startTick: 0, qpcFrequency: frequency);
+
+    Assert.Equal(2, actions.Count);
+    Assert.Equal(0, actions[0].DueTick);
+    Assert.Equal(5_000, actions[1].DueTick);
+}
+
+static void InputActionCompilerKeepsSimultaneousDistinctKeyDownsOnTheSameTick()
+{
+    const long frequency = 1_000_000;
+    var document = new MacroDocument(
+        1,
+        "chord",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.LeftControl, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Down, HidKey.C, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, HidKey.C, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, HidKey.LeftControl, HidModifier.None, TimeSpan.Zero)
+        ]);
+
+    var actions = InputActionCompiler.Compile(document, startTick: 0, qpcFrequency: frequency);
+
+    Assert.Equal(4, actions.Count);
+    Assert.Equal(0, actions[0].DueTick);
+    Assert.Equal(0, actions[1].DueTick);
+    Assert.Equal(10_000, actions[2].DueTick);
+    Assert.Equal(10_000, actions[3].DueTick);
+}
+
+static void CompiledPlaybackPlanDoesNotBatchZeroDelayKeyDownAndUp()
+{
+    const long frequency = 1_000_000;
+    var document = new MacroDocument(
+        1,
+        "zero-delay-batch",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.W, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, HidKey.W, HidModifier.None, TimeSpan.Zero)
+        ]);
+
+    var plan = CompiledPlaybackPlan.Create(document, frequency);
+
+    Assert.Equal(2, plan.Batches.Count);
+    Assert.Equal(0, plan.Batches[0].DueTick);
+    Assert.True(plan.Batches[1].DueTick > plan.Batches[0].DueTick);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.W, HidModifier.None), plan.Batches[0].PreparedBatch.Actions[0]);
+    Assert.Equal(new KeyInputAction(KeyActionKind.Up, HidKey.W, HidModifier.None), plan.Batches[1].PreparedBatch.Actions[0]);
+}
+
 static void InputActionCompilerEmitsTextActions()
 {
     var document = new MacroDocument(
@@ -810,6 +941,174 @@ static void McrxParserCoversMouseButtonCoordinates()
     Assert.Equal(new MouseMoveInputAction(MouseMoveMode.Absolute, 320, 240), actions[0].Action);
     Assert.Equal(new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Down), actions[1].Action);
     Assert.Equal(new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Up), actions[2].Action);
+}
+
+static void McrxParserRoundTripsOcrClickAndRegexTextConditions()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "ocr-actions",
+      "steps": [
+        {
+          "type": "ocr.click",
+          "region": {
+            "topLeft": { "x": 100, "y": 200 },
+            "topRight": { "x": 500, "y": 200 },
+            "bottomRight": { "x": 500, "y": 400 },
+            "bottomLeft": { "x": 100, "y": 400 }
+          },
+          "expectedText": "\\d{9}",
+          "contains": false,
+          "useRegex": true,
+          "language": "ch",
+          "button": "Left",
+          "clickCount": 2,
+          "matchIndex": 2,
+          "holdMs": 25,
+          "intervalMs": 90,
+          "offsetX": 4,
+          "offsetY": -3
+        }
+      ],
+      "conditions": [
+        {
+          "id": "uid",
+          "name": "UID appeared",
+          "startStep": 0,
+          "endStep": 0,
+          "type": "text",
+          "region": {
+            "topLeft": { "x": 10, "y": 20 },
+            "topRight": { "x": 310, "y": 20 },
+            "bottomRight": { "x": 310, "y": 120 },
+            "bottomLeft": { "x": 10, "y": 120 }
+          },
+          "expectedText": "\\b\\d{9}\\b",
+          "contains": true,
+          "useRegex": true,
+          "language": "ch"
+        }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+    var click = Assert.IsType<OcrClickStep>(document.Steps.Single());
+    Assert.Equal(@"\d{9}", click.ExpectedText);
+    Assert.True(click.UseRegex);
+    Assert.False(click.Contains);
+    Assert.Equal(2, click.ClickCount);
+    Assert.Equal(2, click.MatchIndex);
+    Assert.Equal(TimeSpan.FromMilliseconds(25), click.Hold);
+    Assert.Equal(TimeSpan.FromMilliseconds(90), click.Interval);
+    Assert.Equal(4, click.OffsetX);
+    Assert.Equal(-3, click.OffsetY);
+
+    var matcher = Assert.IsType<TextMatcher>(document.EffectiveConditions.Single().Condition);
+    Assert.True(matcher.UseRegex);
+    Assert.Equal(@"\b\d{9}\b", matcher.ExpectedText);
+
+    var serialized = McrxSerializer.Serialize(document);
+    Assert.Contains("\"type\": \"ocr.click\"", serialized);
+    Assert.Contains("\"useRegex\": true", serialized);
+    Assert.Contains("\"clickCount\": 2", serialized);
+    Assert.Contains("\"matchIndex\": 2", serialized);
+
+    var roundTrip = McrxParser.Parse(serialized);
+    Assert.Equal(click, Assert.IsType<OcrClickStep>(roundTrip.Steps.Single()));
+    Assert.Equal(matcher, Assert.IsType<TextMatcher>(roundTrip.EffectiveConditions.Single().Condition));
+}
+
+static void McrxParserRoundTripsTargetWindowActivation()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "target-window",
+      "steps": [
+        {
+          "type": "window.activate",
+          "processName": "YuanShen.exe",
+          "windowTitle": "原神|Genshin",
+          "useTitleRegex": true,
+          "matchIndex": 2,
+          "timeoutMs": 4500,
+          "restore": true,
+          "failIfNotFound": false
+        }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+    var activate = Assert.IsType<WindowActivateStep>(document.Steps.Single());
+    Assert.Equal("YuanShen.exe", activate.ProcessName);
+    Assert.Equal("原神|Genshin", activate.WindowTitle);
+    Assert.True(activate.UseTitleRegex);
+    Assert.Equal(2, activate.MatchIndex);
+    Assert.Equal(TimeSpan.FromMilliseconds(4500), activate.Timeout);
+    Assert.True(activate.Restore);
+    Assert.False(activate.FailIfNotFound);
+
+    var serialized = McrxSerializer.Serialize(document);
+    Assert.Contains("\"type\": \"window.activate\"", serialized);
+    Assert.Contains("\"processName\": \"YuanShen.exe\"", serialized);
+    Assert.Contains("\"useTitleRegex\": true", serialized);
+    Assert.Contains("\"timeoutMs\": 4500", serialized);
+    Assert.Equal(activate, Assert.IsType<WindowActivateStep>(
+        McrxParser.Parse(serialized).Steps.Single()));
+}
+
+static void McrxParserRoundTripsOcrTextExtraction()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "ocr-extract",
+      "steps": [
+        {
+          "type": "ocr.extract-text",
+          "region": {
+            "topLeft": { "x": 10, "y": 20 },
+            "topRight": { "x": 410, "y": 20 },
+            "bottomRight": { "x": 410, "y": 120 },
+            "bottomLeft": { "x": 10, "y": 120 }
+          },
+          "pattern": "UID[:：]\\s*([A-Za-z0-9_-]+)",
+          "language": "ch",
+          "useRegex": true,
+          "matchIndex": 2,
+          "captureGroup": 1,
+          "filterTerms": "-6\n4=3",
+          "keepDigitsOnly": true,
+          "normalizeWhitespace": true,
+          "failIfNotFound": false
+        }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+    var extract = Assert.IsType<OcrExtractTextStep>(document.Steps.Single());
+    Assert.Equal(@"UID[:：]\s*([A-Za-z0-9_-]+)", extract.Pattern);
+    Assert.Equal("ch", extract.Language);
+    Assert.True(extract.UseRegex);
+    Assert.Equal(2, extract.MatchIndex);
+    Assert.Equal(1, extract.CaptureGroup);
+    Assert.Equal("-6\n4=3", extract.FilterTerms);
+    Assert.True(extract.KeepDigitsOnly);
+    Assert.True(extract.NormalizeWhitespace);
+    Assert.False(extract.FailIfNotFound);
+
+    var serialized = McrxSerializer.Serialize(document);
+    Assert.Contains("\"type\": \"ocr.extract-text\"", serialized);
+    Assert.Contains("\"captureGroup\": 1", serialized);
+    Assert.Contains("\"filterTerms\": \"-6\\n4=3\"", serialized);
+    Assert.Contains("\"keepDigitsOnly\": true", serialized);
+    Assert.Contains("\"failIfNotFound\": false", serialized);
+    Assert.Equal(extract, Assert.IsType<OcrExtractTextStep>(
+        McrxParser.Parse(serialized).Steps.Single()));
 }
 
 static void McrxParserPreservesFractionalMillisecondTiming()
@@ -1078,6 +1377,7 @@ static void McrxParserCoversSequenceStopsAndConditionExecutionMode()
       "name": "control-flow",
       "steps": [
         { "type": "sequence.stop-current" },
+        { "type": "sequence.stop-iteration" },
         { "type": "sequence.stop-all" }
       ],
       "conditions": [
@@ -1101,12 +1401,14 @@ static void McrxParserCoversSequenceStopsAndConditionExecutionMode()
 
     var document = McrxParser.Parse(json);
     Assert.IsType<StopCurrentSequenceStep>(document.Steps[0]);
-    Assert.IsType<StopAllSequencesStep>(document.Steps[1]);
+    Assert.IsType<StopCurrentIterationStep>(document.Steps[1]);
+    Assert.IsType<StopAllSequencesStep>(document.Steps[2]);
     Assert.Equal(ConditionExecutionMode.PauseMainTimeline, document.EffectiveConditions[0].ExecutionMode);
     Assert.IsType<StopAllSequencesStep>(document.EffectiveConditions[0].ThenSteps.Single());
 
     var serialized = McrxSerializer.Serialize(document);
     Assert.Contains("\"type\": \"sequence.stop-current\"", serialized);
+    Assert.Contains("\"type\": \"sequence.stop-iteration\"", serialized);
     Assert.Contains("\"type\": \"sequence.stop-all\"", serialized);
     Assert.Contains("\"executionMode\": \"PauseMainTimeline\"", serialized);
 }
@@ -1319,6 +1621,225 @@ static void McrxParserCoversMultiKeyAndMouseComboTriggers()
     Assert.Equal("X1+E", mouseCombo.ToString());
 }
 
+static void McrxParserCoversNumpadSymbolAndMouseTriggerAliases()
+{
+    var numpad = McrxParser.ParseHotkeyGesture("Ctrl+KP1+NumMultiply+NumpadDivide+NumpadDecimal");
+    Assert.True(numpad.Keys.SequenceEqual(
+    [
+        HidKey.Numpad1,
+        HidKey.NumpadMultiply,
+        HidKey.NumpadDivide,
+        HidKey.NumpadDecimal
+    ]));
+
+    var plus = McrxParser.ParseHotkeyGesture("Ctrl++");
+    Assert.Equal(HidModifier.LeftCtrl, plus.Modifiers);
+    Assert.True(plus.Keys.SequenceEqual([HidKey.NumpadPlus]));
+    Assert.Equal(plus, McrxParser.ParseHotkeyGesture(plus.ToString()));
+
+    var symbols = McrxParser.ParseHotkeyGesture("{+}+|+:+\"+~+<+>+?");
+    Assert.True(symbols.Keys.SequenceEqual(
+    [
+        HidKey.LeftBracket,
+        HidKey.RightBracket,
+        HidKey.Backslash,
+        HidKey.Semicolon,
+        HidKey.Quote,
+        HidKey.Grave,
+        HidKey.Comma,
+        HidKey.Period,
+        HidKey.Slash
+    ]));
+
+    var mouse = McrxParser.ParseHotkeyGesture("Mouse1+Mouse2+Mouse3+Mouse4+Mouse5");
+    Assert.True(mouse.MouseButtons.SequenceEqual(
+    [
+        MouseButton.Left,
+        MouseButton.Right,
+        MouseButton.Middle,
+        MouseButton.X1,
+        MouseButton.X2
+    ]));
+    Assert.Equal(mouse, McrxParser.ParseHotkeyGesture(mouse.ToString()));
+}
+
+static void GlobalKeyboardHookMapsNumpadOemAndLockKeys()
+{
+    var expected = new Dictionary<int, HidKey>
+    {
+        [0x60] = HidKey.Numpad0,
+        [0x61] = HidKey.Numpad1,
+        [0x62] = HidKey.Numpad2,
+        [0x63] = HidKey.Numpad3,
+        [0x64] = HidKey.Numpad4,
+        [0x65] = HidKey.Numpad5,
+        [0x66] = HidKey.Numpad6,
+        [0x67] = HidKey.Numpad7,
+        [0x68] = HidKey.Numpad8,
+        [0x69] = HidKey.Numpad9,
+        [0x6A] = HidKey.NumpadMultiply,
+        [0x6B] = HidKey.NumpadPlus,
+        [0x6C] = HidKey.Separator,
+        [0x6D] = HidKey.NumpadMinus,
+        [0x6E] = HidKey.NumpadDecimal,
+        [0x6F] = HidKey.NumpadDivide,
+        [0x90] = HidKey.NumLock,
+        [0x91] = HidKey.ScrollLock,
+        [0x5B] = HidKey.LeftGui,
+        [0x5C] = HidKey.RightGui,
+        [0xBA] = HidKey.Semicolon,
+        [0xBB] = HidKey.Equal,
+        [0xBC] = HidKey.Comma,
+        [0xBD] = HidKey.Minus,
+        [0xBE] = HidKey.Period,
+        [0xBF] = HidKey.Slash,
+        [0xC0] = HidKey.Grave,
+        [0xDB] = HidKey.LeftBracket,
+        [0xDC] = HidKey.Backslash,
+        [0xDD] = HidKey.RightBracket,
+        [0xDE] = HidKey.Quote,
+        [0xE2] = HidKey.NonUsBackslash
+    };
+
+    foreach (var (virtualKey, expectedKey) in expected)
+    {
+        Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(virtualKey, out var actual));
+        Assert.Equal(expectedKey, actual);
+    }
+}
+
+static void GlobalKeyboardHookDistinguishesPhysicalNumpadKeys()
+{
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x23, 0x4F, false, out var numpad1));
+    Assert.Equal(HidKey.Numpad1, numpad1);
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x23, 0x4F, true, out var end));
+    Assert.Equal(HidKey.End, end);
+
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x2E, 0x53, false, out var numpadDecimal));
+    Assert.Equal(HidKey.NumpadDecimal, numpadDecimal);
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x2E, 0x53, true, out var delete));
+    Assert.Equal(HidKey.Delete, delete);
+
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x0D, 0x1C, true, out var numpadEnter));
+    Assert.Equal(HidKey.NumpadEnter, numpadEnter);
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x0D, 0x1C, false, out var enter));
+    Assert.Equal(HidKey.Enter, enter);
+
+    using var hook = new GlobalKeyboardHook();
+    var gestures = GetPrivateField<Dictionary<string, HotkeyGesture>>(hook, "gestures");
+    gestures["numpad"] = new HotkeyGesture(HidModifier.None, HidKey.Numpad1);
+    var pressedIds = new List<string>();
+    hook.TriggerPressed += (_, args) => pressedIds.Add(args.Id);
+    var handleKeyDown = typeof(GlobalKeyboardHook).GetMethod("HandleKeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Missing HandleKeyDown.");
+    handleKeyDown.Invoke(hook, [0x23, 0x4F, false]);
+    Assert.True(pressedIds.SequenceEqual(["numpad"]));
+}
+
+static void GlobalMouseHookMapsAllFiveStandardButtons()
+{
+    var messages = new (int Message, int MouseData, MouseButton Button, bool IsDown)[]
+    {
+        (0x0201, 0, MouseButton.Left, true),
+        (0x0202, 0, MouseButton.Left, false),
+        (0x0204, 0, MouseButton.Right, true),
+        (0x0205, 0, MouseButton.Right, false),
+        (0x0207, 0, MouseButton.Middle, true),
+        (0x0208, 0, MouseButton.Middle, false),
+        (0x020B, 0x0001 << 16, MouseButton.X1, true),
+        (0x020C, 0x0001 << 16, MouseButton.X1, false),
+        (0x020B, 0x0002 << 16, MouseButton.X2, true),
+        (0x020C, 0x0002 << 16, MouseButton.X2, false)
+    };
+
+    foreach (var (message, mouseData, expectedButton, expectedIsDown) in messages)
+    {
+        Assert.True(GlobalKeyboardHook.TryMapMouseMessage(message, mouseData, out var actualButton, out var actualIsDown));
+        Assert.Equal(expectedButton, actualButton);
+        Assert.Equal(expectedIsDown, actualIsDown);
+    }
+
+    using var hook = new GlobalKeyboardHook();
+    var gestures = GetPrivateField<Dictionary<string, HotkeyGesture>>(hook, "gestures");
+    gestures["middle"] = new HotkeyGesture(HidModifier.None, HidKey.None, MouseButton.Middle);
+    var pressedIds = new List<string>();
+    hook.TriggerPressed += (_, args) => pressedIds.Add(args.Id);
+    var handleMouseDown = typeof(GlobalKeyboardHook).GetMethod("HandleMouseDown", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Missing HandleMouseDown.");
+    handleMouseDown.Invoke(hook, [MouseButton.Middle]);
+    Assert.True(pressedIds.SequenceEqual(["middle"]));
+}
+
+static void MacroRecordingSessionPreservesKeyboardMouseAndDelays()
+{
+    var recording = new MacroRecordingSession();
+
+    Assert.True(recording.RecordKey(TimeSpan.FromMilliseconds(10), HidKey.A, true));
+    Assert.False(recording.RecordKey(TimeSpan.FromMilliseconds(20), HidKey.A, true));
+    Assert.True(recording.RecordKey(TimeSpan.FromMilliseconds(60), HidKey.A, false));
+    Assert.True(recording.RecordMouseButton(TimeSpan.FromMilliseconds(75), MouseButton.Left, true, 300, 400));
+    Assert.True(recording.RecordMouseButton(TimeSpan.FromMilliseconds(80), MouseButton.Left, false, 300, 400));
+    Assert.True(recording.RecordMouseWheel(TimeSpan.FromMilliseconds(100), -1, 0));
+
+    var steps = recording.Complete();
+    Assert.Equal(9, steps.Count);
+    Assert.Equal(5, recording.InputCount);
+    Assert.Equal(KeyActionKind.Down, Assert.IsType<KeyStep>(steps[0]).Kind);
+    Assert.Equal(TimeSpan.FromMilliseconds(50), Assert.IsType<WaitStep>(steps[1]).Duration);
+    Assert.Equal(KeyActionKind.Up, Assert.IsType<KeyStep>(steps[2]).Kind);
+    Assert.Equal(TimeSpan.FromMilliseconds(15), Assert.IsType<WaitStep>(steps[3]).Duration);
+    var mouseDown = Assert.IsType<MouseButtonStep>(steps[4]);
+    Assert.Equal(ButtonActionKind.Down, mouseDown.Kind);
+    Assert.Equal(MouseMoveMode.Absolute, mouseDown.CoordinateMode);
+    Assert.Equal(300, mouseDown.X);
+    Assert.Equal(400, mouseDown.Y);
+    Assert.Equal(TimeSpan.FromMilliseconds(5), Assert.IsType<WaitStep>(steps[5]).Duration);
+    Assert.Equal(ButtonActionKind.Up, Assert.IsType<MouseButtonStep>(steps[6]).Kind);
+    Assert.Equal(TimeSpan.FromMilliseconds(20), Assert.IsType<WaitStep>(steps[7]).Duration);
+    Assert.Equal(-1, Assert.IsType<MouseWheelStep>(steps[8]).Vertical);
+}
+
+static void MacroRecordingSessionSamplesMovementAndReleasesHeldInputs()
+{
+    var recording = new MacroRecordingSession(new MacroRecordingOptions(
+        MinimumDelay: TimeSpan.FromMilliseconds(1),
+        MouseMoveSampleInterval: TimeSpan.FromMilliseconds(16),
+        MouseMoveMinimumDistance: 2));
+
+    Assert.True(recording.RecordMouseMove(TimeSpan.Zero, 100, 100));
+    Assert.False(recording.RecordMouseMove(TimeSpan.FromMilliseconds(5), 110, 110));
+    Assert.False(recording.RecordMouseMove(TimeSpan.FromMilliseconds(20), 101, 101));
+    Assert.True(recording.RecordMouseMove(TimeSpan.FromMilliseconds(25), 105, 105));
+    Assert.True(recording.RecordKey(TimeSpan.FromMilliseconds(30), HidKey.B, true));
+
+    var steps = recording.Complete();
+    Assert.Equal(6, steps.Count);
+    Assert.Equal(4, recording.InputCount);
+    Assert.Equal(100, Assert.IsType<MouseMoveStep>(steps[0]).X);
+    Assert.Equal(TimeSpan.FromMilliseconds(25), Assert.IsType<WaitStep>(steps[1]).Duration);
+    Assert.Equal(105, Assert.IsType<MouseMoveStep>(steps[2]).X);
+    Assert.Equal(TimeSpan.FromMilliseconds(5), Assert.IsType<WaitStep>(steps[3]).Duration);
+    Assert.Equal(KeyActionKind.Down, Assert.IsType<KeyStep>(steps[4]).Kind);
+    Assert.Equal(KeyActionKind.Up, Assert.IsType<KeyStep>(steps[5]).Kind);
+}
+
+static void MacroRecordingSessionRemovesStopHotkey()
+{
+    var recording = new MacroRecordingSession();
+    recording.RecordKey(TimeSpan.Zero, HidKey.A, true);
+    recording.RecordKey(TimeSpan.FromMilliseconds(10), HidKey.A, false);
+    recording.RecordKey(TimeSpan.FromMilliseconds(100), HidKey.LeftControl, true);
+    recording.RecordKey(TimeSpan.FromMilliseconds(101), HidKey.LeftShift, true);
+
+    recording.DiscardTrailingStopHotkey();
+    var steps = recording.Complete();
+
+    Assert.Equal(3, steps.Count);
+    Assert.Equal(HidKey.A, Assert.IsType<KeyStep>(steps[0]).Key);
+    Assert.Equal(TimeSpan.FromMilliseconds(10), Assert.IsType<WaitStep>(steps[1]).Duration);
+    Assert.Equal(HidKey.A, Assert.IsType<KeyStep>(steps[2]).Key);
+}
+
 static void McrxParserDefaultsMissingPlaybackSettings()
 {
     const string json = """
@@ -1471,6 +1992,138 @@ static void OcrTextMatchingToleratesShortChineseRecognitionMisses()
     Assert.True(PaddleOcrBridge.TextMatches("已停止", "停止", contains: true));
     Assert.False(PaddleOcrBridge.TextMatches("开始", "停止", contains: true));
     Assert.False(PaddleOcrBridge.TextMatches(string.Empty, "停止", contains: true));
+}
+
+static void OcrTextMatchingSupportsSafeRegexAndTextBoxCoordinates()
+{
+    Assert.True(PaddleOcrBridge.TextMatches("UID 123456789", @"\b\d{9}\b", useRegex: true));
+    Assert.False(PaddleOcrBridge.TextMatches("UID 12345", @"\b\d{9}\b", useRegex: true));
+    Assert.False(PaddleOcrBridge.TextMatches("UID 123456789", @"([", useRegex: true));
+    Assert.False(PaddleOcrBridge.IsValidRegex(@"([", out _));
+    Assert.True(PaddleOcrBridge.IsValidRegex(@"\d{9}", out _));
+
+    var region = ScreenRegion.FromRect(100, 200, 700, 500);
+    OcrTextBox[] boxes =
+    [
+        new("UID 111111111", 20, 30, 180, 40),
+        new("UID 222222222", 250, 30, 180, 40),
+        new("Other", 20, 100, 100, 30)
+    ];
+    var second = PaddleOcrBridge.FindTextInBoxes(
+        region,
+        boxes,
+        @"\d{9}",
+        useRegex: true,
+        matchIndex: 2,
+        offsetX: 5,
+        offsetY: -4);
+
+    Assert.True(second is not null);
+    Assert.Equal("UID 222222222", second!.Text);
+    Assert.Equal(100 + 250 + 90 + 5, second.X);
+    Assert.Equal(200 + 30 + 20 - 4, second.Y);
+    Assert.True(PaddleOcrBridge.FindTextInBoxes(region, boxes, @"\d{9}", useRegex: true, matchIndex: 3) is null);
+}
+
+static void OcrTextExtractionHandlesMixedAndNonnumericUids()
+{
+    Assert.True(PaddleOcrBridge.TryExtractText(
+        "-6  4=3   177933444",
+        string.Empty,
+        useRegex: true,
+        matchIndex: 1,
+        captureGroup: 0,
+        filterTerms: "-6\n4=3",
+        keepDigitsOnly: true,
+        normalizeWhitespace: true,
+        out var filteredUid,
+        out _));
+    Assert.Equal("177933444", filteredUid);
+
+    Assert.True(PaddleOcrBridge.TryExtractText(
+        "编号：A-12345-B",
+        @"\d+",
+        useRegex: true,
+        matchIndex: 1,
+        captureGroup: 0,
+        normalizeWhitespace: true,
+        out var continuousDigits,
+        out _));
+    Assert.Equal("12345", continuousDigits);
+
+    Assert.True(PaddleOcrBridge.TryExtractText(
+        "麻烦加我，UID：AbC-12_x，谢谢",
+        @"(?i)UID\s*[:：=]?\s*([^\s，。！？,;；]+)",
+        useRegex: true,
+        matchIndex: 1,
+        captureGroup: 1,
+        normalizeWhitespace: true,
+        out var mixedUid,
+        out _));
+    Assert.Equal("AbC-12_x", mixedUid);
+
+    Assert.True(PaddleOcrBridge.TryExtractText(
+        "UID：A B C-123",
+        @"UID[:：]([A-Z0-9-]{6,})",
+        useRegex: true,
+        matchIndex: 1,
+        captureGroup: 1,
+        normalizeWhitespace: true,
+        out var compactUid,
+        out _));
+    Assert.Equal("ABC-123", compactUid);
+
+    Assert.True(PaddleOcrBridge.TryExtractText(
+        "UID: first_1，UID: second-2",
+        @"UID:\s*([A-Za-z0-9_-]+)",
+        useRegex: true,
+        matchIndex: 2,
+        captureGroup: 1,
+        normalizeWhitespace: false,
+        out var secondUid,
+        out _));
+    Assert.Equal("second-2", secondUid);
+
+    Assert.True(PaddleOcrBridge.TryExtractText(
+        "用户发来：中文UID-甲",
+        string.Empty,
+        useRegex: true,
+        matchIndex: 1,
+        captureGroup: 0,
+        normalizeWhitespace: true,
+        out var fullText,
+        out _));
+    Assert.Equal("用户发来：中文UID-甲", fullText);
+
+    Assert.False(PaddleOcrBridge.TryExtractText(
+        "UID: anything",
+        "([",
+        useRegex: true,
+        matchIndex: 1,
+        captureGroup: 0,
+        normalizeWhitespace: true,
+        out _,
+        out var invalidRegexError));
+    Assert.True(!string.IsNullOrWhiteSpace(invalidRegexError));
+}
+
+static void WindowActivationMatcherNormalizesProcessNamesAndTitleRegex()
+{
+    Assert.Equal("YuanShen", WindowActivationService.NormalizeProcessName(" YuanShen.exe "));
+    Assert.Equal("qq", WindowActivationService.NormalizeProcessName("qq"));
+    Assert.True(WindowActivationService.TitleMatches("原神", "原", useRegex: false));
+    Assert.True(WindowActivationService.TitleMatches("Genshin Impact", "^(Genshin|原神)", useRegex: true));
+    Assert.False(WindowActivationService.TitleMatches("QQ", "^(Genshin|原神)", useRegex: true));
+    Assert.True(WindowActivationService.IsValidTitleRegex("原神|Genshin", out _));
+    Assert.False(WindowActivationService.IsValidTitleRegex("([", out _));
+    Assert.False(WindowActivationService.TitleMatches("anything", "([", useRegex: true));
+
+    var missing = WindowActivationService.Activate(new WindowActivateStep(
+        $"MacroHidMissingProcess-{Guid.NewGuid():N}.exe",
+        Timeout: TimeSpan.FromMilliseconds(1),
+        FailIfNotFound: false));
+    Assert.False(missing.Success);
+    Assert.Contains("no visible window found", missing.Error ?? string.Empty);
 }
 
 static void LatencyHistogramComputesPercentiles()
@@ -1646,6 +2299,30 @@ static void PlaybackExecutorStopsOnlyCurrentNestedSequence()
     Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.D, HidModifier.None), sink.Actions[2]);
 }
 
+static void StopCurrentMacroLayerAdvancesRootPlaybackIterations()
+{
+    var sink = new RecordingInputSink();
+    var root = new MacroDocument(
+        1,
+        "root-layer",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new StopCurrentSequenceStep(),
+            new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero)
+        ]);
+    var executor = new MacroPlaybackExecutor(sink);
+
+    var result = executor.RunAsync(
+        root,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 3, PixelEvaluationMode.MatchAll, NoWait: true),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.False(result.Cancelled);
+    Assert.Equal(3, result.IterationsCompleted);
+    Assert.Equal(3, sink.Actions.Count(action => action == new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+}
+
 static void PlaybackExecutorStopsAllFixedCountIterations()
 {
     var sink = new RecordingInputSink();
@@ -1748,6 +2425,244 @@ static void PauseConditionModeShiftsRemainingMainTimeline()
     Assert.True(mainElapsedMs >= 180);
 }
 
+static void ConditionActionsCallNestedMacrosAndStopOnlyCurrentChild()
+{
+    var sink = new TimestampInputSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var child = new MacroDocument(
+        1,
+        "child",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero),
+            new StopCurrentSequenceStep(),
+            new KeyStep(KeyActionKind.Down, HidKey.C, HidModifier.None, TimeSpan.Zero)
+        ]);
+    var sibling = new MacroDocument(
+        1,
+        "sibling",
+        [new KeyStep(KeyActionKind.Down, HidKey.D, HidModifier.None, TimeSpan.Zero)]);
+    var root = new MacroDocument(
+        1,
+        "macro1",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromMilliseconds(60)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "nested",
+            "nested",
+            0,
+            1,
+            matcher,
+            [
+                new MacroCallStep("child"),
+                new MacroCallStep("sibling"),
+                new KeyStep(KeyActionKind.Down, HidKey.E, HidModifier.None, TimeSpan.Zero)
+            ],
+            PollInterval: TimeSpan.FromMilliseconds(2),
+            ExecutionMode: ConditionExecutionMode.PauseMainTimeline)]);
+    var executor = new MacroPlaybackExecutor(
+        sink,
+        livePixelEvaluator: _ => true,
+        macroResolver: name => name switch
+        {
+            "child" => child,
+            "sibling" => sibling,
+            _ => null
+        });
+
+    var result = executor.RunAsync(
+        root,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.False(result.Cancelled);
+    var actions = sink.Entries.Select(entry => entry.Action).ToArray();
+    Assert.True(actions.SequenceEqual(
+    [
+        new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None),
+        new KeyInputAction(KeyActionKind.Down, HidKey.D, HidModifier.None),
+        new KeyInputAction(KeyActionKind.Down, HidKey.E, HidModifier.None),
+        new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)
+    ]));
+    Assert.False(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.C, HidModifier.None)));
+}
+
+static void ConditionStopCurrentLayerKeepsMainIterationRunning()
+{
+    var sink = new TimestampInputSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var root = new MacroDocument(
+        1,
+        "condition-layer",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromMilliseconds(60)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "stop-layer",
+            "stop-layer",
+            0,
+            1,
+            matcher,
+            [
+                new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero),
+                new StopCurrentSequenceStep(),
+                new KeyStep(KeyActionKind.Down, HidKey.C, HidModifier.None, TimeSpan.Zero)
+            ],
+            PollInterval: TimeSpan.FromMilliseconds(2),
+            ExecutionMode: ConditionExecutionMode.PauseMainTimeline)]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+
+    var result = executor.RunAsync(
+        root,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.False(result.Cancelled);
+    var actions = sink.Entries.Select(entry => entry.Action).ToArray();
+    Assert.True(actions.SequenceEqual(
+    [
+        new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None),
+        new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)
+    ]));
+    Assert.False(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.C, HidModifier.None)));
+}
+
+static void NestedConditionStopAllCancelsMainTimeline()
+{
+    var sink = new TimestampInputSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var child = new MacroDocument(
+        1,
+        "stopper",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero),
+            new StopAllSequencesStep(),
+            new KeyStep(KeyActionKind.Down, HidKey.C, HidModifier.None, TimeSpan.Zero)
+        ]);
+    var root = new MacroDocument(
+        1,
+        "macro1",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromMilliseconds(250)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "stop-all",
+            "stop-all",
+            0,
+            1,
+            matcher,
+            [new MacroCallStep("stopper"), new KeyStep(KeyActionKind.Down, HidKey.D, HidModifier.None, TimeSpan.Zero)],
+            PollInterval: TimeSpan.FromMilliseconds(2))]);
+    var executor = new MacroPlaybackExecutor(
+        sink,
+        livePixelEvaluator: _ => true,
+        macroResolver: name => name == "stopper" ? child : null);
+
+    var result = executor.RunAsync(
+        root,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 3, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+    Assert.Equal(0, result.IterationsCompleted);
+    var actions = sink.Entries.Select(entry => entry.Action).ToArray();
+    Assert.True(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+    Assert.False(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+    Assert.False(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.C, HidModifier.None)));
+    Assert.False(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.D, HidModifier.None)));
+}
+
+static void ToggleLoopRearmsVisualConditionsAfterStopIterationThenActions()
+{
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    var evaluations = 0;
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var conditionAction = new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None);
+    var sink = new CancellingOnActionInputSink(cancellation, conditionAction, cancelAfterMatches: 3);
+    var child = new MacroDocument(
+        1,
+        "condition-action",
+        [new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero)]);
+    var root = new MacroDocument(
+        1,
+        "macro1",
+        new PlaybackSettings(null, PlaybackMode.ToggleLoop, 1),
+        [new WaitStep(TimeSpan.FromMilliseconds(250)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "visual",
+            "visual",
+            0,
+            1,
+            matcher,
+            [
+                new MacroCallStep("condition-action"),
+                new StopCurrentIterationStep(),
+                new KeyStep(KeyActionKind.Down, HidKey.D, HidModifier.None, TimeSpan.Zero)
+            ],
+            PollInterval: TimeSpan.FromMilliseconds(2),
+            ExecutionMode: ConditionExecutionMode.PauseMainTimeline)]);
+    var executor = new MacroPlaybackExecutor(
+        sink,
+        livePixelEvaluator: _ =>
+        {
+            Interlocked.Increment(ref evaluations);
+            return true;
+        },
+        macroResolver: name => name == "condition-action" ? child : null);
+
+    var result = executor.RunAsync(
+        root,
+        new PlaybackExecutionOptions(PlaybackMode.ToggleLoop, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        cancellation.Token).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+    Assert.True(evaluations >= 3);
+    Assert.Equal(3, sink.Actions.Count(action => action == conditionAction));
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.D, HidModifier.None)));
+}
+
+static void ConditionSelfCallsDoNotRecursivelyRearmConditionMonitors()
+{
+    var sink = new TimestampInputSink();
+    var evaluations = 0;
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    MacroDocument? root = null;
+    root = new MacroDocument(
+        1,
+        "macro1",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromMilliseconds(20)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "self-call",
+            "self-call",
+            0,
+            1,
+            matcher,
+            [
+                new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero),
+                new MacroCallStep("macro1")
+            ],
+            PollInterval: TimeSpan.FromMilliseconds(2),
+            ExecutionMode: ConditionExecutionMode.PauseMainTimeline)]);
+    var executor = new MacroPlaybackExecutor(
+        sink,
+        livePixelEvaluator: _ =>
+        {
+            Interlocked.Increment(ref evaluations);
+            return true;
+        },
+        macroResolver: name => name == "macro1" ? root : null);
+
+    var result = executor.RunAsync(
+        root,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.False(result.Cancelled);
+    Assert.Equal(1, evaluations);
+    var actions = sink.Entries.Select(entry => entry.Action).ToArray();
+    Assert.Equal(1, actions.Count(action => action == new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+    Assert.Equal(2, actions.Count(action => action == new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+
 static void LocalizationNormalizesSupportedCultures()
 {
     Assert.Equal("zh-CN", LocalizationService.NormalizeCultureName(new CultureInfo("zh-Hans-CN")));
@@ -1773,6 +2688,9 @@ static void LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages()
     Assert.Equal("Macro", LocalizationService.Get("AddMacro", new CultureInfo("en-US")));
     Assert.Equal("宏", LocalizationService.Get("AddMacro", new CultureInfo("zh-CN")));
     Assert.Equal("巨集", LocalizationService.Get("AddMacro", new CultureInfo("zh-TW")));
+    Assert.Equal("Stop Current Iteration", LocalizationService.Get("AddStopIteration", new CultureInfo("en-US")));
+    Assert.Equal("停止本轮播放", LocalizationService.Get("AddStopIteration", new CultureInfo("zh-CN")));
+    Assert.Equal("停止本輪播放", LocalizationService.Get("AddStopIteration", new CultureInfo("zh-TW")));
     Assert.Equal("Pixel IF", LocalizationService.Get("PixelIf", new CultureInfo("en-US")));
     Assert.Equal("像素 IF 条件", LocalizationService.Get("PixelIf", new CultureInfo("zh-CN")));
     Assert.Equal("像素 IF 條件", LocalizationService.Get("PixelIf", new CultureInfo("zh-TW")));
@@ -1830,7 +2748,7 @@ static void MacroStudioUsesBorderlessCustomWindowChrome()
     Assert.Contains("InlineStepEditorPopup", stepSequenceXaml);
     Assert.Contains("MacroTargetBox", stepEditorXaml);
     Assert.Contains("PickPixelColorButton", stepEditorXaml);
-    Assert.Contains("Color=\"#EFF3F8\"", lightThemeXaml);
+    Assert.Contains("Color=\"#E1E5EA\"", lightThemeXaml);
     Assert.Contains("TopChromeBar_MouseLeftButtonDown", codeBehind);
     Assert.Contains("ToggleMaximize", codeBehind);
 }
@@ -1889,9 +2807,9 @@ static void MacroStudioUsesLauncherStyleSoftWorkbenchShell()
     Assert.Contains("<controls:ConditionDirectivePanel x:Name=\"ConditionPanel\"", mainWindowXaml);
     Assert.DoesNotContain("Grid.Column=\"6\"", mainWindowXaml);
 
-    Assert.Contains("Color=\"#EFF3F8\"", lightThemeXaml);
-    Assert.Contains("Color=\"#F7F8FB\"", lightThemeXaml);
-    Assert.Contains("Color=\"#EEF2F6\"", lightThemeXaml);
+    Assert.Contains("Color=\"#E1E5EA\"", lightThemeXaml);
+    Assert.Contains("Color=\"#EBEEF1\"", lightThemeXaml);
+    Assert.Contains("Color=\"#D9DFE5\"", lightThemeXaml);
     Assert.Contains("Color=\"#1F232A\"", darkThemeXaml);
     Assert.Contains("Color=\"#2B3038\"", darkThemeXaml);
 
@@ -2147,6 +3065,7 @@ static void MacroStudioConditionThenActionsExposeLocalAddMenu()
 {
     var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
     var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var actionPaletteXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml"));
 
     Assert.Contains("AddThenActionButton", conditionXaml);
     Assert.Contains("ThenActionPalettePopup", conditionXaml);
@@ -2154,6 +3073,9 @@ static void MacroStudioConditionThenActionsExposeLocalAddMenu()
     Assert.Contains("AddThenAction_Click", conditionCode);
     Assert.Contains("OnThenActionPaletteClicked", conditionCode);
     Assert.Contains("MacroActionTemplateFactory.CreateSteps", conditionCode);
+    Assert.Contains("Tag=\"StopCurrent\"", actionPaletteXaml);
+    Assert.Contains("Tag=\"StopIteration\"", actionPaletteXaml);
+    Assert.Contains("Tag=\"StopAll\"", actionPaletteXaml);
 }
 
 static void MacroStudioConditionThenActionsUseActionPalettePopup()
@@ -2216,6 +3138,156 @@ static void MacroStudioExposesMouseButtonCoordinateEditor()
     Assert.Contains("SelectedY", pickerCode);
     Assert.Contains("Key.Escape", pickerCode);
     Assert.Contains("GetCursorPos", pickerCode);
+}
+
+static void MacroStudioExposesOcrRegexConditionAndTextClickEditor()
+{
+    var paletteXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml"));
+    var stepEditorXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml"));
+    var stepEditorCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
+    var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var ocrServer = File.ReadAllText(Path.Combine("src", "tools", "WindowsOcrServer", "Program.cs"));
+    var ocrBridge = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "PaddleOcrBridge.cs"));
+    var runtime = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ManagedMacroControlFlowRunner.cs"));
+    var clipboardRuntime = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "WindowsClipboardService.cs"));
+
+    Assert.Contains("Tag=\"OcrExtractText\"", paletteXaml);
+    Assert.Contains("AddOcrExtractTextButton", paletteXaml);
+    Assert.Contains("Tag=\"OcrClick\"", paletteXaml);
+    Assert.Contains("AddOcrClickButton", paletteXaml);
+    Assert.Contains("OcrClickEditPanel", stepEditorXaml);
+    Assert.Contains("OcrClickExpectedTextBox", stepEditorXaml);
+    Assert.Contains("OcrClickRegexBox", stepEditorXaml);
+    Assert.Contains("PickOcrClickRegionButton", stepEditorXaml);
+    Assert.Contains("TestOcrClickButton", stepEditorXaml);
+    Assert.Contains("ScreenRegionPicker.PickRegion", stepEditorCode);
+    Assert.Contains("FindTextAsync", stepEditorCode);
+    Assert.Contains("BuildEditedOcrClickStep", stepEditorCode);
+    Assert.Contains("OcrExtractTextEditPanel", stepEditorXaml);
+    Assert.Contains("OcrExtractPatternBox", stepEditorXaml);
+    Assert.Contains("OcrExtractPresetBox", stepEditorXaml);
+    Assert.Contains("Tag=\"Digits\"", stepEditorXaml);
+    Assert.Contains("Tag=\"FilterDigits\"", stepEditorXaml);
+    Assert.Contains("Tag=\"Uid\"", stepEditorXaml);
+    Assert.Contains("OcrExtractFilterTermsBox", stepEditorXaml);
+    Assert.Contains("OcrExtractKeepDigitsOnlyBox", stepEditorXaml);
+    Assert.Contains("OcrExtractCaptureGroupBox", stepEditorXaml);
+    Assert.Contains("TestOcrExtractButton", stepEditorXaml);
+    Assert.Contains("BuildEditedOcrExtractTextStep", stepEditorCode);
+    Assert.Contains("OcrExtractPresetBox_SelectionChanged", stepEditorCode);
+    Assert.Contains("$\"-6{Environment.NewLine}4=3\"", stepEditorCode);
+    Assert.Contains("@\"\\d+\"", stepEditorCode);
+    Assert.False(stepEditorXaml.Contains(
+        "x:Name=\"OcrExtractRegexBox\"\r\n                              Content=\"使用正则表达式\"\r\n                              Margin=\"0,7,0,0\"\r\n                              IsChecked=\"True\"",
+        StringComparison.Ordinal));
+    Assert.Contains("OcrExtractRegexBox.IsChecked = true;", stepEditorCode);
+    Assert.Contains("OcrExtractCaptureGroupBox is null", stepEditorCode);
+    Assert.Contains("TryExtractText", stepEditorCode);
+
+    Assert.Contains("RegexCheckBox", conditionXaml);
+    Assert.Contains("RegexErrorText", conditionXaml);
+    Assert.Contains("UseRegex = RegexCheckBox.IsChecked == true", conditionCode);
+    Assert.Contains("PaddleOcrBridge.IsValidRegex", conditionCode);
+
+    Assert.Contains("BuildOcrBoxes", ocrServer);
+    Assert.Contains("OcrTextBoxResponse", ocrServer);
+    Assert.Contains("FindTextInBoxes", ocrBridge);
+    Assert.Contains("TimeSpan.FromMilliseconds(100)", ocrBridge);
+    Assert.Contains("case OcrClickStep ocrClick", runtime);
+    Assert.Contains("case OcrExtractTextStep ocrExtractText", runtime);
+    Assert.Contains("WindowsClipboardService.TrySetText", runtime);
+    Assert.Contains("SetClipboardData", clipboardRuntime);
+    Assert.Contains("MouseMoveMode.Absolute", runtime);
+}
+
+static void MacroStudioExposesTargetWindowForegroundAction()
+{
+    var paletteXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml"));
+    var editorXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml"));
+    var editorCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
+    var pickerXamlPath = Path.Combine("src", "ui", "MacroStudio", "Controls", "WindowTargetPickerDialog.xaml");
+    var pickerCodePath = Path.Combine("src", "ui", "MacroStudio", "Controls", "WindowTargetPickerDialog.xaml.cs");
+    var runtime = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "WindowActivationService.cs"));
+    var runner = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ManagedMacroControlFlowRunner.cs"));
+
+    Assert.Contains("Tag=\"WindowActivate\"", paletteXaml);
+    Assert.Contains("AddWindowActivateButton", paletteXaml);
+    Assert.Contains("WindowActivateEditPanel", editorXaml);
+    Assert.Contains("WindowProcessBox", editorXaml);
+    Assert.Contains("WindowTitleRegexBox", editorXaml);
+    Assert.Contains("WindowTimeoutMsBox", editorXaml);
+    Assert.Contains("WindowFailIfNotFoundBox", editorXaml);
+    Assert.Contains("PickWindowTarget_Click", editorCode);
+    Assert.Contains("BuildEditedWindowActivateStep", editorCode);
+    Assert.True(File.Exists(pickerXamlPath));
+    Assert.True(File.Exists(pickerCodePath));
+    Assert.Contains("WindowActivationService.EnumerateVisibleWindows", File.ReadAllText(pickerCodePath));
+
+    Assert.Contains("EnumWindows", runtime);
+    Assert.Contains("ShowWindowAsync", runtime);
+    Assert.Contains("AttachThreadInput", runtime);
+    Assert.Contains("SetForegroundWindow", runtime);
+    Assert.Contains("GetForegroundWindow", runtime);
+    Assert.Contains("IsForeground(lastTarget)", runtime);
+    Assert.Contains("case WindowActivateStep windowActivate", runner);
+    Assert.Contains("WindowActivationService.Activate", runner);
+}
+
+static void MacroStudioExposesKeyboardAndMouseInputRecording()
+{
+    var recorderPath = Path.Combine("src", "ui", "MacroStudio", "MacroInputRecorder.cs");
+    var sequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml"));
+    var sequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.True(File.Exists(recorderPath));
+    var recorder = File.ReadAllText(recorderPath);
+    Assert.Contains("WhKeyboardLl", recorder);
+    Assert.Contains("WhMouseLl", recorder);
+    Assert.Contains("WmMouseMove", recorder);
+    Assert.Contains("WmMouseWheel", recorder);
+    Assert.Contains("WmMouseHWheel", recorder);
+    Assert.Contains("LlkHfInjected", recorder);
+    Assert.Contains("LlmHfInjected", recorder);
+    Assert.Contains("StopChordIsDown", recorder);
+    Assert.Contains("session.RecordKey", recorder);
+    Assert.Contains("session.RecordMouseButton", recorder);
+    Assert.Contains("session.RecordMouseMove", recorder);
+    Assert.Contains("session.RecordMouseWheel", recorder);
+
+    Assert.Contains("RecordInputButton", sequenceXaml);
+    Assert.Contains("Ctrl+Shift+F12", sequenceXaml);
+    Assert.Contains("RecordingStartRequested", sequenceCode);
+    Assert.Contains("RecordingStopRequested", sequenceCode);
+    Assert.Contains("SetRecordingState", sequenceCode);
+
+    Assert.Contains("keyboardHook?.Dispose()", mainWindow);
+    Assert.Contains("RestartKeyboardHookAfterRecording", mainWindow);
+    Assert.Contains("SequencePanelControl.InsertSteps(recordedSteps)", mainWindow);
+    Assert.Contains("WindowState = WindowState.Minimized", mainWindow);
+}
+
+static void MacroStudioRecordsInputIntoSelectedConditionActions()
+{
+    var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("RecordThenActionsButton", conditionXaml);
+    Assert.Contains("Ctrl+Shift+F12", conditionXaml);
+    Assert.Contains("CanRecordThenActions", conditionCode);
+    Assert.Contains("RecordingStartRequested", conditionCode);
+    Assert.Contains("RecordingStopRequested", conditionCode);
+    Assert.Contains("ConditionList.IsEnabled = !recording", conditionCode);
+    Assert.Contains("InsertRecordedThenSteps", conditionCode);
+    Assert.Contains("ThenActionSequence.InsertSteps(steps)", conditionCode);
+
+    Assert.Contains("ConditionPanel.RecordingStartRequested += OnStartConditionRecording", mainWindow);
+    Assert.Contains("StartMacroRecording(targetsCondition: true)", mainWindow);
+    Assert.Contains("macroRecordingTargetsCondition", mainWindow);
+    Assert.Contains("ConditionPanel.InsertRecordedThenSteps(recordedSteps)", mainWindow);
+    Assert.Contains("SetRecordingUiState", mainWindow);
 }
 
 static void MacroStudioKeepsStepEditorComboBoxValuesSelectable()
@@ -2445,14 +3517,19 @@ static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()
 
     Assert.Contains("x:Name=\"TriggerTextBox\"", playbackXaml);
     Assert.Contains("IsReadOnly=\"True\"", playbackXaml);
+    Assert.Contains("x:Name=\"TriggerSupportHintText\"", playbackXaml);
     Assert.Contains("capturedTriggerKeys", playbackCode);
     Assert.Contains("capturedTriggerMouseButtons", playbackCode);
     Assert.Contains("ScheduleTriggerCaptureCommit", playbackCode);
     Assert.Contains("new HotkeyGesture(ReadCurrentModifiers(), capturedTriggerKeys", playbackCode);
+    Assert.Contains("MouseButton.Left => MacroHid.Core.MouseButton.Left", playbackCode);
+    Assert.Contains("MouseButton.Middle => MacroHid.Core.MouseButton.Middle", playbackCode);
     Assert.Contains("trigger.Keys", hookCode);
     Assert.Contains("trigger.MouseButtons", hookCode);
     Assert.Contains("All(IsKeyDown)", hookCode);
     Assert.Contains("All(pressedMouseButtons.Contains)", hookCode);
+    Assert.Contains("TryMapNumpadScanCode", hookCode);
+    Assert.Contains("WmMiddleButtonDown", hookCode);
 }
 
 static void MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries()
@@ -2496,6 +3573,65 @@ static void MacroStudioExposesLibraryListenAllControlsAndConflictStatus()
     Assert.Contains("FindListeningConflicts", mainWindowCode);
     Assert.Contains("ProcessFiltersOverlap", mainWindowCode);
     Assert.Contains("RefreshLibraryListeningState", mainWindowCode);
+}
+
+static void ListeningTriggerResolverLetsPreferredMacrosOverrideEarlierConflicts()
+{
+    var candidates = new (string Id, string Trigger)[]
+    {
+        ("old", "F1"),
+        ("other", "F2"),
+        ("current", "F1")
+    };
+
+    static bool Conflicts((string Id, string Trigger) left, (string Id, string Trigger) right)
+        => string.Equals(left.Trigger, right.Trigger, StringComparison.OrdinalIgnoreCase);
+
+    var withoutPreference = ListeningTriggerResolver.Resolve(
+        candidates,
+        candidate => candidate.Id,
+        Conflicts);
+    Assert.Equal(2, withoutPreference.Count);
+    Assert.Equal("other", withoutPreference[0].Id);
+    Assert.Equal("current", withoutPreference[1].Id);
+
+    var preferred = ListeningTriggerResolver.Resolve(
+        candidates,
+        candidate => candidate.Id,
+        Conflicts,
+        ["current"]);
+    Assert.Equal(2, preferred.Count);
+    Assert.Equal("other", preferred[0].Id);
+    Assert.Equal("current", preferred[1].Id);
+
+    var preferOld = ListeningTriggerResolver.Resolve(
+        candidates,
+        candidate => candidate.Id,
+        Conflicts,
+        ["old"]);
+    Assert.Equal(2, preferOld.Count);
+    Assert.Equal("old", preferOld[0].Id);
+    Assert.Equal("other", preferOld[1].Id);
+}
+
+static void MacroStudioListeningOverridesPreviousConflictingTriggers()
+{
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("ListeningTriggerResolver.Resolve", mainWindowCode);
+    Assert.Contains("StartListeningCandidates(candidates, selectedIds)", mainWindowCode);
+    Assert.Contains("StartListeningCandidates(candidates, [current.Item.Id])", mainWindowCode);
+    Assert.DoesNotContain("throw new InvalidOperationException(FormatListeningConflictMessage(conflicts));", mainWindowCode);
+}
+
+static void MacroStudioReportsTriggerConflictsOnlyForSimultaneousListeners()
+{
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("var listeningCandidates = candidates", mainWindowCode);
+    Assert.Contains(".Where(candidate => listeningControllers.ContainsKey(candidate.Item.Id))", mainWindowCode);
+    Assert.Contains("var conflicts = FindListeningConflicts(listeningCandidates);", mainWindowCode);
+    Assert.DoesNotContain("RefreshLibraryListeningState(conflicts)", mainWindowCode);
 }
 
 static void MacroStudioSeparatesLibraryBatchListeningFromPlaybackCurrentListening()
@@ -3310,11 +4446,15 @@ static void MacroStudioMovesConversionIntoMacroLibraryAndRemovesDiagnosticsContr
     Assert.DoesNotContain("DiagnosticsPanelControl", mainWindowCode);
 
     Assert.Contains("ImportMacroButton", libraryXaml);
-    Assert.Contains("ImportRazerModulesButton", libraryXaml);
+    Assert.DoesNotContain("ImportRazerModulesButton", libraryXaml);
     Assert.Contains("ExportFormatBox", libraryXaml);
     Assert.Contains("ExportMacroButton", libraryXaml);
     Assert.Contains("MacroConversionService.GetFormats", libraryCode);
     Assert.Contains("TryGetRazerMacroGuid", libraryCode);
+    Assert.Contains("GetRazerModuleReferences", libraryCode);
+    Assert.Contains("ResolveReferencedRazerModuleClosure", libraryCode);
+    Assert.Contains("PreserveRazerModuleCalls: true", libraryCode);
+    Assert.DoesNotContain("ImportRazerModules_Click", libraryCode);
     Assert.Contains("AddAliasesToMacro", libraryCode);
     Assert.Contains("CreateMacro(imported.Document, aliases:", libraryCode);
     Assert.Contains("ImportApplied", libraryCode);
@@ -3329,8 +4469,69 @@ static void MacroStudioPreservesRazerModuleCallsWhenImportingMainMacros()
 {
     var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
 
-    Assert.Contains("LoadConversionAuxiliaryFiles(dialog.FileName)", libraryCode);
-    Assert.DoesNotContain("MacroConversionFormat.Auto, razerModuleFiles", libraryCode);
+    Assert.Contains("BuildSmartImportCatalog(selectedFiles)", libraryCode);
+    Assert.Contains("ResolveReferencedRazerModuleClosure(selectedFiles, modulesByGuid)", libraryCode);
+    Assert.Contains("StoreRazerMacro", libraryCode);
+    Assert.DoesNotContain("razerModuleFiles", libraryCode);
+}
+
+static void MacroStudioExposesPersistentActionColorsInSharedSequences()
+{
+    var paletteXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml"));
+    var paletteCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml.cs"));
+    var appearanceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionAppearanceDialog.xaml"));
+    var appearanceService = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Services", "ActionAppearanceService.cs"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+    var stepSequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml"));
+    var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+
+    Assert.Contains("ActionColorSettingsButton", paletteXaml);
+    Assert.Contains("ActionColorSettingsButton_Click", paletteCode);
+    Assert.Contains("TextColorButton", appearanceXaml);
+    Assert.Contains("IconColorButton", appearanceXaml);
+    Assert.Contains("BackgroundColorButton", appearanceXaml);
+    Assert.Contains("ActionAppearanceSettings.json", appearanceService);
+    Assert.Contains("SetColor", appearanceService);
+    Assert.Contains("AppearanceChanged", appearanceService);
+    Assert.Contains("ActionForeground", displayModels);
+    Assert.Contains("IconBrush", displayModels);
+    Assert.Contains("BackgroundBrush", displayModels);
+    Assert.Contains("Background=\"{Binding BackgroundBrush}\"", stepSequenceXaml);
+    Assert.Contains("Foreground=\"{Binding ActionForeground}\"", stepSequenceXaml);
+    Assert.Contains("Foreground=\"{Binding IconBrush}\"", stepSequenceXaml);
+    Assert.Contains("<local:StepSequencePanel x:Name=\"ThenActionSequence\"", conditionXaml);
+}
+
+static void MacroStudioUsesStrongerActionHoverAndDimmedLightTheme()
+{
+    var stepSequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml"));
+    var lightThemeXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Themes", "LightTheme.xaml"));
+    var darkThemeXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Themes", "DarkTheme.xaml"));
+
+    Assert.Contains("x:Name=\"HoverOverlay\"", stepSequenceXaml);
+    Assert.Contains("x:Name=\"HoverRail\"", stepSequenceXaml);
+    Assert.Contains("BorderThickness=\"2\"", stepSequenceXaml);
+    Assert.Contains("ActionHoverOverlay", lightThemeXaml);
+    Assert.Contains("ActionHoverOverlay", darkThemeXaml);
+    Assert.Contains("Color=\"#E1E5EA\"", lightThemeXaml);
+    Assert.Contains("Color=\"#F1F2F4\"", lightThemeXaml);
+    Assert.DoesNotContain("Color=\"#FFFFFF\"", lightThemeXaml);
+}
+
+static void MacroStudioSupportsCtrlYRedoHistory()
+{
+    var stepSequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml"));
+    var stepSequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs"));
+    var sequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("StepRedoButton", stepSequenceXaml);
+    Assert.Contains("RedoRequested", stepSequenceCode);
+    Assert.Contains("redoStack", sequenceCode);
+    Assert.Contains("RedoLastChange", sequenceCode);
+    Assert.Contains("redoStack.Clear()", sequenceCode);
+    Assert.Contains("SequencePanelControl.RedoLastChange()", mainWindowCode);
+    Assert.Contains("key == Key.Y", mainWindowCode);
 }
 
 static void MacroStudioSupportsMultiSelectToolbarMoveOperations()
@@ -3512,6 +4713,31 @@ static void MacroStepTreeEditorEditsLinkedPressReleasePairs()
     Assert.Equal(300, mouseDown.X);
     Assert.Equal(400, mouseDown.Y);
     Assert.False(mouseUp.HasCoordinate);
+}
+
+static void StepDisplayFindsLoopEndWhenPreferringContainerEnd()
+{
+    var items = StepDisplayItem.FlattenSteps(
+    [
+        new RepeatStep(2, [new WaitStep(TimeSpan.FromMilliseconds(10))])
+    ]);
+
+    var start = StepDisplayItem.FindByPath(items, [0], preferContainerEnd: false);
+    var end = StepDisplayItem.FindByPath(items, [0], preferContainerEnd: true);
+    var wait = StepDisplayItem.FindByPath(items, [0, 0]);
+
+    Assert.Equal(StepDisplayKind.LoopStart, start!.Kind);
+    Assert.Equal(StepDisplayKind.LoopEnd, end!.Kind);
+    Assert.Equal(StepDisplayKind.Delay, wait!.Kind);
+}
+
+static void MacroStudioDropIndicatorUsesLoopEndWhenInsertingAfterALoop()
+{
+    var stepSequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs"));
+
+    Assert.Contains("preferContainerEnd: true", stepSequenceCode);
+    Assert.Contains("FindByPath", stepSequenceCode);
+    Assert.Contains("GetDropIndicatorY", stepSequenceCode);
 }
 
 static void StepDisplayLabelsUsePressReleaseWording()
@@ -4274,6 +5500,23 @@ static void BuildScriptsPackageNativePlaybackEngine()
     Assert.Contains("MacroHid.NativePlayback.dll", iss);
 }
 
+static void InstallerPreservesUserDataUnlessExplicitlyConfirmed()
+{
+    var iss = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
+    var installerDoc = File.ReadAllText(Path.Combine("docs", "installer.md"));
+
+    Assert.Contains("CurUninstallStepChanged", iss);
+    Assert.Contains("DeleteUserDataPrompt", iss);
+    Assert.Contains("DeleteUserDataFinalWarning", iss);
+    Assert.Contains("MB_DEFBUTTON2", iss);
+    Assert.Contains("IDNO", iss);
+    Assert.Contains("{userappdata}\\MacroHID", iss);
+    Assert.Contains("DelTree(UserDataPath, True, True, True)", iss);
+    Assert.DoesNotContain("[UninstallDelete]", iss);
+    Assert.Contains("卸载时默认保留该目录", installerDoc);
+    Assert.Contains("Silent uninstall always preserves user data", installerDoc);
+}
+
 static void RazerSampleXmlSeparatesDirectImportMacrosFromModuleReferences()
 {
     var directFiles = new[]
@@ -4547,6 +5790,46 @@ static void EmbeddedConverterImportsRazerModuleReferencesAsMacroCalls()
     Assert.Equal("Nested Burst", call.Macro);
 }
 
+static void EmbeddedConverterPreservesSuppliedRazerModulesAsNestedCalls()
+{
+    const string main = """
+    <Macro>
+      <Name>Main Macro</Name>
+      <MacroEvents>
+        <MacroEvent><Type>7</Type><guid>child-guid</guid></MacroEvent>
+      </MacroEvents>
+      <Version>4</Version>
+    </Macro>
+    """;
+    const string child = """
+    <Macro>
+      <Name>Child Macro</Name>
+      <Guid>child-guid</Guid>
+      <MacroEvents>
+        <MacroEvent><Type>1</Type><KeyEvent><Makecode>65</Makecode><State>0</State></KeyEvent></MacroEvent>
+      </MacroEvents>
+      <Version>4</Version>
+    </Macro>
+    """;
+    var duplicateAuxiliaries = new AuxiliaryMacroFile[]
+    {
+        new("child.xml", child),
+        new("copy/child.xml", child)
+    };
+
+    var import = MacroConversionService.ImportToMcrx(new MacroImportRequest(
+        main,
+        "main.xml",
+        MacroConversionFormat.RazerSynapseXml,
+        duplicateAuxiliaries,
+        PreserveRazerModuleCalls: true));
+
+    var call = Assert.IsType<MacroCallStep>(import.Document.Steps.Single());
+    Assert.Equal("Child Macro", call.Macro);
+    var references = MacroConversionService.GetRazerModuleReferences(main);
+    Assert.Equal("child-guid", references.Single().Guid);
+}
+
 static void NativePlaybackPauseControlShiftsRunningTimeline()
 {
     if (!OperatingSystem.IsWindows())
@@ -4754,6 +6037,8 @@ static void EmbeddedConverterExportsGIMacrosJson()
     Assert.Equal("gi-demo.json", export.FileName);
     Assert.Contains("\"kd\"", export.Output);
     Assert.Contains("\"view\"", export.Output);
+    Assert.Contains("[\"kd\",\"q\",0]", export.Output);
+    Assert.DoesNotContain("\"kd\"," + Environment.NewLine, export.Output);
     Assert.False(export.Diagnostics.Any(item => item.Severity == MacroDiagnosticSeverity.Warning));
 
     var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(export.Output, "gi-demo.json"));
@@ -5018,6 +6303,69 @@ static void MacroLibraryStoreMigratesLegacyMacrosIntoGlobalProcessGroup()
     }
 }
 
+static void MacroLibraryStoreRepairsDuplicateIndexEntries()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        Directory.CreateDirectory(root);
+        File.WriteAllText(
+            Path.Combine(root, "library.json"),
+            """
+            {
+              "items": [
+                {
+                  "id": "macro-a",
+                  "name": "A",
+                  "folder": "",
+                  "fileName": "a.mcrx",
+                  "updatedAt": "2026-07-13T12:00:00+00:00"
+                },
+                {
+                  "id": "macro-a",
+                  "name": "A ghost",
+                  "folder": "",
+                  "fileName": "a-ghost.mcrx",
+                  "updatedAt": "2026-07-13T12:01:00+00:00"
+                },
+                {
+                  "id": "macro-b",
+                  "name": "B",
+                  "folder": "",
+                  "fileName": "b.mcrx",
+                  "updatedAt": "2026-07-13T12:02:00+00:00"
+                },
+                {
+                  "id": "macro-c",
+                  "name": "B ghost",
+                  "folder": "",
+                  "fileName": "b.mcrx",
+                  "updatedAt": "2026-07-13T12:03:00+00:00"
+                }
+              ],
+              "selectedMacroId": "macro-c"
+            }
+            """);
+
+        var snapshot = new MacroLibraryStore(root).Load();
+        var persisted = File.ReadAllText(Path.Combine(root, "library.json"));
+
+        Assert.Equal(2, snapshot.Items.Count);
+        Assert.True(snapshot.Items.Any(item => item.Id == "macro-a" && item.FileName == "a.mcrx"));
+        Assert.True(snapshot.Items.Any(item => item.Id == "macro-b" && item.FileName == "b.mcrx"));
+        Assert.Equal("macro-a", snapshot.SelectedMacroId);
+        Assert.DoesNotContain("a-ghost.mcrx", persisted);
+        Assert.DoesNotContain("macro-c", persisted);
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
 static void MacroLibraryStoreCreatesEditsAndDeletesProcessGroups()
 {
     var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
@@ -5206,6 +6554,149 @@ static void MacroStudioListenersApplyProcessGroupFilters()
     Assert.DoesNotContain("document.Playback.ProcessFilter ?? string.Empty", mainWindowCode);
 }
 
+static void MacroStudioMacroLibrarySupportsBatchMacroImport()
+{
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("Multiselect = true", libraryCode);
+    Assert.Contains("foreach (var fileName in dialog.FileNames)", libraryCode);
+    Assert.Contains("ConversionSmartImported", libraryCode);
+    Assert.Contains("ConversionBatchImportFailed", libraryCode);
+    Assert.Contains("<value>已导入 {0} 个宏（选择 {1} 个文件，自动识别 {2} 个子宏）。</value>", simplified);
+    Assert.DoesNotContain("ImportRazerModules", simplified);
+    Assert.DoesNotContain("雷云模块", simplified);
+}
+
+static void MacroStudioMacroLibraryRightClickDeleteKeepsItsTargetAndReportsFailures()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("Opened=\"MacroTreeContextMenu_Opened\"", libraryXaml);
+    Assert.Contains("Closed=\"MacroTreeContextMenu_Closed\"", libraryXaml);
+    Assert.Contains("contextMenuTargetNode = node", libraryCode);
+    Assert.Contains("DeleteNode(contextMenuTargetNode ?? GetSelectedNode())", libraryCode);
+    Assert.Contains("MacroDeleted?.Invoke(item.Id)", libraryCode);
+    Assert.DoesNotContain("MacroDeleted?.Invoke(state.SelectedMacroId)", libraryCode);
+    Assert.Contains("DeleteDatabaseConfirm", libraryCode);
+    Assert.Contains("ReportDeleteFailure", libraryCode);
+    Assert.Contains("OnLibraryStructureEdited();", mainWindowCode);
+    Assert.Contains("<value>删除宏数据库“{0}”？其中的宏将移回“全局”数据库。</value>", simplified);
+    Assert.Contains("<value>删除失败：{0}</value>", simplified);
+}
+
+static void MacroStudioMacroLibraryDefersListeningRefreshWhileRenaming()
+{
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var appCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "App.xaml.cs"));
+
+    Assert.Contains("if (renamingNode is not null)", libraryCode);
+    Assert.Contains("refreshTreeAfterRename = true", libraryCode);
+    Assert.Contains("QueueCommitRename(node)", libraryCode);
+    Assert.Contains("DispatcherPriority.Input", libraryCode);
+    Assert.Contains("RefreshAfterRenameIfNeeded", libraryCode);
+    Assert.Contains("dispatcherErrorDialogPending", appCode);
+    Assert.Contains("e.Handled = true", appCode);
+    Assert.Contains("DispatcherPriority.ContextIdle", appCode);
+    Assert.DoesNotContain("Log($\"[UI ERROR] {inner.GetType().Name}: {inner.Message}\\nStack (first 5):\\n{string.Join(\"\\n\", inner.StackTrace?.Split('\\n').Take(5) ?? [])}\");\n        DialogOwnerService.MessageBoxSafe", appCode);
+}
+
+static void MacroStudioRenameUsesThemedInlineTextBox()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var styleStart = libraryXaml.IndexOf("x:Key=\"ExplorerRenameTextBoxStyle\"", StringComparison.Ordinal);
+    Assert.True(styleStart >= 0);
+    var styleEnd = libraryXaml.IndexOf("</Style>", styleStart, StringComparison.Ordinal);
+    Assert.True(styleEnd > styleStart);
+    var style = libraryXaml[styleStart..styleEnd];
+
+    Assert.Contains("Property=\"Background\" Value=\"{DynamicResource ControlBackground}\"", style);
+    Assert.Contains("Property=\"Foreground\" Value=\"{DynamicResource PrimaryText}\"", style);
+    Assert.Contains("Property=\"CaretBrush\" Value=\"{DynamicResource PrimaryText}\"", style);
+    Assert.Contains("BorderBrush=\"{DynamicResource Accent}\"", style);
+    Assert.Contains("CornerRadius=\"6\"", style);
+    Assert.Contains("PART_ContentHost", style);
+    Assert.Contains("IsRenaming", style);
+
+    Assert.Contains("x:Name=\"RenameTextBox\"", libraryXaml);
+    Assert.Contains("Style=\"{StaticResource ExplorerRenameTextBoxStyle}\"", libraryXaml);
+    var treeRenameStart = libraryXaml.IndexOf("x:Name=\"RenameTextBox\"", StringComparison.Ordinal);
+    var treeRenameEnd = libraryXaml.IndexOf("/>", treeRenameStart, StringComparison.Ordinal);
+    Assert.True(treeRenameEnd > treeRenameStart);
+    Assert.Contains("Style=\"{StaticResource ExplorerRenameTextBoxStyle}\"", libraryXaml[treeRenameStart..treeRenameEnd]);
+}
+
+static void MacroStudioPolishesInputChromeMenusAndEmptyStates()
+{
+    var sharedStyles = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Themes", "SharedStyles.xaml"));
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var sequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml"));
+    var playbackXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackPanel.xaml"));
+    var playbackCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackPanel.xaml.cs"));
+    var stepSequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml"));
+    var stepSequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+    var pickerXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "WindowTargetPickerDialog.xaml"));
+    var english = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.resx"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+    var traditional = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-TW.resx"));
+
+    Assert.Contains("x:Name=\"PART_ContentHost\"", sharedStyles);
+    Assert.Contains("CornerRadius=\"11\"", sharedStyles);
+    Assert.Contains("x:Key=\"PlaceholderHintStyle\"", sharedStyles);
+    Assert.Contains("x:Key=\"ToolToggleButton\"", sharedStyles);
+    Assert.Contains("x:Key=\"MenuItemSubmenuHeaderTemplate\"", sharedStyles);
+    Assert.Contains("Property=\"Role\" Value=\"SubmenuHeader\"", sharedStyles);
+    Assert.Contains("Text=\"{TemplateBinding InputGestureText}\"", sharedStyles);
+    Assert.Contains("TargetType=\"{x:Type Slider}\"", sharedStyles);
+    Assert.Contains("Style=\"{StaticResource ComboBoxEditableTextBoxStyle}\"", sharedStyles);
+
+    Assert.Contains("x:Name=\"MacroSearchPlaceholderText\"", libraryXaml);
+    Assert.Contains("x:Name=\"GroupProcessFilterPlaceholderText\"", libraryXaml);
+    Assert.Contains("Style=\"{StaticResource ToolToggleButton}\"", sequenceXaml);
+    Assert.Contains("x:Name=\"TriggerCaptureHintText\"", playbackXaml);
+    Assert.Contains("Tag = \"Capturing\"", playbackCode);
+    Assert.Contains("x:Name=\"EmptySequenceOverlay\"", stepSequenceXaml);
+    Assert.Contains("EmptySequenceOverlay.Visibility", stepSequenceCode);
+    Assert.Contains("x:Name=\"FilterPlaceholderText\"", pickerXaml);
+
+    Assert.DoesNotContain("if (!string.IsNullOrWhiteSpace(Trigger)) return \"未监听\";", displayModels);
+    Assert.Contains("name=\"CaptureTriggerHint\"", english);
+    Assert.Contains("<value>按下触发键…</value>", simplified);
+    Assert.Contains("<value>按下觸發鍵…</value>", traditional);
+}
+
+static void MacroStudioUsesFluentWindowChromeAndThemedDialogs()
+{
+    var mainWindowXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml"));
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var sharedStyles = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Themes", "SharedStyles.xaml"));
+    var chromeCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ThemedDialogChrome.cs"));
+    var pickerCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "WindowTargetPickerDialog.xaml.cs"));
+    var colorCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "RgbColorPickerDialog.xaml.cs"));
+    var appearanceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionAppearanceDialog.xaml.cs"));
+    var thenActionsCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ThenActionsEditorWindow.xaml.cs"));
+    var appXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "App.xaml"));
+
+    Assert.Contains("Segoe UI Variable, Segoe UI", mainWindowXaml);
+    Assert.Contains("Content=\"&#xE921;\"", mainWindowXaml);
+    Assert.Contains("Content=\"&#xE922;\"", mainWindowXaml);
+    Assert.Contains("Content=\"&#xE8BB;\"", mainWindowXaml);
+    Assert.Contains("RefreshWindowChromeButtons", mainWindowCode);
+    Assert.Contains("\\uE708", mainWindowCode);
+    Assert.Contains("x:Key=\"ThemedDialogRootStyle\"", sharedStyles);
+    Assert.Contains("ThemedDialogChrome.Apply", pickerCode);
+    Assert.Contains("ThemedDialogChrome.Apply", colorCode);
+    Assert.Contains("ThemedDialogChrome.Apply", appearanceCode);
+    Assert.Contains("ThemedDialogChrome.Apply", thenActionsCode);
+    Assert.Contains("WindowStyle = WindowStyle.None", chromeCode);
+    Assert.Contains("AllowsTransparency = true", chromeCode);
+    Assert.Contains("Segoe UI Variable, Segoe UI", appXaml);
+}
+
 static void MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste()
 {
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
@@ -5231,11 +6722,17 @@ static void MacroStudioMacroLibraryUsesDynamicThemeTextColors()
 {
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
     var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+    var sharedStyles = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Themes", "SharedStyles.xaml"));
 
     Assert.Contains("Foreground=\"{DynamicResource PrimaryText}\"", libraryXaml);
     Assert.DoesNotContain("Foreground=\"{Binding TitleBrush}\"", libraryXaml);
     Assert.DoesNotContain("TitleBrush", displayModels);
     Assert.DoesNotContain("TextBrush", displayModels);
+    Assert.Contains("TargetType=\"{x:Type ToolTip}\"", sharedStyles);
+    Assert.Contains("Background=\"{DynamicResource ControlBackground}\"", sharedStyles);
+    Assert.Contains("TextElement.Foreground=\"{TemplateBinding Foreground}\"", sharedStyles);
+    Assert.Contains("x:Key=\"HorizontalScrollThumb\"", sharedStyles);
+    Assert.Contains("Property=\"Orientation\" Value=\"Horizontal\"", sharedStyles);
 }
 
 static void MacroStudioMacroLibraryScrollbarDragIsNotCapturedAsMacroDrag()
@@ -5346,18 +6843,42 @@ static void MacroActionTemplatesCreatePlayablePressReleaseSteps()
     Assert.Equal(TimeSpan.FromMilliseconds(100), delay.Duration);
 
     var keySteps = MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.Keyboard);
-    Assert.Equal(2, keySteps.Count);
+    Assert.Equal(3, keySteps.Count);
     Assert.Equal(KeyActionKind.Down, Assert.IsType<KeyStep>(keySteps[0]).Kind);
-    Assert.Equal(KeyActionKind.Up, Assert.IsType<KeyStep>(keySteps[1]).Kind);
+    Assert.Equal(TimeSpan.Zero, Assert.IsType<KeyStep>(keySteps[0]).Hold);
+    Assert.Equal(TimeSpan.FromMilliseconds(5), Assert.IsType<WaitStep>(keySteps[1]).Duration);
+    Assert.Equal(KeyActionKind.Up, Assert.IsType<KeyStep>(keySteps[2]).Kind);
+    Assert.Equal(TimeSpan.Zero, Assert.IsType<KeyStep>(keySteps[2]).Hold);
 
     var mouseSteps = MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.MouseButton);
-    Assert.Equal(2, mouseSteps.Count);
-    Assert.Equal(MouseButton.Left, Assert.IsType<MouseButtonStep>(mouseSteps[0]).Button);
+    Assert.Equal(3, mouseSteps.Count);
     Assert.Equal(ButtonActionKind.Down, Assert.IsType<MouseButtonStep>(mouseSteps[0]).Kind);
-    Assert.Equal(ButtonActionKind.Up, Assert.IsType<MouseButtonStep>(mouseSteps[1]).Kind);
+    Assert.Equal(TimeSpan.Zero, Assert.IsType<MouseButtonStep>(mouseSteps[0]).Hold);
+    Assert.Equal(TimeSpan.FromMilliseconds(5), Assert.IsType<WaitStep>(mouseSteps[1]).Duration);
+    Assert.Equal(ButtonActionKind.Up, Assert.IsType<MouseButtonStep>(mouseSteps[2]).Kind);
+
+    var pixel = Assert.IsType<PixelWhenStep>(
+        MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.Pixel)[0]);
+    Assert.Equal(3, pixel.ThenSteps.Count);
+    Assert.Equal(TimeSpan.FromMilliseconds(5), Assert.IsType<WaitStep>(pixel.ThenSteps[1]).Duration);
 
     var move = Assert.IsType<MouseMoveStep>(MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.MouseMove)[0]);
     Assert.Equal(MouseMoveMode.Relative, move.Mode);
+
+    var windowActivate = Assert.IsType<WindowActivateStep>(
+        MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.WindowActivate)[0]);
+    Assert.Equal("YuanShen.exe", windowActivate.ProcessName);
+    Assert.Equal(TimeSpan.FromSeconds(3), windowActivate.Timeout);
+
+    var ocrExtract = Assert.IsType<OcrExtractTextStep>(
+        MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.OcrExtractText)[0]);
+    Assert.True(ocrExtract.UseRegex);
+    Assert.Equal(1, ocrExtract.CaptureGroup);
+
+    var ocrClick = Assert.IsType<OcrClickStep>(MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.OcrClick)[0]);
+    Assert.Equal(MouseButton.Left, ocrClick.Button);
+    Assert.Equal(1, ocrClick.ClickCount);
+    Assert.Equal(TimeSpan.FromMilliseconds(20), ocrClick.Hold);
 
     var text = Assert.IsType<TextStep>(MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.Text)[0]);
     Assert.Equal("text", text.Text);
@@ -5365,6 +6886,9 @@ static void MacroActionTemplatesCreatePlayablePressReleaseSteps()
     var repeat = Assert.IsType<RepeatStep>(MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.Loop)[0]);
     Assert.Equal(2, repeat.Count);
     Assert.Equal(0, repeat.Steps.Count);
+    Assert.IsType<StopCurrentSequenceStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.StopCurrent));
+    Assert.IsType<StopCurrentIterationStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.StopIteration));
+    Assert.IsType<StopAllSequencesStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.StopAll));
 
     var document = new MacroDocument(
         Version: 1,
@@ -5375,11 +6899,14 @@ static void MacroActionTemplatesCreatePlayablePressReleaseSteps()
             .. keySteps,
             .. mouseSteps,
             move,
+            windowActivate,
+            ocrExtract,
+            ocrClick,
             text,
             repeat
         ]);
     var roundTrip = McrxParser.Parse(McrxSerializer.Serialize(document));
-    Assert.Equal(8, roundTrip.Steps.Count);
+    Assert.Equal(13, roundTrip.Steps.Count);
     Assert.False(roundTrip.Steps.OfType<KeyStep>().Any(step => step.Kind == KeyActionKind.Tap));
     Assert.False(roundTrip.Steps.OfType<MouseButtonStep>().Any(step => step.Kind == ButtonActionKind.Click));
 }
@@ -5418,6 +6945,307 @@ static void InvokePrivate(object target, string name)
     var method = target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new InvalidOperationException($"Missing private method '{name}'.");
     method.Invoke(target, []);
+}
+
+static void EmbeddedConverterReportsSyntaxImportFailuresWithSourceLines()
+{
+    const string malformedJson = """
+    {
+      "version": 1,
+      "name": "broken",
+      "steps": [
+        { "type": "key.down", "key": "A" },
+        { "type": "wait", "ms": }
+      ]
+    }
+    """;
+
+    MacroImportException? jsonFailure = null;
+    try
+    {
+        MacroConversionService.ImportToMcrx(new MacroImportRequest(malformedJson, "broken.mcrx"));
+    }
+    catch (MacroImportException ex)
+    {
+        jsonFailure = ex;
+    }
+
+    Assert.True(jsonFailure is not null);
+    Assert.Equal(6, jsonFailure!.LineNumber);
+    Assert.True(jsonFailure.ColumnNumber > 0);
+    Assert.Contains("\"type\": \"wait\"", jsonFailure.SourceLine ?? string.Empty);
+    Assert.Equal(MacroConversionFormat.MacroHidMcrx, jsonFailure.SourceFormat);
+
+    const string malformedXml = """
+    <Macro>
+      <Name>broken</Name>
+      <MacroEvents>
+        <MacroEvent><Type>0</Type></MacroEvent>
+      </MacroEventsX>
+    </Macro>
+    """;
+    MacroImportException? xmlFailure = null;
+    try
+    {
+        MacroConversionService.ImportToMcrx(new MacroImportRequest(
+            malformedXml,
+            "broken.xml",
+            MacroConversionFormat.RazerSynapseXml));
+    }
+    catch (MacroImportException ex)
+    {
+        xmlFailure = ex;
+    }
+
+    Assert.True(xmlFailure is not null);
+    Assert.True(xmlFailure!.LineNumber >= 5);
+    Assert.True(xmlFailure.ColumnNumber > 0);
+    Assert.Contains("MacroEventsX", xmlFailure.SourceLine ?? string.Empty);
+
+    const string malformedGIMacros = """
+    [
+      ["wait", 10],
+      ["kd", "A"
+    ]
+    """;
+    MacroImportException? giFailure = null;
+    try
+    {
+        MacroConversionService.ImportToMcrx(new MacroImportRequest(malformedGIMacros, "broken.json"));
+    }
+    catch (MacroImportException ex)
+    {
+        giFailure = ex;
+    }
+
+    Assert.True(giFailure is not null);
+    Assert.Equal(MacroConversionFormat.GIMacrosJson, giFailure!.SourceFormat);
+    Assert.True(giFailure.LineNumber >= 3);
+    Assert.Contains("kd", giFailure.SourceLine ?? string.Empty);
+}
+
+static void EmbeddedConverterLocatesSemanticMcrxFailures()
+{
+    const string semanticFailure = """
+    {
+      "version": 1,
+      "name": "semantic failure",
+      "steps": [
+        { "type": "not.real" }
+      ]
+    }
+    """;
+
+    MacroImportException? failure = null;
+    try
+    {
+        MacroConversionService.ImportToMcrx(new MacroImportRequest(semanticFailure, "semantic.mcrx"));
+    }
+    catch (MacroImportException ex)
+    {
+        failure = ex;
+    }
+
+    Assert.True(failure is not null);
+    Assert.Equal(5, failure!.LineNumber);
+    Assert.Contains("not.real", failure.SourceLine ?? string.Empty);
+    Assert.Contains("Unsupported macro step type", failure.Reason);
+}
+
+static void MacroLibraryStorePersistsEditLocks()
+{
+    var root = Path.Combine(Path.GetTempPath(), "macrohid-lock-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var store = new MacroLibraryStore(root);
+        var created = store.CreateMacro(new MacroDocument(
+            1,
+            "locked",
+            PlaybackSettings.Default,
+            [new WaitStep(TimeSpan.FromMilliseconds(1))]));
+        var locked = store.SetMacroLocked(created.Id, true);
+
+        Assert.True(locked.IsLocked);
+        Assert.True(store.Load().Items.Single(item => item.Id == created.Id).IsLocked);
+        Assert.Throws<InvalidOperationException>(() => store.SaveMacro(
+            created.Id,
+            new MacroDocument(1, "changed", PlaybackSettings.Default, [])));
+        Assert.Throws<InvalidOperationException>(() => store.RenameMacro(created.Id, "changed"));
+        Assert.Throws<InvalidOperationException>(() => store.DeleteMacro(created.Id));
+
+        var copy = store.DuplicateMacro(created.Id, "editable copy");
+        Assert.False(copy.IsLocked);
+        store.SaveMacro(copy.Id, new MacroDocument(1, "editable copy", PlaybackSettings.Default, []));
+
+        var unlocked = store.SetMacroLocked(created.Id, false);
+        Assert.False(unlocked.IsLocked);
+        store.RenameMacro(created.Id, "unlocked");
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void ImportedConditionalMacrosExecuteThenActions()
+{
+    const string conditionalMacro = """
+    {
+      "version": 1,
+      "name": "imported condition",
+      "steps": [
+        { "type": "wait", "ms": 30 },
+        { "type": "key.down", "key": "A" }
+      ],
+      "conditions": [
+        {
+          "id": "imported-condition",
+          "name": "pixel match",
+          "startStep": 0,
+          "endStep": 1,
+          "startPath": "0",
+          "endPath": "1",
+          "type": "pixel",
+          "x": 10,
+          "y": 20,
+          "r": 1,
+          "g": 2,
+          "b": 3,
+          "then": [
+            { "type": "key.down", "key": "B" }
+          ]
+        }
+      ]
+    }
+    """;
+
+    var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(conditionalMacro, "conditional.mcrx"));
+    Assert.Single(imported.Document.EffectiveConditions);
+
+    var matchingSink = new RecordingInputSink();
+    using (var matchingExecutor = new MacroPlaybackExecutor(matchingSink, livePixelEvaluator: _ => true))
+    {
+        var result = matchingExecutor.RunAsync(
+            imported.Document,
+            new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false),
+            CancellationToken.None).GetAwaiter().GetResult();
+        Assert.Equal(PlaybackRunStatus.Completed, result.Status);
+    }
+
+    Assert.True(matchingSink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+    Assert.True(matchingSink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+
+    var nonMatchingSink = new RecordingInputSink();
+    using (var nonMatchingExecutor = new MacroPlaybackExecutor(nonMatchingSink, livePixelEvaluator: _ => false))
+    {
+        nonMatchingExecutor.RunAsync(
+            imported.Document,
+            new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false),
+            CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    Assert.True(nonMatchingSink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+    Assert.False(nonMatchingSink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+}
+
+static void MacroStudioMacroLibrarySupportsExplorerMultiSelectAndViewModes()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("x:Name=\"ExplorerListView\"", libraryXaml);
+    Assert.Contains("SelectionMode=\"Extended\"", libraryXaml);
+    Assert.Contains("Background=\"{DynamicResource PanelBackground}\"", libraryXaml);
+    Assert.Contains("Foreground=\"{DynamicResource PrimaryText}\"", libraryXaml);
+    Assert.Contains("x:Name=\"ItemRoot\"", libraryXaml);
+    Assert.Contains("Value=\"{DynamicResource Selection}\"", libraryXaml);
+    Assert.Contains("x:Name=\"LibraryViewBox\"", libraryXaml);
+    Assert.Contains("Tag=\"details\"", libraryXaml);
+    Assert.Contains("Tag=\"list\"", libraryXaml);
+    Assert.Contains("Tag=\"smallIcons\"", libraryXaml);
+    Assert.Contains("Tag=\"largeIcons\"", libraryXaml);
+    Assert.Contains("ExplorerSelectAllMenuItem", libraryXaml);
+    Assert.Contains("ExplorerViewMenuItem", libraryXaml);
+    Assert.Contains("ExplorerSortMenuItem", libraryXaml);
+    Assert.Contains("ExplorerToggleLockMenuItem", libraryXaml);
+    Assert.Contains("ExplorerRefreshMenuItem", libraryXaml);
+    Assert.Contains("UpFolderButton", libraryXaml);
+    Assert.Contains("Content=\"返回上级\"", libraryXaml);
+    Assert.Contains("ScrollViewer.IsDeferredScrollingEnabled=\"False\"", libraryXaml);
+    Assert.Contains("ScrollViewer.PanningMode=\"Both\"", libraryXaml);
+    Assert.Contains("PreviewMouseWheel=\"ExplorerListView_PreviewMouseWheel\"", libraryXaml);
+    Assert.Contains("QueueExplorerHorizontalScroll", libraryCode);
+    Assert.Contains("WM_MOUSEHWHEEL", libraryCode);
+    Assert.Contains("GetSelectedExplorerNodes", libraryCode);
+    Assert.Contains("ExplorerListView.SelectAll()", libraryCode);
+    Assert.Contains("LibraryItemsDeleteRequested", libraryCode);
+    Assert.Contains("MacroLockChanged", libraryCode);
+    Assert.Contains("is not string[] macroIds", libraryCode);
+    Assert.Contains("currentDatabaseFolder", libraryCode);
+    Assert.Contains("LibraryPanel.LibraryItemsDeleteRequested += OnLibraryItemsDeleteRequested", mainWindowCode);
+    Assert.Contains("LibraryPanel.MacroLockChanged += OnLibraryMacroLockChanged", mainWindowCode);
+    Assert.Contains("ExplorerTypeText", displayModels);
+    Assert.Contains("\"\\uE8B7\"", displayModels);
+    Assert.Contains("<value>详细信息</value>", simplified);
+    Assert.Contains("<value>大图标</value>", simplified);
+}
+
+static void MacroStudioLocksEveryMacroEditingSurface()
+{
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var sequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml"));
+    var sequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
+    var stepSequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var jsonCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "McrxJsonPanel.xaml.cs"));
+    var playbackCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackPanel.xaml.cs"));
+    var actionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml.cs"));
+
+    Assert.Contains("MacroLockButton", sequenceXaml);
+    Assert.Contains("EditLockChanged", sequenceCode);
+    Assert.Contains("SetMacroLocked", mainWindow);
+    Assert.Contains("SequencePanelControl.SetReadOnly", mainWindow);
+    Assert.Contains("ConditionPanel.SetReadOnly", mainWindow);
+    Assert.Contains("JsonPanel.SetReadOnly", mainWindow);
+    Assert.Contains("PlaybackPanelControl.SetReadOnly", mainWindow);
+    Assert.Contains("ActionPalette.SetReadOnly", mainWindow);
+    Assert.Contains("if (isReadOnly) return", stepSequenceCode);
+    Assert.Contains("if (isReadOnly) return", conditionCode);
+    Assert.Contains("MacroEditor.IsReadOnly", jsonCode);
+    Assert.Contains("CaptureTriggerButton.IsEnabled = !value", playbackCode);
+    Assert.Contains("ActionCommandGrid.IsEnabled = !value", actionCode);
+}
+
+static void MacroStudioScopesDeleteShortcutsAndPreservesImportedConditions()
+{
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+
+    Assert.Contains("e.Key == Key.Delete && modifiers == ModifierKeys.None", libraryCode);
+    Assert.Contains("modifiers == ModifierKeys.Control && e.Key == Key.D", libraryCode);
+    Assert.Contains("modifiers == ModifierKeys.Control && e.Key == Key.N", libraryCode);
+    Assert.Contains("InputGestureText=\"Delete\"", libraryXaml);
+    Assert.Contains("SequencePanelControl.IsKeyboardFocusWithin", mainWindow);
+    Assert.Contains("ConditionPanel.IsKeyboardFocusWithin", mainWindow);
+    Assert.Contains("ConditionPanel.HasValidationErrors", mainWindow);
+    Assert.Contains("public bool HasValidationErrors", conditionCode);
+    Assert.Contains("SaveActiveEditorBeforeSwitch", mainWindow);
+    Assert.Contains("autoSaveTimer.Stop()", mainWindow);
+
+    var importIndex = mainWindow.IndexOf("private void OnImportApplied", StringComparison.Ordinal);
+    var undoIndex = mainWindow.IndexOf("private void OnSequenceUndoApplied", StringComparison.Ordinal);
+    Assert.True(importIndex >= 0 && undoIndex > importIndex);
+    var importBody = mainWindow[importIndex..undoIndex];
+    Assert.Contains("ConditionPanel.LoadConditions(document.EffectiveConditions)", importBody);
+    Assert.Contains("SequencePanelControl.SetConditionHighlights(document.EffectiveConditions", importBody);
 }
 
 static class Assert
@@ -5625,6 +7453,53 @@ sealed class CancellingInputSink : IMacroInputSink
         if (Actions.Count >= cancelAfter)
         {
             cancellation.Cancel();
+        }
+    }
+
+    public InputSubmissionStats? GetStats() => null;
+}
+
+sealed class CancellingOnActionInputSink : IMacroInputSink
+{
+    private readonly object gate = new();
+    private readonly CancellationTokenSource cancellation;
+    private readonly InputAction target;
+    private readonly int cancelAfterMatches;
+    private readonly List<InputAction> actions = [];
+    private int matches;
+
+    public CancellingOnActionInputSink(
+        CancellationTokenSource cancellation,
+        InputAction target,
+        int cancelAfterMatches)
+    {
+        this.cancellation = cancellation;
+        this.target = target;
+        this.cancelAfterMatches = cancelAfterMatches;
+    }
+
+    public bool IsAvailable => true;
+
+    public IReadOnlyList<InputAction> Actions
+    {
+        get
+        {
+            lock (gate)
+            {
+                return actions.ToArray();
+            }
+        }
+    }
+
+    public void Submit(uint sequence, InputAction action)
+    {
+        lock (gate)
+        {
+            actions.Add(action);
+            if (action == target && ++matches >= cancelAfterMatches)
+            {
+                cancellation.Cancel();
+            }
         }
     }
 
