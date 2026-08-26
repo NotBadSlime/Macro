@@ -14,19 +14,26 @@ public partial class SequencePanel : UserControl
 
     private MacroEditorState? state;
     private bool updatingMacroName;
+    private bool isReadOnly;
+    private bool isRecording;
     private string editorText = string.Empty;
     private readonly List<string> undoStack = [];
+    private readonly List<string> redoStack = [];
 
     public event Action? SaveLibraryRequested;
     public event Action? RunNowRequested;
     public event Action? StopRequested;
+    public event Action<MacroRecordingMode>? RecordingStartRequested;
+    public event Action? RecordingStopRequested;
     public event Action<int>? StepSelectionChanged;
     public event Action<MacroActionTemplateKind, string, int>? ActionTemplateDropped;
     public event Action<string, string, int>? MacroLibraryDropped;
     public event Action? UndoApplied;
+    public event Action? RedoApplied;
     public event Action? DocumentEdited;
     public event Action? SequenceActivated;
     public event Action<string>? EditorTextChanged;
+    public event Action<bool>? EditLockChanged;
 
     public SequencePanel()
     {
@@ -58,6 +65,8 @@ public partial class SequencePanel : UserControl
     public IReadOnlyList<int> SelectedStepPath => StepSequenceControl.SelectedStepPath;
     public string MacroName => MacroNameBox.Text.Trim();
     public bool CanUndo => undoStack.Count > 0;
+    public bool CanRedo => redoStack.Count > 0;
+    public bool IsReadOnly => isReadOnly;
 
     public void Initialize(MacroEditorState editorState)
     {
@@ -70,6 +79,7 @@ public partial class SequencePanel : UserControl
         StepSequenceControl.ActionTemplateDropped += (kind, parentPath, insertIndex) => ActionTemplateDropped?.Invoke(kind, parentPath, insertIndex);
         StepSequenceControl.MacroLibraryDropped += (macroId, parentPath, insertIndex) => MacroLibraryDropped?.Invoke(macroId, parentPath, insertIndex);
         StepSequenceControl.UndoRequested += UndoLastChange;
+        StepSequenceControl.RedoRequested += RedoLastChange;
         StepSequenceControl.ClearRequested += ClearAllSteps;
         StepSequenceControl.Activated += () => SequenceActivated?.Invoke();
     }
@@ -79,10 +89,42 @@ public partial class SequencePanel : UserControl
         SaveLibraryButton.Content = L("SaveLibrary");
         RunNowHeaderButton.Content = L("RunNow");
         StopHeaderButton.Content = L("Stop");
+        RecordInputButton.Content = L(isRecording ? "StopRecording" : "StartRecording");
+        RecordInputButton.ToolTip = L("RecordingHelp");
+        RecordingStatusText.Text = isRecording ? L("RecordingActive") : string.Empty;
         NameLabelText.Text = L("Name");
         ScheduledStepsLabelText.Text = L("ScheduledSteps");
         DurationLabelText.Text = L("Duration");
+        MacroLockButton.Content = isReadOnly ? L("UnlockMacro") : L("LockMacro");
+        MacroLockButton.ToolTip = isReadOnly ? L("UnlockMacroHelp") : L("LockMacroHelp");
         StepSequenceControl.ApplyLocalization();
+    }
+
+    public void SetReadOnly(bool value)
+    {
+        isReadOnly = value;
+        MacroLockButton.IsChecked = value;
+        MacroLockButton.Content = value ? L("UnlockMacro") : L("LockMacro");
+        MacroLockButton.ToolTip = value ? L("UnlockMacroHelp") : L("LockMacroHelp");
+        MacroNameBox.IsReadOnly = value;
+        SaveLibraryButton.IsEnabled = !value;
+        RecordInputButton.IsEnabled = isRecording || !value;
+        StepSequenceControl.SetReadOnly(value);
+    }
+
+    public void SetRecordingState(bool recording, int inputCount = 0)
+    {
+        isRecording = recording;
+        MacroLockButton.IsEnabled = !recording;
+        RecordInputButton.Content = L(recording ? "StopRecording" : "StartRecording");
+        RecordInputButton.ToolTip = L("RecordingHelp");
+        RecordInputButton.IsEnabled = recording || !isReadOnly;
+        RecordingStatusText.Visibility = recording ? Visibility.Visible : Visibility.Collapsed;
+        RecordingStatusText.Text = recording
+            ? (inputCount > 0
+                ? LocalizationService.Format("RecordingCaptured", inputCount)
+                : L("RecordingActive"))
+            : string.Empty;
     }
 
     public void SetEditorDocument(MacroDocument document)
@@ -94,6 +136,7 @@ public partial class SequencePanel : UserControl
 
     public void CaptureUndoSnapshot()
     {
+        if (isReadOnly) return;
         var current = EditorText;
         if (string.IsNullOrWhiteSpace(current))
         {
@@ -105,11 +148,8 @@ public partial class SequencePanel : UserControl
             return;
         }
 
-        undoStack.Add(current);
-        if (undoStack.Count > MaxUndoDepth)
-        {
-            undoStack.RemoveAt(0);
-        }
+        PushSnapshot(undoStack, current);
+        redoStack.Clear();
 
         UpdateUndoButtonState();
     }
@@ -117,11 +157,13 @@ public partial class SequencePanel : UserControl
     public void ClearUndoHistory()
     {
         undoStack.Clear();
+        redoStack.Clear();
         UpdateUndoButtonState();
     }
 
     public void UndoLastChange()
     {
+        if (isReadOnly) return;
         if (undoStack.Count == 0)
         {
             return;
@@ -129,10 +171,28 @@ public partial class SequencePanel : UserControl
 
         var previous = undoStack[^1];
         undoStack.RemoveAt(undoStack.Count - 1);
+        PushSnapshot(redoStack, EditorText);
         EditorText = previous;
         ValidateCurrentMacro();
         UpdateUndoButtonState();
         UndoApplied?.Invoke();
+    }
+
+    public void RedoLastChange()
+    {
+        if (isReadOnly) return;
+        if (redoStack.Count == 0)
+        {
+            return;
+        }
+
+        var next = redoStack[^1];
+        redoStack.RemoveAt(redoStack.Count - 1);
+        PushSnapshot(undoStack, EditorText);
+        EditorText = next;
+        ValidateCurrentMacro();
+        UpdateUndoButtonState();
+        RedoApplied?.Invoke();
     }
 
     public void ValidateCurrentMacro()
@@ -190,6 +250,7 @@ public partial class SequencePanel : UserControl
 
     public void ClearAllSteps()
     {
+        if (isReadOnly) return;
         var document = McrxParser.Parse(EditorText);
         if (document.Steps.Count == 0 && document.EffectiveConditions.Count == 0)
         {
@@ -207,6 +268,7 @@ public partial class SequencePanel : UserControl
 
     public void ApplyMacroName(string name)
     {
+        if (isReadOnly) return;
         var document = McrxParser.Parse(EditorText);
         if (string.Equals(document.Name, name, StringComparison.Ordinal)) return;
         CaptureUndoSnapshot();
@@ -216,6 +278,7 @@ public partial class SequencePanel : UserControl
 
     private void OnStepSequenceStepsChanged()
     {
+        if (isReadOnly) return;
         var document = McrxParser.Parse(EditorText);
         EditorText = McrxSerializer.Serialize(document with { Steps = StepSequenceControl.Steps });
         ValidateCurrentMacro();
@@ -234,8 +297,20 @@ public partial class SequencePanel : UserControl
     }
 
     private void SaveLibrary_Click(object sender, RoutedEventArgs e) => SaveLibraryRequested?.Invoke();
+    private void MacroLockButton_Click(object sender, RoutedEventArgs e) => EditLockChanged?.Invoke(MacroLockButton.IsChecked == true);
     private void RunNow_Click(object sender, RoutedEventArgs e) => RunNowRequested?.Invoke();
     private void Stop_Click(object sender, RoutedEventArgs e) => StopRequested?.Invoke();
+    private void RecordInputButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (isRecording)
+        {
+            RecordingStopRequested?.Invoke();
+        }
+        else if (!isReadOnly)
+        {
+            RecordingModeMenu.Show(RecordInputButton, mode => RecordingStartRequested?.Invoke(mode));
+        }
+    }
 
     private void MacroNameBox_LostFocus(object sender, RoutedEventArgs e) => ApplyNameFromBox();
 
@@ -317,6 +392,22 @@ public partial class SequencePanel : UserControl
     private void UpdateUndoButtonState()
     {
         StepSequenceControl.SetCanUndo(CanUndo);
+        StepSequenceControl.SetCanRedo(CanRedo);
+    }
+
+    private static void PushSnapshot(List<string> stack, string snapshot)
+    {
+        if (string.IsNullOrWhiteSpace(snapshot)
+            || (stack.Count > 0 && string.Equals(stack[^1], snapshot, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        stack.Add(snapshot);
+        if (stack.Count > MaxUndoDepth)
+        {
+            stack.RemoveAt(0);
+        }
     }
 
     private void RaiseDocumentEdited()

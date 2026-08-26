@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using MacroHid.Converter;
 using MacroHid.Core;
 using MacroHid.Runtime;
 using MacroStudio.Controls;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
     private RuntimePrecisionSettings runtimePrecisionSettings = RuntimePrecisionSettingsStore.Load();
 
     private GlobalKeyboardHook? keyboardHook;
+    private MacroInputRecorder? macroRecorder;
     private MacroPlaybackController? playbackController;
     private readonly Dictionary<string, MacroPlaybackController> listeningControllers = [];
     private readonly Dictionary<string, string> listeningMacroNames = [];
@@ -42,7 +44,10 @@ public partial class MainWindow : Window
     private bool updatingWorkspaceMenu;
     private bool syncingJsonPanel;
     private bool workspaceContentRendered;
+    private bool macroRecordingTargetsCondition;
     private string activeRightToolPanelId = "actions";
+    private string? activeEditorMacroId;
+    private WindowState windowStateBeforeRecording = WindowState.Normal;
 
     private sealed record ListeningCandidate(
         MacroLibraryItem Item,
@@ -75,6 +80,8 @@ public partial class MainWindow : Window
         InitializeWorkspacePanels();
         ApplyLocalization();
         InitializeMacroLibrary();
+        StateChanged += (_, _) => RefreshWindowChromeButtons();
+        RefreshWindowChromeButtons();
     }
 
     private void MainWindow_ContentRendered(object? sender, EventArgs e)
@@ -93,6 +100,8 @@ public partial class MainWindow : Window
         LibraryPanel.MacroCreated += OnMacroCreated;
         LibraryPanel.MacroDuplicated += OnMacroDuplicated;
         LibraryPanel.MacroDeleted += OnMacroDeleted;
+        LibraryPanel.LibraryItemsDeleteRequested += OnLibraryItemsDeleteRequested;
+        LibraryPanel.MacroLockChanged += OnLibraryMacroLockChanged;
         LibraryPanel.ImportApplied += OnImportApplied;
         LibraryPanel.DocumentRequested += () => GetDocumentWithPlayback();
         LibraryPanel.ResultMessage += msg => SetStatus(msg);
@@ -105,13 +114,17 @@ public partial class MainWindow : Window
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
         SequencePanelControl.RunNowRequested += OnRunNow;
         SequencePanelControl.StopRequested += OnStopPlayback;
+        SequencePanelControl.RecordingStartRequested += OnStartRecording;
+        SequencePanelControl.RecordingStopRequested += OnStopRecording;
         SequencePanelControl.StepSelectionChanged += OnStepSelectionChanged;
         SequencePanelControl.ActionTemplateDropped += OnActionTemplateDropped;
         SequencePanelControl.MacroLibraryDropped += OnMacroLibraryDropped;
         SequencePanelControl.UndoApplied += OnSequenceUndoApplied;
+        SequencePanelControl.RedoApplied += OnSequenceRedoApplied;
         SequencePanelControl.DocumentEdited += OnSequenceDocumentEdited;
         SequencePanelControl.SequenceActivated += ConditionPanel.DeactivateThenActionSequence;
         SequencePanelControl.EditorTextChanged += OnSequenceEditorTextChanged;
+        SequencePanelControl.EditLockChanged += OnEditLockChanged;
 
         JsonPanel.EditorTextChanged += OnJsonPanelEditorTextChanged;
         JsonPanel.ApplyJsonRequested += OnApplyJsonRequested;
@@ -127,6 +140,8 @@ public partial class MainWindow : Window
         ConditionPanel.ConditionSelectionChanged += OnConditionSelectionChanged;
         ConditionPanel.ConditionsModified += OnConditionsModified;
         ConditionPanel.PickRegionRequested += OnPickRegionRequested;
+        ConditionPanel.RecordingStartRequested += OnStartConditionRecording;
+        ConditionPanel.RecordingStopRequested += OnStopRecording;
     }
 
     private void ConfigureWorkspaceDockHost()
@@ -866,17 +881,24 @@ public partial class MainWindow : Window
 
     private void OnJsonPanelEditorTextChanged(string text)
     {
-        if (syncingJsonPanel) return;
+        if (syncingJsonPanel || editorState.IsEditLocked) return;
         TryApplyJsonTextToEditor(text, showStatus: false);
     }
 
     private void OnApplyJsonRequested()
     {
+        if (RejectLockedEdit()) return;
         TryApplyJsonTextToEditor(JsonPanel.EditorText, showStatus: true);
     }
 
     private bool TryApplyJsonTextToEditor(string text, bool showStatus)
     {
+        if (editorState.IsEditLocked)
+        {
+            if (showStatus) SetStatus(L("MacroLockedReadOnly"));
+            return false;
+        }
+
         try
         {
             McrxParser.Parse(text);
@@ -922,6 +944,7 @@ public partial class MainWindow : Window
             SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
             SequencePanelControl.ClearUndoHistory();
             RefreshConditionStepChoices();
+            ApplyEditLock(false);
         }
     }
 
@@ -930,6 +953,8 @@ public partial class MainWindow : Window
         try
         {
             editorState.SelectedMacroId = id;
+            activeEditorMacroId = id;
+            libraryStore.SetSelected(id);
             var document = libraryStore.ReadMacro(id);
             SequencePanelControl.SetEditorDocument(document);
             SequencePanelControl.ClearUndoHistory();
@@ -938,6 +963,8 @@ public partial class MainWindow : Window
             ConditionPanel.LoadConditions(document.EffectiveConditions);
             SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             CheckAndWarnConflicts(document);
+            var item = libraryStore.Load().Items.FirstOrDefault(candidate => string.Equals(candidate.Id, id, StringComparison.OrdinalIgnoreCase));
+            ApplyEditLock(item?.IsLocked == true);
             SetStatus(document.Name);
         }
         catch (Exception ex)
@@ -946,10 +973,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnMacroSelected(string id) => LoadMacroFromLibrary(id);
+    private void OnMacroSelected(string id)
+    {
+        SaveActiveEditorBeforeSwitch(id);
+        LoadMacroFromLibrary(id);
+    }
 
     private void OnMacroCreated(MacroLibraryItem item)
     {
+        SaveActiveEditorBeforeSwitch(item.Id);
         editorState.SelectedMacroId = item.Id;
         LoadMacroFromLibrary(item.Id);
     }
@@ -958,8 +990,14 @@ public partial class MainWindow : Window
     {
         try
         {
-            var document = SequencePanelControl.GetCurrentDocument();
-            libraryStore.SaveMacro(id, document);
+            var source = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+            var document = source?.IsLocked == true
+                ? libraryStore.ReadMacro(id)
+                : SequencePanelControl.GetCurrentDocument();
+            if (source?.IsLocked != true)
+            {
+                libraryStore.SaveMacro(id, document);
+            }
             var item = libraryStore.DuplicateMacro(id, $"{document.Name} Copy");
             editorState.SelectedMacroId = item.Id;
             LibraryPanel.RefreshList();
@@ -973,7 +1011,8 @@ public partial class MainWindow : Window
 
     private void OnMacroDeleted(string id)
     {
-        var name = SequencePanelControl.MacroName;
+        var item = libraryStore.Load().Items.FirstOrDefault(candidate => string.Equals(candidate.Id, id, StringComparison.Ordinal));
+        var name = item?.Name ?? SequencePanelControl.MacroName;
         var result = DialogOwnerService.MessageBoxSafe(
             this,
             LocalizationService.Format("DeleteMacroConfirm", string.IsNullOrWhiteSpace(name) ? L("Macro") : name),
@@ -982,23 +1021,112 @@ public partial class MainWindow : Window
             MessageBoxImage.Warning);
         if (result != MessageBoxResult.Yes) return;
 
-        libraryStore.DeleteMacro(id);
-        editorState.ReloadLibrary();
-        editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
-        LibraryPanel.RefreshList();
-
-        if (editorState.SelectedMacroId is not null)
-            LoadMacroFromLibrary(editorState.SelectedMacroId);
-        else
+        try
         {
-            SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
-            SequencePanelControl.ClearUndoHistory();
-            RefreshConditionStepChoices();
+            libraryStore.DeleteMacro(id);
+            editorState.ReloadLibrary();
+            editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
+            activeEditorMacroId = editorState.SelectedMacroId;
+            LibraryPanel.RefreshList();
+
+            if (editorState.SelectedMacroId is not null)
+                LoadMacroFromLibrary(editorState.SelectedMacroId);
+            else
+            {
+                SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
+                SequencePanelControl.ClearUndoHistory();
+                RefreshConditionStepChoices();
+                ConditionPanel.LoadConditions([]);
+                ApplyEditLock(false);
+            }
+
+            OnLibraryStructureEdited();
+            SetStatus(LocalizationService.Format("MacroDeleted", name));
+        }
+        catch (Exception ex)
+        {
+            var message = LocalizationService.Format("DeleteFailed", ex.Message);
+            SetStatus(message);
+            DialogOwnerService.MessageBoxSafe(
+                this,
+                message,
+                L("Delete"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void OnLibraryItemsDeleteRequested(IReadOnlyList<MacroLibraryDeleteItem> requests)
+    {
+        var deletable = requests.Where(request => !request.IsLocked).ToList();
+        if (deletable.Count == 0)
+        {
+            SetStatus(L("MacroLockedReadOnly"));
+            return;
+        }
+
+        var result = DialogOwnerService.MessageBoxSafe(
+            this,
+            LocalizationService.Format("DeleteSelectedItemsConfirm", deletable.Count),
+            L("Delete"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            foreach (var request in deletable)
+            {
+                if (request.IsFolder)
+                {
+                    libraryStore.DeleteFolder(request.FolderName, deleteMacros: false, request.GroupId);
+                }
+                else if (request.MacroId is { } macroId)
+                {
+                    libraryStore.DeleteMacro(macroId);
+                }
+            }
+
+            editorState.ReloadLibrary();
+            editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
+            activeEditorMacroId = editorState.SelectedMacroId;
+            LibraryPanel.RefreshList();
+            if (editorState.SelectedMacroId is not null)
+            {
+                LoadMacroFromLibrary(editorState.SelectedMacroId);
+            }
+            else
+            {
+                SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
+                SequencePanelControl.ClearUndoHistory();
+                RefreshConditionStepChoices();
+                ConditionPanel.LoadConditions([]);
+                ApplyEditLock(false);
+            }
+
+            OnLibraryStructureEdited();
+            SetStatus(LocalizationService.Format("SelectedItemsDeleted", deletable.Count));
+        }
+        catch (Exception ex)
+        {
+            var message = LocalizationService.Format("DeleteFailed", ex.Message);
+            SetStatus(message);
+            DialogOwnerService.MessageBoxSafe(this, message, L("Delete"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void OnLibraryMacroLockChanged(string macroId, bool isLocked)
+    {
+        editorState.ReloadLibrary();
+        if (string.Equals(editorState.SelectedMacroId ?? activeEditorMacroId, macroId, StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyEditLock(isLocked);
         }
     }
 
     private void OnSaveLibrary()
     {
+        if (RejectLockedEdit()) return;
         try
         {
             AutoSaveCurrentMacro(updateStatus: false);
@@ -1012,6 +1140,7 @@ public partial class MainWindow : Window
 
     private void OnPlaybackSettingsEdited()
     {
+        if (editorState.IsEditLocked) return;
         try
         {
             ScheduleAutoSave();
@@ -1081,7 +1210,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        StartListeningCandidates(candidates);
+        StartListeningCandidates(candidates, editorState.SelectedMacroId is { } selectedId ? [selectedId] : null);
     }
 
     private void OnLibraryStructureEdited()
@@ -1092,14 +1221,29 @@ public partial class MainWindow : Window
 
     private void AutoSaveCurrentMacro(bool updateStatus)
     {
+        var targetMacroId = editorState.SelectedMacroId ?? activeEditorMacroId;
+        var existingItem = targetMacroId is null
+            ? null
+            : libraryStore.Load().Items.FirstOrDefault(candidate => string.Equals(candidate.Id, targetMacroId, StringComparison.OrdinalIgnoreCase));
+        if (existingItem?.IsLocked == true)
+        {
+            if (updateStatus) SetStatus(L("MacroLockedReadOnly"));
+            return;
+        }
+
         var document = GetDocumentWithPlayback();
         MacroLibraryItem item;
-        if (editorState.SelectedMacroId is null)
-            item = libraryStore.CreateMacro(document);
+        if (targetMacroId is not null && existingItem is not null)
+        {
+            item = libraryStore.SaveMacro(targetMacroId, document);
+        }
         else
-            item = libraryStore.SaveMacro(editorState.SelectedMacroId, document);
+        {
+            item = libraryStore.CreateMacro(document);
+        }
 
         editorState.SelectedMacroId = item.Id;
+        activeEditorMacroId = item.Id;
         LibraryPanel.RefreshList();
         RefreshLibraryListeningState();
         if (updateStatus)
@@ -1110,6 +1254,7 @@ public partial class MainWindow : Window
 
     private void ScheduleAutoSave()
     {
+        if (editorState.IsEditLocked) return;
         autoSaveTimer.Stop();
         autoSaveTimer.Start();
     }
@@ -1133,8 +1278,88 @@ public partial class MainWindow : Window
         editorState.SelectedStepIndex = stepIndex;
     }
 
+    private void SaveActiveEditorBeforeSwitch(string? nextMacroId)
+    {
+        if (activeEditorMacroId is not { } activeId
+            || string.Equals(activeId, nextMacroId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        autoSaveTimer.Stop();
+        var activeItem = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, activeId, StringComparison.OrdinalIgnoreCase));
+        if (activeItem is null || activeItem.IsLocked)
+        {
+            return;
+        }
+
+        try
+        {
+            libraryStore.SaveMacro(activeId, GetDocumentWithPlayback());
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
+        }
+    }
+
+    private void OnEditLockChanged(bool isLocked)
+    {
+        var macroId = editorState.SelectedMacroId ?? activeEditorMacroId;
+        if (macroId is null)
+        {
+            ApplyEditLock(false);
+            SetStatus(L("SelectMacroToLock"));
+            return;
+        }
+
+        try
+        {
+            if (isLocked)
+            {
+                autoSaveTimer.Stop();
+                AutoSaveCurrentMacro(updateStatus: false);
+            }
+
+            var item = libraryStore.SetMacroLocked(macroId, isLocked);
+            editorState.ReloadLibrary();
+            ApplyEditLock(item.IsLocked);
+            LibraryPanel.RefreshList();
+            SetStatus(item.IsLocked ? L("MacroLocked") : L("MacroUnlocked"));
+        }
+        catch (Exception ex)
+        {
+            var persisted = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, macroId, StringComparison.OrdinalIgnoreCase));
+            ApplyEditLock(persisted?.IsLocked == true);
+            SetStatus(ex.Message);
+        }
+    }
+
+    private void ApplyEditLock(bool isLocked)
+    {
+        editorState.SetEditLocked(isLocked);
+        SequencePanelControl.SetReadOnly(isLocked);
+        ConditionPanel.SetReadOnly(isLocked);
+        JsonPanel.SetReadOnly(isLocked);
+        ActionPalette.SetReadOnly(isLocked);
+        PlaybackPanelControl.SetReadOnly(isLocked);
+        OpenButton.IsEnabled = !isLocked;
+    }
+
+    private bool RejectLockedEdit()
+    {
+        if (!editorState.IsEditLocked)
+        {
+            return false;
+        }
+
+        SetStatus(L("MacroLockedReadOnly"));
+        return true;
+    }
+
     private void OnActionPaletteClicked(MacroActionTemplateKind kind)
     {
+        if (RejectLockedEdit()) return;
         if (!actionTemplateInsertGate.TryAccept(kind)) return;
         if (ConditionPanel.TryInsertActionTemplateIntoActiveCondition(kind))
         {
@@ -1149,6 +1374,7 @@ public partial class MainWindow : Window
 
     private void OnActionTemplateDropped(MacroActionTemplateKind kind, string parentPathText, int insertIndex)
     {
+        if (RejectLockedEdit()) return;
         if (!actionTemplateInsertGate.TryAccept(kind)) return;
         SequencePanelControl.InsertStepsAtPath(MacroActionTemplateFactory.CreateSteps(kind), parentPathText, insertIndex);
         RefreshConditionStepChoices();
@@ -1156,6 +1382,7 @@ public partial class MainWindow : Window
 
     private void OnMacroLibraryDropped(string macroId, string parentPathText, int insertIndex)
     {
+        if (RejectLockedEdit()) return;
         try
         {
             var document = libraryStore.ReadMacro(macroId);
@@ -1189,7 +1416,8 @@ public partial class MainWindow : Window
             var candidates = BuildListeningCandidates()
                 .Where(candidate => desiredIds.Contains(candidate.Item.Id))
                 .ToList();
-            var count = StartListeningCandidates(candidates);
+            var selectedIds = selectedCandidates.Select(candidate => candidate.Item.Id).ToArray();
+            var count = StartListeningCandidates(candidates, selectedIds);
             PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
             SetStatus($"{L("Listening")} ({count})");
             await Task.CompletedTask;
@@ -1232,7 +1460,7 @@ public partial class MainWindow : Window
                 candidates.Add(current);
             }
 
-            var count = StartListeningCandidates(candidates);
+            var count = StartListeningCandidates(candidates, [current.Item.Id]);
             PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
             SetStatus($"{L("Listening")} ({count})");
             await Task.CompletedTask;
@@ -1298,20 +1526,22 @@ public partial class MainWindow : Window
         return macroIds.Count;
     }
 
-    private int StartListeningCandidates(IReadOnlyList<ListeningCandidate> candidates)
+    private int StartListeningCandidates(
+        IReadOnlyList<ListeningCandidate> candidates,
+        IReadOnlyCollection<string>? preferredIds = null)
     {
-        var conflicts = FindListeningConflicts(candidates);
-        if (conflicts.Count > 0)
-        {
-            RefreshLibraryListeningState(conflicts);
-            throw new InvalidOperationException(FormatListeningConflictMessage(conflicts));
-        }
+        var resolved = ListeningTriggerResolver.Resolve(
+            candidates,
+            candidate => candidate.Item.Id,
+            (left, right) => string.Equals(left.Trigger.ToString(), right.Trigger.ToString(), StringComparison.OrdinalIgnoreCase)
+                && ProcessFiltersOverlap(left, right),
+            preferredIds);
 
         var bindings = new List<HotkeyBinding>();
         var controllers = new Dictionary<string, MacroPlaybackController>(StringComparer.OrdinalIgnoreCase);
         var macroNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var groupProcessFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var candidate in candidates)
+        foreach (var candidate in resolved)
         {
             var item = candidate.Item;
             var document = candidate.Document;
@@ -1520,11 +1750,13 @@ public partial class MainWindow : Window
             right.GroupProcessFilter);
     }
 
-    private void RefreshLibraryListeningState(
-        IReadOnlyList<(ListeningCandidate Left, ListeningCandidate Right)>? conflicts = null)
+    private void RefreshLibraryListeningState()
     {
         var candidates = BuildListeningCandidates();
-        conflicts ??= FindListeningConflicts(candidates);
+        var listeningCandidates = candidates
+            .Where(candidate => listeningControllers.ContainsKey(candidate.Item.Id))
+            .ToList();
+        var conflicts = FindListeningConflicts(listeningCandidates);
         var conflictIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (left, right) in conflicts)
         {
@@ -1567,6 +1799,11 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (macroRecorder is not null)
+            {
+                StopMacroRecording(insertSteps: true, restoreWindow: true);
+            }
+
             var document = GetDocumentWithPlayback();
             playbackController?.Dispose();
             var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
@@ -1610,14 +1847,19 @@ public partial class MainWindow : Window
 
     private void OnImportApplied(MacroDocument document)
     {
+        SaveActiveEditorBeforeSwitch(nextMacroId: null);
         var item = libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
         editorState.SelectedMacroId = item.Id;
+        activeEditorMacroId = item.Id;
         LibraryPanel.RefreshList();
         RefreshLibraryListeningState();
         SequencePanelControl.SetEditorDocument(document);
         SequencePanelControl.ClearUndoHistory();
         PlaybackPanelControl.SetPlaybackControls(document.Playback);
         RefreshConditionStepChoices();
+        ConditionPanel.LoadConditions(document.EffectiveConditions);
+        SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
+        ApplyEditLock(false);
         SetStatus(L("ConversionApplied"));
     }
 
@@ -1626,8 +1868,177 @@ public partial class MainWindow : Window
         RefreshEditorAfterSequenceDocumentChange(L("Undo"));
     }
 
+    private void OnStartRecording(MacroRecordingMode mode) => StartMacroRecording(targetsCondition: false, mode);
+
+    private void OnStartConditionRecording(MacroRecordingMode mode) => StartMacroRecording(targetsCondition: true, mode);
+
+    private void StartMacroRecording(bool targetsCondition, MacroRecordingMode mode)
+    {
+        if (macroRecorder is not null)
+        {
+            return;
+        }
+
+        if (SequencePanelControl.IsReadOnly)
+        {
+            SetStatus(L("RecordingLocked"));
+            return;
+        }
+
+        if (targetsCondition && !ConditionPanel.CanRecordThenActions)
+        {
+            SetStatus(L("ConditionRecordingUnavailable"));
+            return;
+        }
+
+        try
+        {
+            macroRecordingTargetsCondition = targetsCondition;
+            OnStopPlayback();
+
+            // Recording input must not also activate macros that are listening.
+            keyboardHook?.Dispose();
+            keyboardHook = null;
+
+            var options = MacroRecordingOptions.ForUserMode(mode);
+            var recorder = new MacroInputRecorder(options);
+            recorder.StopHotkeyPressed += MacroRecorder_StopHotkeyPressed;
+            recorder.Start();
+            macroRecorder = recorder;
+
+            SetRecordingUiState(true);
+            SetStatus(L("RecordingStarted"));
+            windowStateBeforeRecording = WindowState;
+            Dispatcher.BeginInvoke(
+                new Action(() => WindowState = WindowState.Minimized),
+                DispatcherPriority.Background);
+        }
+        catch (Exception ex)
+        {
+            DisposeMacroRecorder();
+            RestartKeyboardHookAfterRecording();
+            SetRecordingUiState(false);
+            macroRecordingTargetsCondition = false;
+            SetStatus(LocalizationService.Format("RecordingFailed", ex.Message));
+        }
+    }
+
+    private void OnStopRecording() => StopMacroRecording(insertSteps: true, restoreWindow: true);
+
+    private void MacroRecorder_StopHotkeyPressed(object? sender, EventArgs e)
+    {
+        Dispatcher.BeginInvoke(
+            new Action(() => StopMacroRecording(insertSteps: true, restoreWindow: true)),
+            DispatcherPriority.Send);
+    }
+
+    private void StopMacroRecording(bool insertSteps, bool restoreWindow)
+    {
+        var recorder = macroRecorder;
+        if (recorder is null)
+        {
+            SetRecordingUiState(false);
+            return;
+        }
+
+        var targetsCondition = macroRecordingTargetsCondition;
+        IReadOnlyList<MacroStep> recordedSteps;
+        var inputCount = recorder.InputCount;
+        try
+        {
+            recordedSteps = recorder.Stop();
+            inputCount = recorder.InputCount;
+        }
+        catch (Exception ex)
+        {
+            recordedSteps = [];
+            SetStatus(LocalizationService.Format("RecordingFailed", ex.Message));
+        }
+        finally
+        {
+            DisposeMacroRecorder();
+            RestartKeyboardHookAfterRecording();
+            SetRecordingUiState(false);
+        }
+
+        if (insertSteps && recordedSteps.Count > 0)
+        {
+            var inserted = true;
+            if (targetsCondition)
+            {
+                inserted = ConditionPanel.InsertRecordedThenSteps(recordedSteps);
+            }
+            else
+            {
+                SequencePanelControl.InsertSteps(recordedSteps);
+            }
+
+            SetStatus(inserted
+                ? LocalizationService.Format("RecordingCompleted", inputCount, recordedSteps.Count)
+                : L("ConditionRecordingUnavailable"));
+        }
+        else if (insertSteps)
+        {
+            SetStatus(L("RecordingEmpty"));
+        }
+
+        if (restoreWindow)
+        {
+            Show();
+            if (WindowState == WindowState.Minimized)
+            {
+                WindowState = windowStateBeforeRecording == WindowState.Minimized
+                    ? WindowState.Normal
+                    : windowStateBeforeRecording;
+            }
+
+            Activate();
+        }
+
+        macroRecordingTargetsCondition = false;
+    }
+
+    private void SetRecordingUiState(bool recording)
+    {
+        SequencePanelControl.SetRecordingState(recording);
+        ConditionPanel.SetRecordingState(recording);
+    }
+
+    private void DisposeMacroRecorder()
+    {
+        if (macroRecorder is null)
+        {
+            return;
+        }
+
+        macroRecorder.StopHotkeyPressed -= MacroRecorder_StopHotkeyPressed;
+        macroRecorder.Dispose();
+        macroRecorder = null;
+    }
+
+    private void RestartKeyboardHookAfterRecording()
+    {
+        try
+        {
+            RestartKeyboardHookFromListeningControllers();
+        }
+        catch (Exception ex)
+        {
+            keyboardHook?.Dispose();
+            keyboardHook = null;
+            listening = false;
+            SetStatus(LocalizationService.Format("RecordingListenerRestoreFailed", ex.Message));
+        }
+    }
+
+    private void OnSequenceRedoApplied()
+    {
+        RefreshEditorAfterSequenceDocumentChange(L("Redo"));
+    }
+
     private void OnSequenceDocumentEdited()
     {
+        if (editorState.IsEditLocked) return;
         RefreshEditorAfterSequenceDocumentChange(null);
     }
 
@@ -1655,6 +2066,11 @@ public partial class MainWindow : Window
 
     private MacroDocument GetDocumentWithPlayback()
     {
+        if (ConditionPanel.HasValidationErrors)
+        {
+            throw new InvalidOperationException(L("ConditionValidationFailed"));
+        }
+
         ApplyPlaybackSettingsToEditor();
         var document = SequencePanelControl.GetCurrentDocument();
         var merged = document with { Conditions = ConditionPanel.Conditions.ToList() };
@@ -1886,6 +2302,8 @@ public partial class MainWindow : Window
 
         if ((modifiers & ModifierKeys.Control) != 0
             && key == Key.Z
+            && (modifiers & (ModifierKeys.Shift | ModifierKeys.Alt)) == 0
+            && (SequencePanelControl.IsKeyboardFocusWithin || ConditionPanel.IsKeyboardFocusWithin)
             && !IsTextEditingSource(e.OriginalSource as DependencyObject))
         {
             SequencePanelControl.UndoLastChange();
@@ -1893,14 +2311,27 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!IsTextEditingSource(e.OriginalSource as DependencyObject)
+        if ((modifiers & ModifierKeys.Control) != 0
+            && (modifiers & ModifierKeys.Alt) == 0
+            && (key == Key.Y || (key == Key.Z && (modifiers & ModifierKeys.Shift) != 0))
+            && (SequencePanelControl.IsKeyboardFocusWithin || ConditionPanel.IsKeyboardFocusWithin)
+            && !IsTextEditingSource(e.OriginalSource as DependencyObject))
+        {
+            SequencePanelControl.RedoLastChange();
+            e.Handled = true;
+            return;
+        }
+
+        if (ConditionPanel.IsKeyboardFocusWithin
+            && !IsTextEditingSource(e.OriginalSource as DependencyObject)
             && ConditionPanel.HandleExplorerShortcut(key, modifiers))
         {
             e.Handled = true;
             return;
         }
 
-        if (!IsTextEditingSource(e.OriginalSource as DependencyObject)
+        if (SequencePanelControl.IsKeyboardFocusWithin
+            && !IsTextEditingSource(e.OriginalSource as DependencyObject)
             && SequencePanelControl.HandleExplorerShortcut(key, modifiers))
         {
             e.Handled = true;
@@ -1909,6 +2340,7 @@ public partial class MainWindow : Window
 
         if ((modifiers & ModifierKeys.Control) != 0
             && key == Key.Delete
+            && SequencePanelControl.IsKeyboardFocusWithin
             && !IsTextEditingSource(e.OriginalSource as DependencyObject))
         {
             SequencePanelControl.ClearAllSteps();
@@ -1937,20 +2369,54 @@ public partial class MainWindow : Window
 
     private void RefreshThemeToggleButton()
     {
-        ThemeToggleButton.Content = ThemeService.CurrentTheme == AppTheme.Dark ? "☾" : "☀";
+        ThemeToggleButton.Content = ThemeService.CurrentTheme == AppTheme.Dark ? "\uE708" : "\uE706";
+        RefreshWindowChromeButtons();
+    }
+
+    private void RefreshWindowChromeButtons()
+    {
+        if (MaximizeWindowButton is null)
+        {
+            return;
+        }
+
+        MaximizeWindowButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        MaximizeWindowButton.ToolTip = WindowState == WindowState.Maximized ? "还原" : "最大化";
     }
 
     // --- File operations ---
 
     private void OpenMacro_Click(object sender, RoutedEventArgs e)
     {
+        if (RejectLockedEdit()) return;
         var dialog = new OpenFileDialog { Filter = L("MacroFileFilter"), Title = L("OpenMacroTitle") };
-        if (DialogOwnerService.ShowDialogSafe(dialog, this) == true)
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
+
+        try
         {
-            SequencePanelControl.EditorText = File.ReadAllText(dialog.FileName);
-            SequencePanelControl.ValidateCurrentMacro();
+            var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(
+                File.ReadAllText(dialog.FileName),
+                dialog.FileName,
+                MacroConversionFormat.MacroHidMcrx));
+            var document = imported.Document;
+            SequencePanelControl.SetEditorDocument(document);
             SequencePanelControl.ClearUndoHistory();
+            PlaybackPanelControl.SetPlaybackControls(document.Playback);
+            RefreshConditionStepChoices();
+            ConditionPanel.LoadConditions(document.EffectiveConditions);
+            SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
+            CheckAndWarnConflicts(document);
             SetStatus(Path.GetFileName(dialog.FileName));
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
+            DialogOwnerService.MessageBoxSafe(
+                this,
+                ex.Message,
+                L("ConversionImportErrorTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 
@@ -2022,6 +2488,7 @@ public partial class MainWindow : Window
 
         LibraryPanel.ApplyLocalization();
         SequencePanelControl.ApplyLocalization();
+        ConditionPanel.ApplyLocalization();
         JsonPanel.ApplyLocalization();
         ActionPalette.ApplyLocalization();
         PlaybackPanelControl.ApplyLocalization();
@@ -2033,6 +2500,7 @@ public partial class MainWindow : Window
         windowSource?.RemoveHook(WindowProcedure);
         windowSource = null;
         keyboardHook?.Dispose();
+        DisposeMacroRecorder();
         StopListeningControllers();
         playbackController?.Stop();
         foreach (var panel in workspacePanels.Values)
@@ -2107,6 +2575,7 @@ public partial class MainWindow : Window
 
     private void OnConditionsModified(object? sender, EventArgs e)
     {
+        if (editorState.IsEditLocked) return;
         try
         {
             var doc = SequencePanelControl.GetCurrentDocument();
@@ -2126,6 +2595,7 @@ public partial class MainWindow : Window
 
     private void OnPickRegionRequested(object? sender, EventArgs e)
     {
+        if (RejectLockedEdit()) return;
         var region = ScreenRegionPicker.PickRegion(this);
         if (region != null)
         {

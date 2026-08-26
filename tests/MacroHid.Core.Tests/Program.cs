@@ -131,6 +131,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio exposes target window foreground action", MacroStudioExposesTargetWindowForegroundAction),
     ("MacroStudio exposes keyboard and mouse input recording", MacroStudioExposesKeyboardAndMouseInputRecording),
     ("MacroStudio records input into selected condition actions", MacroStudioRecordsInputIntoSelectedConditionActions),
+    ("MacroStudio recording buttons choose a delay mode first", MacroStudioRecordingButtonsChooseADelayModeFirst),
     ("MacroStudio keeps step editor combo box values selectable", MacroStudioKeepsStepEditorComboBoxValuesSelectable),
     ("MacroStudio step editor hides hold timing and captures modifier keys", MacroStudioStepEditorHidesHoldTimingAndCapturesModifierKeys),
     ("MacroStudio exposes undo for the last sequence edit", MacroStudioExposesUndoForLastSequenceEdit),
@@ -3323,10 +3324,27 @@ static void MacroStudioRecordsInputIntoSelectedConditionActions()
     Assert.Contains("ThenActionSequence.InsertSteps(steps)", conditionCode);
 
     Assert.Contains("ConditionPanel.RecordingStartRequested += OnStartConditionRecording", mainWindow);
-    Assert.Contains("StartMacroRecording(targetsCondition: true)", mainWindow);
+    Assert.Contains("StartMacroRecording(targetsCondition: true, mode)", mainWindow);
     Assert.Contains("macroRecordingTargetsCondition", mainWindow);
     Assert.Contains("ConditionPanel.InsertRecordedThenSteps(recordedSteps)", mainWindow);
     Assert.Contains("SetRecordingUiState", mainWindow);
+}
+
+static void MacroStudioRecordingButtonsChooseADelayModeFirst()
+{
+    var menu = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "RecordingModeMenu.cs"));
+    var sequence = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
+    var condition = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+
+    Assert.Contains("MacroRecordingMode.Replica", menu);
+    Assert.Contains("MacroRecordingMode.FixedDelay", menu);
+    Assert.Contains("MacroRecordingMode.NoDelay", menu);
+    Assert.Contains("RecordingModeMenu.Show", sequence);
+    Assert.Contains("RecordingModeMenu.Show", condition);
+    Assert.Contains("Action<MacroRecordingMode>", sequence);
+    Assert.Contains("MacroRecordingOptions.ForUserMode(mode)", mainWindow);
+    Assert.Contains("new MacroInputRecorder(options)", mainWindow);
 }
 
 static void MacroStudioKeepsStepEditorComboBoxValuesSelectable()

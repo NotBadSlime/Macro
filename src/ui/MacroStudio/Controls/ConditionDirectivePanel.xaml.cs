@@ -26,6 +26,8 @@ public partial class ConditionDirectivePanel : UserControl
     private bool conditionDragStarted;
     private int conditionDragStartIndex = -1;
     private bool thenActionSequenceActive;
+    private bool isReadOnly;
+    private bool isRecording;
 
     private static readonly Brush[] conditionColors =
     [
@@ -40,6 +42,8 @@ public partial class ConditionDirectivePanel : UserControl
     public event EventHandler<ConditionSelectionChangedEventArgs>? ConditionSelectionChanged;
     public event EventHandler? ConditionsModified;
     public event EventHandler? PickRegionRequested;
+    public event Action<MacroRecordingMode>? RecordingStartRequested;
+    public event Action? RecordingStopRequested;
 
     public ConditionDirectivePanel()
     {
@@ -51,6 +55,83 @@ public partial class ConditionDirectivePanel : UserControl
     }
 
     public IReadOnlyList<ConditionalDirective> Conditions => conditions;
+    public bool HasValidationErrors => selectedIndex >= 0
+        && selectedIndex < conditions.Count
+        && (!TryReadTimeWindow(out _, out _)
+            || conditions[selectedIndex].Condition is TextMatcher { UseRegex: true } text
+            && !PaddleOcrBridge.IsValidRegex(text.ExpectedText, out _));
+    public bool CanRecordThenActions => !isReadOnly
+        && selectedIndex >= 0
+        && selectedIndex < conditions.Count;
+
+    public void ApplyLocalization()
+    {
+        RecordThenActionsButton.Content = LocalizationService.Get(isRecording ? "StopRecording" : "StartRecording");
+        RecordThenActionsButton.ToolTip = LocalizationService.Get("RecordingHelp");
+        ThenActionPalette.ApplyLocalization();
+    }
+
+    public void SetReadOnly(bool value)
+    {
+        isReadOnly = value;
+        AddConditionButton.IsEnabled = !value;
+        DeleteConditionButton.IsEnabled = !value;
+        ConditionList.AllowDrop = !value;
+        CondNameBox.IsReadOnly = value;
+        CondTypeCombo.IsEnabled = !value;
+        ExecutionModeCombo.IsEnabled = !value;
+        StartStepCombo.IsEnabled = !value;
+        EndStepCombo.IsEnabled = !value;
+        WindowStartMsBox.IsReadOnly = value;
+        WindowEndMsBox.IsReadOnly = value;
+        PickRegionButton.IsEnabled = !value;
+        ColorRBox.IsReadOnly = value;
+        ColorGBox.IsReadOnly = value;
+        ColorBBox.IsReadOnly = value;
+        ToleranceBox.IsReadOnly = value;
+        PickConditionColorButton.IsEnabled = !value;
+        ExpectedTextBox.IsReadOnly = value;
+        ContainsCheckBox.IsEnabled = !value;
+        RegexCheckBox.IsEnabled = !value;
+        UpdateRegexValidity();
+        AddThenActionButton.IsEnabled = !value;
+        ThenActionSequence.SetReadOnly(value || isRecording);
+        ThenActionPalette.SetReadOnly(value || isRecording);
+        UpdateRecordingButtonState();
+        if (value)
+        {
+            ThenActionPalettePopup.IsOpen = false;
+            FinishConditionBoxSelection();
+        }
+    }
+
+    public void SetRecordingState(bool recording)
+    {
+        isRecording = recording;
+        ConditionList.IsEnabled = !recording;
+        AddThenActionButton.IsEnabled = !isReadOnly && !recording;
+        ThenActionSequence.SetReadOnly(isReadOnly || recording);
+        ThenActionPalette.SetReadOnly(isReadOnly || recording);
+        if (recording)
+        {
+            ThenActionPalettePopup.IsOpen = false;
+        }
+
+        ApplyLocalization();
+        UpdateRecordingButtonState();
+    }
+
+    public bool InsertRecordedThenSteps(IReadOnlyList<MacroStep> steps)
+    {
+        if (isReadOnly || steps.Count == 0 || !TryGetSelectedCondition(out _, out _))
+        {
+            return false;
+        }
+
+        thenActionSequenceActive = true;
+        ThenActionSequence.InsertSteps(steps);
+        return true;
+    }
 
     public void Initialize(MacroEditorState state)
     {
@@ -139,13 +220,15 @@ public partial class ConditionDirectivePanel : UserControl
             suppressConditionSelectionChanged = false;
         }
 
+        UpdateRecordingButtonState();
+
         EmptyConditionHintText.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static string DescribeMatcher(IConditionMatcher matcher) => matcher switch
     {
         PixelMatcher p => $"像素 ({p.Region.TopLeft.X},{p.Region.TopLeft.Y}) RGB=({p.Expected.R},{p.Expected.G},{p.Expected.B})",
-        TextMatcher t => $"文字: \"{t.ExpectedText}\"",
+        TextMatcher t => t.UseRegex ? $"文字正则: /{t.ExpectedText}/" : $"文字: \"{t.ExpectedText}\"",
         TemplateMatcher or PixelHashMatcher => "已移除的条件类型",
         _ => "未知条件"
     };
@@ -159,6 +242,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void AddCondition_Click(object sender, RoutedEventArgs e)
     {
+        if (isReadOnly) return;
         var firstChoice = stepChoices.FirstOrDefault();
         var firstPath = firstChoice?.Path;
         var newCond = new ConditionalDirective(
@@ -177,6 +261,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void DeleteCondition_Click(object sender, RoutedEventArgs e)
     {
+        if (isReadOnly) return;
         var indexes = GetSelectedConditionIndexes();
         DeleteConditions(indexes);
     }
@@ -225,6 +310,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ConditionList_PreviewMouseMove(object sender, MouseEventArgs e)
     {
+        if (isReadOnly && !conditionBoxSelectionActive) return;
         if (conditionBoxSelectionActive)
         {
             if (e.LeftButton != MouseButtonState.Pressed)
@@ -283,6 +369,13 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ConditionList_DragOver(object sender, DragEventArgs e)
     {
+        if (isReadOnly)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         if (!e.Data.GetDataPresent(ConditionDragFormat))
         {
             return;
@@ -294,6 +387,13 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ConditionList_Drop(object sender, DragEventArgs e)
     {
+        if (isReadOnly)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         if (!e.Data.GetDataPresent(ConditionDragFormat)
             || e.Data.GetData(ConditionDragFormat) is not string payload)
         {
@@ -363,6 +463,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     public bool CutSelectedConditionsToClipboard()
     {
+        if (isReadOnly) return false;
         var indexes = GetSelectedConditionIndexes();
         if (indexes.Count == 0 || !CopySelectedConditionsToClipboard())
         {
@@ -375,6 +476,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     public bool PasteConditionsFromClipboard()
     {
+        if (isReadOnly) return false;
         if (!TryReadClipboardConditions(out var pasted) || pasted.Count == 0)
         {
             return false;
@@ -451,6 +553,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void DeleteConditions(IReadOnlyList<int> indexes)
     {
+        if (isReadOnly) return;
         if (indexes.Count == 0) return;
 
         var nextIndex = indexes[0];
@@ -476,6 +579,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void MoveSelectedConditionsToIndex(IReadOnlyList<int> indexes, int targetIndex)
     {
+        if (isReadOnly) return;
         if (indexes.Count == 0)
         {
             return;
@@ -700,6 +804,8 @@ public partial class ConditionDirectivePanel : UserControl
         {
             ExpectedTextBox.Text = tm.ExpectedText;
             ContainsCheckBox.IsChecked = tm.Contains;
+            RegexCheckBox.IsChecked = tm.UseRegex;
+            UpdateRegexValidity();
         }
 
         RegionInfoText.Text = $"({cond.Condition switch
@@ -723,6 +829,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void CondNameBox_TextChanged(object sender, TextChangedEventArgs e)
     {
+        if (isReadOnly) return;
         if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var c)) return;
         conditions[editIndex] = c with { Name = CondNameBox.Text };
         ConditionsModified?.Invoke(this, EventArgs.Empty);
@@ -730,6 +837,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void CondTypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (isReadOnly) return;
         if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition)) return;
         if (CondTypeCombo.SelectedItem is not ComboBoxItem item) return;
         var type = item.Tag?.ToString() ?? "pixel";
@@ -746,6 +854,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ExecutionModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (isReadOnly) return;
         if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition)) return;
         var mode = ExecutionModeCombo.SelectedItem is ComboBoxItem { Tag: string tag }
             && Enum.TryParse<ConditionExecutionMode>(tag, out var parsed)
@@ -762,6 +871,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void StepRange_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (isReadOnly) return;
         if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var directive)) return;
         if (StartStepCombo.SelectedItem is not StepChoice startChoice
             || EndStepCombo.SelectedItem is not StepChoice endChoice)
@@ -796,6 +906,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void TimeWindowBox_TextChanged(object sender, TextChangedEventArgs e)
     {
+        if (isReadOnly) return;
         if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var c)) return;
         if (!TryReadTimeWindow(out var windowStart, out var windowEnd))
         {
@@ -816,11 +927,13 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void PickRegion_Click(object sender, RoutedEventArgs e)
     {
+        if (isReadOnly) return;
         PickRegionRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void PickConditionColor_Click(object sender, RoutedEventArgs e)
     {
+        if (isReadOnly) return;
         if (!TryGetSelectedCondition(out _, out var directive)) return;
         if (directive.Condition is not PixelMatcher)
         {
@@ -837,6 +950,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ApplyPickedConditionColor(int x, int y, RgbColor color)
     {
+        if (isReadOnly) return;
         if (!TryGetSelectedCondition(out var editIndex, out var condition)) return;
         var region = ScreenRegion.FromSinglePixel(x, y);
         var tolerance = condition.Condition is PixelMatcher pixel
@@ -869,6 +983,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ExpectedTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
+        UpdateRegexValidity();
         UpdateSelectedMatcherFromEditor();
     }
 
@@ -877,8 +992,27 @@ public partial class ConditionDirectivePanel : UserControl
         UpdateSelectedMatcherFromEditor();
     }
 
+    private void RegexCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        UpdateRegexValidity();
+        UpdateSelectedMatcherFromEditor();
+    }
+
+    private void UpdateRegexValidity()
+    {
+        var useRegex = RegexCheckBox.IsChecked == true;
+        string? error = null;
+        var valid = !useRegex || PaddleOcrBridge.IsValidRegex(ExpectedTextBox.Text, out error);
+        RegexErrorText.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
+        RegexErrorText.Text = valid ? "正则表达式无效" : $"正则表达式无效：{error}";
+        ExpectedTextBox.BorderBrush = valid ? null : Brushes.Red;
+        ExpectedTextBox.ToolTip = valid ? null : error;
+        ContainsCheckBox.IsEnabled = !isReadOnly && !useRegex;
+    }
+
     private void UpdateSelectedMatcherFromEditor()
     {
+        if (isReadOnly) return;
         if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition))
         {
             return;
@@ -897,7 +1031,8 @@ public partial class ConditionDirectivePanel : UserControl
             TextMatcher text => text with
             {
                 ExpectedText = ExpectedTextBox.Text ?? string.Empty,
-                Contains = ContainsCheckBox.IsChecked != false
+                Contains = ContainsCheckBox.IsChecked != false,
+                UseRegex = RegexCheckBox.IsChecked == true
             },
             _ => condition.Condition
         };
@@ -937,7 +1072,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     public bool TryInsertActionTemplateIntoActiveCondition(MacroActionTemplateKind kind)
     {
-        if (!IsThenActionSequenceActive)
+        if (isReadOnly || !IsThenActionSequenceActive)
         {
             return false;
         }
@@ -948,6 +1083,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void AddThenAction_Click(object sender, RoutedEventArgs e)
     {
+        if (isReadOnly) return;
         if (!TryGetSelectedCondition(out _, out _))
         {
             return;
@@ -957,8 +1093,26 @@ public partial class ConditionDirectivePanel : UserControl
         ThenActionPalettePopup.IsOpen = true;
     }
 
+    private void RecordThenActions_Click(object sender, RoutedEventArgs e)
+    {
+        if (isRecording)
+        {
+            RecordingStopRequested?.Invoke();
+        }
+        else if (CanRecordThenActions)
+        {
+            RecordingModeMenu.Show(RecordThenActionsButton, mode => RecordingStartRequested?.Invoke(mode));
+        }
+    }
+
+    private void UpdateRecordingButtonState()
+    {
+        RecordThenActionsButton.IsEnabled = isRecording || CanRecordThenActions;
+    }
+
     private void OnThenActionPaletteClicked(MacroActionTemplateKind kind)
     {
+        if (isReadOnly) return;
         if (!TryGetSelectedCondition(out _, out _))
         {
             ThenActionPalettePopup.IsOpen = false;
@@ -972,6 +1126,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void ThenActionTemplate_Click(object sender, RoutedEventArgs e)
     {
+        if (isReadOnly) return;
         if (sender is not MenuItem item
             || item.Tag is not string tag
             || !Enum.TryParse<MacroActionTemplateKind>(tag, ignoreCase: true, out var kind))
@@ -993,6 +1148,23 @@ public partial class ConditionDirectivePanel : UserControl
         if (ThenActionSequence.IsActiveSequence && ThenActionSequence.HandleExplorerShortcut(key, modifiers))
         {
             return true;
+        }
+
+        if (isReadOnly)
+        {
+            if ((modifiers & ModifierKeys.Control) != 0
+                && (modifiers & (ModifierKeys.Alt | ModifierKeys.Shift)) == 0)
+            {
+                return key switch
+                {
+                    Key.A => SelectAllConditions(),
+                    Key.C => CopySelectedConditionsToClipboard(),
+                    Key.X or Key.V => true,
+                    _ => false
+                };
+            }
+
+            return key == Key.Delete && modifiers == ModifierKeys.None;
         }
 
         if (key == Key.Delete && modifiers == ModifierKeys.None)
@@ -1042,7 +1214,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void OnThenActionSequenceStepsChanged()
     {
-        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition))
+        if (isReadOnly || loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition))
         {
             return;
         }
@@ -1058,12 +1230,13 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void OnThenActionTemplateDropped(MacroActionTemplateKind kind, string parentPathText, int insertIndex)
     {
+        if (isReadOnly) return;
         ThenActionSequence.InsertStepsAtPath(MacroActionTemplateFactory.CreateSteps(kind), parentPathText, insertIndex);
     }
 
     private void OnThenMacroLibraryDropped(string macroId, string parentPathText, int insertIndex)
     {
-        if (editorState is null)
+        if (isReadOnly || editorState is null)
         {
             return;
         }
@@ -1080,6 +1253,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     public void SetRegion(ScreenRegion region)
     {
+        if (isReadOnly) return;
         if (!TryGetSelectedCondition(out var editIndex, out var c)) return;
         var newMatcher = c.Condition switch
         {

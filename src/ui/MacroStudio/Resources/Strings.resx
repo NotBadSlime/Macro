@@ -511,7 +511,10 @@
   <data name="NoWindowsFound" xml:space="preserve"><value>No running windows are available.</value></data>
   <data name="StartRecording" xml:space="preserve"><value>● Record input</value></data>
   <data name="StopRecording" xml:space="preserve"><value>■ Stop recording</value></data>
-  <data name="RecordingHelp" xml:space="preserve"><value>Record keyboard, mouse, and real delays. Press Ctrl+Shift+F12 to stop.</value></data>
+  <data name="RecordModeReplica" xml:space="preserve"><value>Replay timing</value></data>
+  <data name="RecordModeFixedDelay" xml:space="preserve"><value>Fixed 5 ms delay</value></data>
+  <data name="RecordModeNoDelay" xml:space="preserve"><value>No delay</value></data>
+  <data name="RecordingHelp" xml:space="preserve"><value>Choose a recording mode, then capture keyboard, mouse buttons, and wheel. Mouse movement is not recorded. Press Ctrl+Shift+F12 to stop.</value></data>
   <data name="RecordingActive" xml:space="preserve"><value>Recording… Ctrl+Shift+F12 to stop</value></data>
   <data name="RecordingCaptured" xml:space="preserve"><value>Recording… {0} inputs captured</value></data>
   <data name="RecordingStarted" xml:space="preserve"><value>Input recording started. Press Ctrl+Shift+F12 to stop.</value></data>

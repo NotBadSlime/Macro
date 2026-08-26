@@ -337,7 +337,10 @@
   <data name="NoWindowsFound" xml:space="preserve"><value>没有可选择的运行窗口。</value></data>
   <data name="StartRecording" xml:space="preserve"><value>● 录制输入</value></data>
   <data name="StopRecording" xml:space="preserve"><value>■ 停止录制</value></data>
-  <data name="RecordingHelp" xml:space="preserve"><value>记录键盘、鼠标和真实延迟；按 Ctrl+Shift+F12 停止</value></data>
+  <data name="RecordModeReplica" xml:space="preserve"><value>复刻录入</value></data>
+  <data name="RecordModeFixedDelay" xml:space="preserve"><value>延迟录入</value></data>
+  <data name="RecordModeNoDelay" xml:space="preserve"><value>无延迟录入</value></data>
+  <data name="RecordingHelp" xml:space="preserve"><value>先选择录制模式，再记录键盘、鼠标按键和滚轮；不录入鼠标移动。按 Ctrl+Shift+F12 停止</value></data>
   <data name="RecordingActive" xml:space="preserve"><value>正在录制… Ctrl+Shift+F12 停止</value></data>
   <data name="RecordingCaptured" xml:space="preserve"><value>正在录制… 已记录 {0} 个输入</value></data>
   <data name="RecordingStarted" xml:space="preserve"><value>已开始记录键鼠输入，按 Ctrl+Shift+F12 停止。</value></data>
