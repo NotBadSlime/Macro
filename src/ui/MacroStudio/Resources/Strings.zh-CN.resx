@@ -285,6 +285,19 @@
   <data name="SubmacroNotFound" xml:space="preserve"><value>找不到子宏“{0}”。</value></data>
   <data name="AlreadyEditingMacro" xml:space="preserve"><value>已在编辑该宏。</value></data>
   <data name="ReturnMacroMissing" xml:space="preserve"><value>上一宏已不存在，已清除返回记录。</value></data>
+  <data name="ConditionListTitle" xml:space="preserve"><value>条件列表</value></data>
+  <data name="AddCondition" xml:space="preserve"><value>添加条件</value></data>
+  <data name="DeleteCondition" xml:space="preserve"><value>删除</value></data>
+  <data name="EmptyConditionHint" xml:space="preserve"><value>暂无条件。先点「添加条件」，再在下方「触发后执行」里添加动作。</value></data>
+  <data name="ThenActionsTitle" xml:space="preserve"><value>触发后执行</value></data>
+  <data name="ThenActionsHint" xml:space="preserve"><value>条件成立后要跑的动作写在这里。点「添加动作」或从右侧拖入。</value></data>
+  <data name="AddThenAction" xml:space="preserve"><value>添加动作</value></data>
+  <data name="ThenActionEmptyHint" xml:space="preserve"><value>还没有动作。点上方「添加动作」开始。</value></data>
+  <data name="SelectConditionBeforeThenAction" xml:space="preserve"><value>请先选中一条条件，再添加动作。</value></data>
+  <data name="ConditionGateModeHint" xml:space="preserve"><value>仅等待条件成立后启动主序列，不跑触发后动作。</value></data>
+  <data name="ConditionGateBadge" xml:space="preserve"><value>门闩</value></data>
+  <data name="ConditionPauseBadge" xml:space="preserve"><value>暂停</value></data>
+  <data name="ConditionReadyBadge" xml:space="preserve"><value>就绪</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>删除宏文件夹</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解锁所选宏</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已锁定所选的 {0} 个宏。</value></data>

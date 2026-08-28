@@ -357,6 +357,23 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
         try
         {
+            if (!TryWaitForStartupGatesOrCancel(
+                    document,
+                    conditionEvaluator,
+                    delayStrategy,
+                    ref plannedIterationStartTick,
+                    qpcFrequency,
+                    cancellationToken))
+            {
+                ApplyTimingStats(timingRecorder);
+                return new PlaybackRunResult(
+                    PlaybackRunStatus.Completed,
+                    iterationsCompleted,
+                    actionsSubmitted,
+                    Cancelled: true,
+                    inputSink.GetStats());
+            }
+
             while (iterationsCompleted < iterationsTarget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -744,6 +761,11 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             : [];
         foreach (var cond in document.EffectiveConditions)
         {
+            if (cond.ExecutionMode == ConditionExecutionMode.GateMainSequence)
+            {
+                continue;
+            }
+
             monitors.Add(new ConditionMonitor(
                 ApplyConditionTimeWindow(cond, conditionWindows, qpcFrequency),
                 evaluator,
@@ -774,6 +796,23 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         using var conditionEvaluator = new CompositeConditionEvaluator(livePixelEvaluator);
         try
         {
+            var gateStartTick = clock.GetTimestamp();
+            if (!TryWaitForStartupGatesOrCancel(
+                    document,
+                    conditionEvaluator,
+                    delayStrategy,
+                    ref gateStartTick,
+                    qpcFrequency,
+                    cancellationToken))
+            {
+                return new PlaybackRunResult(
+                    PlaybackRunStatus.Completed,
+                    iterationsCompleted,
+                    actionsSubmitted,
+                    Cancelled: true,
+                    inputSink.GetStats());
+            }
+
             while (iterationsCompleted < iterationsTarget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -901,6 +940,116 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     private static bool HasPauseMainTimelineCondition(MacroDocument document)
     {
         return document.EffectiveConditions.Any(condition => condition.ExecutionMode == ConditionExecutionMode.PauseMainTimeline);
+    }
+
+    private static bool HasStartupGateCondition(MacroDocument document)
+    {
+        return document.EffectiveConditions.Any(condition => condition.ExecutionMode == ConditionExecutionMode.GateMainSequence);
+    }
+
+    /// <summary>
+    /// Waits until every GateMainSequence condition currently matches (AND).
+    /// Returns false on timeout; throws on cancellation.
+    /// </summary>
+    public static bool WaitForStartupGates(
+        IReadOnlyList<ConditionalDirective> gates,
+        IConditionEvaluator evaluator,
+        IHighResolutionClock clock,
+        IPlaybackDelayStrategy delayStrategy,
+        long triggerTick,
+        long qpcFrequency,
+        CancellationToken cancellationToken,
+        TimeSpan? pollInterval = null)
+    {
+        if (gates.Count == 0)
+        {
+            return true;
+        }
+
+        var poll = pollInterval is { } value && value > TimeSpan.Zero
+            ? value
+            : TimeSpan.FromMilliseconds(25);
+        var pollTicks = Math.Max(1, (long)Math.Round(poll.TotalSeconds * qpcFrequency, MidpointRounding.AwayFromZero));
+        TimeSpan? deadline = null;
+        foreach (var gate in gates)
+        {
+            if (gate.WindowEnd is not { } end)
+            {
+                continue;
+            }
+
+            deadline = deadline is { } current
+                ? (current <= end ? current : end)
+                : end;
+        }
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var now = clock.GetTimestamp();
+            var elapsedMs = (now - triggerTick) * 1000.0 / qpcFrequency;
+            if (deadline is { } end && elapsedMs > end.TotalMilliseconds)
+            {
+                return false;
+            }
+
+            var allMatched = true;
+            foreach (var gate in gates)
+            {
+                if (gate.WindowStart is { } start && elapsedMs < start.TotalMilliseconds)
+                {
+                    allMatched = false;
+                    break;
+                }
+
+                if (!evaluator.Evaluate(gate.Condition))
+                {
+                    allMatched = false;
+                    break;
+                }
+            }
+
+            if (allMatched)
+            {
+                return true;
+            }
+
+            delayStrategy.WaitUntil(now + pollTicks, qpcFrequency, cancellationToken, noWait: false);
+        }
+    }
+
+    private bool TryWaitForStartupGatesOrCancel(
+        MacroDocument document,
+        CompositeConditionEvaluator conditionEvaluator,
+        IPlaybackDelayStrategy delayStrategy,
+        ref long plannedIterationStartTick,
+        long qpcFrequency,
+        CancellationToken cancellationToken)
+    {
+        var gates = document.EffectiveConditions
+            .Where(condition => condition.ExecutionMode == ConditionExecutionMode.GateMainSequence)
+            .ToList();
+        if (gates.Count == 0)
+        {
+            return true;
+        }
+
+        var triggerTick = clock.GetTimestamp();
+        if (!WaitForStartupGates(
+                gates,
+                conditionEvaluator,
+                clock,
+                delayStrategy,
+                triggerTick,
+                qpcFrequency,
+                cancellationToken))
+        {
+            return false;
+        }
+
+        // Restart iteration timeline after the gate so main sequence DueTicks are relative to gate pass.
+        plannedIterationStartTick = clock.GetTimestamp();
+        return true;
     }
 
     private static void ActivateAllMonitors(List<ConditionMonitor> monitors)

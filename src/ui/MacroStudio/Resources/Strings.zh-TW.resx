@@ -285,6 +285,19 @@
   <data name="SubmacroNotFound" xml:space="preserve"><value>找不到子巨集「{0}」。</value></data>
   <data name="AlreadyEditingMacro" xml:space="preserve"><value>已在編輯該巨集。</value></data>
   <data name="ReturnMacroMissing" xml:space="preserve"><value>上一巨集已不存在，已清除返回記錄。</value></data>
+  <data name="ConditionListTitle" xml:space="preserve"><value>條件列表</value></data>
+  <data name="AddCondition" xml:space="preserve"><value>新增條件</value></data>
+  <data name="DeleteCondition" xml:space="preserve"><value>刪除</value></data>
+  <data name="EmptyConditionHint" xml:space="preserve"><value>尚無條件。先點「新增條件」，再在下方「觸發後執行」裡新增動作。</value></data>
+  <data name="ThenActionsTitle" xml:space="preserve"><value>觸發後執行</value></data>
+  <data name="ThenActionsHint" xml:space="preserve"><value>條件成立後要跑的動作寫在這裡。點「新增動作」或從右側拖入。</value></data>
+  <data name="AddThenAction" xml:space="preserve"><value>新增動作</value></data>
+  <data name="ThenActionEmptyHint" xml:space="preserve"><value>還沒有動作。點上方「新增動作」開始。</value></data>
+  <data name="SelectConditionBeforeThenAction" xml:space="preserve"><value>請先選取一條條件，再新增動作。</value></data>
+  <data name="ConditionGateModeHint" xml:space="preserve"><value>僅等待條件成立後啟動主序列，不跑觸發後動作。</value></data>
+  <data name="ConditionGateBadge" xml:space="preserve"><value>門閂</value></data>
+  <data name="ConditionPauseBadge" xml:space="preserve"><value>暫停</value></data>
+  <data name="ConditionReadyBadge" xml:space="preserve"><value>就緒</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>刪除宏資料夾</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解除鎖定所選巨集</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已鎖定所選的 {0} 個巨集。</value></data>

@@ -44,6 +44,7 @@ public partial class ConditionDirectivePanel : UserControl
     public event EventHandler? PickRegionRequested;
     public event Action<MacroRecordingMode>? RecordingStartRequested;
     public event Action? RecordingStopRequested;
+    public event Action<string>? StatusMessageRequested;
 
     public ConditionDirectivePanel()
     {
@@ -66,9 +67,20 @@ public partial class ConditionDirectivePanel : UserControl
 
     public void ApplyLocalization()
     {
+        ConditionSequenceTitleText.Text = LocalizationService.Get("ConditionListTitle");
+        AddConditionButton.Content = LocalizationService.Get("AddCondition");
+        DeleteConditionButton.Content = LocalizationService.Get("DeleteCondition");
+        EmptyConditionHintText.Text = LocalizationService.Get("EmptyConditionHint");
+        ThenActionsLabelText.Text = LocalizationService.Get("ThenActionsTitle");
+        ThenActionsHintText.Text = LocalizationService.Get("ThenActionsHint");
+        AddThenActionButton.Content = LocalizationService.Get("AddThenAction");
+        ThenActionEmptyHintText.Text = LocalizationService.Get("ThenActionEmptyHint");
+        GateModeHintText.Text = LocalizationService.Get("ConditionGateModeHint");
         RecordThenActionsButton.Content = LocalizationService.Get(isRecording ? "StopRecording" : "StartRecording");
         RecordThenActionsButton.ToolTip = LocalizationService.Get("RecordingHelp");
         ThenActionPalette.ApplyLocalization();
+        UpdateThenActionEmptyHint();
+        RefreshList();
     }
 
     public void SetReadOnly(bool value)
@@ -201,8 +213,15 @@ public partial class ConditionDirectivePanel : UserControl
                 RangeBadge = DescribeRange(c),
                 TypeIcon = GetTypeIcon(c.Condition.Type),
                 ColorBrush = GetConditionColor(i),
-                StatusBrush = Brushes.Gray,
-                StatusText = "就绪"
+                StatusBrush = c.ExecutionMode == ConditionExecutionMode.GateMainSequence
+                    ? new SolidColorBrush(Color.FromRgb(14, 165, 233))
+                    : Brushes.Gray,
+                StatusText = c.ExecutionMode switch
+                {
+                    ConditionExecutionMode.GateMainSequence => LocalizationService.Get("ConditionGateBadge"),
+                    ConditionExecutionMode.PauseMainTimeline => LocalizationService.Get("ConditionPauseBadge"),
+                    _ => LocalizationService.Get("ConditionReadyBadge")
+                }
             });
         }
 
@@ -257,6 +276,7 @@ public partial class ConditionDirectivePanel : UserControl
         RefreshList();
         ConditionList.SelectedIndex = conditions.Count - 1;
         ConditionsModified?.Invoke(this, EventArgs.Empty);
+        Dispatcher.BeginInvoke(new Action(ScrollThenActionsIntoView), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void DeleteCondition_Click(object sender, RoutedEventArgs e)
@@ -281,14 +301,17 @@ public partial class ConditionDirectivePanel : UserControl
             LoadEditor(directive);
             EditorBorder.Visibility = Visibility.Visible;
             EditorGrid.Visibility = Visibility.Visible;
+            UpdateThenActionEmptyHint();
             ConditionSelectionChanged?.Invoke(this,
                 new ConditionSelectionChangedEventArgs(index, directive));
+            Dispatcher.BeginInvoke(new Action(ScrollThenActionsIntoView), System.Windows.Threading.DispatcherPriority.Loaded);
         }
         else
         {
             EditorBorder.Visibility = Visibility.Collapsed;
             EditorGrid.Visibility = Visibility.Collapsed;
             ThenActionSequence.SetSteps([]);
+            UpdateThenActionEmptyHint();
             ConditionSelectionChanged?.Invoke(this, new ConditionSelectionChangedEventArgs(-1, null));
         }
     }
@@ -781,7 +804,13 @@ public partial class ConditionDirectivePanel : UserControl
         WindowStartMsBox.Text = cond.WindowStart is { } start ? FormatMs(start) : string.Empty;
         WindowEndMsBox.Text = cond.WindowEnd is { } end ? FormatMs(end) : string.Empty;
         SetTimeWindowValidity(true);
-        ExecutionModeCombo.SelectedIndex = cond.ExecutionMode == ConditionExecutionMode.PauseMainTimeline ? 1 : 0;
+        ExecutionModeCombo.SelectedIndex = cond.ExecutionMode switch
+        {
+            ConditionExecutionMode.PauseMainTimeline => 1,
+            ConditionExecutionMode.GateMainSequence => 2,
+            _ => 0
+        };
+        UpdateThenActionsVisibility(cond.ExecutionMode);
 
         var typeIndex = cond.Condition.Type switch
         {
@@ -819,6 +848,7 @@ public partial class ConditionDirectivePanel : UserControl
 
         ThenActionSequence.SetSteps(cond.ThenSteps);
         loadingEditor = false;
+        UpdateThenActionEmptyHint();
     }
 
     private void UpdateTypeVisibility(string type)
@@ -861,12 +891,24 @@ public partial class ConditionDirectivePanel : UserControl
             ? parsed
             : ConditionExecutionMode.Parallel;
         conditions[editIndex] = condition with { ExecutionMode = mode };
+        UpdateThenActionsVisibility(mode);
         RefreshList();
         selectedIndex = editIndex;
         ConditionList.SelectedIndex = editIndex;
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
             new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
+    }
+
+    private void UpdateThenActionsVisibility(ConditionExecutionMode mode)
+    {
+        var isGate = mode == ConditionExecutionMode.GateMainSequence;
+        ThenActionsSection.Visibility = isGate ? Visibility.Collapsed : Visibility.Visible;
+        GateModeHintText.Visibility = isGate ? Visibility.Visible : Visibility.Collapsed;
+        if (isGate)
+        {
+            ThenActionPalettePopup.IsOpen = false;
+        }
     }
 
     private void StepRange_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1086,11 +1128,13 @@ public partial class ConditionDirectivePanel : UserControl
         if (isReadOnly) return;
         if (!TryGetSelectedCondition(out _, out _))
         {
+            StatusMessageRequested?.Invoke(LocalizationService.Get("SelectConditionBeforeThenAction"));
             return;
         }
 
         thenActionSequenceActive = true;
         ThenActionPalettePopup.IsOpen = true;
+        ScrollThenActionsIntoView();
     }
 
     private void RecordThenActions_Click(object sender, RoutedEventArgs e)
@@ -1122,6 +1166,7 @@ public partial class ConditionDirectivePanel : UserControl
         thenActionSequenceActive = true;
         ThenActionSequence.InsertSteps(MacroActionTemplateFactory.CreateSteps(kind));
         ThenActionPalettePopup.IsOpen = false;
+        UpdateThenActionEmptyHint();
     }
 
     private void ThenActionTemplate_Click(object sender, RoutedEventArgs e)
@@ -1223,9 +1268,37 @@ public partial class ConditionDirectivePanel : UserControl
         RefreshList();
         selectedIndex = editIndex;
         ConditionList.SelectedIndex = editIndex;
+        UpdateThenActionEmptyHint();
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
             new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
+    }
+
+    private void UpdateThenActionEmptyHint()
+    {
+        var showEmpty = EditorBorder.Visibility == Visibility.Visible
+            && ThenActionSequence.Steps.Count == 0;
+        ThenActionEmptyHintText.Visibility = showEmpty ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ScrollThenActionsIntoView()
+    {
+        if (ThenActionsSection is null || ConditionEditorScrollViewer is null)
+        {
+            return;
+        }
+
+        ThenActionsSection.BringIntoView();
+        ConditionEditorScrollViewer.UpdateLayout();
+        var offset = ThenActionsSection.TranslatePoint(new Point(0, 0), ConditionEditorScrollViewer).Y
+            + ConditionEditorScrollViewer.VerticalOffset
+            - 8;
+        if (offset < 0)
+        {
+            offset = 0;
+        }
+
+        ConditionEditorScrollViewer.ScrollToVerticalOffset(offset);
     }
 
     private void OnThenActionTemplateDropped(MacroActionTemplateKind kind, string parentPathText, int insertIndex)

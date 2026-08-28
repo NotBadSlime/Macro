@@ -37,7 +37,8 @@ public enum ConflictBehavior
 public enum ConditionExecutionMode
 {
     Parallel,
-    PauseMainTimeline
+    PauseMainTimeline,
+    GateMainSequence
 }
 
 public interface IConditionMatcher

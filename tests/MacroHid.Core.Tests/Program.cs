@@ -37,6 +37,8 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers conditional directive time windows", McrxParserCoversConditionalDirectiveTimeWindows),
     ("MCRX parser covers random waits and conditional directive paths", McrxParserCoversRandomWaitsAndConditionalDirectivePaths),
     ("MCRX parser covers sequence stop controls and condition execution mode", McrxParserCoversSequenceStopsAndConditionExecutionMode),
+    ("Playback executor waits for startup gate conditions before main sequence", PlaybackExecutorWaitsForStartupGateConditionsBeforeMainSequence),
+    ("MacroStudio exposes startup gate condition execution mode", MacroStudioExposesStartupGateConditionExecutionMode),
     ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
     ("MCRX parser covers playback precision mode", McrxParserCoversPlaybackPrecisionMode),
     ("Precision mode profiles expose target jitter budgets", PrecisionModeProfilesExposeTargetJitterBudgets),
@@ -1429,6 +1431,72 @@ static void McrxParserCoversSequenceStopsAndConditionExecutionMode()
     Assert.Contains("\"type\": \"sequence.stop-iteration\"", serialized);
     Assert.Contains("\"type\": \"sequence.stop-all\"", serialized);
     Assert.Contains("\"executionMode\": \"PauseMainTimeline\"", serialized);
+}
+
+static void PlaybackExecutorWaitsForStartupGateConditionsBeforeMainSequence()
+{
+    var gate = new ConditionalDirective(
+        "gate1",
+        "ready",
+        0,
+        0,
+        new PixelMatcher(ScreenRegion.FromSinglePixel(1, 1), new RgbColor(1, 2, 3), 0),
+        [new WaitStep(TimeSpan.FromMilliseconds(1))],
+        WindowEnd: TimeSpan.FromMilliseconds(200),
+        ExecutionMode: ConditionExecutionMode.GateMainSequence);
+
+    var evaluator = new ScriptedConditionEvaluator([false, false, true]);
+    var clock = new FakeHighResolutionClock(1_000_000);
+    var delay = new ImmediatePlaybackDelayStrategy(clock);
+
+    Assert.True(MacroPlaybackExecutor.WaitForStartupGates(
+        [gate],
+        evaluator,
+        clock,
+        delay,
+        triggerTick: 0,
+        qpcFrequency: 1_000_000,
+        CancellationToken.None,
+        pollInterval: TimeSpan.FromMilliseconds(1)));
+    Assert.Equal(3, evaluator.EvaluateCount);
+
+    var timeoutEvaluator = new ScriptedConditionEvaluator([false, false, false, false, false, false, false, false]);
+    Assert.False(MacroPlaybackExecutor.WaitForStartupGates(
+        [gate],
+        timeoutEvaluator,
+        clock,
+        delay,
+        triggerTick: 0,
+        qpcFrequency: 1_000_000,
+        CancellationToken.None,
+        pollInterval: TimeSpan.FromMilliseconds(50)));
+
+    var serialized = McrxSerializer.Serialize(new MacroDocument(
+        1,
+        "gated",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromMilliseconds(1))],
+        [gate]));
+    Assert.Contains("\"executionMode\": \"GateMainSequence\"", serialized);
+    Assert.Equal(
+        ConditionExecutionMode.GateMainSequence,
+        McrxParser.Parse(serialized).EffectiveConditions.Single().ExecutionMode);
+}
+
+static void MacroStudioExposesStartupGateConditionExecutionMode()
+{
+    var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var model = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Core", "ConditionModel.cs"));
+    var executor = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs"));
+
+    Assert.Contains("GateMainSequence", model);
+    Assert.Contains("Tag=\"GateMainSequence\"", conditionXaml);
+    Assert.Contains("x:Name=\"GateModeHintText\"", conditionXaml);
+    Assert.Contains("UpdateThenActionsVisibility", conditionCode);
+    Assert.Contains("WaitForStartupGates", executor);
+    Assert.Contains("GateMainSequence", executor);
+    Assert.Contains("ConditionExecutionMode.GateMainSequence", conditionCode);
 }
 
 static void McrxParserCoversPlaybackHotkeySettings()
@@ -2893,7 +2961,8 @@ static void MacroStudioLaysOutBaseAndConditionalSequencesSideBySide()
     Assert.Contains("x:Name=\"ConditionSequenceTitleText\"", conditionXaml);
     Assert.Contains("Text=\"条件列表\"", conditionXaml);
     Assert.Contains("x:Name=\"EmptyConditionHintText\"", conditionXaml);
-    Assert.Contains("暂无条件，点击 + 添加", conditionXaml);
+    Assert.Contains("添加条件", conditionXaml);
+    Assert.Contains("触发后执行", conditionXaml);
     Assert.Contains("x:Name=\"ThenActionSequence\"", conditionXaml);
     Assert.Contains("x:Name=\"EditorBorder\"", conditionXaml);
     Assert.Contains("StepSequencePanel", conditionXaml);
@@ -3126,6 +3195,8 @@ static void MacroStudioConditionThenActionsExposeLocalAddMenu()
     Assert.Contains("AddThenAction_Click", conditionCode);
     Assert.Contains("OnThenActionPaletteClicked", conditionCode);
     Assert.Contains("MacroActionTemplateFactory.CreateSteps", conditionCode);
+    Assert.Contains("ScrollThenActionsIntoView", conditionCode);
+    Assert.Contains("StatusMessageRequested", conditionCode);
     Assert.Contains("Tag=\"StopCurrent\"", actionPaletteXaml);
     Assert.Contains("Tag=\"StopIteration\"", actionPaletteXaml);
     Assert.Contains("Tag=\"StopAll\"", actionPaletteXaml);
@@ -4444,7 +4515,11 @@ static void MacroStudioConditionEditorContentScrollsWithoutClippingThenActions()
     Assert.Contains("CanContentScroll=\"False\"", conditionXaml);
     Assert.DoesNotContain("MaxHeight=\"620\"", conditionXaml);
     Assert.Contains("x:Name=\"ThenActionSequenceHost\"", conditionXaml);
-    Assert.Contains("MinHeight=\"260\"", conditionXaml);
+    Assert.Contains("MinHeight=\"220\"", conditionXaml);
+    Assert.Contains("x:Name=\"ThenActionsSection\"", conditionXaml);
+    Assert.Contains("x:Name=\"AddThenActionButton\"", conditionXaml);
+    Assert.Contains("Content=\"添加动作\"", conditionXaml);
+    Assert.Contains("x:Name=\"ThenActionEmptyHintText\"", conditionXaml);
 }
 
 static void MacroStudioRefreshesJsonContentBeforeShowingToolWindow()
@@ -8002,5 +8077,58 @@ sealed class CancellingDelayStrategy : IPlaybackDelayStrategy
     {
         cancellation.Cancel();
         cancellationToken.ThrowIfCancellationRequested();
+    }
+}
+
+sealed class ScriptedConditionEvaluator : IConditionEvaluator
+{
+    private readonly Queue<bool> results;
+
+    public ScriptedConditionEvaluator(IEnumerable<bool> scriptedResults)
+    {
+        results = new Queue<bool>(scriptedResults);
+    }
+
+    public int EvaluateCount { get; private set; }
+
+    public bool Evaluate(IConditionMatcher matcher)
+    {
+        EvaluateCount++;
+        return results.Count > 0 && results.Dequeue();
+    }
+}
+
+sealed class FakeHighResolutionClock : IHighResolutionClock
+{
+    private long timestamp;
+
+    public FakeHighResolutionClock(long frequency)
+    {
+        Frequency = frequency;
+    }
+
+    public long Frequency { get; }
+
+    public long GetTimestamp() => timestamp;
+
+    public void Advance(long ticks) => timestamp += ticks;
+}
+
+sealed class ImmediatePlaybackDelayStrategy : IPlaybackDelayStrategy
+{
+    private readonly FakeHighResolutionClock clock;
+
+    public ImmediatePlaybackDelayStrategy(FakeHighResolutionClock clock)
+    {
+        this.clock = clock;
+    }
+
+    public void WaitUntil(long dueTick, long qpcFrequency, CancellationToken cancellationToken, bool noWait)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (dueTick > clock.GetTimestamp())
+        {
+            clock.Advance(dueTick - clock.GetTimestamp());
+        }
     }
 }

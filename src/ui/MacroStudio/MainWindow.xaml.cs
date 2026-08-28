@@ -153,6 +153,7 @@ public partial class MainWindow : Window
         ConditionPanel.PickRegionRequested += OnPickRegionRequested;
         ConditionPanel.RecordingStartRequested += OnStartConditionRecording;
         ConditionPanel.RecordingStopRequested += OnStopRecording;
+        ConditionPanel.StatusMessageRequested += msg => SetStatus(msg);
     }
 
     private void ConfigureWorkspaceDockHost()

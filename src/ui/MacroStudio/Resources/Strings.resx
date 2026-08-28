@@ -459,6 +459,19 @@
   <data name="SubmacroNotFound" xml:space="preserve"><value>Could not find submacro “{0}”.</value></data>
   <data name="AlreadyEditingMacro" xml:space="preserve"><value>Already editing this macro.</value></data>
   <data name="ReturnMacroMissing" xml:space="preserve"><value>Previous macro is missing. Navigation history cleared.</value></data>
+  <data name="ConditionListTitle" xml:space="preserve"><value>Conditions</value></data>
+  <data name="AddCondition" xml:space="preserve"><value>Add condition</value></data>
+  <data name="DeleteCondition" xml:space="preserve"><value>Delete</value></data>
+  <data name="EmptyConditionHint" xml:space="preserve"><value>No conditions yet. Click “Add condition”, then add actions under “Run after trigger”.</value></data>
+  <data name="ThenActionsTitle" xml:space="preserve"><value>Run after trigger</value></data>
+  <data name="ThenActionsHint" xml:space="preserve"><value>Actions to run when the condition matches. Click “Add action” or drag from the action palette.</value></data>
+  <data name="AddThenAction" xml:space="preserve"><value>Add action</value></data>
+  <data name="ThenActionEmptyHint" xml:space="preserve"><value>No actions yet. Click “Add action” above to start.</value></data>
+  <data name="SelectConditionBeforeThenAction" xml:space="preserve"><value>Select a condition first, then add actions.</value></data>
+  <data name="ConditionGateModeHint" xml:space="preserve"><value>Only waits until the condition matches, then starts the main sequence. Then-actions are not run.</value></data>
+  <data name="ConditionGateBadge" xml:space="preserve"><value>Gate</value></data>
+  <data name="ConditionPauseBadge" xml:space="preserve"><value>Pause</value></data>
+  <data name="ConditionReadyBadge" xml:space="preserve"><value>Ready</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>Delete macro folder</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>Unlock selected</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>Locked {0} selected macro(s).</value></data>
