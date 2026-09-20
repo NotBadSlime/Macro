@@ -90,7 +90,7 @@ dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj --configuration 
 
 建议把 100 轮以内的调参只当 smoke test；真正选择极限档核心掩码时，至少使用 `-TuneIterations 1000 -TunePasses 2`，再用推荐 mask 跑一次 `LatencyProbe --iterations 5000` 确认最大值。短测可能会漏掉 1 秒级或数十秒级才出现一次的调度尖峰。
 
-MacroStudio 的播放控制面板提供“极限核心掩码”字段。把脚本推荐值（例如 `0x1F`）填进去并选择“极限（0.1 ms）”后，MacroStudio 会在后台按该 mask 重新预热 native standby worker；实际播放期间会临时限制进程 affinity，播放结束后恢复原 affinity。
+MacroStudio 的宏数据库管理页「全局运行」提供“极限核心掩码”字段。把脚本推荐值（例如 `0x1F`）填进去并选择“极限（0.1 ms）”后，MacroStudio 会在后台按该 mask 重新预热 native standby worker；实际播放期间会临时限制进程 affinity，播放结束后恢复原 affinity。填写规则、核编号对照和参考文献见 [极限核心掩码说明](cpu-affinity.md)。
 
 如果仍然出现 0.5ms 以上的偶发尖峰，请用管理员 PowerShell 运行 `Trace-LatencyOutliers.ps1`。脚本会同时生成 LatencyProbe outlier CSV 和 WPR `.etl` 文件；用 Windows Performance Analyzer 打开 `.etl`，对照 CSV 中的批次时间查看 CPU Usage (Precise)、DPC、ISR 和上下文切换，判断尖峰来自应用线程调度、设备驱动中断还是系统后台活动。
 
@@ -197,7 +197,7 @@ dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj --configuration 
 
 Treat runs below 100 iterations as smoke tests only. For a real Extreme mask, use at least `-TuneIterations 1000 -TunePasses 2`, then validate the recommended mask with `LatencyProbe --iterations 5000`. Short tests can miss scheduler spikes that appear only once every second or every few dozen seconds.
 
-MacroStudio exposes an “Ultra affinity mask” field in the playback panel. Paste the recommended value, for example `0x1F`, and select “Extreme (0.1 ms)”; MacroStudio will warm native standby workers for that mask in the background, then temporarily restrict process affinity during playback and restore it afterward.
+MacroStudio exposes an “Ultra affinity mask” field under Global Runtime on the macro library manager page. Paste the recommended value, for example `0x1F`, and select “Extreme (0.1 ms)”; MacroStudio will warm native standby workers for that mask in the background, then temporarily restrict process affinity during playback and restore it afterward. See [CPU affinity notes](cpu-affinity.md) for the core-to-code table and references.
 
 If >0.5ms spikes still appear, run `Trace-LatencyOutliers.ps1` from an elevated PowerShell session. It generates both a LatencyProbe outlier CSV and a WPR `.etl` trace. Open the `.etl` in Windows Performance Analyzer and compare the CSV outlier times with CPU Usage (Precise), DPC, ISR, and context-switch activity to decide whether the spike comes from application scheduling, driver interrupts, or background system activity.
 
