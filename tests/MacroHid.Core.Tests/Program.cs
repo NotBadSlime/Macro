@@ -35,9 +35,18 @@ var tests = new (string Name, Action Body)[]
     ("MCRX serializer works when JSON reflection defaults are disabled", McrxSerializerWorksWhenJsonReflectionDefaultsAreDisabled),
     ("MCRX parser covers macro call and pixel time windows", McrxParserCoversMacroCallAndPixelTimeWindows),
     ("MCRX parser covers conditional directive time windows", McrxParserCoversConditionalDirectiveTimeWindows),
+    ("MCRX parser round trips condition time base", McrxParserRoundTripsConditionTimeBase),
+    ("MCRX parser round trips empty condition step range", McrxParserRoundTripsEmptyConditionStepRange),
+    ("Condition activation schedule ORs step and time intervals", ConditionActivationScheduleOrsStepAndTimeIntervals),
+    ("MacroStudio condition range supports unlimited steps and emphasized inputs", MacroStudioConditionRangeSupportsUnlimitedStepsAndEmphasizedInputs),
+    ("Step sequence panel shows execution step numbers", StepSequencePanelShowsExecutionStepNumbers),
+    ("MacroStudio condition region supports manual coordinates", MacroStudioConditionRegionSupportsManualCoordinates),
+    ("Condition timeline resolves after-previous and first-condition fallback", ConditionTimelineResolvesAfterPreviousAndFirstConditionFallback),
+    ("MacroStudio exposes condition time base controls", MacroStudioExposesConditionTimeBaseControls),
     ("MCRX parser covers random waits and conditional directive paths", McrxParserCoversRandomWaitsAndConditionalDirectivePaths),
     ("MCRX parser covers sequence stop controls and condition execution mode", McrxParserCoversSequenceStopsAndConditionExecutionMode),
     ("Playback executor waits for startup gate conditions before main sequence", PlaybackExecutorWaitsForStartupGateConditionsBeforeMainSequence),
+    ("Playback executor waits for startup gates sequentially in list order", PlaybackExecutorWaitsForStartupGatesSequentiallyInListOrder),
     ("MacroStudio exposes startup gate condition execution mode", MacroStudioExposesStartupGateConditionExecutionMode),
     ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
     ("MCRX parser covers playback precision mode", McrxParserCoversPlaybackPrecisionMode),
@@ -81,7 +90,13 @@ var tests = new (string Name, Action Body)[]
     ("Input action compiler evaluates pixel branches before emitting actions", InputActionCompilerEvaluatesPixelBranches),
     ("Input action compiler samples random waits for each compilation", InputActionCompilerSamplesRandomWaitsForEachCompilation),
     ("SendInput encoder covers keyboard, mouse, wheel, and consumer input", SendInputEncoderCoversInputActions),
+    ("SendInput encoder maps function keys and navigation keys distinctly", SendInputEncoderMapsFunctionAndNavigationKeysDistinctly),
+    ("Global keyboard hook maps F1-F24 without colliding with PrintScreen", GlobalKeyboardHookMapsFunctionKeysWithoutPrintScreenCollision),
     ("SendInput encoder covers Unicode text actions", SendInputEncoderCoversUnicodeTextActions),
+    ("Text playback uses clipboard paste for focused fields", TextPlaybackUsesClipboardPasteForFocusedFields),
+    ("Comment steps round trip and do not emit input", CommentStepsRoundTripAndDoNotEmitInput),
+    ("Native playback waits long delays without a 60s spin fallback", NativePlaybackWaitsLongDelaysWithoutSpinFallback),
+    ("MacroStudio confirms before clearing the sequence", MacroStudioConfirmsBeforeClearingTheSequence),
     ("Prepared SendInput batches preserve encoder output", PreparedSendInputBatchesPreserveEncoderOutput),
     ("Pixel conditions match expected colors within tolerance", PixelConditionsMatchWithinTolerance),
     ("Composite condition evaluator handles all supported matcher types", CompositeConditionEvaluatorHandlesAllSupportedMatcherTypes),
@@ -100,12 +115,17 @@ var tests = new (string Name, Action Body)[]
     ("Stop current macro layer advances root playback iterations", StopCurrentMacroLayerAdvancesRootPlaybackIterations),
     ("Playback executor stops all fixed count iterations", PlaybackExecutorStopsAllFixedCountIterations),
     ("Playback executor allows cancellable tail self calls", PlaybackExecutorAllowsCancellableTailSelfCalls),
+    ("Playback executor duration estimate stops cyclic macro calls", PlaybackExecutorDurationEstimateStopsCyclicMacroCalls),
     ("Condition stop all cancels the main timeline", ConditionStopAllCancelsMainTimeline),
+    ("Condition stop-iteration skips remaining main sequence on batch path", ConditionStopIterationSkipsRemainingMainSequenceOnBatchPath),
+    ("Startup gate then stop-iteration skips main sequence", StartupGateThenStopIterationSkipsMainSequence),
+    ("Toggle loop gate then stop-iteration continues next round", ToggleLoopGateThenStopIterationContinuesNextRound),
     ("Pause condition mode shifts the remaining main timeline", PauseConditionModeShiftsRemainingMainTimeline),
     ("Condition actions call nested macros and stop only the current child", ConditionActionsCallNestedMacrosAndStopOnlyCurrentChild),
     ("Condition stop-current layer keeps the main iteration running", ConditionStopCurrentLayerKeepsMainIterationRunning),
     ("Nested condition stop all cancels the main timeline", NestedConditionStopAllCancelsMainTimeline),
     ("Toggle loop rearms visual conditions after stop-iteration then actions", ToggleLoopRearmsVisualConditionsAfterStopIterationThenActions),
+    ("Fixed count rearms startup gates and step-range conditions each iteration", FixedCountRearmsStartupGatesAndStepRangeConditionsEachIteration),
     ("Condition self calls do not recursively rearm condition monitors", ConditionSelfCallsDoNotRecursivelyRearmConditionMonitors),
     ("Localization normalizes supported cultures", LocalizationNormalizesSupportedCultures),
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
@@ -207,6 +227,8 @@ var tests = new (string Name, Action Body)[]
     ("Step display finds loop end when preferring container end", StepDisplayFindsLoopEndWhenPreferringContainerEnd),
     ("MacroStudio drop indicator uses loop end when inserting after a loop", MacroStudioDropIndicatorUsesLoopEndWhenInsertingAfterALoop),
     ("MacroStudio displays random delay and total duration ranges", MacroStudioDisplaysRandomDelayAndTotalDurationRanges),
+    ("Macro duration estimator includes nested macro calls", MacroDurationEstimatorIncludesNestedMacroCalls),
+    ("OCR display text filters noise and collapses whitespace", OcrDisplayTextFiltersNoiseAndCollapsesWhitespace),
     ("Step display labels resolve macro call ids to names", StepDisplayLabelsResolveMacroCallIdsToNames),
     ("MacroStudio resolves macro call aliases for display and playback", MacroStudioResolvesMacroCallAliasesForDisplayAndPlayback),
     ("MacroStudio merges condition panel changes before playback", MacroStudioMergesConditionPanelChangesBeforePlayback),
@@ -254,14 +276,24 @@ var tests = new (string Name, Action Body)[]
     ("Embedded converter imports GIMacros JSON", EmbeddedConverterImportsGIMacrosJson),
     ("Embedded converter exports GIMacros JSON", EmbeddedConverterExportsGIMacrosJson),
     ("Embedded converter exports MacroConverter formats", EmbeddedConverterExportsMacroConverterFormats),
+    ("Embedded converter exports Razer key down and up without doubling", EmbeddedConverterExportsRazerKeyDownAndUpWithoutDoubling),
+    ("MacroStudio condition list supports wheel scroll while dragging", MacroStudioConditionListSupportsWheelScrollWhileDragging),
     ("Embedded converter reports warnings for unsupported external features", EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures),
     ("Embedded converter reports syntax import failures with source lines", EmbeddedConverterReportsSyntaxImportFailuresWithSourceLines),
     ("Embedded converter locates semantic MCRX failures", EmbeddedConverterLocatesSemanticMcrxFailures),
     ("Imported conditional macros execute then actions", ImportedConditionalMacrosExecuteThenActions),
     ("Macro library store persists and duplicates macros", MacroLibraryStorePersistsAndDuplicatesMacros),
+    ("Macro library store persists condition macros and clones packs", MacroLibraryStorePersistsConditionMacrosAndClonesPacks),
     ("Macro library store persists edit locks", MacroLibraryStorePersistsEditLocks),
     ("Macro library store resolves external aliases", MacroLibraryStoreResolvesExternalAliases),
     ("Macro library import preserves nested macro call identity", MacroLibraryImportPreservesNestedMacroCallIdentity),
+    ("Macro library import remaps nested calls onto existing aliases", MacroLibraryImportRemapsNestedCallsOntoExistingAliases),
+    ("Macro library import remaps nested calls onto existing names from extra map", MacroLibraryImportRemapsNestedCallsOntoExistingNamesFromExtraMap),
+    ("Macro library duplicate preserves external aliases", MacroLibraryDuplicatePreservesExternalAliases),
+    ("Macro library MCRX export import round trips nested alias calls", MacroLibraryMcrxExportImportRoundTripsNestedAliasCalls),
+    ("Razer export preserves nested macro calls and stable guid", RazerExportPreservesNestedMacroCallsAndStableGuid),
+    ("Razer export import round trips nested module calls", RazerExportImportRoundTripsNestedModuleCalls),
+    ("Embedded converter collects neighbor MCRX dependencies", EmbeddedConverterCollectsNeighborMcrxDependencies),
     ("Macro call reference collector walks nested structures", MacroCallReferenceCollectorWalksNestedStructures),
     ("Macro library export bundle separates folder macros from dependencies", MacroLibraryExportBundleSeparatesFolderMacrosFromDependencies),
     ("Macro library export bundle collects dependencies for a single primary macro", MacroLibraryExportBundleCollectsDependenciesForSinglePrimaryMacro),
@@ -436,6 +468,7 @@ static void PlaybackDelayStrategySupportsPrecisionProfiles()
 
     Assert.Contains("PlaybackDelayProfile.ForPrecisionMode", playbackCode);
     Assert.Contains("UseHighResolutionWaitableTimer", playbackCode);
+    Assert.Contains("CancellationPollChunkUs", playbackCode);
     Assert.Contains("CreateWaitableTimerExW", nativeCode);
     Assert.Contains("CREATE_WAITABLE_TIMER_HIGH_RESOLUTION", nativeCode);
     Assert.Contains("SetWaitableTimerEx", nativeCode);
@@ -1335,10 +1368,243 @@ static void McrxParserCoversConditionalDirectiveTimeWindows()
     var condition = document.EffectiveConditions[0];
     Assert.Equal(TimeSpan.FromSeconds(3), condition.WindowStart);
     Assert.Equal(TimeSpan.FromSeconds(5), condition.WindowEnd);
+    Assert.Equal(ConditionTimeBase.PlaybackTrigger, condition.TimeBase);
 
     var serialized = McrxSerializer.Serialize(document);
     Assert.Contains("\"windowStartMs\": 3000", serialized);
     Assert.Contains("\"windowEndMs\": 5000", serialized);
+    Assert.DoesNotContain("\"timeBase\"", serialized);
+}
+
+static void McrxParserRoundTripsConditionTimeBase()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "time-base",
+      "steps": [
+        { "type": "wait", "ms": 1 }
+      ],
+      "conditions": [
+        {
+          "id": "c1",
+          "name": "after-prev",
+          "startStep": 0,
+          "endStep": 0,
+          "windowStartMs": 100,
+          "windowEndMs": 200,
+          "timeBase": "AfterPreviousCondition",
+          "type": "pixel",
+          "x": 1,
+          "y": 2,
+          "r": 3,
+          "g": 4,
+          "b": 5
+        },
+        {
+          "id": "c2",
+          "name": "main-round",
+          "startStep": 0,
+          "endStep": 0,
+          "windowStartMs": 0,
+          "windowEndMs": 50,
+          "timeBase": "MainIteration",
+          "type": "pixel",
+          "x": 6,
+          "y": 7,
+          "r": 8,
+          "g": 9,
+          "b": 10
+        }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+    Assert.Equal(ConditionTimeBase.AfterPreviousCondition, document.EffectiveConditions[0].TimeBase);
+    Assert.Equal(ConditionTimeBase.MainIteration, document.EffectiveConditions[1].TimeBase);
+
+    var serialized = McrxSerializer.Serialize(document);
+    Assert.Contains("\"timeBase\": \"AfterPreviousCondition\"", serialized);
+    Assert.Contains("\"timeBase\": \"MainIteration\"", serialized);
+
+    var roundTrip = McrxParser.Parse(serialized);
+    Assert.Equal(ConditionTimeBase.AfterPreviousCondition, roundTrip.EffectiveConditions[0].TimeBase);
+    Assert.Equal(ConditionTimeBase.MainIteration, roundTrip.EffectiveConditions[1].TimeBase);
+}
+
+static void McrxParserRoundTripsEmptyConditionStepRange()
+{
+    const string json = """
+    {
+      "version": 1,
+      "name": "empty-step-range",
+      "steps": [ { "type": "wait", "ms": 1 } ],
+      "conditions": [
+        {
+          "id": "c1",
+          "name": "time-only",
+          "startStep": -1,
+          "endStep": -1,
+          "windowStartMs": 10,
+          "windowEndMs": 50,
+          "type": "pixel",
+          "x": 1, "y": 2, "r": 3, "g": 4, "b": 5
+        }
+      ]
+    }
+    """;
+
+    var document = McrxParser.Parse(json);
+    var condition = document.EffectiveConditions[0];
+    Assert.False(condition.HasStepRange);
+    Assert.True(condition.HasTimeRange);
+    Assert.Equal(-1, condition.StartStepIndex);
+
+    var serialized = McrxSerializer.Serialize(document);
+    Assert.Contains("\"startStep\": -1", serialized);
+    Assert.DoesNotContain("\"startPath\"", serialized);
+
+    var roundTrip = McrxParser.Parse(serialized).EffectiveConditions[0];
+    Assert.False(roundTrip.HasStepRange);
+    Assert.Equal(TimeSpan.FromMilliseconds(10), roundTrip.WindowStart);
+}
+
+static void ConditionActivationScheduleOrsStepAndTimeIntervals()
+{
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var windows = new List<StepTimeWindow>
+    {
+        new(0, [0], 0, 100_000),
+        new(1, [1], 100_000, 200_000)
+    };
+    const long frequency = 1_000_000;
+
+    var both = new ConditionalDirective(
+        "c",
+        "c",
+        0,
+        0,
+        matcher,
+        [],
+        WindowStart: TimeSpan.FromMilliseconds(500),
+        WindowEnd: TimeSpan.FromMilliseconds(600),
+        StartStepPath: [0],
+        EndStepPath: [0]);
+    var intervals = ConditionActivationSchedule.Resolve(both, windows, frequency);
+    Assert.Equal(2, intervals.Count);
+    Assert.True(intervals.Any(interval => interval.Anchor == ConditionTimeBase.MainIteration));
+    Assert.True(intervals.Any(interval => interval.Anchor == ConditionTimeBase.PlaybackTrigger));
+    Assert.True(ConditionActivationSchedule.Contains(intervals, 50));
+    Assert.False(ConditionActivationSchedule.Contains(intervals, 250));
+    Assert.True(ConditionActivationSchedule.Contains(intervals, 550));
+    Assert.True(ConditionActivationSchedule.IsPastAll(intervals, 601));
+
+    var timeOnly = both with { StartStepIndex = -1, EndStepIndex = -1, StartStepPath = null, EndStepPath = null };
+    var timeIntervals = ConditionActivationSchedule.Resolve(timeOnly, windows, frequency);
+    Assert.Equal(1, timeIntervals.Count);
+    Assert.False(ConditionActivationSchedule.Contains(timeIntervals, 50));
+    Assert.True(ConditionActivationSchedule.Contains(timeIntervals, 550));
+
+    var empty = timeOnly with { WindowStart = null, WindowEnd = null };
+    Assert.Equal(0, ConditionActivationSchedule.Resolve(empty, windows, frequency).Count);
+}
+
+static void MacroStudioConditionRangeSupportsUnlimitedStepsAndEmphasizedInputs()
+{
+    var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var styles = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Themes", "SharedStyles.xaml"));
+    var schedule = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ConditionActivationSchedule.cs"));
+
+    Assert.Contains("EmphasizedInputTextBox", styles);
+    Assert.Contains("Style=\"{StaticResource EmphasizedInputTextBox}\"", conditionXaml);
+    Assert.Contains("CreateUnlimitedStepChoice", conditionCode);
+    Assert.Contains("HasActivationConstraint", conditionCode);
+    Assert.Contains("ConditionActivationSchedule", schedule);
+    Assert.Contains("ConditionStepRangeOrTimeHint", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx")));
+}
+
+static void StepSequencePanelShowsExecutionStepNumbers()
+{
+    var steps = new MacroStep[]
+    {
+        new WaitStep(TimeSpan.FromMilliseconds(100)),
+        new KeyStep(KeyActionKind.Down, HidKey.F14, HidModifier.None, TimeSpan.Zero),
+        new WaitStep(TimeSpan.FromSeconds(200)),
+        new KeyStep(KeyActionKind.Up, HidKey.F14, HidModifier.None, TimeSpan.Zero),
+        new WaitStep(TimeSpan.FromSeconds(10))
+    };
+    var items = StepDisplayItem.FlattenWithExecutionOrdinals(steps);
+    var numbered = items.Where(item => item.ExecutionOrdinal >= 0).ToList();
+
+    Assert.Equal(5, numbered.Count);
+    Assert.Equal("#1", numbered[0].StepNumberLabel);
+    Assert.Equal("#2", numbered[1].StepNumberLabel);
+    Assert.Equal("#5", numbered[4].StepNumberLabel);
+
+    var stepSequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml"));
+    var stepSequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs"));
+    Assert.Contains("StepNumberLabel", stepSequenceXaml);
+    Assert.Contains("FlattenWithExecutionOrdinals", stepSequenceCode);
+    Assert.Contains("AssignExecutionOrdinals", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs")));
+}
+
+static void MacroStudioConditionRegionSupportsManualCoordinates()
+{
+    var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var strings = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("x:Name=\"SinglePixelModeCheckBox\"", conditionXaml);
+    Assert.Contains("x:Name=\"RegionLeftBox\"", conditionXaml);
+    Assert.Contains("x:Name=\"RegionRightBox\"", conditionXaml);
+    Assert.Contains("x:Name=\"RegionXBox\"", conditionXaml);
+    Assert.Contains("BuildRegionFromEditor", conditionCode);
+    Assert.Contains("FromSinglePixel", conditionCode);
+    Assert.Contains("ConditionRegionSinglePixelMode", strings);
+    Assert.Contains("ConditionRegionTopLeft", strings);
+    Assert.Contains("ConditionRegionBottomRight", strings);
+}
+
+static void ConditionTimelineResolvesAfterPreviousAndFirstConditionFallback()
+{
+    var timeline = new ConditionTimeline(conditionCount: 3, playbackTriggerTick: 1000, mainIterationTick: 2000);
+
+    Assert.Equal(1000, timeline.ResolveBaseTick(0, ConditionTimeBase.PlaybackTrigger));
+    Assert.Equal(2000, timeline.ResolveBaseTick(0, ConditionTimeBase.MainIteration));
+    Assert.Equal(2000, timeline.ResolveBaseTick(0, ConditionTimeBase.AfterPreviousCondition));
+    Assert.Equal(0, timeline.ResolveBaseTick(1, ConditionTimeBase.AfterPreviousCondition));
+
+    timeline.MarkFinished(0, 2500);
+    Assert.Equal(2500, timeline.ResolveBaseTick(1, ConditionTimeBase.AfterPreviousCondition));
+    Assert.Equal(0, timeline.ResolveBaseTick(2, ConditionTimeBase.AfterPreviousCondition));
+
+    timeline.MarkFinished(1, 3100);
+    Assert.Equal(3100, timeline.ResolveBaseTick(2, ConditionTimeBase.AfterPreviousCondition));
+    Assert.Equal(2000, timeline.ResolveBaseTick(2, ConditionTimeBase.MainIteration));
+}
+
+static void MacroStudioExposesConditionTimeBaseControls()
+{
+    var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+    var model = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Core", "ConditionModel.cs"));
+    var timeline = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ConditionTimeline.cs"));
+    var strings = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("enum ConditionTimeBase", model);
+    Assert.Contains("AfterPreviousCondition", model);
+    Assert.Contains("MainIteration", model);
+    Assert.Contains("x:Name=\"TimeBaseCombo\"", conditionXaml);
+    Assert.Contains("Tag=\"PlaybackTrigger\"", conditionXaml);
+    Assert.Contains("Tag=\"AfterPreviousCondition\"", conditionXaml);
+    Assert.Contains("Tag=\"MainIteration\"", conditionXaml);
+    Assert.Contains("TimeBaseCombo_SelectionChanged", conditionCode);
+    Assert.Contains("UpdateTimeBaseHint", conditionCode);
+    Assert.Contains("ConditionTimeBaseAfterPreviousHint", strings);
+    Assert.Contains("class ConditionTimeline", timeline);
+    Assert.Contains("ResolveBaseTick", timeline);
 }
 
 static void McrxParserCoversRandomWaitsAndConditionalDirectivePaths()
@@ -1438,11 +1704,10 @@ static void PlaybackExecutorWaitsForStartupGateConditionsBeforeMainSequence()
     var gate = new ConditionalDirective(
         "gate1",
         "ready",
-        0,
-        0,
+        -1,
+        -1,
         new PixelMatcher(ScreenRegion.FromSinglePixel(1, 1), new RgbColor(1, 2, 3), 0),
         [new WaitStep(TimeSpan.FromMilliseconds(1))],
-        WindowEnd: TimeSpan.FromMilliseconds(200),
         ExecutionMode: ConditionExecutionMode.GateMainSequence);
 
     var evaluator = new ScriptedConditionEvaluator([false, false, true]);
@@ -1460,16 +1725,18 @@ static void PlaybackExecutorWaitsForStartupGateConditionsBeforeMainSequence()
         pollInterval: TimeSpan.FromMilliseconds(1)));
     Assert.Equal(3, evaluator.EvaluateCount);
 
-    var timeoutEvaluator = new ScriptedConditionEvaluator([false, false, false, false, false, false, false, false]);
-    Assert.False(MacroPlaybackExecutor.WaitForStartupGates(
+    using var cancellation = new CancellationTokenSource();
+    var endlessEvaluator = new ScriptedConditionEvaluator(Enumerable.Repeat(false, 20));
+    cancellation.CancelAfter(TimeSpan.FromMilliseconds(50));
+    Assert.Throws<OperationCanceledException>(() => MacroPlaybackExecutor.WaitForStartupGates(
         [gate],
-        timeoutEvaluator,
+        endlessEvaluator,
         clock,
         delay,
         triggerTick: 0,
         qpcFrequency: 1_000_000,
-        CancellationToken.None,
-        pollInterval: TimeSpan.FromMilliseconds(50)));
+        cancellation.Token,
+        pollInterval: TimeSpan.FromMilliseconds(10)));
 
     var serialized = McrxSerializer.Serialize(new MacroDocument(
         1,
@@ -1495,8 +1762,55 @@ static void MacroStudioExposesStartupGateConditionExecutionMode()
     Assert.Contains("x:Name=\"GateModeHintText\"", conditionXaml);
     Assert.Contains("UpdateThenActionsVisibility", conditionCode);
     Assert.Contains("WaitForStartupGates", executor);
+    Assert.Contains("WaitForStartupGatesSequentially", executor);
+    Assert.Contains("ExecuteStartupGateThenSteps", executor);
+    Assert.Contains("evaluator.Evaluate(gate.Condition, cancellationToken)", executor);
     Assert.Contains("GateMainSequence", executor);
     Assert.Contains("ConditionExecutionMode.GateMainSequence", conditionCode);
+    Assert.Contains("ThenActionsSection.Visibility = Visibility.Visible", conditionCode);
+    Assert.Contains("StepRangeSection", conditionXaml);
+    Assert.Contains("UpdateExecutionModeVisibility", conditionCode);
+    Assert.Contains("ResolveStartupGate", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ConditionActivationSchedule.cs")));
+}
+
+static void PlaybackExecutorWaitsForStartupGatesSequentiallyInListOrder()
+{
+    var gateA = new ConditionalDirective(
+        "gate-a",
+        "ocr",
+        -1,
+        -1,
+        new PixelMatcher(ScreenRegion.FromSinglePixel(1, 1), new RgbColor(1, 2, 3), 0),
+        [new WaitStep(TimeSpan.FromMilliseconds(1))],
+        ExecutionMode: ConditionExecutionMode.GateMainSequence);
+    var gateB = new ConditionalDirective(
+        "gate-b",
+        "pixel",
+        -1,
+        -1,
+        new PixelMatcher(ScreenRegion.FromSinglePixel(2, 2), new RgbColor(4, 5, 6), 0),
+        [],
+        ExecutionMode: ConditionExecutionMode.GateMainSequence);
+
+    // Gate A fails twice then passes; gate B fails once then passes.
+    var evaluator = new ScriptedConditionEvaluator([false, false, true, false, true]);
+    var clock = new FakeHighResolutionClock(1_000_000);
+    var delay = new ImmediatePlaybackDelayStrategy(clock);
+    var passed = new List<string>();
+
+    Assert.True(MacroPlaybackExecutor.WaitForStartupGatesSequentially(
+        [gateA, gateB],
+        evaluator,
+        clock,
+        delay,
+        qpcFrequency: 1_000_000,
+        CancellationToken.None,
+        gate => passed.Add(gate.Id),
+        pollInterval: TimeSpan.FromMilliseconds(1)));
+    Assert.Equal(2, passed.Count);
+    Assert.Equal("gate-a", passed[0]);
+    Assert.Equal("gate-b", passed[1]);
+    Assert.Equal(5, evaluator.EvaluateCount);
 }
 
 static void McrxParserCoversPlaybackHotkeySettings()
@@ -2008,6 +2322,44 @@ static void McrxParserRejectsInvalidPlaybackSettings()
     Assert.Throws<JsonException>(() => McrxParser.Parse(invalidTriggerJson));
 }
 
+static void SendInputEncoderMapsFunctionAndNavigationKeysDistinctly()
+{
+    Assert.Equal(0x70, SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.F1, HidModifier.None))[0].VirtualKey);
+    Assert.Equal(0x7B, SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.F12, HidModifier.None))[0].VirtualKey);
+    Assert.Equal(0x7C, SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.F13, HidModifier.None))[0].VirtualKey);
+    Assert.Equal(0x87, SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.F24, HidModifier.None))[0].VirtualKey);
+
+    var insert = SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.Insert, HidModifier.None))[0];
+    Assert.Equal(0x2D, insert.VirtualKey);
+    Assert.True((insert.Flags & 0x0001u) != 0);
+
+    var left = SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.LeftArrow, HidModifier.None))[0];
+    Assert.Equal(0x25, left.VirtualKey);
+    Assert.True((left.Flags & 0x0001u) != 0);
+
+    var printScreen = SendInputEncoder.Encode(new KeyInputAction(KeyActionKind.Down, HidKey.PrintScreen, HidModifier.None))[0];
+    Assert.Equal(0x2C, printScreen.VirtualKey);
+}
+
+static void GlobalKeyboardHookMapsFunctionKeysWithoutPrintScreenCollision()
+{
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x70, out var f1));
+    Assert.Equal(HidKey.F1, f1);
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x7B, out var f12));
+    Assert.Equal(HidKey.F12, f12);
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x7C, out var f13));
+    Assert.Equal(HidKey.F13, f13);
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x87, out var f24));
+    Assert.Equal(HidKey.F24, f24);
+
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x2C, out var printScreen));
+    Assert.Equal(HidKey.PrintScreen, printScreen);
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x2D, out var insert));
+    Assert.Equal(HidKey.Insert, insert);
+    Assert.True(GlobalKeyboardHook.TryMapVirtualKeyToHidKey(0x25, out var left));
+    Assert.Equal(HidKey.LeftArrow, left);
+}
+
 static void SendInputEncoderCoversInputActions()
 {
     var keyboard = SendInputEncoder.Encode(new KeyInputAction(
@@ -2056,6 +2408,68 @@ static void SendInputEncoderCoversUnicodeTextActions()
     Assert.Equal((ushort)'中', packets[2].ScanCode);
     Assert.Equal(0x0004u, packets[2].Flags);
     Assert.Equal(0x0006u, packets[3].Flags);
+}
+
+static void TextPlaybackUsesClipboardPasteForFocusedFields()
+{
+    var actions = ClipboardTextSender.CreatePasteActions();
+    Assert.Equal(2, actions.Count);
+    var down = Assert.IsType<KeyInputAction>(actions[0]);
+    var up = Assert.IsType<KeyInputAction>(actions[1]);
+    Assert.Equal(KeyActionKind.Down, down.Kind);
+    Assert.Equal(HidKey.V, down.Key);
+    Assert.Equal(HidModifier.LeftCtrl, down.Modifiers);
+    Assert.Equal(KeyActionKind.Up, up.Kind);
+    Assert.Equal(HidKey.V, up.Key);
+
+    var sinkCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "SendInputMacroSink.cs"));
+    Assert.Contains("ClipboardTextSender.TrySend", sinkCode);
+    Assert.Contains("action is TextInputAction", sinkCode);
+
+    var inspectorCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ManagedMacroControlFlowRunner.cs"));
+    Assert.Contains("case TextStep text when", inspectorCode);
+}
+
+static void CommentStepsRoundTripAndDoNotEmitInput()
+{
+    var document = new MacroDocument(
+        1,
+        "notes",
+        [
+            new CommentStep("作者备注"),
+            new WaitStep(TimeSpan.FromMilliseconds(10))
+        ]);
+    var roundTrip = McrxParser.Parse(McrxSerializer.Serialize(document));
+    Assert.Equal("作者备注", Assert.IsType<CommentStep>(roundTrip.Steps[0]).Text);
+
+    var compiled = InputActionCompiler.Compile(document, 0, Stopwatch.Frequency);
+    Assert.Empty(compiled);
+
+    var items = StepDisplayItem.FlattenWithExecutionOrdinals(document.Steps);
+    Assert.True(items.Any(item => item.Title.Contains("作者备注")));
+    Assert.Equal(-1, items[0].ExecutionOrdinal);
+    Assert.Equal(0, items[1].ExecutionOrdinal);
+}
+
+static void NativePlaybackWaitsLongDelaysWithoutSpinFallback()
+{
+    var native = File.ReadAllText(Path.Combine("src", "native", "MacroHid.NativePlayback", "NativePlayback.cpp"));
+    Assert.Contains("WaitForSingleObject(handle, 250)", native);
+    Assert.DoesNotContain("std::clamp<int64_t>(waitUs / 1000 + 8, 1, 60000)", native);
+    Assert.Contains("Sleep(remainingUs > 30'000 ? 1 : 0)", native);
+}
+
+static void MacroStudioConfirmsBeforeClearingTheSequence()
+{
+    var sequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
+    Assert.Contains("ClearAllConfirm", sequenceCode);
+    Assert.Contains("FocusMacroNameEditor", sequenceCode);
+    var editorCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
+    Assert.Contains("StepTextBox_PreviewKeyDown", editorCode);
+    Assert.Contains("ModifierKeys.Alt", editorCode);
+    var paletteXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml"));
+    Assert.Contains("AddCommentButton", paletteXaml);
+    Assert.Contains("Tag=\"Comment\"", paletteXaml);
 }
 
 static void PreparedSendInputBatchesPreserveEncoderOutput()
@@ -2492,6 +2906,44 @@ static void PlaybackExecutorAllowsCancellableTailSelfCalls()
     Assert.True(sink.Actions.Count >= 6);
 }
 
+static void PlaybackExecutorDurationEstimateStopsCyclicMacroCalls()
+{
+    var executorCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs"));
+    Assert.Contains("EstimateMacroCallDurationTicks", executorCode);
+    Assert.Contains("if (!visiting.Add(document))", executorCode);
+    Assert.Contains("ReferenceEqualityComparer.Instance", executorCode);
+
+    using var cancellation = new CancellationTokenSource();
+    var sink = new CancellingInputSink(cancellation, cancelAfter: 4);
+    MacroDocument? document = null;
+    document = new MacroDocument(
+        1,
+        "cycle",
+        PlaybackSettings.Default,
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new MacroCallStep("cycle")
+        ],
+        [
+            new ConditionalDirective(
+                "watch",
+                "pixel",
+                0,
+                1,
+                new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0),
+                [])
+        ]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => false, macroResolver: name => name == "cycle" ? document : null);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: true),
+        cancellation.Token).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+}
+
 static void ConditionStopAllCancelsMainTimeline()
 {
     var sink = new RecordingInputSink();
@@ -2510,6 +2962,98 @@ static void ConditionStopAllCancelsMainTimeline()
         CancellationToken.None).GetAwaiter().GetResult();
 
     Assert.True(result.Cancelled);
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+
+static void ConditionStopIterationSkipsRemainingMainSequenceOnBatchPath()
+{
+    var sink = new RecordingInputSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var document = new MacroDocument(
+        1,
+        "condition-stop-iteration",
+        PlaybackSettings.Default,
+        [new WaitStep(TimeSpan.FromSeconds(1)), new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "stop-iter",
+            "stop-iter",
+            0,
+            1,
+            matcher,
+            [new StopCurrentIterationStep()],
+            PollInterval: TimeSpan.FromMilliseconds(2))]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.False(result.Cancelled);
+    Assert.Equal(1, result.IterationsCompleted);
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+
+static void StartupGateThenStopIterationSkipsMainSequence()
+{
+    var sink = new RecordingInputSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var document = new MacroDocument(
+        1,
+        "gate-stop-iteration",
+        PlaybackSettings.Default,
+        [new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "gate",
+            "gate",
+            0,
+            0,
+            matcher,
+            [new StopCurrentIterationStep()],
+            PollInterval: TimeSpan.FromMilliseconds(2),
+            ExecutionMode: ConditionExecutionMode.GateMainSequence)]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.False(result.Cancelled);
+    Assert.Equal(1, result.IterationsCompleted);
+    Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+
+static void ToggleLoopGateThenStopIterationContinuesNextRound()
+{
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    var gateAction = new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None);
+    var sink = new CancellingOnActionInputSink(cancellation, gateAction, cancelAfterMatches: 3);
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var document = new MacroDocument(
+        1,
+        "gate-toggle-restart",
+        new PlaybackSettings(null, PlaybackMode.ToggleLoop, 1),
+        [new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)],
+        [new ConditionalDirective(
+            "gate",
+            "gate",
+            0,
+            0,
+            matcher,
+            [new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero), new StopCurrentIterationStep()],
+            PollInterval: TimeSpan.FromMilliseconds(2),
+            ExecutionMode: ConditionExecutionMode.GateMainSequence)]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.ToggleLoop, 1, PixelEvaluationMode.Live, NoWait: false, PrecisionMode.Balanced),
+        cancellation.Token).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+    Assert.True(result.IterationsCompleted >= 2);
+    Assert.Equal(3, sink.Actions.Count(action => action == gateAction));
     Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
 }
 
@@ -2740,6 +3284,57 @@ static void ToggleLoopRearmsVisualConditionsAfterStopIterationThenActions()
     Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.D, HidModifier.None)));
 }
 
+static void FixedCountRearmsStartupGatesAndStepRangeConditionsEachIteration()
+{
+    var sink = new RecordingInputSink();
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var document = new MacroDocument(
+        1,
+        "loop-rearm",
+        PlaybackSettings.Default,
+        [
+            new WaitStep(TimeSpan.FromMilliseconds(80)),
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)
+        ],
+        [
+            new ConditionalDirective(
+                "gate",
+                "gate",
+                -1,
+                -1,
+                matcher,
+                [new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero)],
+                PollInterval: TimeSpan.FromMilliseconds(2),
+                ExecutionMode: ConditionExecutionMode.GateMainSequence),
+            new ConditionalDirective(
+                "step-range",
+                "step-range",
+                0,
+                0,
+                matcher,
+                [new KeyStep(KeyActionKind.Down, HidKey.C, HidModifier.None, TimeSpan.Zero)],
+                PollInterval: TimeSpan.FromMilliseconds(2))
+        ]);
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(
+            PlaybackMode.FixedCount,
+            Count: 2,
+            PixelEvaluationMode.Live,
+            NoWait: false,
+            PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+
+    Assert.Equal(PlaybackRunStatus.Completed, result.Status);
+    Assert.False(result.Cancelled);
+    Assert.Equal(2, result.IterationsCompleted);
+    Assert.Equal(2, sink.Actions.Count(action => action == new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+    Assert.Equal(2, sink.Actions.Count(action => action == new KeyInputAction(KeyActionKind.Down, HidKey.C, HidModifier.None)));
+    Assert.Equal(2, sink.Actions.Count(action => action == new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+
 static void ConditionSelfCallsDoNotRecursivelyRearmConditionMonitors()
 {
     var sink = new TimestampInputSink();
@@ -2961,7 +3556,8 @@ static void MacroStudioLaysOutBaseAndConditionalSequencesSideBySide()
     Assert.Contains("x:Name=\"ConditionSequenceTitleText\"", conditionXaml);
     Assert.Contains("Text=\"条件列表\"", conditionXaml);
     Assert.Contains("x:Name=\"EmptyConditionHintText\"", conditionXaml);
-    Assert.Contains("添加条件", conditionXaml);
+    Assert.Contains("Content=\"添加\"", conditionXaml);
+    Assert.Contains("Content=\"宏库\"", conditionXaml);
     Assert.Contains("触发后执行", conditionXaml);
     Assert.Contains("x:Name=\"ThenActionSequence\"", conditionXaml);
     Assert.Contains("x:Name=\"EditorBorder\"", conditionXaml);
@@ -3007,6 +3603,7 @@ static void MacroStudioExposesInlineStepEditingAndConditionRangeControls()
     Assert.Contains("EndStepCombo", conditionXaml);
     Assert.Contains("WindowStartMsBox", conditionXaml);
     Assert.Contains("WindowEndMsBox", conditionXaml);
+    Assert.Contains("TimeBaseCombo", conditionXaml);
 }
 
 static void MacroStudioValidatesConditionTimeWindowsAndPersistsPathRanges()
@@ -3023,7 +3620,7 @@ static void MacroStudioValidatesConditionTimeWindowsAndPersistsPathRanges()
     Assert.Contains("StartStepPath", conditionCode);
     Assert.Contains("EndStepPath", conditionCode);
     Assert.Contains("PathText", conditionCode);
-    Assert.Contains("StepDisplayItem.FlattenSteps(steps, macroNameResolver: ResolveMacroDisplayName)", stepSequenceCode);
+    Assert.Contains("StepDisplayItem.FlattenWithExecutionOrdinals(steps, macroNameResolver: ResolveMacroDisplayName)", stepSequenceCode);
     Assert.Contains("public override string ToString() => Label;", stepSequenceCode);
     Assert.Contains("ConditionRangeHighlight", stepSequenceCode);
 }
@@ -3053,8 +3650,9 @@ static void MacroStudioLetsConditionSequencePickPixelColors()
     Assert.Contains("Content=\"取色\"", conditionXaml);
     Assert.Contains("Click=\"PickConditionColor_Click\"", conditionXaml);
     Assert.Contains("PickConditionColor_Click", conditionCode);
-    Assert.Contains("new ScreenCoordinatePickerWindow", conditionCode);
-    Assert.Contains("ScreenPixelSampler.TryReadPixel", conditionCode);
+    Assert.Contains("PickScreenPixelAsync", conditionCode);
+    Assert.Contains("DesktopScreenSnapshot", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "DesktopScreenSnapshot.cs")));
+    Assert.Contains("TryCaptureVirtualScreen", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ScreenPixelSampler.cs")));
     Assert.Contains("ColorRBox.Text", conditionCode);
     Assert.Contains("ColorGBox.Text", conditionCode);
     Assert.Contains("ColorBBox.Text", conditionCode);
@@ -3117,6 +3715,10 @@ static void MacroStudioPackagesWindowsOcrFallbackForTextConditions()
     Assert.Contains("PrepareOcrCandidates", ocrProgram);
     Assert.Contains("GetEngines", ocrProgram);
     Assert.Contains("AutoInvertThreshold", ocrProgram);
+    Assert.Contains("ContrastStretch", ocrProgram);
+    Assert.Contains("ScoreOcrText", ocrProgram);
+    Assert.Contains("EstimateOtsuThreshold", ocrProgram);
+    Assert.Contains("PrepareGlyphBanner", ocrProgram);
     Assert.Contains("BitmapAlphaMode.Ignore", ocrProgram);
     Assert.Contains("Console.WriteLine(\"ready\")", ocrProgram);
     Assert.Contains("JsonSerializable(typeof(OcrRequest))", ocrProgram);
@@ -3129,6 +3731,8 @@ static void MacroStudioPackagesWindowsOcrFallbackForTextConditions()
     Assert.Contains("paddleocr\", \"ppocr_server.exe", bridgeCode);
     Assert.Contains("DefaultStatusText", bridgeCode);
     Assert.Contains("StatusText", bridgeCode);
+    Assert.Contains("capture blank", bridgeCode);
+    Assert.Contains("LooksBlankOrUniform", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ScreenCaptureService.cs")));
     Assert.Contains("BuildArguments()", bridgeCode);
 
     Assert.Contains("OcrStatusText", conditionXaml);
@@ -3940,6 +4544,7 @@ static void MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel()
     var actionPaletteXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml"));
     var actionPaletteCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml.cs"));
     var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
     var stepSequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml"));
     var stepSequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs"));
 
@@ -3956,6 +4561,22 @@ static void MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel()
     Assert.DoesNotContain("Tag=\"Pixel\"", actionPaletteXaml);
     Assert.DoesNotContain("AddPixelText", actionPaletteCode);
     Assert.Contains("AddConditionButton", conditionXaml);
+    Assert.Contains("ConditionLibraryMenuButton", conditionXaml);
+    Assert.Contains("InsertLibraryConditionMacroMenuItem", conditionXaml);
+    Assert.Contains("ExtractConditionPackMenuItem", conditionXaml);
+    Assert.Contains("InsertSelectedLibraryConditionMacroRequested", conditionCode);
+    Assert.Contains("ListConditionMacrosInCurrentDatabase", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs")));
+    Assert.Contains("ConditionMacroPickerDialog", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
+    Assert.True(File.Exists(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionMacroPickerDialog.xaml")));
+    Assert.Contains("Always prefer the macro open in the editor", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
+    // Multi-step templates must still open the inline editor when one of the selected rows is clicked.
+    Assert.Contains("Always focus the clicked row first", stepSequenceCode);
+    Assert.Contains("activeEditorMacroId", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
+    Assert.Contains("ExtractConditionPack_Click", conditionCode);
+    Assert.Contains("ExtractConditionPackRequested", conditionCode);
+    Assert.Contains("MacroLibraryDroppedOnConditionList", conditionCode);
+    Assert.Contains("OnConditionListMacroLibraryDropped", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
+    Assert.Contains("OnExtractConditionPackRequested", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
     Assert.Contains("CondTypeCombo", conditionXaml);
     Assert.Contains("PixelOptionsPanel", conditionXaml);
 }
@@ -4466,6 +5087,7 @@ static void MacroStudioUsesSafeDialogOwnershipAndDeferredFloatingRestore()
     var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
     var stepEditorCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
     var regionPickerCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ScreenRegionPicker.xaml.cs"));
+    var pixelSamplerCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ScreenPixelSampler.cs"));
     var helperPath = Path.Combine("src", "ui", "MacroStudio", "Services", "DialogOwnerService.cs");
 
     Assert.True(File.Exists(helperPath));
@@ -4486,8 +5108,9 @@ static void MacroStudioUsesSafeDialogOwnershipAndDeferredFloatingRestore()
     Assert.DoesNotContain("ShowDialog(Window.GetWindow(this))", macroLibraryCode);
     Assert.Contains("DialogOwnerService.ShowDialogSafe", mainWindowCode);
     Assert.Contains("DialogOwnerService.ShowDialogSafe", macroLibraryCode);
-    Assert.Contains("DialogOwnerService.ShowDialogSafe", conditionCode);
+    Assert.Contains("DialogOwnerService.ShowDialogSafe", pixelSamplerCode);
     Assert.Contains("DialogOwnerService.ShowDialogSafe", stepEditorCode);
+    Assert.Contains("PickScreenPixelAsync", conditionCode);
     Assert.Contains("DialogOwnerService.MessageBoxSafe", appCode);
 }
 
@@ -4504,8 +5127,8 @@ static void MacroStudioConditionEditorContentScrollsWithoutClippingThenActions()
 {
     var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
 
-    Assert.Contains("x:Name=\"ConditionListRow\" Height=\"180\"", conditionXaml);
-    Assert.Contains("x:Name=\"ConditionEditorRow\" Height=\"*\"", conditionXaml);
+    Assert.Contains("x:Name=\"ConditionListRow\" Height=\"*\"", conditionXaml);
+    Assert.Contains("x:Name=\"ConditionEditorRow\" Height=\"2*\"", conditionXaml);
     Assert.Contains("x:Name=\"ConditionListEditorSplitter\"", conditionXaml);
     Assert.Contains("Cursor=\"SizeNS\"", conditionXaml);
     Assert.Contains("x:Name=\"ConditionEditorScrollViewer\"", conditionXaml);
@@ -4515,7 +5138,8 @@ static void MacroStudioConditionEditorContentScrollsWithoutClippingThenActions()
     Assert.Contains("CanContentScroll=\"False\"", conditionXaml);
     Assert.DoesNotContain("MaxHeight=\"620\"", conditionXaml);
     Assert.Contains("x:Name=\"ThenActionSequenceHost\"", conditionXaml);
-    Assert.Contains("MinHeight=\"220\"", conditionXaml);
+    Assert.Contains("MinHeight=\"160\"", conditionXaml);
+    Assert.Contains("x:Name=\"ThenActionsResizeThumb\"", conditionXaml);
     Assert.Contains("x:Name=\"ThenActionsSection\"", conditionXaml);
     Assert.Contains("x:Name=\"AddThenActionButton\"", conditionXaml);
     Assert.Contains("Content=\"添加动作\"", conditionXaml);
@@ -4788,6 +5412,11 @@ static void MacroStudioSupportsExplorerShortcutsAutoscrollAndStableMultiDrag()
     Assert.Contains("boxSelectionAutoScrollTimer", stepSequenceCode);
     Assert.Contains("AutoScrollStepList", stepSequenceCode);
     Assert.Contains("FindVisualChild<ScrollViewer>", stepSequenceCode);
+    Assert.Contains("StartStepDragWheelHook", stepSequenceCode);
+    Assert.Contains("ScrollStepListByWheelDelta", stepSequenceCode);
+    Assert.Contains("ResolveDropTarget", stepSequenceCode);
+    Assert.Contains("IsPointInAutoScrollEdge", stepSequenceCode);
+    Assert.Contains("stickyDropTarget", stepSequenceCode);
 
     Assert.Contains("SequencePanelControl.HandleExplorerShortcut", mainWindowCode);
     Assert.Contains("ConditionPanel.HandleExplorerShortcut", mainWindowCode);
@@ -4962,11 +5591,54 @@ static void MacroStudioDisplaysRandomDelayAndTotalDurationRanges()
     Assert.Equal("8ms-15ms", item.Title);
 
     var sequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
-    Assert.Contains("DurationRange", sequenceCode);
-    Assert.Contains("EstimateDurationRange", sequenceCode);
+    Assert.Contains("MacroDurationEstimator.EstimateSteps", sequenceCode);
     Assert.Contains("FormatDurationRange", sequenceCode);
-    Assert.Contains("wait.MaxDuration ?? wait.Duration", sequenceCode);
+    Assert.Contains("ResolveMacroForEstimate", sequenceCode);
     Assert.Contains("\" ~ \"", sequenceCode);
+}
+
+static void MacroDurationEstimatorIncludesNestedMacroCalls()
+{
+    var child = new MacroDocument(
+        1,
+        "child",
+        [new WaitStep(TimeSpan.FromMilliseconds(120))]);
+    var parent = new MacroDocument(
+        1,
+        "parent",
+        [
+            new WaitStep(TimeSpan.FromMilliseconds(30)),
+            new MacroCallStep("child")
+        ]);
+
+    var range = MacroDurationEstimator.EstimateSteps(
+        parent.Steps,
+        reference => string.Equals(reference, "child", StringComparison.OrdinalIgnoreCase) ? child : null);
+
+    Assert.Equal(TimeSpan.FromMilliseconds(150), range.Min);
+    Assert.Equal(TimeSpan.FromMilliseconds(150), range.Max);
+}
+
+static void OcrDisplayTextFiltersNoiseAndCollapsesWhitespace()
+{
+    var formatted = OcrDisplayText.Format(new OcrRecognitionResult(
+        true,
+        true,
+        "WindowsOcrServer",
+        "0 0 继续 挑战\r\n重新  挑战 由浃 k 炜",
+        null,
+        [
+            new OcrTextBox("0", 0, 0, 8, 8),
+            new OcrTextBox("继续 挑战", 10, 0, 80, 20),
+            new OcrTextBox("重新 挑战", 10, 24, 80, 20),
+            new OcrTextBox("由浃", 90, 24, 20, 20)
+        ]));
+
+    Assert.Contains("继续 挑战", formatted);
+    Assert.Contains("重新 挑战", formatted);
+    Assert.DoesNotContain("\r", formatted);
+    Assert.DoesNotContain("\n", formatted);
+    Assert.DoesNotContain("  ", formatted);
 }
 
 static void StepDisplayLabelsResolveMacroCallIdsToNames()
@@ -5002,8 +5674,8 @@ static void MacroStudioResolvesMacroCallAliasesForDisplayAndPlayback()
     var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
     var stepEditorCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
 
-    Assert.Contains("item.MatchesReference(value)", sequenceCode);
-    Assert.Contains("candidate.MatchesReference(name)", mainWindowCode);
+    Assert.Contains("MacroLibraryResolver.Resolve", sequenceCode);
+    Assert.Contains("MacroLibraryResolver.Resolve", mainWindowCode);
     Assert.Contains("item.MatchesReference(previous)", stepEditorCode);
 }
 
@@ -5062,7 +5734,7 @@ static void PlaybackExecutorActivatesConditionMonitorsByTimeWindows()
     var executorCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs"));
 
     Assert.Contains("CreateConditionTimeWindows", executorCode);
-    Assert.Contains("ApplyConditionTimeWindow", executorCode);
+    Assert.Contains("ConditionActivationSchedule.Resolve", executorCode);
     Assert.Contains("ActivateAllMonitors", executorCode);
     Assert.Contains("WaitForTriggeredConditionActions", executorCode);
     Assert.Contains("monitor.WaitForTriggeredCompletion", executorCode);
@@ -5072,16 +5744,15 @@ static void PlaybackExecutorActivatesConditionMonitorsByTimeWindows()
 static void PlaybackExecutorDefaultsConditionEndWindowToIterationEnd()
 {
     var executorCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs"));
-    var applyIndex = executorCode.IndexOf("private static ConditionalDirective ApplyConditionTimeWindow", StringComparison.Ordinal);
-    var findIndex = executorCode.IndexOf("private static StepTimeWindow? FindStepTimeWindow", StringComparison.Ordinal);
-    Assert.True(applyIndex >= 0);
-    Assert.True(findIndex > applyIndex);
+    var scheduleCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ConditionActivationSchedule.cs"));
 
-    var applyBody = executorCode[applyIndex..findIndex];
-    Assert.Contains("iterationEnd", applyBody);
-    Assert.Contains("directive.WindowEnd is { } explicitEnd", applyBody);
-    Assert.Contains("ToTimeSpan(iterationEnd", applyBody);
-    Assert.DoesNotContain("MinTimeSpan(directive.WindowEnd, stepEnd) ?? stepEnd", applyBody);
+    Assert.Contains("ConditionActivationSchedule.Resolve", executorCode);
+    Assert.Contains("CreateConditionTimeWindows", executorCode);
+    Assert.Contains("HasStepRange", scheduleCode);
+    Assert.Contains("HasTimeRange", scheduleCode);
+    Assert.Contains("MergeOverlapping", scheduleCode);
+    Assert.DoesNotContain("MinTimeSpan(directive.WindowEnd, stepEnd) ?? stepEnd", executorCode);
+    Assert.DoesNotContain("directive.WindowEnd is { } explicitEnd", executorCode);
 }
 
 static void LatencyProbeReportsPrecisionHistograms()
@@ -5223,7 +5894,9 @@ static void RuntimeKeepsExternalConditionDirectivesOnNativeTimeline()
     Assert.Contains("if (!TryRunNativeIteration(", executorCode);
     Assert.Contains("nativeControl", executorCode);
     Assert.Contains("CompleteAllMonitorsAfterCurrentEvaluation(monitors)", executorCode);
-    Assert.Contains("WaitForTriggeredConditionActions(monitors, cancellationToken)", executorCode);
+    Assert.Contains("WaitForTriggeredConditionActions(monitors, iterationToken)", executorCode);
+    Assert.Contains("RequestStopIteration", executorCode);
+    Assert.Contains("out bool stopIterationRequested", executorCode);
     Assert.DoesNotContain("condition ranges require managed step activation", executorCode);
     Assert.DoesNotContain("document.EffectiveConditions.Count == 0", executorCode);
     Assert.Contains("inline PixelWhen requires managed step activation", executorCode);
@@ -6274,6 +6947,58 @@ static void EmbeddedConverterExportsMacroConverterFormats()
     Assert.True(razer.Diagnostics.Any(item => item.Severity == MacroDiagnosticSeverity.Warning));
 }
 
+static void EmbeddedConverterExportsRazerKeyDownAndUpWithoutDoubling()
+{
+    var document = new MacroDocument(
+        1,
+        "E hold",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.E, HidModifier.None, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromMilliseconds(50)),
+            new KeyStep(KeyActionKind.Up, HidKey.E, HidModifier.None, TimeSpan.Zero)
+        ]);
+
+    var export = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.RazerSynapseXml);
+    var keyStates = System.Text.RegularExpressions.Regex
+        .Matches(export.Output, @"<KeyEvent>\s*<Makecode>(\d+)</Makecode>\s*<State>(\d+)</State>", System.Text.RegularExpressions.RegexOptions.Singleline)
+        .Select(match => (Makecode: match.Groups[1].Value, State: match.Groups[2].Value))
+        .ToList();
+
+    Assert.Equal(2, keyStates.Count);
+    Assert.Equal("0", keyStates[0].State);
+    Assert.Equal("1", keyStates[1].State);
+    Assert.Equal(keyStates[0].Makecode, keyStates[1].Makecode);
+    Assert.Contains("<Number>0.05</Number>", export.Output);
+
+    var tapExport = MacroConversionService.ExportFromMcrx(
+        new MacroDocument(
+            1,
+            "tap",
+            [new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.FromMilliseconds(10))]),
+        MacroConversionFormat.RazerSynapseXml);
+    var tapStates = System.Text.RegularExpressions.Regex
+        .Matches(tapExport.Output, @"<KeyEvent>\s*<Makecode>\d+</Makecode>\s*<State>(\d+)</State>", System.Text.RegularExpressions.RegexOptions.Singleline)
+        .Select(match => match.Groups[1].Value)
+        .ToList();
+    Assert.Equal(2, tapStates.Count);
+    Assert.Equal("0", tapStates[0]);
+    Assert.Equal("1", tapStates[1]);
+}
+
+static void MacroStudioConditionListSupportsWheelScrollWhileDragging()
+{
+    var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
+
+    Assert.Contains("StartConditionDragWheelHook", conditionCode);
+    Assert.Contains("AutoScrollConditionList", conditionCode);
+    Assert.Contains("BeginConditionListDragInteraction", conditionCode);
+    Assert.Contains("x:Name=\"ConditionListRow\" Height=\"*\"", conditionXaml);
+    Assert.Contains("x:Name=\"ConditionEditorRow\" Height=\"2*\"", conditionXaml);
+    Assert.Contains("x:Name=\"ThenActionsResizeThumb\"", conditionXaml);
+    Assert.DoesNotContain("MaxHeight=\"420\"", conditionXaml);
+}
+
 static void EmbeddedConverterReportsWarningsForUnsupportedExternalFeatures()
 {
     var document = new MacroDocument(
@@ -6320,6 +7045,55 @@ static void MacroLibraryStorePersistsAndDuplicatesMacros()
         Assert.Equal(2, reloaded.Items.Count);
         Assert.True(reloaded.Items.Any(item => item.Id == duplicate.Id && item.Name == "Burst A Copy"));
         Assert.Equal("Burst A Copy", new MacroLibraryStore(root).ReadMacro(duplicate.Id).Name);
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void MacroLibraryStorePersistsConditionMacrosAndClonesPacks()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var store = new MacroLibraryStore(root);
+        var gate = new ConditionalDirective(
+            "gate1",
+            "countdown",
+            0,
+            0,
+            new TextMatcher(ScreenRegion.FromRect(0, 0, 100, 40), "3", Contains: true),
+            [new WaitStep(TimeSpan.FromMilliseconds(5))],
+            ExecutionMode: ConditionExecutionMode.GateMainSequence);
+        var created = store.CreateMacro(
+            new MacroDocument(
+                1,
+                "开局走",
+                PlaybackSettings.Default,
+                [],
+                [gate],
+                Kind: MacroKind.Condition),
+            folder: "Packs");
+
+        Assert.True(created.IsConditionMacro);
+        var reloadedItem = store.Load().Items.Single(item => item.Id == created.Id);
+        Assert.Equal(MacroKind.Condition, reloadedItem.Kind);
+        var document = store.ReadMacro(created.Id);
+        Assert.Equal(MacroKind.Condition, document.Kind);
+        Assert.Contains("\"kind\": \"condition\"", McrxSerializer.Serialize(document));
+
+        var duplicate = store.DuplicateMacro(created.Id, "开局走 Copy");
+        Assert.True(duplicate.IsConditionMacro);
+        Assert.Equal(1, store.ReadMacro(duplicate.Id).EffectiveConditions.Count);
+
+        var cloned = ConditionPackCloner.CloneWithNewIds(document.EffectiveConditions);
+        Assert.Equal(1, cloned.Count);
+        Assert.False(string.Equals(cloned[0].Id, document.EffectiveConditions[0].Id, StringComparison.Ordinal));
+        Assert.Equal(document.EffectiveConditions[0].Name, cloned[0].Name);
     }
     finally
     {
@@ -6560,6 +7334,278 @@ static void MacroCallReferenceCollectorWalksNestedStructures()
     Assert.True(refs.Contains("loop-child"));
     Assert.True(refs.Contains("pixel-child"));
     Assert.True(refs.Contains("cond-child"));
+}
+
+static void MacroLibraryImportRemapsNestedCallsOntoExistingAliases()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        const string razerGuid = "1f71b76c-998f-4834-b349-131a2f29a8cc";
+        var store = new MacroLibraryStore(root);
+        var child = store.CreateMacro(
+            new MacroDocument(1, "2as", [new WaitStep(TimeSpan.FromMilliseconds(1))]),
+            aliases: [razerGuid]);
+        var imported = store.ImportMacros(
+        [
+            new MacroDocument(
+                1,
+                "eaaq+223222",
+                PlaybackSettings.Default,
+                [
+                    new MacroCallStep("eaaq带后摇"),
+                    new MacroCallStep(razerGuid),
+                    new RepeatStep(2, [new MacroCallStep(razerGuid)])
+                ],
+                Id: Guid.NewGuid().ToString("N"))
+        ]);
+
+        Assert.Equal(1, imported.Count);
+        var document = store.ReadMacro(imported[0].Id);
+        var namedCall = Assert.IsType<MacroCallStep>(document.Steps[0]);
+        Assert.Equal("eaaq带后摇", namedCall.Macro);
+
+        var guidCall = Assert.IsType<MacroCallStep>(document.Steps[1]);
+        Assert.Equal(child.Id, guidCall.Macro);
+
+        var nested = Assert.IsType<RepeatStep>(document.Steps[2]);
+        var nestedCall = Assert.IsType<MacroCallStep>(nested.Steps[0]);
+        Assert.Equal(child.Id, nestedCall.Macro);
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void MacroLibraryImportRemapsNestedCallsOntoExistingNamesFromExtraMap()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        const string razerGuid = "3994b861-0813-48db-949b-bf699f58a99a";
+        var store = new MacroLibraryStore(root);
+        var child = store.CreateMacro("2as（无前摇）", steps: [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+        var imported = store.ImportMacros(
+        [
+            new MacroDocument(
+                1,
+                "Parent",
+                PlaybackSettings.Default,
+                [new MacroCallStep(razerGuid)],
+                Id: Guid.NewGuid().ToString("N"))
+        ], extraReferenceMap: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [razerGuid] = child.Name
+        });
+
+        var document = store.ReadMacro(imported.Single().Id);
+        var call = Assert.IsType<MacroCallStep>(document.Steps[0]);
+        Assert.Equal(child.Id, call.Macro);
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void MacroLibraryDuplicatePreservesExternalAliases()
+{
+    var root = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        const string razerGuid = "d74f5349-2d1c-43eb-85b3-fc92cfac40ff";
+        var store = new MacroLibraryStore(root);
+        var original = store.CreateMacro(
+            new MacroDocument(1, "2az", [new WaitStep(TimeSpan.FromMilliseconds(1))]),
+            aliases: [razerGuid]);
+        var duplicate = store.DuplicateMacro(original.Id, "2az Copy");
+
+        Assert.True(duplicate.MatchesReference(razerGuid));
+        Assert.True(duplicate.MatchesReference(original.Id));
+        Assert.False(string.Equals(duplicate.Id, original.Id, StringComparison.OrdinalIgnoreCase));
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void MacroLibraryMcrxExportImportRoundTripsNestedAliasCalls()
+{
+    var sourceRoot = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    var exportRoot = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    var targetRoot = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        const string razerGuid = "1f71b76c-998f-4834-b349-131a2f29a8cc";
+        var source = new MacroLibraryStore(sourceRoot);
+        var child = source.CreateMacro(
+            new MacroDocument(1, "2as", [new WaitStep(TimeSpan.FromMilliseconds(5))]),
+            aliases: [razerGuid]);
+        var parent = source.CreateMacro(
+            new MacroDocument(
+                1,
+                "eaaq+223222",
+                PlaybackSettings.Default,
+                [
+                    new MacroCallStep(razerGuid),
+                    new RepeatStep(2, [new MacroCallStep(child.Id)])
+                ]));
+
+        var snapshot = source.Load();
+        var bundle = MacroLibraryExportBundles.FromItems(source, snapshot, [parent]);
+        Assert.Equal(1, bundle.Dependencies.Count);
+        var exportedCall = Assert.IsType<MacroCallStep>(bundle.Primary[0].Document.Steps[0]);
+        Assert.Equal("2as", exportedCall.Macro);
+
+        Directory.CreateDirectory(exportRoot);
+        MacroLibraryExportWriter.WriteTwoFolders(
+            bundle,
+            exportRoot,
+            exportRootName: "combo-导出",
+            primaryFolderName: "combo",
+            dependenciesFolderName: "依赖子宏",
+            format: MacroConversionFormat.MacroHidMcrx);
+
+        var exportedFiles = Directory.GetFiles(exportRoot, "*.mcrx", SearchOption.AllDirectories)
+            .Select(path => McrxParser.Parse(File.ReadAllText(path)))
+            .ToList();
+        var target = new MacroLibraryStore(targetRoot);
+        var imported = target.ImportMacros(exportedFiles);
+        var importedSnapshot = target.Load();
+        var importedChild = importedSnapshot.Items.Single(item => item.Name == "2as");
+        var importedParent = importedSnapshot.Items.Single(item => item.Name == "eaaq+223222");
+        var importedDocument = target.ReadMacro(importedParent.Id);
+        var call = Assert.IsType<MacroCallStep>(importedDocument.Steps[0]);
+        Assert.True(importedChild.MatchesReference(call.Macro));
+        Assert.Equal(importedChild.Id, call.Macro);
+        Assert.Equal(2, imported.Count);
+    }
+    finally
+    {
+        if (Directory.Exists(sourceRoot)) Directory.Delete(sourceRoot, recursive: true);
+        if (Directory.Exists(exportRoot)) Directory.Delete(exportRoot, recursive: true);
+        if (Directory.Exists(targetRoot)) Directory.Delete(targetRoot, recursive: true);
+    }
+}
+
+static void RazerExportPreservesNestedMacroCallsAndStableGuid()
+{
+    const string id = "7c2627cda7a14ee9ad1da986853d0e6f";
+    var document = new MacroDocument(
+        1,
+        "Main Combo",
+        PlaybackSettings.Default,
+        [
+            new MacroCallStep("2as"),
+            new RepeatStep(2, [new MacroCallStep("2as")])
+        ],
+        Id: id);
+
+    var first = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.RazerSynapseXml);
+    var second = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.RazerSynapseXml);
+    Assert.False(first.Diagnostics.Any(item => item.Code == "razer.unsupportedStep"));
+    Assert.Contains("<Type>7</Type>", first.Output);
+    Assert.Contains("<Name>2as</Name>", first.Output);
+    Assert.Contains($"<Guid>{Guid.Parse(id):D}</Guid>", first.Output);
+    Assert.Equal(first.Output, second.Output);
+
+    var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(
+        first.Output,
+        "main.xml",
+        MacroConversionFormat.RazerSynapseXml,
+        PreserveRazerModuleCalls: true));
+    var call = Assert.IsType<MacroCallStep>(imported.Document.Steps[0]);
+    Assert.Equal("2as", call.Macro);
+    var loop = Assert.IsType<RepeatStep>(imported.Document.Steps[1]);
+    Assert.Equal("2as", Assert.IsType<MacroCallStep>(loop.Steps[0]).Macro);
+}
+
+static void RazerExportImportRoundTripsNestedModuleCalls()
+{
+    var sourceRoot = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    var exportRoot = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    var targetRoot = Path.Combine(Path.GetTempPath(), "MacroHID-tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        const string razerGuid = "a394a4e8-5413-4f3d-97d1-6b503c52eac5";
+        var source = new MacroLibraryStore(sourceRoot);
+        var child = source.CreateMacro(
+            new MacroDocument(1, "3aww", [new WaitStep(TimeSpan.FromMilliseconds(1))]),
+            aliases: [razerGuid]);
+        var parent = source.CreateMacro(
+            new MacroDocument(1, "Opener", PlaybackSettings.Default, [new MacroCallStep(razerGuid)]));
+
+        var snapshot = source.Load();
+        var bundle = MacroLibraryExportBundles.FromItems(source, snapshot, [parent]);
+        Directory.CreateDirectory(exportRoot);
+        MacroLibraryExportWriter.WriteTwoFolders(
+            bundle,
+            exportRoot,
+            "opener-导出",
+            "opener",
+            "依赖子宏",
+            MacroConversionFormat.RazerSynapseXml);
+
+        var xmlFiles = Directory.GetFiles(exportRoot, "*.xml", SearchOption.AllDirectories)
+            .Select(path => new AuxiliaryMacroFile(Path.GetFileName(path), File.ReadAllText(path)))
+            .ToList();
+        var parentFile = xmlFiles.Single(file => file.Content.Contains("<Name>Opener</Name>", StringComparison.Ordinal));
+        var childFile = xmlFiles.Single(file =>
+            file.Content.Contains("<Name>3aww</Name>", StringComparison.Ordinal)
+            && !file.Content.Contains("<Name>Opener</Name>", StringComparison.Ordinal));
+
+        var importedChild = MacroConversionService.ImportToMcrx(new MacroImportRequest(
+            childFile.Content,
+            childFile.FileName,
+            MacroConversionFormat.RazerSynapseXml));
+        var importedParent = MacroConversionService.ImportToMcrx(new MacroImportRequest(
+            parentFile.Content,
+            parentFile.FileName,
+            MacroConversionFormat.RazerSynapseXml,
+            xmlFiles,
+            PreserveRazerModuleCalls: true));
+
+        var target = new MacroLibraryStore(targetRoot);
+        MacroConversionService.TryGetRazerMacroGuid(childFile.Content, out var childGuid);
+        var storedChild = target.CreateMacro(importedChild.Document, aliases: [childGuid]);
+        var storedParent = target.ImportMacros([importedParent.Document]).Single();
+        var call = Assert.IsType<MacroCallStep>(target.ReadMacro(storedParent.Id).Steps.Single());
+        Assert.True(storedChild.MatchesReference(call.Macro));
+        Assert.Equal("3aww", target.Load().Items.Single(item => item.MatchesReference(call.Macro)).Name);
+    }
+    finally
+    {
+        if (Directory.Exists(sourceRoot)) Directory.Delete(sourceRoot, recursive: true);
+        if (Directory.Exists(exportRoot)) Directory.Delete(exportRoot, recursive: true);
+        if (Directory.Exists(targetRoot)) Directory.Delete(targetRoot, recursive: true);
+    }
+}
+
+static void EmbeddedConverterCollectsNeighborMcrxDependencies()
+{
+    var child = new MacroDocument(1, "2as", PlaybackSettings.Default, [new WaitStep(TimeSpan.FromMilliseconds(1))], Id: "child-id");
+    var parent = new MacroDocument(
+        1,
+        "Parent",
+        PlaybackSettings.Default,
+        [new MacroCallStep("2as")],
+        Id: "parent-id");
+    var extras = MacroConversionService.CollectReferencedMcrxDocuments(
+        [parent],
+        [new AuxiliaryMacroFile("2as.mcrx", McrxSerializer.Serialize(child))]);
+    Assert.Equal(1, extras.Count);
+    Assert.Equal("2as", extras[0].Name);
 }
 
 static void MacroLibraryImportPreservesNestedMacroCallIdentity()
@@ -7064,6 +8110,10 @@ static void MacroStudioRemapsNestedMacroCallsWhenImportingMcrxFiles()
     Assert.Contains("root.TryGetProperty(\"id\"", parserCode);
     Assert.Contains("ImportMacros(", storeCode);
     Assert.Contains("MacroCallRewriter.RemapReferences", storeCode);
+    Assert.Contains("RewriteToLibraryNames", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Core", "MacroCallRewriter.cs")));
+    Assert.Contains("extraReferenceMap", storeCode);
+    Assert.Contains("LoadNeighborLibraryReferenceMap", libraryCode);
+    Assert.Contains("CollectReferencedMcrxDocuments", libraryCode);
     Assert.Contains("ImportMacros(", libraryCode);
     Assert.Contains("BeginExport", libraryCode);
     Assert.Contains("MacroLibraryExportWriter", libraryCode);
@@ -7226,8 +8276,24 @@ static void MacroStudioMacroLibrarySupportsExplorerRenameCopyAndPaste()
 static void MacroStudioMacroLibraryToolbarUsesNewDropdownOnly()
 {
     var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var displayModels = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "DisplayModels.cs"));
+
     Assert.Contains("x:Name=\"NewMacroMenuButton\"", xaml);
     Assert.Contains("ToolbarNewMacroMenuItem", xaml);
+    Assert.Contains("ToolbarNewConditionMacroMenuItem", xaml);
+    Assert.Contains("NewConditionMacro_Click", code);
+    Assert.Contains("MacroKind.Condition", code);
+    Assert.Contains("SelectLibraryMacro", code);
+    Assert.Contains("InsertConditionMacroRequested", code);
+    Assert.Contains("InsertedMacroCall", mainWindow);
+    Assert.Contains("InsertConditionPack", mainWindow);
+    Assert.Contains("InsertConditionPack(pack, document.Name)", mainWindow);
+    Assert.Contains("EnsureUniqueConditionName", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs")));
+    Assert.Contains("item.Name = name", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs")));
+    Assert.Contains("INotifyPropertyChanged", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs")));
+    Assert.Contains("ConditionMacroBrush", displayModels);
     Assert.Contains("ToolbarNewFolderMenuItem", xaml);
     Assert.DoesNotContain("x:Name=\"CopyMacroButton\"", xaml);
     Assert.DoesNotContain("x:Name=\"PasteMacroButton\"", xaml);
@@ -7411,6 +8477,8 @@ static void MacroActionTemplatesCreatePlayablePressReleaseSteps()
 
     var text = Assert.IsType<TextStep>(MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.Text)[0]);
     Assert.Equal("text", text.Text);
+    var comment = Assert.IsType<CommentStep>(MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.Comment)[0]);
+    Assert.Equal("注释", comment.Text);
 
     var repeat = Assert.IsType<RepeatStep>(MacroActionTemplateFactory.CreateSteps(MacroActionTemplateKind.Loop)[0]);
     Assert.Equal(2, repeat.Count);
@@ -7432,10 +8500,11 @@ static void MacroActionTemplatesCreatePlayablePressReleaseSteps()
             ocrExtract,
             ocrClick,
             text,
+            comment,
             repeat
         ]);
     var roundTrip = McrxParser.Parse(McrxSerializer.Serialize(document));
-    Assert.Equal(13, roundTrip.Steps.Count);
+    Assert.Equal(14, roundTrip.Steps.Count);
     Assert.False(roundTrip.Steps.OfType<KeyStep>().Any(step => step.Kind == KeyActionKind.Tap));
     Assert.False(roundTrip.Steps.OfType<MouseButtonStep>().Any(step => step.Kind == ButtonActionKind.Click));
 }
@@ -8091,7 +9160,7 @@ sealed class ScriptedConditionEvaluator : IConditionEvaluator
 
     public int EvaluateCount { get; private set; }
 
-    public bool Evaluate(IConditionMatcher matcher)
+    public bool Evaluate(IConditionMatcher matcher, CancellationToken cancellationToken = default)
     {
         EvaluateCount++;
         return results.Count > 0 && results.Dequeue();

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -17,6 +18,10 @@ public partial class StepSequencePanel : UserControl
     private const string StepDragFormat = "MacroHID.StepPath";
     private const string StepDragPathSeparator = "|";
     private const string StepClipboardPrefix = "MacroHID.SequenceSteps.v1";
+    private const int WM_MOUSEWHEEL_LOW_LEVEL = 0x020A;
+    private const int WH_MOUSE_LL = 14;
+    private const double WheelDelta = 120.0;
+    private const double AutoScrollEdgeSize = 42;
 
     private readonly DispatcherTimer boxSelectionAutoScrollTimer = new() { Interval = TimeSpan.FromMilliseconds(30) };
     private readonly List<ListBoxItem> fadedStepDragContainers = [];
@@ -41,10 +46,16 @@ public partial class StepSequencePanel : UserControl
     private Point boxSelectionStartPoint;
     private Point boxSelectionLastPoint;
     private ScrollViewer? stepScrollViewer;
+    private bool stepListDragInProgress;
+    private StepDropTarget? stickyDropTarget;
+    private bool stickyDropTargetValid;
+    private IntPtr stepDragMouseHookHandle;
+    private readonly LowLevelMouseProc stepDragMouseHookProc;
 
     public StepSequencePanel()
     {
         InitializeComponent();
+        stepDragMouseHookProc = StepDragMouseHookCallback;
         Loaded += StepSequencePanel_Loaded;
         Unloaded += StepSequencePanel_Unloaded;
         boxSelectionAutoScrollTimer.Tick += (_, _) =>
@@ -107,6 +118,9 @@ public partial class StepSequencePanel : UserControl
     private void StepSequencePanel_Unloaded(object sender, RoutedEventArgs e)
     {
         ActionAppearanceService.AppearanceChanged -= OnActionAppearanceChanged;
+        StopStepDragWheelHook();
+        ClearStickyDropTarget();
+        stepListDragInProgress = false;
     }
 
     private void OnActionAppearanceChanged()
@@ -183,9 +197,9 @@ public partial class StepSequencePanel : UserControl
 
     public IReadOnlyList<StepChoice> GetStepChoices()
     {
-        return StepDisplayItem.FlattenSteps(steps, macroNameResolver: ResolveMacroDisplayName)
-            .Where(item => item.StepPath.Count > 0 && !IsContainerEnd(item))
-            .Select((item, index) => new StepChoice(index, $"#{index + 1} {item.Title}", item.StepPath))
+        return StepDisplayItem.FlattenWithExecutionOrdinals(steps, macroNameResolver: ResolveMacroDisplayName)
+            .Where(item => item.ExecutionOrdinal >= 0)
+            .Select(item => new StepChoice(item.ExecutionOrdinal, $"{item.StepNumberLabel} {item.Title}", item.StepPath))
             .ToList();
     }
 
@@ -426,7 +440,7 @@ public partial class StepSequencePanel : UserControl
     private void RefreshList(IReadOnlyList<int>? selectPath = null)
     {
         StepList.Items.Clear();
-        foreach (var item in StepDisplayItem.FlattenSteps(steps, macroNameResolver: ResolveMacroDisplayName))
+        foreach (var item in StepDisplayItem.FlattenWithExecutionOrdinals(steps, macroNameResolver: ResolveMacroDisplayName))
         {
             StepList.Items.Add(item);
         }
@@ -455,14 +469,24 @@ public partial class StepSequencePanel : UserControl
             return macroNameResolver(value);
         }
 
-        var item = state?.LibrarySnapshot.Items.FirstOrDefault(item => item.MatchesReference(value));
+        if (state is null)
+        {
+            return value;
+        }
+
+        var snapshot = state.LibraryStore.Load();
+        var preferredGroupId = snapshot.Items.FirstOrDefault(item =>
+            string.Equals(item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase))?.GroupId;
+        var item = MacroLibraryResolver.Resolve(snapshot.Items, value, preferredGroupId);
         return item?.Name ?? value;
     }
 
     private void RefreshSelectedStepText()
     {
         SelectedStepText.Text = StepList.SelectedItem is StepDisplayItem { StepPath.Count: > 0 } selected
-            ? selected.Title
+            ? selected.ExecutionOrdinal >= 0
+                ? $"{selected.StepNumberLabel} {selected.Title}"
+                : selected.Title
             : LocalizationService.Get("DropActionsHint");
     }
 
@@ -474,40 +498,48 @@ public partial class StepSequencePanel : UserControl
 
     private void StepList_Drop(object sender, DragEventArgs e)
     {
-        if (isReadOnly)
+        try
         {
-            e.Effects = DragDropEffects.None;
-            e.Handled = true;
-            return;
-        }
-
-        var target = GetStepDropTargetFromPoint(e.GetPosition(StepList));
-        if (e.Data.GetDataPresent(StepDragFormat)
-            && e.Data.GetData(StepDragFormat) is string sourcePathText)
-        {
-            MoveStepsToDropTarget(ParseStepPaths(sourcePathText), target);
-            HideDropIndicator();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Data.GetDataPresent(ActionTemplateDragFormat) && e.Data.GetData(ActionTemplateDragFormat) is string template)
-        {
-            if (Enum.TryParse<MacroActionTemplateKind>(template, ignoreCase: true, out var kind))
+            if (isReadOnly)
             {
-                ActionTemplateDropped?.Invoke(kind, target.ParentPathText, target.InsertIndex);
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
             }
 
-            HideDropIndicator();
-            e.Handled = true;
-            return;
-        }
+            var target = ResolveDropTarget(e.GetPosition(StepList));
+            if (e.Data.GetDataPresent(StepDragFormat)
+                && e.Data.GetData(StepDragFormat) is string sourcePathText)
+            {
+                MoveStepsToDropTarget(ParseStepPaths(sourcePathText), target);
+                e.Handled = true;
+                return;
+            }
 
-        if (e.Data.GetDataPresent(MacroLibraryDragFormat) && e.Data.GetData(MacroLibraryDragFormat) is string macroId)
+            if (e.Data.GetDataPresent(ActionTemplateDragFormat) && e.Data.GetData(ActionTemplateDragFormat) is string template)
+            {
+                if (Enum.TryParse<MacroActionTemplateKind>(template, ignoreCase: true, out var kind))
+                {
+                    ActionTemplateDropped?.Invoke(kind, target.ParentPathText, target.InsertIndex);
+                }
+
+                e.Handled = true;
+                return;
+            }
+
+            if (TryReadLibraryMacroIds(e.Data, out var macroIds))
+            {
+                foreach (var macroId in macroIds)
+                {
+                    MacroLibraryDropped?.Invoke(macroId, target.ParentPathText, target.InsertIndex);
+                }
+
+                e.Handled = true;
+            }
+        }
+        finally
         {
-            MacroLibraryDropped?.Invoke(macroId, target.ParentPathText, target.InsertIndex);
-            HideDropIndicator();
-            e.Handled = true;
+            EndStepListDragInteraction();
         }
     }
 
@@ -522,20 +554,48 @@ public partial class StepSequencePanel : UserControl
 
         if (e.Data.GetDataPresent(StepDragFormat)
             || e.Data.GetDataPresent(ActionTemplateDragFormat)
-            || e.Data.GetDataPresent(MacroLibraryDragFormat))
+            || TryReadLibraryMacroIds(e.Data, out _))
         {
+            BeginStepListDragInteraction();
             var point = e.GetPosition(StepList);
             AutoScrollStepList(point);
             UpdateStepDragGhost(point);
-            UpdateDropIndicator(GetStepDropTargetFromPoint(point));
-            e.Effects = e.Data.GetDataPresent(StepDragFormat) ? DragDropEffects.Move : DragDropEffects.Copy;
+            UpdateDropIndicator(ResolveDropTarget(point));
+            e.Effects = e.Data.GetDataPresent(StepDragFormat)
+                ? DragDropEffects.Move
+                : (e.AllowedEffects & DragDropEffects.Copy) != 0
+                    ? DragDropEffects.Copy
+                    : DragDropEffects.Move;
             e.Handled = true;
         }
     }
 
     private void StepList_DragLeave(object sender, DragEventArgs e)
     {
+        // Keep wheel hook while OLE drag is still active over another window; only clear indicator.
         HideDropIndicator();
+    }
+
+    private static bool TryReadLibraryMacroIds(IDataObject data, out string[] macroIds)
+    {
+        if (!data.GetDataPresent(MacroLibraryDragFormat))
+        {
+            macroIds = [];
+            return false;
+        }
+
+        switch (data.GetData(MacroLibraryDragFormat))
+        {
+            case string id when !string.IsNullOrWhiteSpace(id):
+                macroIds = [id];
+                return true;
+            case string[] ids when ids.Length > 0:
+                macroIds = ids.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                return macroIds.Length > 0;
+            default:
+                macroIds = [];
+                return false;
+        }
     }
 
     private void SequenceRoot_PreviewMouseDown(object sender, MouseButtonEventArgs e)
@@ -625,6 +685,7 @@ public partial class StepSequencePanel : UserControl
         stepDragStarted = true;
         ShowStepDragGhost(current, dragPathTexts.Count);
         FadeStepDragSources(dragPathTexts);
+        BeginStepListDragInteraction();
         try
         {
             DragDrop.DoDragDrop(StepList, new DataObject(StepDragFormat, string.Join(StepDragPathSeparator, dragPathTexts)), DragDropEffects.Move);
@@ -633,7 +694,7 @@ public partial class StepSequencePanel : UserControl
         {
             RestoreStepDragSources();
             RemoveStepDragGhost();
-            HideDropIndicator();
+            EndStepListDragInteraction();
             ResetStepDragState();
         }
         e.Handled = true;
@@ -785,13 +846,16 @@ public partial class StepSequencePanel : UserControl
     private void BeginStepVisualEdit(StepDisplayItem item, UIElement? placementTarget)
     {
         if (isReadOnly) return;
-        if (item.StepPath.Count == 0 || StepList.SelectedItems.Count > 1)
+        if (item.StepPath.Count == 0)
         {
             return;
         }
 
-        var current = MacroStepTreeEditor.GetAtPath(steps, item.StepPath);
+        // Keyboard/mouse templates insert press+gap+release as a multi-selection.
+        // WPF keeps that multi-select when clicking one of the selected rows, which
+        // previously blocked the inline editor. Always focus the clicked row first.
         SelectStepPath(item.StepPath);
+        var current = MacroStepTreeEditor.GetAtPath(steps, item.StepPath);
         OpenInlineStepEditor(item.StepPath, current, placementTarget);
     }
 
@@ -1018,8 +1082,23 @@ public partial class StepSequencePanel : UserControl
         }
     }
 
+    private StepDropTarget ResolveDropTarget(Point point)
+    {
+        var inEdge = IsPointInAutoScrollEdge(point);
+        if (inEdge && stickyDropTargetValid && stickyDropTarget is { } sticky)
+        {
+            return sticky;
+        }
+
+        var target = GetStepDropTargetFromPoint(point);
+        stickyDropTarget = target;
+        stickyDropTargetValid = true;
+        return target;
+    }
+
     private StepDropTarget GetStepDropTargetFromPoint(Point point)
     {
+        StepDisplayItem? lastRealized = null;
         for (var i = 0; i < StepList.Items.Count; i++)
         {
             if (StepList.Items[i] is not StepDisplayItem { StepPath.Count: > 0 } item
@@ -1028,6 +1107,7 @@ public partial class StepSequencePanel : UserControl
                 continue;
             }
 
+            lastRealized = item;
             var midPoint = container.TranslatePoint(new Point(0, container.ActualHeight / 2), StepList);
             var bottomPoint = container.TranslatePoint(new Point(0, container.ActualHeight), StepList);
             if (point.Y > bottomPoint.Y)
@@ -1050,6 +1130,13 @@ public partial class StepSequencePanel : UserControl
             }
 
             return point.Y < midPoint.Y ? CreateTargetBeforeStep(item) : CreateTargetAfterStep(item);
+        }
+
+        // Prefer after the last realized row instead of leaping to the absolute sequence end
+        // when virtualization skipped containers during edge auto-scroll.
+        if (lastRealized is not null)
+        {
+            return CreateTargetAfterStep(lastRealized);
         }
 
         return new StepDropTarget([], steps.Count);
@@ -1230,16 +1317,15 @@ public partial class StepSequencePanel : UserControl
             return false;
         }
 
-        const double edgeSize = 42;
         const double maxDelta = 28;
         var delta = 0d;
-        if (point.Y < edgeSize)
+        if (point.Y < AutoScrollEdgeSize)
         {
-            delta = -ScaleAutoScrollDelta(edgeSize - point.Y, edgeSize, maxDelta);
+            delta = -ScaleAutoScrollDelta(AutoScrollEdgeSize - point.Y, AutoScrollEdgeSize, maxDelta);
         }
-        else if (point.Y > StepList.ActualHeight - edgeSize)
+        else if (point.Y > StepList.ActualHeight - AutoScrollEdgeSize)
         {
-            delta = ScaleAutoScrollDelta(point.Y - (StepList.ActualHeight - edgeSize), edgeSize, maxDelta);
+            delta = ScaleAutoScrollDelta(point.Y - (StepList.ActualHeight - AutoScrollEdgeSize), AutoScrollEdgeSize, maxDelta);
         }
 
         if (Math.Abs(delta) < 0.01)
@@ -1255,6 +1341,111 @@ public partial class StepSequencePanel : UserControl
 
         scrollViewer.ScrollToVerticalOffset(next);
         return true;
+    }
+
+    private bool IsPointInAutoScrollEdge(Point point)
+    {
+        if (StepList.ActualHeight <= 0)
+        {
+            return false;
+        }
+
+        return point.Y < AutoScrollEdgeSize || point.Y > StepList.ActualHeight - AutoScrollEdgeSize;
+    }
+
+    private void BeginStepListDragInteraction()
+    {
+        stepListDragInProgress = true;
+        StartStepDragWheelHook();
+    }
+
+    private void EndStepListDragInteraction()
+    {
+        stepListDragInProgress = false;
+        StopStepDragWheelHook();
+        ClearStickyDropTarget();
+        HideDropIndicator();
+    }
+
+    private void ClearStickyDropTarget()
+    {
+        stickyDropTarget = null;
+        stickyDropTargetValid = false;
+    }
+
+    private void StartStepDragWheelHook()
+    {
+        if (stepDragMouseHookHandle != IntPtr.Zero)
+        {
+            return;
+        }
+
+        stepDragMouseHookHandle = SetWindowsHookEx(WH_MOUSE_LL, stepDragMouseHookProc, IntPtr.Zero, 0);
+    }
+
+    private void StopStepDragWheelHook()
+    {
+        if (stepDragMouseHookHandle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        UnhookWindowsHookEx(stepDragMouseHookHandle);
+        stepDragMouseHookHandle = IntPtr.Zero;
+    }
+
+    private IntPtr StepDragMouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0
+            && wParam.ToInt32() == WM_MOUSEWHEEL_LOW_LEVEL
+            && stepListDragInProgress
+            && stepDragMouseHookHandle != IntPtr.Zero)
+        {
+            var data = Marshal.PtrToStructure<MouseLowLevelHookStruct>(lParam);
+            if (IsScreenPointInsideStepList(data.Point.X, data.Point.Y))
+            {
+                var delta = unchecked((short)((data.MouseData >> 16) & 0xFFFF));
+                Dispatcher.BeginInvoke(new Action(() => ScrollStepListByWheelDelta(delta)), DispatcherPriority.Input);
+                return new IntPtr(1);
+            }
+        }
+
+        return CallNextHookEx(stepDragMouseHookHandle, nCode, wParam, lParam);
+    }
+
+    private bool IsScreenPointInsideStepList(double screenX, double screenY)
+    {
+        if (!StepList.IsLoaded || !StepList.IsVisible)
+        {
+            return false;
+        }
+
+        try
+        {
+            var local = StepList.PointFromScreen(new Point(screenX, screenY));
+            return local.X >= 0
+                && local.Y >= 0
+                && local.X <= StepList.ActualWidth
+                && local.Y <= StepList.ActualHeight;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void ScrollStepListByWheelDelta(int delta)
+    {
+        var scrollViewer = GetStepScrollViewer();
+        if (scrollViewer is null)
+        {
+            return;
+        }
+
+        var lines = SystemParameters.WheelScrollLines <= 0 ? 3 : SystemParameters.WheelScrollLines;
+        var offsetDelta = -(delta / WheelDelta) * lines;
+        var target = Math.Clamp(scrollViewer.VerticalOffset + offsetDelta, 0, scrollViewer.ScrollableHeight);
+        scrollViewer.ScrollToVerticalOffset(target);
     }
 
     private ScrollViewer? GetStepScrollViewer()
@@ -1571,6 +1762,11 @@ public partial class StepSequencePanel : UserControl
             for (int i = 0; i < conditions.Count; i++)
             {
                 var c = conditions[i];
+                if (!c.HasStepRange)
+                {
+                    continue;
+                }
+
                 var color = colorSelector?.Invoke(i) ?? GetDefaultConditionColor(i);
                 conditionRanges.Add(CreateConditionRangeHighlight(c, color));
             }
@@ -1581,7 +1777,7 @@ public partial class StepSequencePanel : UserControl
     public void HighlightSingleCondition(int conditionIndex, ConditionalDirective? directive, Brush? color = null)
     {
         conditionRanges.Clear();
-        if (directive != null)
+        if (directive is { HasStepRange: true })
         {
             var brush = color ?? GetDefaultConditionColor(conditionIndex);
             conditionRanges.Add(CreateConditionRangeHighlight(directive, brush));
@@ -1593,19 +1789,16 @@ public partial class StepSequencePanel : UserControl
     {
         var displayItems = StepList.Items.OfType<StepDisplayItem>().ToList();
         var pathOrdinals = displayItems
-            .Where(item => item.StepPath.Count > 0 && !IsContainerEnd(item))
-            .Select((item, ordinal) => (item.StepPathText, ordinal))
+            .Where(item => item.ExecutionOrdinal >= 0)
             .GroupBy(item => item.StepPathText, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().ordinal, StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group => group.First().ExecutionOrdinal, StringComparer.Ordinal);
 
         foreach (var item in StepList.Items.OfType<StepDisplayItem>())
         {
             item.ConditionBars.Clear();
             item.IsConditionEndpoint = false;
             var topLevelIndex = item.StepPath.Count > 0 ? item.StepPath[0] : item.Index;
-            var itemOrdinal = item.StepPath.Count > 0 && pathOrdinals.TryGetValue(item.StepPathText, out var ordinal)
-                ? ordinal
-                : -1;
+            var itemOrdinal = item.ExecutionOrdinal;
 
             foreach (var range in conditionRanges)
             {
@@ -1942,6 +2135,43 @@ public partial class StepSequencePanel : UserControl
     {
         public string ParentPathText => ToPathText(ParentPath);
     }
+
+    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseLowLevelHookStruct
+    {
+        public NativePoint Point;
+        public int MouseData;
+        public int Flags;
+        public int Time;
+        public IntPtr ExtraInfo;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(
+        int idHook,
+        LowLevelMouseProc lpfn,
+        IntPtr hmod,
+        uint dwThreadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CallNextHookEx(
+        IntPtr hhk,
+        int nCode,
+        IntPtr wParam,
+        IntPtr lParam);
 }
 
 public sealed record StepChoice(int Index, string Label, IReadOnlyList<int> Path)

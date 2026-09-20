@@ -24,6 +24,7 @@ public sealed class BoolToThicknessConverter : IValueConverter
 public sealed class MacroLibraryListEntry
 {
     private static readonly Brush MacroBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
+    private static readonly Brush ConditionMacroBrush = new SolidColorBrush(Color.FromRgb(255, 149, 0));
 
     private MacroLibraryListEntry(MacroLibraryItem? item, string title, string subtitle, string icon, Brush accent, FontWeight weight)
     {
@@ -54,13 +55,21 @@ public sealed class MacroLibraryListEntry
 
     public static MacroLibraryListEntry Macro(MacroLibraryItem item, MacroDocument? document)
     {
+        var kind = document?.Kind == MacroKind.Condition || item.IsConditionMacro
+            ? MacroKind.Condition
+            : MacroKind.Normal;
         var subtitle = item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
-        if (document?.Playback.Trigger is { } trigger)
+        if (kind == MacroKind.Condition)
+        {
+            subtitle = $"{LocalizationService.Get("ConditionMacroBadge")} · {subtitle}";
+        }
+        else if (document?.Playback.Trigger is { } trigger)
         {
             subtitle = $"{trigger} · {FormatPlaybackMode(document.Playback)} · {subtitle}";
         }
 
-        return new MacroLibraryListEntry(item, item.Name, subtitle, "M", MacroBrush, FontWeights.Normal);
+        var accent = kind == MacroKind.Condition ? ConditionMacroBrush : MacroBrush;
+        return new MacroLibraryListEntry(item, item.Name, subtitle, "M", accent, FontWeights.Normal);
     }
 
     private static string FormatPlaybackMode(PlaybackSettings settings)
@@ -181,7 +190,9 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
     public string LockToolTip => LocalizationService.Get("MacroLockedReadOnly");
     public string ExplorerTypeText => IsFolder
         ? LocalizationService.Get("FileFolderType")
-        : LocalizationService.Get("MacroFileType");
+        : Item?.IsConditionMacro == true
+            ? LocalizationService.Get("ConditionMacroFileType")
+            : LocalizationService.Get("MacroFileType");
     public string ExplorerModifiedText => Item is null
         ? string.Empty
         : Item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
@@ -337,6 +348,7 @@ public sealed class StepDisplayItem
         AccentBrush = accentBrush;
         Kind = kind;
         Indent = indent;
+        AppearanceKind = appearanceKind;
         LeftMargin = new Thickness(indent * 20, 0, 0, 0);
         var appearance = ActionAppearanceService.GetBrushes(appearanceKind);
         ActionForeground = appearance.Text;
@@ -357,11 +369,44 @@ public sealed class StepDisplayItem
     public Brush BackgroundBrush { get; }
     public StepDisplayKind Kind { get; }
     public int Indent { get; }
+    public MacroActionTemplateKind AppearanceKind { get; }
     public Thickness LeftMargin { get; }
     public bool IsStructural => Kind is StepDisplayKind.LoopStart or StepDisplayKind.LoopEnd or StepDisplayKind.ConditionStart or StepDisplayKind.ConditionEnd;
     public bool IsContainerEnd => Kind is StepDisplayKind.LoopEnd or StepDisplayKind.ConditionEnd;
     public bool IsConditionEndpoint { get; set; }
     public List<Brush> ConditionBars { get; set; } = [];
+    public int ExecutionOrdinal { get; set; } = -1;
+    public string StepNumberLabel { get; set; } = string.Empty;
+
+    public static void AssignExecutionOrdinals(IList<StepDisplayItem> items)
+    {
+        var ordinal = 0;
+        foreach (var item in items)
+        {
+            if (item.StepPath.Count > 0
+                && !item.IsContainerEnd
+                && item.AppearanceKind != MacroActionTemplateKind.Comment)
+            {
+                item.ExecutionOrdinal = ordinal;
+                item.StepNumberLabel = $"#{ordinal + 1}";
+                ordinal++;
+            }
+            else
+            {
+                item.ExecutionOrdinal = -1;
+                item.StepNumberLabel = string.Empty;
+            }
+        }
+    }
+
+    public static List<StepDisplayItem> FlattenWithExecutionOrdinals(
+        IReadOnlyList<MacroStep> steps,
+        Func<string, string>? macroNameResolver = null)
+    {
+        var items = FlattenSteps(steps, macroNameResolver: macroNameResolver);
+        AssignExecutionOrdinals(items);
+        return items;
+    }
 
     public static StepDisplayItem? FindByPath(
         IEnumerable<StepDisplayItem> items,
@@ -435,6 +480,7 @@ public sealed class StepDisplayItem
         {
             KeyStep key => new StepDisplayItem(index, path, "🔤", GetKeyIndicator(key), DescribeKey(key), FormatDuration(key.Hold), GreenBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Keyboard),
             TextStep text => new StepDisplayItem(index, path, "📝", "", $"文本: \"{TrimText(text.Text)}\"", "", BlueBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Text),
+            CommentStep comment => new StepDisplayItem(index, path, "💬", "", $"注释: {TrimText(comment.Text)}", "", GrayBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Comment),
             MouseMoveStep move => new StepDisplayItem(index, path, "🖱", "↗", $"移动 ({move.X}, {move.Y})", FormatDuration(move.Duration), OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.MouseMove),
             MouseButtonStep button => new StepDisplayItem(index, path, "🖱", GetMouseIndicator(button), DescribeMouseButton(button), FormatDuration(button.Hold), OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.MouseButton),
             MouseWheelStep wheel => new StepDisplayItem(index, path, "🖱", "⟳", $"滚轮 V={wheel.Vertical} H={wheel.Horizontal}", "", BlueBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.MouseWheel),
@@ -481,7 +527,7 @@ public sealed class StepDisplayItem
             WaitStep wait => new StepDisplayItem(index, path, "⏱", "", FormatWait(wait), "", GrayBrush, StepDisplayKind.Delay, indent, MacroActionTemplateKind.Delay),
             MacroCallStep macro => new StepDisplayItem(index, path, "📦", "▶", $"调用宏: {ResolveMacroDisplayName(macro.Macro, macroNameResolver)}", "", GreenBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Macro),
             StopCurrentSequenceStep => new StepDisplayItem(index, path, "■", "", "停止本层宏动作", "外层继续", OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopCurrent),
-            StopCurrentIterationStep => new StepDisplayItem(index, path, "■", "", "停止本轮播放", "循环继续", OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopIteration),
+            StopCurrentIterationStep => new StepDisplayItem(index, path, "■", "", "停止本轮播放", "下一轮", OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopIteration),
             StopAllSequencesStep => new StepDisplayItem(index, path, "■", "", "停止本次播放", "立即停止", RedBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopAll),
             _ => new StepDisplayItem(index, path, "?", "", step.GetType().Name, "", GrayBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Delay)
         };

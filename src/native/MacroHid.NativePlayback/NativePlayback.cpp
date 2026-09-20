@@ -161,6 +161,24 @@ namespace
             const int64_t pausedTicks = TotalPausedTicks(control);
             effectiveDueTick = baseDueTick + pausedTicks;
             const int64_t targetTick = effectiveDueTick + rescueDelayTicks;
+            const int64_t now = QueryCounter();
+            if (now >= targetTick)
+            {
+                if (!IsPaused(control))
+                {
+                    return !IsCancelled(cancelFlag);
+                }
+
+                continue;
+            }
+
+            const int64_t remainingUs = ToMicroseconds(targetTick - now, QueryFrequency());
+            if (remainingUs > 2500)
+            {
+                Sleep(remainingUs > 30'000 ? 1 : 0);
+                continue;
+            }
+
             while (!IsCancelled(cancelFlag)
                 && !IsPaused(control)
                 && QueryCounter() < targetTick)
@@ -209,7 +227,7 @@ namespace
             }
         }
 
-        bool WaitForMicroseconds(int64_t waitUs)
+        bool WaitForMicroseconds(int64_t waitUs, volatile long* cancelFlag = nullptr)
         {
             if (handle == nullptr || waitUs <= 0)
             {
@@ -217,14 +235,29 @@ namespace
             }
 
             LARGE_INTEGER due{};
-            due.QuadPart = -std::max<int64_t>(1, waitUs * 10);
+            constexpr int64_t maxWaitUs = (std::numeric_limits<int64_t>::max() / 10) - 1;
+            const int64_t clampedUs = std::min(waitUs, maxWaitUs);
+            due.QuadPart = -std::max<int64_t>(1, clampedUs * 10);
             if (!SetWaitableTimerEx(handle, &due, 0, nullptr, nullptr, nullptr, 0))
             {
                 return false;
             }
 
-            const DWORD timeout = static_cast<DWORD>(std::clamp<int64_t>(waitUs / 1000 + 8, 1, 60000));
-            return WaitForSingleObject(handle, timeout) == WAIT_OBJECT_0;
+            while (!IsCancelled(cancelFlag))
+            {
+                const DWORD result = WaitForSingleObject(handle, 250);
+                if (result == WAIT_OBJECT_0)
+                {
+                    return true;
+                }
+
+                if (result != WAIT_TIMEOUT)
+                {
+                    return false;
+                }
+            }
+
+            return false;
         }
 
     private:
@@ -1831,11 +1864,12 @@ namespace
             if (remainingUs > finalSpinUs + 750)
             {
                 const int64_t timerWaitUs = remainingUs - finalSpinUs;
-                if (timer.WaitForMicroseconds(timerWaitUs))
+                if (timer.WaitForMicroseconds(timerWaitUs, cancelFlag))
                 {
                     stats.waitPathTimerCount++;
-                    continue;
                 }
+
+                continue;
             }
 
             stats.waitPathSpinCount++;

@@ -34,6 +34,7 @@ public partial class ActionPalettePanel : UserControl
         AddOcrExtractTextText.Text = L("AddOcrExtractText");
         AddOcrClickText.Text = L("AddOcrClick");
         AddTextActionText.Text = L("AddText");
+        AddCommentText.Text = L("AddComment");
         AddMacroText.Text = L("AddMacro");
         AddLoopText.Text = L("AddLoop");
         AddStopCurrentText.Text = L("AddStopCurrent");
@@ -48,6 +49,7 @@ public partial class ActionPalettePanel : UserControl
         AddOcrExtractTextHintText.Text = L("AddOcrExtractTextHint");
         AddOcrClickHintText.Text = L("AddOcrClickHint");
         AddTextHintText.Text = L("AddTextHint");
+        AddCommentHintText.Text = L("AddCommentHint");
         AddMacroActionHintText.Text = L("AddMacroActionHint");
         AddLoopHintText.Text = L("AddLoopHint");
         AddStopCurrentHintText.Text = L("AddStopCurrentHint");
@@ -164,6 +166,7 @@ public partial class ActionPalettePanel : UserControl
         ApplyButtonAppearance(AddOcrExtractTextButton, MacroActionTemplateKind.OcrExtractText);
         ApplyButtonAppearance(AddOcrClickButton, MacroActionTemplateKind.OcrClick);
         ApplyButtonAppearance(AddTextButton, MacroActionTemplateKind.Text);
+        ApplyButtonAppearance(AddCommentButton, MacroActionTemplateKind.Comment);
         ApplyButtonAppearance(AddMacroButton, MacroActionTemplateKind.Macro);
         ApplyButtonAppearance(AddLoopButton, MacroActionTemplateKind.Loop);
         ApplyButtonAppearance(AddStopCurrentButton, MacroActionTemplateKind.StopCurrent);

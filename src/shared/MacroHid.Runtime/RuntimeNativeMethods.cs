@@ -68,6 +68,9 @@ internal static partial class RuntimeNativeMethods
     public static extern uint SendInput(uint inputCount, NativeInput[] inputs, int inputSize);
 
     [DllImport("user32.dll")]
+    public static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
+    [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int index);
 
     [DllImport("winmm.dll")]

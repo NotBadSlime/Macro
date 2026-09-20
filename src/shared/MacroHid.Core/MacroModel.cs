@@ -1,12 +1,19 @@
 namespace MacroHid.Core;
 
+public enum MacroKind
+{
+    Normal = 0,
+    Condition = 1
+}
+
 public sealed record MacroDocument(
     int Version,
     string Name,
     PlaybackSettings Playback,
     IReadOnlyList<MacroStep> Steps,
     IReadOnlyList<ConditionalDirective>? Conditions = null,
-    string? Id = null)
+    string? Id = null,
+    MacroKind Kind = MacroKind.Normal)
 {
     public MacroDocument(int Version, string Name, IReadOnlyList<MacroStep> Steps)
         : this(Version, Name, PlaybackSettings.Default, Steps, null)
@@ -15,6 +22,8 @@ public sealed record MacroDocument(
 
     public IReadOnlyList<ConditionalDirective> EffectiveConditions =>
         Conditions ?? Array.Empty<ConditionalDirective>();
+
+    public bool IsConditionMacro => Kind == MacroKind.Condition;
 }
 
 public sealed record PlaybackSettings(
@@ -317,6 +326,8 @@ public sealed record KeyStep(
     TimeSpan Hold) : MacroStep;
 
 public sealed record TextStep(string Text) : MacroStep;
+
+public sealed record CommentStep(string Text) : MacroStep;
 
 public sealed record MouseMoveStep(
     MouseMoveMode Mode,

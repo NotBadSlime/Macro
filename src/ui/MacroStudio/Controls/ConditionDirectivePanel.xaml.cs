@@ -1,7 +1,10 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MacroHid.Core;
 using MacroHid.Runtime;
 using MacroStudio.Services;
@@ -12,6 +15,11 @@ public partial class ConditionDirectivePanel : UserControl
 {
     private const string ConditionClipboardPrefix = "MacroHID.Conditions.v1";
     private const string ConditionDragFormat = "MacroHID.ConditionIndexes";
+    private const string MacroLibraryDragFormat = "MacroHID.MacroLibraryItem";
+    private const int WM_MOUSEWHEEL_LOW_LEVEL = 0x020A;
+    private const int WH_MOUSE_LL = 14;
+    private const double WheelDelta = 120.0;
+    private const double AutoScrollEdgeSize = 42;
 
     private List<ConditionalDirective> conditions = [];
     private IReadOnlyList<StepChoice> stepChoices = [];
@@ -28,6 +36,10 @@ public partial class ConditionDirectivePanel : UserControl
     private bool thenActionSequenceActive;
     private bool isReadOnly;
     private bool isRecording;
+    private bool conditionListDragInProgress;
+    private ScrollViewer? conditionListScrollViewer;
+    private IntPtr conditionDragMouseHookHandle;
+    private readonly LowLevelMouseProc conditionDragMouseHookProc;
 
     private static readonly Brush[] conditionColors =
     [
@@ -45,20 +57,32 @@ public partial class ConditionDirectivePanel : UserControl
     public event Action<MacroRecordingMode>? RecordingStartRequested;
     public event Action? RecordingStopRequested;
     public event Action<string>? StatusMessageRequested;
+    public event Action<IReadOnlyList<ConditionalDirective>, string>? ExtractConditionPackRequested;
+    public event Action<string>? MacroLibraryDroppedOnConditionList;
+    public event Action? InsertSelectedLibraryConditionMacroRequested;
 
     public ConditionDirectivePanel()
     {
         InitializeComponent();
+        conditionDragMouseHookProc = ConditionDragMouseHookCallback;
+        Unloaded += ConditionDirectivePanel_Unloaded;
         OcrStatusText.Text = PaddleOcrBridge.DefaultStatusText;
         PaddleOcrBridge.RecognitionCompleted += OnOcrRecognitionCompleted;
         ThenActionPalette.ActionClicked += OnThenActionPaletteClicked;
         ThenActionPalette.ApplyLocalization();
     }
 
+    private void ConditionDirectivePanel_Unloaded(object sender, RoutedEventArgs e)
+    {
+        EndConditionListDragInteraction();
+    }
+
     public IReadOnlyList<ConditionalDirective> Conditions => conditions;
     public bool HasValidationErrors => selectedIndex >= 0
         && selectedIndex < conditions.Count
-        && (!TryReadTimeWindow(out _, out _)
+        && conditions[selectedIndex].ExecutionMode != ConditionExecutionMode.GateMainSequence
+        && (!conditions[selectedIndex].HasActivationConstraint
+            || !TryReadTimeWindow(out _, out _)
             || conditions[selectedIndex].Condition is TextMatcher { UseRegex: true } text
             && !PaddleOcrBridge.IsValidRegex(text.ExpectedText, out _));
     public bool CanRecordThenActions => !isReadOnly
@@ -70,12 +94,35 @@ public partial class ConditionDirectivePanel : UserControl
         ConditionSequenceTitleText.Text = LocalizationService.Get("ConditionListTitle");
         AddConditionButton.Content = LocalizationService.Get("AddCondition");
         DeleteConditionButton.Content = LocalizationService.Get("DeleteCondition");
+        ConditionLibraryMenuButton.Content = LocalizationService.Get("ConditionLibraryMenu");
+        ConditionLibraryMenuButton.ToolTip = LocalizationService.Get("ConditionLibraryMenuHelp");
+        InsertLibraryConditionMacroMenuItem.Header = LocalizationService.Get("InsertLibraryConditionMacro");
+        InsertLibraryConditionMacroMenuItem.ToolTip = LocalizationService.Get("InsertLibraryConditionMacroHelp");
+        ExtractConditionPackMenuItem.Header = LocalizationService.Get("ExtractConditionPack");
+        ExtractConditionPackMenuItem.ToolTip = LocalizationService.Get("ExtractConditionPackHelp");
         EmptyConditionHintText.Text = LocalizationService.Get("EmptyConditionHint");
         ThenActionsLabelText.Text = LocalizationService.Get("ThenActionsTitle");
         ThenActionsHintText.Text = LocalizationService.Get("ThenActionsHint");
         AddThenActionButton.Content = LocalizationService.Get("AddThenAction");
         ThenActionEmptyHintText.Text = LocalizationService.Get("ThenActionEmptyHint");
         GateModeHintText.Text = LocalizationService.Get("ConditionGateModeHint");
+        ConditionStepRangeLabelText.Text = LocalizationService.Get("ConditionStepRangeTitle");
+        ConditionStepRangeHintText.Text = LocalizationService.Get("ConditionStepRangeOrTimeHint");
+        ConditionTimeWindowLabelText.Text = LocalizationService.Get("ConditionTimeWindowTitle");
+        TimeBasePlaybackItem.Content = LocalizationService.Get("ConditionTimeBasePlayback");
+        TimeBaseAfterPreviousItem.Content = LocalizationService.Get("ConditionTimeBaseAfterPrevious");
+        TimeBaseMainIterationItem.Content = LocalizationService.Get("ConditionTimeBaseMainIteration");
+        TimeWindowErrorText.Text = LocalizationService.Get("ConditionActivationInvalid");
+        ConditionRegionLabelText.Text = LocalizationService.Get("ConditionRegionTitle");
+        PickRegionButton.Content = LocalizationService.Get("PickScreenRegion");
+        SinglePixelModeCheckBox.Content = LocalizationService.Get("ConditionRegionSinglePixelMode");
+        RegionTopLeftLabelText.Text = LocalizationService.Get("ConditionRegionTopLeft");
+        RegionBottomRightLabelText.Text = LocalizationService.Get("ConditionRegionBottomRight");
+        UpdateTimeBaseHint();
+        if (selectedIndex >= 0 && selectedIndex < conditions.Count)
+        {
+            SetStepChoices(stepChoices);
+        }
         RecordThenActionsButton.Content = LocalizationService.Get(isRecording ? "StopRecording" : "StartRecording");
         RecordThenActionsButton.ToolTip = LocalizationService.Get("RecordingHelp");
         ThenActionPalette.ApplyLocalization();
@@ -88,15 +135,27 @@ public partial class ConditionDirectivePanel : UserControl
         isReadOnly = value;
         AddConditionButton.IsEnabled = !value;
         DeleteConditionButton.IsEnabled = !value;
+        ConditionLibraryMenuButton.IsEnabled = !value;
+        InsertLibraryConditionMacroMenuItem.IsEnabled = !value;
+        ExtractConditionPackMenuItem.IsEnabled = !value;
         ConditionList.AllowDrop = !value;
+        ConditionListDropHost.AllowDrop = !value;
         CondNameBox.IsReadOnly = value;
         CondTypeCombo.IsEnabled = !value;
         ExecutionModeCombo.IsEnabled = !value;
+        TimeBaseCombo.IsEnabled = !value;
         StartStepCombo.IsEnabled = !value;
         EndStepCombo.IsEnabled = !value;
         WindowStartMsBox.IsReadOnly = value;
         WindowEndMsBox.IsReadOnly = value;
         PickRegionButton.IsEnabled = !value;
+        SinglePixelModeCheckBox.IsEnabled = !value;
+        RegionXBox.IsReadOnly = value;
+        RegionYBox.IsReadOnly = value;
+        RegionLeftBox.IsReadOnly = value;
+        RegionTopBox.IsReadOnly = value;
+        RegionRightBox.IsReadOnly = value;
+        RegionBottomBox.IsReadOnly = value;
         ColorRBox.IsReadOnly = value;
         ColorGBox.IsReadOnly = value;
         ColorBBox.IsReadOnly = value;
@@ -164,8 +223,11 @@ public partial class ConditionDirectivePanel : UserControl
         try
         {
             stepChoices = choices;
-            StartStepCombo.ItemsSource = stepChoices;
-            EndStepCombo.ItemsSource = stepChoices;
+            var unlimited = CreateUnlimitedStepChoice();
+            var items = new List<StepChoice> { unlimited };
+            items.AddRange(choices);
+            StartStepCombo.ItemsSource = items;
+            EndStepCombo.ItemsSource = items;
             if (selectedIndex >= 0 && selectedIndex < conditions.Count)
             {
                 SelectStepChoice(StartStepCombo, conditions[selectedIndex].StartStepPathText, conditions[selectedIndex].StartStepIndex);
@@ -177,6 +239,9 @@ public partial class ConditionDirectivePanel : UserControl
             loadingEditor = previousLoadingEditor;
         }
     }
+
+    private static StepChoice CreateUnlimitedStepChoice() =>
+        new(-1, LocalizationService.Get("ConditionStepRangeUnlimited"), []);
 
     public void LoadConditions(IReadOnlyList<ConditionalDirective>? directives)
     {
@@ -279,6 +344,90 @@ public partial class ConditionDirectivePanel : UserControl
         Dispatcher.BeginInvoke(new Action(ScrollThenActionsIntoView), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
+    private void ConditionLibraryMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ConditionLibraryContextMenu is null)
+        {
+            return;
+        }
+
+        ConditionLibraryContextMenu.PlacementTarget = ConditionLibraryMenuButton;
+        ConditionLibraryContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        ConditionLibraryContextMenu.IsOpen = true;
+    }
+
+    private void ExtractConditionPack_Click(object sender, RoutedEventArgs e)
+    {
+        if (isReadOnly)
+        {
+            return;
+        }
+
+        var indexes = GetSelectedConditionIndexes();
+        var source = indexes.Count > 0
+            ? indexes.Select(index => conditions[index]).ToList()
+            : conditions.ToList();
+        if (source.Count == 0)
+        {
+            StatusMessageRequested?.Invoke(LocalizationService.Get("ExtractConditionPackEmpty"));
+            return;
+        }
+
+        var name = source.Count == 1 && !string.IsNullOrWhiteSpace(source[0].Name)
+            ? source[0].Name.Trim()
+            : LocalizationService.Format("ExtractedConditionPackName", source.Count);
+        var pack = ConditionPackCloner.CloneWithNewIds(source);
+        ExtractConditionPackRequested?.Invoke(pack, name);
+    }
+
+    private void InsertLibraryConditionMacro_Click(object sender, RoutedEventArgs e)
+    {
+        if (isReadOnly)
+        {
+            return;
+        }
+
+        InsertSelectedLibraryConditionMacroRequested?.Invoke();
+    }
+
+    public void InsertConditionPack(IReadOnlyList<ConditionalDirective> pack, string? packDisplayName = null)
+    {
+        if (isReadOnly || pack.Count == 0)
+        {
+            return;
+        }
+
+        var cloned = ConditionPackCloner.CloneWithNewIds(pack);
+        var firstChoice = stepChoices.FirstOrDefault();
+        var packName = string.IsNullOrWhiteSpace(packDisplayName) ? null : packDisplayName.Trim();
+        for (var i = 0; i < cloned.Count; i++)
+        {
+            var condition = cloned[i];
+            var preferredName = packName is null
+                ? condition.Name
+                : cloned.Count == 1
+                    ? packName
+                    : $"{packName} ({i + 1})";
+            var startIndex = firstChoice?.Index ?? condition.StartStepIndex;
+            var endIndex = firstChoice?.Index ?? condition.EndStepIndex;
+            var startPath = firstChoice?.Path ?? condition.StartStepPath;
+            var endPath = firstChoice?.Path ?? condition.EndStepPath;
+            conditions.Add(condition with
+            {
+                Name = EnsureUniqueConditionName(preferredName),
+                StartStepIndex = startIndex,
+                EndStepIndex = endIndex,
+                StartStepPath = startPath,
+                EndStepPath = endPath
+            });
+        }
+
+        RefreshList();
+        ConditionList.SelectedIndex = conditions.Count - 1;
+        ConditionsModified?.Invoke(this, EventArgs.Empty);
+        Dispatcher.BeginInvoke(new Action(ScrollThenActionsIntoView), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
     private void DeleteCondition_Click(object sender, RoutedEventArgs e)
     {
         if (isReadOnly) return;
@@ -367,7 +516,16 @@ public partial class ConditionDirectivePanel : UserControl
         }
 
         conditionDragStarted = true;
-        DragDrop.DoDragDrop(ConditionList, new DataObject(ConditionDragFormat, string.Join(",", indexes)), DragDropEffects.Move);
+        BeginConditionListDragInteraction();
+        try
+        {
+            DragDrop.DoDragDrop(ConditionList, new DataObject(ConditionDragFormat, string.Join(",", indexes)), DragDropEffects.Move);
+        }
+        finally
+        {
+            EndConditionListDragInteraction();
+        }
+
         conditionDragStarted = false;
         conditionDragStartIndex = -1;
         e.Handled = true;
@@ -399,44 +557,95 @@ public partial class ConditionDirectivePanel : UserControl
             return;
         }
 
-        if (!e.Data.GetDataPresent(ConditionDragFormat))
+        if (e.Data.GetDataPresent(ConditionDragFormat))
         {
-            return;
-        }
-
-        e.Effects = DragDropEffects.Move;
-        e.Handled = true;
-    }
-
-    private void ConditionList_Drop(object sender, DragEventArgs e)
-    {
-        if (isReadOnly)
-        {
-            e.Effects = DragDropEffects.None;
+            BeginConditionListDragInteraction();
+            AutoScrollConditionList(e.GetPosition(ConditionList));
+            e.Effects = DragDropEffects.Move;
             e.Handled = true;
             return;
         }
 
-        if (!e.Data.GetDataPresent(ConditionDragFormat)
-            || e.Data.GetData(ConditionDragFormat) is not string payload)
+        if (TryReadLibraryMacroIds(e.Data, out _))
         {
-            return;
+            BeginConditionListDragInteraction();
+            AutoScrollConditionList(e.GetPosition(ConditionList));
+            e.Effects = (e.AllowedEffects & DragDropEffects.Copy) != 0
+                ? DragDropEffects.Copy
+                : DragDropEffects.Move;
+            e.Handled = true;
+        }
+    }
+
+    private void ConditionList_Drop(object sender, DragEventArgs e)
+    {
+        try
+        {
+            if (isReadOnly)
+            {
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+
+            if (TryReadLibraryMacroIds(e.Data, out var macroIds))
+            {
+                foreach (var macroId in macroIds)
+                {
+                    MacroLibraryDroppedOnConditionList?.Invoke(macroId);
+                }
+
+                e.Handled = true;
+                return;
+            }
+
+            if (!e.Data.GetDataPresent(ConditionDragFormat)
+                || e.Data.GetData(ConditionDragFormat) is not string payload)
+            {
+                return;
+            }
+
+            var indexes = payload
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(value => int.TryParse(value, out var index) ? index : -1)
+                .Where(index => index >= 0 && index < conditions.Count)
+                .Distinct()
+                .Order()
+                .ToList();
+            if (indexes.Count == 0)
+            {
+                return;
+            }
+
+            MoveSelectedConditionsToIndex(indexes, GetConditionDropIndex(e.GetPosition(ConditionList)));
+            e.Handled = true;
+        }
+        finally
+        {
+            EndConditionListDragInteraction();
+        }
+    }
+
+    private static bool TryReadLibraryMacroIds(IDataObject data, out string[] macroIds)
+    {
+        if (!data.GetDataPresent(MacroLibraryDragFormat))
+        {
+            macroIds = [];
+            return false;
         }
 
-        var indexes = payload
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(value => int.TryParse(value, out var index) ? index : -1)
-            .Where(index => index >= 0 && index < conditions.Count)
-            .Distinct()
-            .Order()
-            .ToList();
-        if (indexes.Count == 0)
+        switch (data.GetData(MacroLibraryDragFormat))
         {
-            return;
+            case string id when !string.IsNullOrWhiteSpace(id):
+                macroIds = [id];
+                return true;
+            case string[] ids when ids.Length > 0:
+                macroIds = ids.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                return macroIds.Length > 0;
+            default:
+                macroIds = [];
+                return false;
         }
-
-        MoveSelectedConditionsToIndex(indexes, GetConditionDropIndex(e.GetPosition(ConditionList)));
-        e.Handled = true;
     }
 
     private IReadOnlyList<int> GetSelectedConditionIndexes()
@@ -572,6 +781,25 @@ public partial class ConditionDirectivePanel : UserControl
         }
 
         return candidate;
+    }
+
+    private string EnsureUniqueConditionName(string name)
+    {
+        var baseName = string.IsNullOrWhiteSpace(name) ? "条件" : name.Trim();
+        if (!conditions.Any(condition => string.Equals(condition.Name, baseName, StringComparison.CurrentCultureIgnoreCase)))
+        {
+            return baseName;
+        }
+
+        var counter = 2;
+        while (true)
+        {
+            var candidate = $"{baseName} ({counter++})";
+            if (!conditions.Any(condition => string.Equals(condition.Name, candidate, StringComparison.CurrentCultureIgnoreCase)))
+            {
+                return candidate;
+            }
+        }
     }
 
     private void DeleteConditions(IReadOnlyList<int> indexes)
@@ -810,7 +1038,14 @@ public partial class ConditionDirectivePanel : UserControl
             ConditionExecutionMode.GateMainSequence => 2,
             _ => 0
         };
-        UpdateThenActionsVisibility(cond.ExecutionMode);
+        TimeBaseCombo.SelectedIndex = cond.TimeBase switch
+        {
+            ConditionTimeBase.AfterPreviousCondition => 1,
+            ConditionTimeBase.MainIteration => 2,
+            _ => 0
+        };
+        UpdateTimeBaseHint();
+        UpdateExecutionModeVisibility(cond.ExecutionMode);
 
         var typeIndex = cond.Condition.Type switch
         {
@@ -839,12 +1074,13 @@ public partial class ConditionDirectivePanel : UserControl
 
         RegionInfoText.Text = $"({cond.Condition switch
         {
-            PixelMatcher p => $"{p.Region.TopLeft.X},{p.Region.TopLeft.Y} ~ {p.Region.BottomRight.X},{p.Region.BottomRight.Y}",
-            TemplateMatcher t => $"{t.Region.TopLeft.X},{t.Region.TopLeft.Y} ~ {t.Region.BottomRight.X},{t.Region.BottomRight.Y}",
-            PixelHashMatcher h => $"{h.Region.TopLeft.X},{h.Region.TopLeft.Y} ~ {h.Region.BottomRight.X},{h.Region.BottomRight.Y}",
-            TextMatcher tx => $"{tx.Region.TopLeft.X},{tx.Region.TopLeft.Y} ~ {tx.Region.BottomRight.X},{tx.Region.BottomRight.Y}",
-            _ => "未设置"
+            PixelMatcher p => FormatRegionSummary(p.Region),
+            TemplateMatcher t => FormatRegionSummary(t.Region),
+            PixelHashMatcher h => FormatRegionSummary(h.Region),
+            TextMatcher tx => FormatRegionSummary(tx.Region),
+            _ => LocalizationService.Get("ConditionRegionUnset")
         }})";
+        LoadRegionEditor(GetMatcherRegion(cond.Condition));
 
         ThenActionSequence.SetSteps(cond.ThenSteps);
         loadingEditor = false;
@@ -861,7 +1097,15 @@ public partial class ConditionDirectivePanel : UserControl
     {
         if (isReadOnly) return;
         if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var c)) return;
-        conditions[editIndex] = c with { Name = CondNameBox.Text };
+        var name = CondNameBox.Text;
+        conditions[editIndex] = c with { Name = name };
+        if (editIndex >= 0
+            && editIndex < ConditionList.Items.Count
+            && ConditionList.Items[editIndex] is ConditionDisplayItem item)
+        {
+            item.Name = name;
+        }
+
         ConditionsModified?.Invoke(this, EventArgs.Empty);
     }
 
@@ -890,8 +1134,42 @@ public partial class ConditionDirectivePanel : UserControl
             && Enum.TryParse<ConditionExecutionMode>(tag, out var parsed)
             ? parsed
             : ConditionExecutionMode.Parallel;
+        var isGate = mode == ConditionExecutionMode.GateMainSequence;
         conditions[editIndex] = condition with { ExecutionMode = mode };
-        UpdateThenActionsVisibility(mode);
+        if (isGate)
+        {
+            conditions[editIndex] = conditions[editIndex] with
+            {
+                StartStepIndex = -1,
+                EndStepIndex = -1,
+                StartStepPath = null,
+                EndStepPath = null,
+                WindowStart = null,
+                WindowEnd = null,
+                TimeBase = ConditionTimeBase.PlaybackTrigger
+            };
+        }
+
+        UpdateExecutionModeVisibility(mode);
+        RefreshList();
+        selectedIndex = editIndex;
+        ConditionList.SelectedIndex = editIndex;
+        LoadEditor(conditions[editIndex]);
+        ConditionsModified?.Invoke(this, EventArgs.Empty);
+        ConditionSelectionChanged?.Invoke(this,
+            new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
+    }
+
+    private void TimeBaseCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isReadOnly) return;
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition)) return;
+        var timeBase = TimeBaseCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse<ConditionTimeBase>(tag, out var parsed)
+            ? parsed
+            : ConditionTimeBase.PlaybackTrigger;
+        conditions[editIndex] = condition with { TimeBase = timeBase };
+        UpdateTimeBaseHint();
         RefreshList();
         selectedIndex = editIndex;
         ConditionList.SelectedIndex = editIndex;
@@ -900,16 +1178,36 @@ public partial class ConditionDirectivePanel : UserControl
             new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
     }
 
-    private void UpdateThenActionsVisibility(ConditionExecutionMode mode)
+    private void UpdateTimeBaseHint()
+    {
+        var timeBase = TimeBaseCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse<ConditionTimeBase>(tag, out var parsed)
+            ? parsed
+            : ConditionTimeBase.PlaybackTrigger;
+        ConditionTimeWindowHintText.Text = timeBase switch
+        {
+            ConditionTimeBase.AfterPreviousCondition => LocalizationService.Get("ConditionTimeBaseAfterPreviousHint"),
+            ConditionTimeBase.MainIteration => LocalizationService.Get("ConditionTimeBaseMainIterationHint"),
+            _ => LocalizationService.Get("ConditionTimeBasePlaybackHint")
+        };
+    }
+
+    private void UpdateExecutionModeVisibility(ConditionExecutionMode mode)
     {
         var isGate = mode == ConditionExecutionMode.GateMainSequence;
-        ThenActionsSection.Visibility = isGate ? Visibility.Collapsed : Visibility.Visible;
+        ThenActionsSection.Visibility = Visibility.Visible;
         GateModeHintText.Visibility = isGate ? Visibility.Visible : Visibility.Collapsed;
+        ThenActionsHintText.Visibility = isGate ? Visibility.Collapsed : Visibility.Visible;
+        StepRangeSection.Visibility = isGate ? Visibility.Collapsed : Visibility.Visible;
+        TimeWindowSection.Visibility = isGate ? Visibility.Collapsed : Visibility.Visible;
         if (isGate)
         {
-            ThenActionPalettePopup.IsOpen = false;
+            TimeWindowErrorText.Visibility = Visibility.Collapsed;
         }
     }
+
+    private void UpdateThenActionsVisibility(ConditionExecutionMode mode)
+        => UpdateExecutionModeVisibility(mode);
 
     private void StepRange_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -918,6 +1216,33 @@ public partial class ConditionDirectivePanel : UserControl
         if (StartStepCombo.SelectedItem is not StepChoice startChoice
             || EndStepCombo.SelectedItem is not StepChoice endChoice)
         {
+            return;
+        }
+
+        if (startChoice.Index < 0 || endChoice.Index < 0)
+        {
+            loadingEditor = true;
+            try
+            {
+                SelectStepChoice(StartStepCombo, string.Empty, -1);
+                SelectStepChoice(EndStepCombo, string.Empty, -1);
+            }
+            finally
+            {
+                loadingEditor = false;
+            }
+
+            conditions[editIndex] = directive with
+            {
+                StartStepIndex = -1,
+                EndStepIndex = -1,
+                StartStepPath = null,
+                EndStepPath = null
+            };
+            RefreshActivationValidity(editIndex);
+            ConditionsModified?.Invoke(this, EventArgs.Empty);
+            ConditionSelectionChanged?.Invoke(this,
+                new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
             return;
         }
 
@@ -941,6 +1266,7 @@ public partial class ConditionDirectivePanel : UserControl
             StartStepPath = startChoice.Path,
             EndStepPath = effectiveEndChoice.Path
         };
+        RefreshActivationValidity(editIndex);
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
             new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
@@ -962,9 +1288,33 @@ public partial class ConditionDirectivePanel : UserControl
             WindowStart = windowStart,
             WindowEnd = windowEnd
         };
+        RefreshActivationValidity(editIndex);
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
             new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
+    }
+
+    private void RefreshActivationValidity(int editIndex)
+    {
+        if (editIndex < 0 || editIndex >= conditions.Count)
+        {
+            return;
+        }
+
+        if (conditions[editIndex].ExecutionMode == ConditionExecutionMode.GateMainSequence)
+        {
+            SetTimeWindowValidity(true);
+            TimeWindowErrorText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var valid = conditions[editIndex].HasActivationConstraint && TryReadTimeWindow(out _, out _);
+        SetTimeWindowValidity(valid);
+        if (!conditions[editIndex].HasActivationConstraint)
+        {
+            TimeWindowErrorText.Text = LocalizationService.Get("ConditionActivationInvalid");
+            TimeWindowErrorText.Visibility = Visibility.Visible;
+        }
     }
 
     private void PickRegion_Click(object sender, RoutedEventArgs e)
@@ -973,7 +1323,141 @@ public partial class ConditionDirectivePanel : UserControl
         PickRegionRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    private void PickConditionColor_Click(object sender, RoutedEventArgs e)
+    private void SinglePixelModeCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (loadingEditor) return;
+        var singlePixel = SinglePixelModeCheckBox.IsChecked == true;
+        UpdateRegionModeVisibility(singlePixel);
+        if (singlePixel)
+        {
+            var x = ReadInt(RegionLeftBox.Text, ReadInt(RegionXBox.Text, 0));
+            var y = ReadInt(RegionTopBox.Text, ReadInt(RegionYBox.Text, 0));
+            RegionXBox.Text = x.ToString();
+            RegionYBox.Text = y.ToString();
+        }
+        else
+        {
+            var x = ReadInt(RegionXBox.Text, ReadInt(RegionLeftBox.Text, 0));
+            var y = ReadInt(RegionYBox.Text, ReadInt(RegionTopBox.Text, 0));
+            RegionLeftBox.Text = x.ToString();
+            RegionTopBox.Text = y.ToString();
+            if (string.IsNullOrWhiteSpace(RegionRightBox.Text))
+            {
+                RegionRightBox.Text = (x + 1).ToString();
+            }
+
+            if (string.IsNullOrWhiteSpace(RegionBottomBox.Text))
+            {
+                RegionBottomBox.Text = (y + 1).ToString();
+            }
+        }
+
+        UpdateRegionFromEditor();
+    }
+
+    private void RegionCoordBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateRegionFromEditor();
+    }
+
+    private void UpdateRegionModeVisibility(bool singlePixel)
+    {
+        SinglePixelCoordPanel.Visibility = singlePixel ? Visibility.Visible : Visibility.Collapsed;
+        RectCoordPanel.Visibility = singlePixel ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void LoadRegionEditor(ScreenRegion region)
+    {
+        var singlePixel = IsSinglePixelRegion(region);
+        SinglePixelModeCheckBox.IsChecked = singlePixel;
+        UpdateRegionModeVisibility(singlePixel);
+        if (singlePixel)
+        {
+            RegionXBox.Text = region.TopLeft.X.ToString();
+            RegionYBox.Text = region.TopLeft.Y.ToString();
+        }
+        else
+        {
+            RegionLeftBox.Text = region.TopLeft.X.ToString();
+            RegionTopBox.Text = region.TopLeft.Y.ToString();
+            RegionRightBox.Text = region.BottomRight.X.ToString();
+            RegionBottomBox.Text = region.BottomRight.Y.ToString();
+        }
+    }
+
+    private void UpdateRegionFromEditor()
+    {
+        if (isReadOnly) return;
+        if (loadingEditor || !TryGetSelectedCondition(out var editIndex, out var condition))
+        {
+            return;
+        }
+
+        var region = BuildRegionFromEditor();
+        var updatedMatcher = condition.Condition switch
+        {
+            PixelMatcher pixel => (IConditionMatcher)(pixel with { Region = region }),
+            TextMatcher text => text with { Region = region },
+            TemplateMatcher template => template with { Region = region },
+            PixelHashMatcher hash => hash with { Region = region },
+            _ => new PixelMatcher(region, new RgbColor(255, 0, 0), 10)
+        };
+
+        if (updatedMatcher.Equals(condition.Condition))
+        {
+            return;
+        }
+
+        conditions[editIndex] = condition with { Condition = updatedMatcher };
+        RegionInfoText.Text = $"({FormatRegionSummary(region)})";
+        RefreshList();
+        selectedIndex = editIndex;
+        ConditionList.SelectedIndex = editIndex;
+        ConditionsModified?.Invoke(this, EventArgs.Empty);
+        ConditionSelectionChanged?.Invoke(this,
+            new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
+    }
+
+    private ScreenRegion BuildRegionFromEditor()
+    {
+        if (SinglePixelModeCheckBox.IsChecked == true)
+        {
+            return ScreenRegion.FromSinglePixel(
+                ReadInt(RegionXBox.Text, 0),
+                ReadInt(RegionYBox.Text, 0));
+        }
+
+        var left = ReadInt(RegionLeftBox.Text, 0);
+        var top = ReadInt(RegionTopBox.Text, 0);
+        var right = ReadInt(RegionRightBox.Text, left);
+        var bottom = ReadInt(RegionBottomBox.Text, top);
+        if (right < left)
+        {
+            (left, right) = (right, left);
+        }
+
+        if (bottom < top)
+        {
+            (top, bottom) = (bottom, top);
+        }
+
+        if (right - left < 1 && bottom - top < 1)
+        {
+            return ScreenRegion.FromSinglePixel(left, top);
+        }
+
+        return ScreenRegion.FromRect(left, top, right, bottom);
+    }
+
+    private static bool IsSinglePixelRegion(ScreenRegion region)
+        => region.Width <= 1 && region.Height <= 1;
+
+    private static string FormatRegionSummary(ScreenRegion region)
+        => IsSinglePixelRegion(region)
+            ? $"{region.TopLeft.X},{region.TopLeft.Y}"
+            : $"{region.TopLeft.X},{region.TopLeft.Y} ~ {region.BottomRight.X},{region.BottomRight.Y}";
+
+    private async void PickConditionColor_Click(object sender, RoutedEventArgs e)
     {
         if (isReadOnly) return;
         if (!TryGetSelectedCondition(out _, out var directive)) return;
@@ -982,12 +1466,17 @@ public partial class ConditionDirectivePanel : UserControl
             return;
         }
 
-        var picker = new ScreenCoordinatePickerWindow();
+        var owner = Window.GetWindow(this);
+        var result = await ScreenPixelSampler.PickScreenPixelAsync(owner);
+        if (!result.Ok)
+        {
+            StatusMessageRequested?.Invoke(LocalizationService.Get("ColorPickFailedHint"));
+            return;
+        }
 
-        if (DialogOwnerService.ShowDialogSafe(picker, this) != true) return;
-        if (!ScreenPixelSampler.TryReadPixel(picker.SelectedX, picker.SelectedY, out var color)) return;
-
-        ApplyPickedConditionColor(picker.SelectedX, picker.SelectedY, color);
+        ApplyPickedConditionColor(result.X, result.Y, result.Color);
+        StatusMessageRequested?.Invoke(
+            LocalizationService.Format("ColorPickedStatus", result.Color.R, result.Color.G, result.Color.B));
     }
 
     private void ApplyPickedConditionColor(int x, int y, RgbColor color)
@@ -1251,10 +1740,11 @@ public partial class ConditionDirectivePanel : UserControl
 
     private void UpdateOcrStatus(OcrRecognitionResult result)
     {
-        var recognizedText = string.IsNullOrWhiteSpace(result.Text) ? "空" : result.Text;
+        var recognizedText = OcrDisplayText.Format(result);
+        var displayText = string.IsNullOrWhiteSpace(recognizedText) ? "空" : recognizedText;
         OcrStatusText.Text = result.Success
-            ? $"OCR {result.BackendName}: recognizedText={recognizedText}"
-            : $"OCR {result.BackendName}: {result.Error ?? "recognition empty"}; recognizedText={recognizedText}";
+            ? $"OCR {result.BackendName}: recognizedText={displayText}"
+            : $"OCR {result.BackendName}: {result.Error ?? "recognition empty"}; recognizedText={displayText}";
     }
 
     private void OnThenActionSequenceStepsChanged()
@@ -1265,9 +1755,8 @@ public partial class ConditionDirectivePanel : UserControl
         }
 
         conditions[editIndex] = condition with { ThenSteps = ThenActionSequence.Steps.ToList() };
-        RefreshList();
-        selectedIndex = editIndex;
-        ConditionList.SelectedIndex = editIndex;
+        // Avoid RefreshList/SelectedIndex here: rebuilding the condition list reloads the
+        // then-action editor and clears multi-step insert selection mid-edit.
         UpdateThenActionEmptyHint();
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
@@ -1316,8 +1805,18 @@ public partial class ConditionDirectivePanel : UserControl
 
         try
         {
+            var item = editorState.LibraryStore.TryGetItem(macroId);
             var document = editorState.LibraryStore.ReadMacro(macroId);
-            ThenActionSequence.InsertStepsAtPath(document.Steps, parentPathText, insertIndex);
+            if (item?.IsConditionMacro == true || document.IsConditionMacro)
+            {
+                StatusMessageRequested?.Invoke(LocalizationService.Get("ConditionPackNotForThenActions"));
+                return;
+            }
+
+            ThenActionSequence.InsertStepsAtPath(
+                [new MacroCallStep(document.Name)],
+                parentPathText,
+                insertIndex);
         }
         catch
         {
@@ -1401,21 +1900,48 @@ public partial class ConditionDirectivePanel : UserControl
 
     private string DescribeRange(ConditionalDirective directive)
     {
+        if (directive.ExecutionMode == ConditionExecutionMode.GateMainSequence)
+        {
+            return LocalizationService.Get("ConditionGateRangeHint");
+        }
+
+        var baseLabel = directive.TimeBase switch
+        {
+            ConditionTimeBase.AfterPreviousCondition => LocalizationService.Get("ConditionTimeBaseAfterPreviousShort"),
+            ConditionTimeBase.MainIteration => LocalizationService.Get("ConditionTimeBaseMainIterationShort"),
+            _ => LocalizationService.Get("ConditionTimeBasePlaybackShort")
+        };
+        string? timePart = null;
+        if (directive.HasTimeRange)
+        {
+            var start = directive.WindowStart is { } windowStart ? FormatMs(windowStart) : "0";
+            var end = directive.WindowEnd is { } windowEnd ? FormatMs(windowEnd) : LocalizationService.Get("ConditionTimeRangeOpenEnd");
+            timePart = $"{baseLabel} {start}~{end} ms";
+        }
+
+        if (!directive.HasStepRange)
+        {
+            return timePart ?? LocalizationService.Get("ConditionStepRangeUnlimited");
+        }
+
         var startLabel = FindStepChoiceLabel(directive.StartStepPathText, directive.StartStepIndex);
         var endLabel = FindStepChoiceLabel(directive.EndStepPathText, directive.EndStepIndex);
         var range = $"{startLabel} ~ {endLabel}";
-        if (directive.WindowStart is null && directive.WindowEnd is null)
+        if (timePart is null)
         {
             return range;
         }
 
-        var start = directive.WindowStart is { } windowStart ? FormatMs(windowStart) : "0";
-        var end = directive.WindowEnd is { } windowEnd ? FormatMs(windowEnd) : "结束";
-        return $"{range} · 触发后 {start}~{end} ms";
+        return $"{range} {LocalizationService.Get("ConditionRangeOr")} {timePart}";
     }
 
     private string FindStepChoiceLabel(string pathText, int stepIndex)
     {
+        if (stepIndex < 0)
+        {
+            return LocalizationService.Get("ConditionStepRangeUnlimited");
+        }
+
         var match = stepChoices.FirstOrDefault(choice =>
             (!string.IsNullOrWhiteSpace(pathText)
                 && string.Equals(choice.PathText, pathText, StringComparison.Ordinal))
@@ -1425,8 +1951,23 @@ public partial class ConditionDirectivePanel : UserControl
 
     private static void SelectStepChoice(ComboBox comboBox, string pathText, int stepIndex)
     {
+        if (stepIndex < 0)
+        {
+            var unlimited = comboBox.Items.OfType<StepChoice>().FirstOrDefault(choice => choice.Index < 0);
+            if (unlimited is not null)
+            {
+                comboBox.SelectedItem = unlimited;
+                return;
+            }
+        }
+
         foreach (var choice in comboBox.Items.OfType<StepChoice>())
         {
+            if (choice.Index < 0)
+            {
+                continue;
+            }
+
             if ((!string.IsNullOrWhiteSpace(pathText)
                     && string.Equals(choice.PathText, pathText, StringComparison.Ordinal))
                 || choice.Index == stepIndex)
@@ -1493,6 +2034,171 @@ public partial class ConditionDirectivePanel : UserControl
             : fallback;
     }
 
+    private static int ReadInt(string value, int fallback)
+        => int.TryParse(value.Trim(), out var parsed) ? parsed : fallback;
+
+    private void ThenActionsResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        var next = ThenActionSequenceHost.Height + e.VerticalChange;
+        if (double.IsNaN(ThenActionSequenceHost.Height) || ThenActionSequenceHost.Height <= 0)
+        {
+            next = ThenActionSequenceHost.ActualHeight + e.VerticalChange;
+        }
+
+        ThenActionSequenceHost.Height = Math.Clamp(next, 160, 900);
+    }
+
+    private void BeginConditionListDragInteraction()
+    {
+        conditionListDragInProgress = true;
+        StartConditionDragWheelHook();
+    }
+
+    private void EndConditionListDragInteraction()
+    {
+        conditionListDragInProgress = false;
+        StopConditionDragWheelHook();
+    }
+
+    private void StartConditionDragWheelHook()
+    {
+        if (conditionDragMouseHookHandle != IntPtr.Zero)
+        {
+            return;
+        }
+
+        conditionDragMouseHookHandle = SetWindowsHookEx(WH_MOUSE_LL, conditionDragMouseHookProc, IntPtr.Zero, 0);
+    }
+
+    private void StopConditionDragWheelHook()
+    {
+        if (conditionDragMouseHookHandle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        UnhookWindowsHookEx(conditionDragMouseHookHandle);
+        conditionDragMouseHookHandle = IntPtr.Zero;
+    }
+
+    private IntPtr ConditionDragMouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0
+            && wParam.ToInt32() == WM_MOUSEWHEEL_LOW_LEVEL
+            && conditionListDragInProgress
+            && conditionDragMouseHookHandle != IntPtr.Zero)
+        {
+            var data = Marshal.PtrToStructure<MouseLowLevelHookStruct>(lParam);
+            if (IsScreenPointInsideConditionList(data.Point.X, data.Point.Y))
+            {
+                var delta = unchecked((short)((data.MouseData >> 16) & 0xFFFF));
+                Dispatcher.BeginInvoke(
+                    new Action(() => ScrollConditionListByWheelDelta(delta)),
+                    DispatcherPriority.Input);
+                return new IntPtr(1);
+            }
+        }
+
+        return CallNextHookEx(conditionDragMouseHookHandle, nCode, wParam, lParam);
+    }
+
+    private bool IsScreenPointInsideConditionList(double screenX, double screenY)
+    {
+        if (!ConditionList.IsLoaded || !ConditionList.IsVisible)
+        {
+            return false;
+        }
+
+        try
+        {
+            var local = ConditionList.PointFromScreen(new Point(screenX, screenY));
+            return local.X >= 0
+                && local.Y >= 0
+                && local.X <= ConditionList.ActualWidth
+                && local.Y <= ConditionList.ActualHeight;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void ScrollConditionListByWheelDelta(int delta)
+    {
+        var scrollViewer = GetConditionListScrollViewer();
+        if (scrollViewer is null)
+        {
+            return;
+        }
+
+        var lines = SystemParameters.WheelScrollLines <= 0 ? 3 : SystemParameters.WheelScrollLines;
+        var offsetDelta = -(delta / WheelDelta) * lines;
+        var target = Math.Clamp(scrollViewer.VerticalOffset + offsetDelta, 0, scrollViewer.ScrollableHeight);
+        scrollViewer.ScrollToVerticalOffset(target);
+    }
+
+    private bool AutoScrollConditionList(Point point)
+    {
+        var scrollViewer = GetConditionListScrollViewer();
+        if (scrollViewer is null || scrollViewer.ScrollableHeight <= 0)
+        {
+            return false;
+        }
+
+        const double maxDelta = 28;
+        double delta = 0;
+        if (point.Y < AutoScrollEdgeSize)
+        {
+            delta = -ScaleAutoScrollDelta(AutoScrollEdgeSize - point.Y, AutoScrollEdgeSize, maxDelta);
+        }
+        else if (point.Y > ConditionList.ActualHeight - AutoScrollEdgeSize)
+        {
+            delta = ScaleAutoScrollDelta(point.Y - (ConditionList.ActualHeight - AutoScrollEdgeSize), AutoScrollEdgeSize, maxDelta);
+        }
+
+        if (Math.Abs(delta) < 0.5)
+        {
+            return false;
+        }
+
+        scrollViewer.ScrollToVerticalOffset(
+            Math.Clamp(scrollViewer.VerticalOffset + delta, 0, scrollViewer.ScrollableHeight));
+        return true;
+    }
+
+    private ScrollViewer? GetConditionListScrollViewer()
+    {
+        return conditionListScrollViewer ??= FindVisualChild<ScrollViewer>(ConditionList);
+    }
+
+    private static double ScaleAutoScrollDelta(double distanceIntoEdge, double edgeSize, double maxDelta)
+    {
+        var ratio = Math.Clamp(distanceIntoEdge / edgeSize, 0.15, 1.0);
+        return maxDelta * ratio;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(parent);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
+            {
+                return match;
+            }
+
+            var nested = FindVisualChild<T>(child);
+            if (nested is not null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
     private static T? FindVisualParent<T>(DependencyObject? source)
         where T : DependencyObject
     {
@@ -1506,17 +2212,72 @@ public partial class ConditionDirectivePanel : UserControl
 
         return null;
     }
+
+    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseLowLevelHookStruct
+    {
+        public NativePoint Point;
+        public int MouseData;
+        public int Flags;
+        public int Time;
+        public IntPtr ExtraInfo;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(
+        int idHook,
+        LowLevelMouseProc lpfn,
+        IntPtr hmod,
+        uint dwThreadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CallNextHookEx(
+        IntPtr hhk,
+        int nCode,
+        IntPtr wParam,
+        IntPtr lParam);
 }
 
-public sealed class ConditionDisplayItem
+public sealed class ConditionDisplayItem : System.ComponentModel.INotifyPropertyChanged
 {
-    public string Name { get; set; } = "";
+    private string name = "";
+
+    public string Name
+    {
+        get => name;
+        set
+        {
+            if (string.Equals(name, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            name = value ?? "";
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Name)));
+        }
+    }
+
     public string Description { get; set; } = "";
     public string RangeBadge { get; set; } = "";
     public string TypeIcon { get; set; } = "";
     public Brush ColorBrush { get; set; } = Brushes.Gray;
     public Brush StatusBrush { get; set; } = Brushes.Gray;
     public string StatusText { get; set; } = "";
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
 public sealed class ConditionSelectionChangedEventArgs : EventArgs

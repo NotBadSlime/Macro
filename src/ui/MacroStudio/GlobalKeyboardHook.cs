@@ -169,9 +169,17 @@ public sealed class GlobalKeyboardHook : IDisposable
             return true;
         }
 
-        if (virtualKey >= 0x70 && virtualKey <= 0x87)
+        // VK_F1–F12 are contiguous; VK_F13–F24 continue at 0x7C.
+        // HID usages are not contiguous across that boundary (F13 jumps to 0x68).
+        if (virtualKey >= 0x70 && virtualKey <= 0x7B)
         {
             key = (HidKey)((int)HidKey.F1 + (virtualKey - 0x70));
+            return true;
+        }
+
+        if (virtualKey >= 0x7C && virtualKey <= 0x87)
+        {
+            key = (HidKey)((int)HidKey.F13 + (virtualKey - 0x7C));
             return true;
         }
 

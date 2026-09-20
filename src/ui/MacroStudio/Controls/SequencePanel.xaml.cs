@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MacroHid.Core;
 using MacroStudio.Services;
 
@@ -211,7 +212,7 @@ public partial class SequencePanel : UserControl
             MacroNameBox.Text = document.Name;
             updatingMacroName = false;
             StepCountText.Text = scheduled.Count.ToString();
-            DurationText.Text = FormatDurationRange(EstimateDurationRange(document.Steps));
+            DurationText.Text = FormatDurationRange(MacroDurationEstimator.EstimateSteps(document.Steps, ResolveMacroForEstimate));
             StepSequenceControl.SetSteps(document.Steps);
         }
         catch (Exception ex)
@@ -262,6 +263,17 @@ public partial class SequencePanel : UserControl
             return;
         }
 
+        var confirmed = DialogOwnerService.MessageBoxSafe(
+            Window.GetWindow(this),
+            L("ClearAllConfirm"),
+            L("ClearAll"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (confirmed != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
         CaptureUndoSnapshot();
         SetEditorDocument(document with
         {
@@ -292,13 +304,44 @@ public partial class SequencePanel : UserControl
 
     private string ResolveMacroDisplayName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        return ResolveLibraryItem(value)?.Name ?? value;
+    }
+
+    private MacroDocument? ResolveMacroForEstimate(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
         {
-            return value;
+            return null;
         }
 
-        var item = state?.LibrarySnapshot.Items.FirstOrDefault(item => item.MatchesReference(value));
-        return item?.Name ?? value;
+        try
+        {
+            var current = McrxParser.Parse(EditorText);
+            if (string.Equals(current.Name, reference, StringComparison.CurrentCultureIgnoreCase))
+            {
+                return current;
+            }
+        }
+        catch
+        {
+            // Keep estimating from library references when the editor text is invalid.
+        }
+
+        var item = ResolveLibraryItem(reference);
+        return item is null ? null : state?.LibraryStore.ReadMacro(item.Id);
+    }
+
+    private MacroLibraryItem? ResolveLibraryItem(string? reference)
+    {
+        if (state is null || string.IsNullOrWhiteSpace(reference))
+        {
+            return null;
+        }
+
+        var snapshot = state.LibraryStore.Load();
+        var preferredGroupId = snapshot.Items.FirstOrDefault(item =>
+            string.Equals(item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase))?.GroupId;
+        return MacroLibraryResolver.Resolve(snapshot.Items, reference, preferredGroupId);
     }
 
     private void SaveLibrary_Click(object sender, RoutedEventArgs e) => SaveLibraryRequested?.Invoke();
@@ -317,11 +360,26 @@ public partial class SequencePanel : UserControl
         }
     }
 
+    public void FocusMacroNameEditor()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            MacroNameBox.Focus();
+            MacroNameBox.SelectAll();
+        }, DispatcherPriority.Input);
+    }
+
     private void MacroNameBox_LostFocus(object sender, RoutedEventArgs e) => ApplyNameFromBox();
 
     private void MacroNameBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
+        if (Keyboard.Modifiers == ModifierKeys.Alt)
+        {
+            e.Handled = true;
+            return;
+        }
+
         ApplyNameFromBox();
         Keyboard.ClearFocus();
         e.Handled = true;
@@ -335,64 +393,17 @@ public partial class SequencePanel : UserControl
         try { ApplyMacroName(name); } catch { }
     }
 
-    private static TimeSpan EstimateDuration(IReadOnlyList<MacroStep> steps)
-    {
-        return EstimateDurationRange(steps).Max;
-    }
-
-    private static DurationRange EstimateDurationRange(IReadOnlyList<MacroStep> steps)
-    {
-        var minTicks = 0L;
-        var maxTicks = 0L;
-        foreach (var step in steps)
-        {
-            var range = EstimateStepDurationRange(step);
-            minTicks += range.Min.Ticks;
-            maxTicks += range.Max.Ticks;
-        }
-
-        return new DurationRange(TimeSpan.FromTicks(minTicks), TimeSpan.FromTicks(maxTicks));
-    }
-
-    private static TimeSpan EstimateStepDuration(MacroStep step)
-    {
-        return EstimateStepDurationRange(step).Max;
-    }
-
-    private static DurationRange EstimateStepDurationRange(MacroStep step) => step switch
-    {
-        KeyStep key => FixedDuration(key.Hold),
-        MouseMoveStep move => FixedDuration(move.Duration),
-        MouseButtonStep button => FixedDuration(button.Hold),
-        ConsumerStep consumer => FixedDuration(consumer.Hold),
-        WaitStep wait => new DurationRange(wait.Duration, wait.MaxDuration ?? wait.Duration),
-        RepeatStep repeat => MultiplyDuration(EstimateDurationRange(repeat.Steps), Math.Max(0, repeat.Count)),
-        PixelWhenStep pixel => EstimateDurationRange(pixel.ThenSteps),
-        _ => FixedDuration(TimeSpan.Zero)
-    };
-
-    private static DurationRange FixedDuration(TimeSpan duration) => new(duration, duration);
-
-    private static DurationRange MultiplyDuration(DurationRange range, int count)
-    {
-        return new DurationRange(
-            TimeSpan.FromTicks(range.Min.Ticks * count),
-            TimeSpan.FromTicks(range.Max.Ticks * count));
-    }
-
     private static string FormatDuration(TimeSpan duration)
     {
         return duration.TotalSeconds >= 1 ? $"{duration.TotalSeconds:0.###} s" : $"{duration.TotalMilliseconds:0.###} ms";
     }
 
-    private static string FormatDurationRange(DurationRange range)
+    private static string FormatDurationRange(MacroDurationRange range)
     {
         return range.Min == range.Max
             ? FormatDuration(range.Max)
             : string.Join(" ~ ", [FormatDuration(range.Min), FormatDuration(range.Max)]);
     }
-
-    private readonly record struct DurationRange(TimeSpan Min, TimeSpan Max);
 
     private void UpdateUndoButtonState()
     {

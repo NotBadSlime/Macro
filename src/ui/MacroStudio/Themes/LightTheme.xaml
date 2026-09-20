@@ -19,8 +19,8 @@
     <SolidColorBrush x:Key="ActionHoverOverlay" Color="#2E2F80ED" />
     <SolidColorBrush x:Key="ChromeBackground" Color="#E8EBEF" />
     <SolidColorBrush x:Key="ChromeBorder" Color="#C8CED6" />
-    <SolidColorBrush x:Key="ControlBackground" Color="#F3F4F5" />
-    <SolidColorBrush x:Key="ControlBorder" Color="#C4CBD3" />
+    <SolidColorBrush x:Key="ControlBackground" Color="#EEF1F4" />
+    <SolidColorBrush x:Key="ControlBorder" Color="#8B96A5" />
     <SolidColorBrush x:Key="ScrollThumb" Color="#B8C0CA" />
     <SolidColorBrush x:Key="ScrollThumbHover" Color="#AEB8C6" />
     <SolidColorBrush x:Key="DisabledText" Color="#AEB5C0" />

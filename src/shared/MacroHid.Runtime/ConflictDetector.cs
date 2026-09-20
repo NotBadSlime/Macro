@@ -24,6 +24,11 @@ public static class ConflictDetector
             var condKeys = ExtractAllKeys(cond.ThenSteps);
             if (condKeys.Count == 0) continue;
 
+            if (!cond.HasStepRange)
+            {
+                continue;
+            }
+
             for (int stepIdx = cond.StartStepIndex; stepIdx <= cond.EndStepIndex && stepIdx < mainStepKeys.Count; stepIdx++)
             {
                 foreach (var mainKey in mainStepKeys[stepIdx])

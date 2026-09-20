@@ -113,7 +113,7 @@ public static class MacroStepNormalizer
         var result = new List<ConditionalDirective>(conditions.Count);
         foreach (var condition in conditions)
         {
-            if (condition.HasStepPaths)
+            if (!condition.HasStepRange || condition.HasStepPaths)
             {
                 result.Add(condition);
                 continue;

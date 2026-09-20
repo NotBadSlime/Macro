@@ -225,7 +225,9 @@ public static class SendInputEncoder
             flags |= RuntimeNativeMethods.KeyEventFExtendedKey;
         }
 
-        return new SendInputPacket(SendInputPacketKind.Keyboard, virtualKey, flags, 0, 0, 0);
+        // Populate scan code so games/raw-input listeners that ignore bare VKs still see the key.
+        var scanCode = (ushort)RuntimeNativeMethods.MapVirtualKey(virtualKey, 0);
+        return new SendInputPacket(SendInputPacketKind.Keyboard, virtualKey, flags, 0, 0, 0, scanCode);
     }
 
     private static SendInputPacket UnicodePacket(char value, bool keyUp)
@@ -263,9 +265,16 @@ public static class SendInputEncoder
             return (ushort)('1' + (key - HidKey.D1));
         }
 
-        if (key is >= HidKey.F1 and <= HidKey.F24)
+        // HID F1–F12 are 0x3A–0x45, but F13–F24 jump to 0x68–0x73.
+        // Do not treat the gap (PrintScreen, arrows, etc.) as function keys.
+        if (key is >= HidKey.F1 and <= HidKey.F12)
         {
             return (ushort)(0x70 + (key - HidKey.F1));
+        }
+
+        if (key is >= HidKey.F13 and <= HidKey.F24)
+        {
+            return (ushort)(0x7C + (key - HidKey.F13));
         }
 
         if (key is >= HidKey.Numpad1 and <= HidKey.Numpad9)

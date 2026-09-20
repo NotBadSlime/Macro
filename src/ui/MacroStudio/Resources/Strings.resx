@@ -273,6 +273,25 @@
   <data name="MacroLibrary" xml:space="preserve"><value>Macro Library Manager</value></data>
   <data name="NewMacro" xml:space="preserve"><value>New</value></data>
   <data name="NewMacroFile" xml:space="preserve"><value>Macro file</value></data>
+  <data name="NewConditionMacroFile" xml:space="preserve"><value>Condition macro</value></data>
+  <data name="ExtractConditionPack" xml:space="preserve"><value>Extract to library</value></data>
+  <data name="ExtractConditionPackHelp" xml:space="preserve"><value>Extract selected conditions (including then-actions) as a condition macro. If nothing is selected, extracts all.</value></data>
+  <data name="ExtractConditionPackEmpty" xml:space="preserve"><value>No conditions to extract.</value></data>
+  <data name="ExtractedConditionPackName" xml:space="preserve"><value>Condition pack ({0})</value></data>
+  <data name="ExtractedConditionPackCreated" xml:space="preserve"><value>Created condition macro "{0}" with {1} condition(s).</value></data>
+  <data name="InsertedConditionPack" xml:space="preserve"><value>Inserted condition pack "{0}" ({1} condition(s)).</value></data>
+  <data name="InsertedMacroCall" xml:space="preserve"><value>Inserted macro call "{0}".</value></data>
+  <data name="ConditionPackNotForThenActions" xml:space="preserve"><value>Condition macros can only be dropped onto a normal macro's condition list, not then-actions.</value></data>
+  <data name="ConditionLibraryMenu" xml:space="preserve"><value>Library</value></data>
+  <data name="ConditionLibraryMenuHelp" xml:space="preserve"><value>Insert the selected condition macro from the library, or extract current conditions as a condition macro.</value></data>
+  <data name="InsertLibraryConditionMacro" xml:space="preserve"><value>Insert condition macro…</value></data>
+  <data name="InsertLibraryConditionMacroHelp" xml:space="preserve"><value>Pick an orange condition macro from the current database and insert it into this list.</value></data>
+  <data name="SelectConditionMacroInLibraryFirst" xml:space="preserve"><value>Select an orange condition macro in the library first.</value></data>
+  <data name="ConditionMacroPickerTitle" xml:space="preserve"><value>Select condition macro</value></data>
+  <data name="InsertConditionMacro" xml:space="preserve"><value>Insert</value></data>
+  <data name="NoConditionMacrosInDatabase" xml:space="preserve"><value>No condition macros in the current database</value></data>
+  <data name="FilterConditionMacrosPlaceholder" xml:space="preserve"><value>Filter by name or folder</value></data>
+  <data name="DatabaseRootFolder" xml:space="preserve"><value>Root</value></data>
   <data name="NewFolder" xml:space="preserve"><value>Folder</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>Duplicate</value></data>
   <data name="Copy" xml:space="preserve"><value>Copy</value></data>
@@ -280,6 +299,7 @@
   <data name="Rename" xml:space="preserve"><value>Rename</value></data>
   <data name="Undo" xml:space="preserve"><value>Undo</value></data>
   <data name="ClearAll" xml:space="preserve"><value>Clear All</value></data>
+  <data name="ClearAllConfirm" xml:space="preserve"><value>Clear all steps and conditions in this macro? This cannot be undone except with Undo.</value></data>
   <data name="Delete" xml:space="preserve"><value>Delete</value></data>
   <data name="LockMacro" xml:space="preserve"><value>Lock editing</value></data>
   <data name="UnlockMacro" xml:space="preserve"><value>Unlock</value></data>
@@ -298,6 +318,8 @@
   <data name="AddMouseMove" xml:space="preserve"><value>Mouse Move</value></data>
   <data name="AddWheel" xml:space="preserve"><value>Wheel</value></data>
   <data name="AddText" xml:space="preserve"><value>Text Function</value></data>
+  <data name="AddComment" xml:space="preserve"><value>Comment</value></data>
+  <data name="AddCommentHint" xml:space="preserve"><value>Author note only; does nothing at runtime</value></data>
   <data name="AddMacro" xml:space="preserve"><value>Macro</value></data>
   <data name="AddLoop" xml:space="preserve"><value>Loop</value></data>
   <data name="AddStopCurrent" xml:space="preserve"><value>Stop Current Macro Layer</value></data>
@@ -309,11 +331,11 @@
   <data name="AddMouseButtonHint" xml:space="preserve"><value>Click, hold, and coordinate</value></data>
   <data name="AddMouseMoveHint" xml:space="preserve"><value>Relative or absolute move</value></data>
   <data name="AddWheelHint" xml:space="preserve"><value>Vertical / horizontal scroll</value></data>
-  <data name="AddTextHint" xml:space="preserve"><value>Send Unicode text</value></data>
+  <data name="AddTextHint" xml:space="preserve"><value>Paste text into the focused field (Ctrl+V)</value></data>
   <data name="AddMacroActionHint" xml:space="preserve"><value>Call a library macro</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>Repeat a group of steps</value></data>
   <data name="AddStopCurrentHint" xml:space="preserve"><value>Exit this macro call and continue the caller</value></data>
-  <data name="AddStopIterationHint" xml:space="preserve"><value>Skip remaining steps in this iteration and keep the outer loop running</value></data>
+  <data name="AddStopIterationHint" xml:space="preserve"><value>Skip remaining steps this round; toggle/hold loop starts the next round (including startup gates)</value></data>
   <data name="AddStopAllHint" xml:space="preserve"><value>Immediately stop the entire playback</value></data>
   <data name="ActionPaletteDragHint" xml:space="preserve"><value>Click to add, or drag to a target position in the sequence.</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>Drag another macro from the library into the sequence to copy its steps.</value></data>
@@ -387,6 +409,7 @@
   <data name="TemplateMouseMove" xml:space="preserve"><value>mouse move</value></data>
   <data name="TemplateMouseWheel" xml:space="preserve"><value>wheel</value></data>
   <data name="TemplateText" xml:space="preserve"><value>text function</value></data>
+  <data name="TemplateComment" xml:space="preserve"><value>comment</value></data>
   <data name="TemplateMacro" xml:space="preserve"><value>macro</value></data>
   <data name="TemplateLoop" xml:space="preserve"><value>loop</value></data>
   <data name="TemplatePixel" xml:space="preserve"><value>pixel condition</value></data>
@@ -428,6 +451,7 @@
   <data name="DateModified" xml:space="preserve"><value>Date modified</value></data>
   <data name="FileFolderType" xml:space="preserve"><value>File folder</value></data>
   <data name="MacroFileType" xml:space="preserve"><value>Macro</value></data>
+  <data name="ConditionMacroFileType" xml:space="preserve"><value>Condition macro</value></data>
   <data name="FolderItemCount" xml:space="preserve"><value>{0} item(s)</value></data>
   <data name="UpOneLevel" xml:space="preserve"><value>Back to parent</value></data>
   <data name="ViewDetails" xml:space="preserve"><value>Details</value></data>
@@ -460,18 +484,43 @@
   <data name="AlreadyEditingMacro" xml:space="preserve"><value>Already editing this macro.</value></data>
   <data name="ReturnMacroMissing" xml:space="preserve"><value>Previous macro is missing. Navigation history cleared.</value></data>
   <data name="ConditionListTitle" xml:space="preserve"><value>Conditions</value></data>
-  <data name="AddCondition" xml:space="preserve"><value>Add condition</value></data>
+  <data name="AddCondition" xml:space="preserve"><value>Add</value></data>
   <data name="DeleteCondition" xml:space="preserve"><value>Delete</value></data>
-  <data name="EmptyConditionHint" xml:space="preserve"><value>No conditions yet. Click “Add condition”, then add actions under “Run after trigger”.</value></data>
+  <data name="EmptyConditionHint" xml:space="preserve"><value>No conditions yet. Drop an orange condition macro here, or use Library → Insert condition macro / Add.</value></data>
   <data name="ThenActionsTitle" xml:space="preserve"><value>Run after trigger</value></data>
   <data name="ThenActionsHint" xml:space="preserve"><value>Actions to run when the condition matches. Click “Add action” or drag from the action palette.</value></data>
   <data name="AddThenAction" xml:space="preserve"><value>Add action</value></data>
   <data name="ThenActionEmptyHint" xml:space="preserve"><value>No actions yet. Click “Add action” above to start.</value></data>
   <data name="SelectConditionBeforeThenAction" xml:space="preserve"><value>Select a condition first, then add actions.</value></data>
-  <data name="ConditionGateModeHint" xml:space="preserve"><value>Only waits until the condition matches, then starts the main sequence. Then-actions are not run.</value></data>
+  <data name="ConditionGateModeHint" xml:space="preserve"><value>Waits for each gate in list order from play/trigger until it matches. Then-actions run before the next gate. The main sequence starts only after every gate has passed. Step and time ranges do not apply.</value></data>
+  <data name="ConditionGateRangeHint" xml:space="preserve"><value>From play/trigger</value></data>
+  <data name="ConditionTimeWindowTitle" xml:space="preserve"><value>Time range</value></data>
+  <data name="ConditionStepRangeTitle" xml:space="preserve"><value>Step range</value></data>
+  <data name="ConditionStepRangeUnlimited" xml:space="preserve"><value>(Any)</value></data>
+  <data name="ConditionStepRangeOrTimeHint" xml:space="preserve"><value>Optional. Watches when either the step range or the time range matches. Selected steps highlight in red.</value></data>
+  <data name="ConditionRegionTitle" xml:space="preserve"><value>Screen region</value></data>
+  <data name="PickScreenRegion" xml:space="preserve"><value>Pick region</value></data>
+  <data name="ConditionRegionSinglePixelMode" xml:space="preserve"><value>Single pixel</value></data>
+  <data name="ConditionRegionTopLeft" xml:space="preserve"><value>Top-left</value></data>
+  <data name="ConditionRegionBottomRight" xml:space="preserve"><value>Bottom-right</value></data>
+  <data name="ConditionRegionUnset" xml:space="preserve"><value>Not set</value></data>
+  <data name="ConditionActivationInvalid" xml:space="preserve"><value>Set a step range, a time range, or both.</value></data>
+  <data name="ConditionRangeOr" xml:space="preserve"><value>or</value></data>
+  <data name="ConditionTimeRangeOpenEnd" xml:space="preserve"><value>end</value></data>
+  <data name="ConditionTimeBasePlayback" xml:space="preserve"><value>Since play/trigger</value></data>
+  <data name="ConditionTimeBaseAfterPrevious" xml:space="preserve"><value>Since previous condition</value></data>
+  <data name="ConditionTimeBaseMainIteration" xml:space="preserve"><value>This main-sequence round</value></data>
+  <data name="ConditionTimeBasePlaybackHint" xml:space="preserve"><value>Milliseconds since play/trigger for this run.</value></data>
+  <data name="ConditionTimeBaseAfterPreviousHint" xml:space="preserve"><value>Milliseconds since the previous condition finished; the first condition uses this round's main-sequence start.</value></data>
+  <data name="ConditionTimeBaseMainIterationHint" xml:space="preserve"><value>Milliseconds since this main-sequence round started (resets each toggle/hold loop).</value></data>
+  <data name="ConditionTimeBasePlaybackShort" xml:space="preserve"><value>play</value></data>
+  <data name="ConditionTimeBaseAfterPreviousShort" xml:space="preserve"><value>prev</value></data>
+  <data name="ConditionTimeBaseMainIterationShort" xml:space="preserve"><value>round</value></data>
   <data name="ConditionGateBadge" xml:space="preserve"><value>Gate</value></data>
   <data name="ConditionPauseBadge" xml:space="preserve"><value>Pause</value></data>
   <data name="ConditionReadyBadge" xml:space="preserve"><value>Ready</value></data>
+  <data name="ColorPickFailedHint" xml:space="preserve"><value>Could not sample that pixel. Use borderless/windowed mode for games; exclusive fullscreen often blocks screen capture.</value></data>
+  <data name="ColorPickedStatus" xml:space="preserve"><value>Picked color RGB({0}, {1}, {2}).</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>Delete macro folder</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>Unlock selected</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>Locked {0} selected macro(s).</value></data>

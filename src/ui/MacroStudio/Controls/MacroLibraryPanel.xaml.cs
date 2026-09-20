@@ -66,6 +66,7 @@ public partial class MacroLibraryPanel : UserControl
         new Dictionary<string, MacroLibraryListenState>(StringComparer.OrdinalIgnoreCase);
 
     public event Action<string>? MacroSelected;
+    public event Action<string>? InsertConditionMacroRequested;
     public event Action<string>? MacroDuplicated;
     public event Action<string>? MacroDeleted;
     public event Action<IReadOnlyList<MacroLibraryDeleteItem>>? LibraryItemsDeleteRequested;
@@ -105,6 +106,7 @@ public partial class MacroLibraryPanel : UserControl
         BackToManagerButton.Content = L("ReturnToManager");
         NewMacroMenuButton.Content = L("NewMacro");
         ToolbarNewMacroMenuItem.Header = L("NewMacroFile");
+        ToolbarNewConditionMacroMenuItem.Header = L("NewConditionMacroFile");
         ToolbarNewFolderMenuItem.Header = L("NewFolder");
         GroupProcessFilterLabelText.Text = L("GroupProcessFilter");
         GroupProcessFilterBox.ToolTip = L("GroupProcessFilterHelp");
@@ -119,6 +121,8 @@ public partial class MacroLibraryPanel : UserControl
         ListeningTitleText.Text = L("Listening");
         StopEveryListeningButton.Content = L("StopListeningAll");
         RenameMenuItem.Header = L("Rename");
+        InsertConditionMacroMenuItem.Header = L("InsertConditionMacroIntoCurrent");
+        EditConditionMacroMenuItem.Header = L("EditConditionMacro");
         CopyMenuItem.Header = L("Copy");
         PasteMenuItem.Header = L("Paste");
         DeleteMenuItem.Header = L("Delete");
@@ -129,9 +133,12 @@ public partial class MacroLibraryPanel : UserControl
         ExplorerTriggerHeaderText.Text = L("Trigger");
         ExplorerModifiedHeaderText.Text = L("DateModified");
         ExplorerExportMacroMenuItem.Header = L("ExportMacro");
+        ExplorerInsertConditionMacroMenuItem.Header = L("InsertConditionMacroIntoCurrent");
+        ExplorerEditConditionMacroMenuItem.Header = L("EditConditionMacro");
         ExplorerExportFolderMenuItem.Header = L("ExportThisFolder");
         ExplorerNewMenuItem.Header = L("New");
         ExplorerNewMacroMenuItem.Header = L("NewMacroFile");
+        ExplorerNewConditionMacroMenuItem.Header = L("NewConditionMacroFile");
         ExplorerNewFolderMenuItem.Header = L("NewFolder");
         ExplorerRenameMenuItem.Header = L("Rename");
         ExplorerCopyMenuItem.Header = L("Copy");
@@ -186,6 +193,52 @@ public partial class MacroLibraryPanel : UserControl
     public string CurrentDatabaseGroupId => showingDatabaseContents
         ? activeDatabaseGroupId
         : selectedGroupId;
+
+    public string CurrentDatabaseFolder => GetCurrentFolder();
+
+    public IReadOnlyList<string> GetSelectedConditionMacroIds()
+    {
+        if (showingDatabaseContents)
+        {
+            return GetSelectedExplorerNodes()
+                .Select(node => node.Item)
+                .Where(item => item is not null && IsConditionLibraryItem(item))
+                .Select(item => item!.Id)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        if (GetSelectedNode()?.Item is { } treeItem && IsConditionLibraryItem(treeItem))
+        {
+            return [treeItem.Id];
+        }
+
+        if (state?.SelectedMacroId is { } selectedId
+            && state.LibraryStore.TryGetItem(selectedId) is { } selected
+            && IsConditionLibraryItem(selected))
+        {
+            return [selectedId];
+        }
+
+        return [];
+    }
+
+    public IReadOnlyList<ConditionMacroPickItem> ListConditionMacrosInCurrentDatabase()
+    {
+        if (state is null)
+        {
+            return [];
+        }
+
+        var groupId = CurrentDatabaseGroupId;
+        return state.LibrarySnapshot.Items
+            .Where(item => IsConditionLibraryItem(item)
+                && string.Equals(item.GroupId, groupId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.Folder, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(ConditionMacroPickItem.FromLibraryItem)
+            .ToList();
+    }
 
     public PrecisionMode GetSelectedPrecisionMode()
     {
@@ -664,9 +717,7 @@ public partial class MacroLibraryPanel : UserControl
             return;
         }
 
-        state!.SelectedMacroId = item.Id;
-        state.LibraryStore.SetSelected(item.Id);
-        MacroSelected?.Invoke(item.Id);
+        SelectLibraryMacro(item, openInEditor: !IsConditionLibraryItem(item));
     }
 
     private void ExplorerListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -691,9 +742,44 @@ public partial class MacroLibraryPanel : UserControl
             return;
         }
 
+        SelectLibraryMacro(item, openInEditor: !IsConditionLibraryItem(item));
+    }
+
+    private void SelectLibraryMacro(MacroLibraryItem item, bool openInEditor)
+    {
+        if (state is null)
+        {
+            return;
+        }
+
         state.SelectedMacroId = item.Id;
         state.LibraryStore.SetSelected(item.Id);
-        MacroSelected?.Invoke(item.Id);
+        if (openInEditor)
+        {
+            MacroSelected?.Invoke(item.Id);
+        }
+    }
+
+    private void OpenLibraryMacro(MacroLibraryItem item)
+    {
+        SelectLibraryMacro(item, openInEditor: true);
+    }
+
+    private bool IsConditionLibraryItem(MacroLibraryItem item)
+    {
+        if (item.IsConditionMacro)
+        {
+            return true;
+        }
+
+        try
+        {
+            return state?.LibraryStore.ReadMacro(item.Id).IsConditionMacro == true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void ExplorerListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -744,6 +830,13 @@ public partial class MacroLibraryPanel : UserControl
         var isBlank = kind == ExplorerContextMenuKind.Blank;
 
         ExplorerExportMacroMenuItem.Visibility = isMacro ? Visibility.Visible : Visibility.Collapsed;
+        var conditionSelected = isMacro
+            && selected.Count > 0
+            && selected.All(node => node.Item is not null && IsConditionLibraryItem(node.Item));
+        ExplorerInsertConditionMacroMenuItem.Visibility = conditionSelected ? Visibility.Visible : Visibility.Collapsed;
+        ExplorerEditConditionMacroMenuItem.Visibility = conditionSelected && selected.Count == 1
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         ExplorerExportFolderMenuItem.Visibility = isFolder ? Visibility.Visible : Visibility.Collapsed;
         ExplorerNewMenuItem.Visibility = isBlank ? Visibility.Visible : Visibility.Collapsed;
         ExplorerRenameMenuItem.Visibility = (isMacro || isFolder) ? Visibility.Visible : Visibility.Collapsed;
@@ -791,9 +884,7 @@ public partial class MacroLibraryPanel : UserControl
 
         if (node.Item is { } item)
         {
-            state!.SelectedMacroId = item.Id;
-            state.LibraryStore.SetSelected(item.Id);
-            MacroSelected?.Invoke(item.Id);
+            OpenLibraryMacro(item);
         }
     }
 
@@ -927,6 +1018,13 @@ public partial class MacroLibraryPanel : UserControl
         }
 
         if (e.ClickCount != 2) return;
+        if (node.Item is { } item && IsConditionLibraryItem(item))
+        {
+            OpenLibraryMacro(item);
+            e.Handled = true;
+            return;
+        }
+
         BeginRename(node);
         e.Handled = true;
     }
@@ -1202,6 +1300,51 @@ public partial class MacroLibraryPanel : UserControl
         RenameMenuItem.IsEnabled = node is not null && node.Item?.IsLocked != true;
         CopyMenuItem.IsEnabled = showingDatabaseContents && node is not null && !node.IsGroup;
         DeleteMenuItem.IsEnabled = CanDeleteNode(node);
+        var isCondition = node?.Item is { } item && IsConditionLibraryItem(item);
+        InsertConditionMacroMenuItem.Visibility = isCondition ? Visibility.Visible : Visibility.Collapsed;
+        EditConditionMacroMenuItem.Visibility = isCondition ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void InsertConditionMacroMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var ids = GetContextConditionMacroIds();
+        foreach (var id in ids)
+        {
+            InsertConditionMacroRequested?.Invoke(id);
+        }
+    }
+
+    private void EditConditionMacroMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var item = GetContextConditionMacroItem();
+        if (item is null)
+        {
+            return;
+        }
+
+        OpenLibraryMacro(item);
+    }
+
+    private IReadOnlyList<string> GetContextConditionMacroIds()
+    {
+        if (showingDatabaseContents)
+        {
+            return GetSelectedExplorerNodes()
+                .Select(node => node.Item)
+                .Where(item => item is not null && IsConditionLibraryItem(item))
+                .Select(item => item!.Id)
+                .ToList();
+        }
+
+        var single = GetContextConditionMacroItem();
+        return single is null ? [] : [single.Id];
+    }
+
+    private MacroLibraryItem? GetContextConditionMacroItem()
+    {
+        var node = contextMenuTargetNode
+            ?? (showingDatabaseContents ? GetSelectedExplorerNodes().FirstOrDefault() : GetSelectedNode());
+        return node?.Item is { } item && IsConditionLibraryItem(item) ? item : null;
     }
 
     private void MacroTreeContextMenu_Closed(object sender, RoutedEventArgs e)
@@ -1716,9 +1859,23 @@ public partial class MacroLibraryPanel : UserControl
 
     private void NewMacro_Click(object sender, RoutedEventArgs e)
     {
+        CreateNewMacro(MacroKind.Normal);
+    }
+
+    private void NewConditionMacro_Click(object sender, RoutedEventArgs e)
+    {
+        CreateNewMacro(MacroKind.Condition);
+    }
+
+    private void CreateNewMacro(MacroKind kind)
+    {
         if (state is null) return;
-        var name = NextMacroName("Macro");
-        var item = state.LibraryStore.CreateMacro(name, GetCurrentFolder(), groupId: GetCurrentGroupId());
+        var name = NextMacroName(kind == MacroKind.Condition ? "ConditionMacro" : "Macro");
+        var item = state.LibraryStore.CreateMacro(
+            name,
+            GetCurrentFolder(),
+            groupId: GetCurrentGroupId(),
+            kind: kind);
         state.SelectedMacroId = item.Id;
         selectedGroupId = item.GroupId;
         RefreshTree();
@@ -1799,7 +1956,7 @@ public partial class MacroLibraryPanel : UserControl
         DragDrop.DoDragDrop(
             ExplorerListView,
             new DataObject(MacroLibraryDragFormat, macroIds),
-            DragDropEffects.Move);
+            DragDropEffects.Copy | DragDropEffects.Move);
     }
 
     private void ExplorerListView_DragOver(object sender, DragEventArgs e)
@@ -2153,12 +2310,20 @@ public partial class MacroLibraryPanel : UserControl
             }
         }
 
+        foreach (var dependency in MacroConversionService.CollectReferencedMcrxDocuments(pendingDocuments, auxiliaryFiles))
+        {
+            pendingDocuments.Add(dependency);
+            importedCount++;
+            automaticallyDetectedCount++;
+        }
+
         if (pendingDocuments.Count > 0)
         {
             var importedItems = state.LibraryStore.ImportMacros(
                 pendingDocuments,
                 GetCurrentFolder(),
-                CurrentDatabaseGroupId);
+                CurrentDatabaseGroupId,
+                LoadNeighborLibraryReferenceMap(selectedFiles));
             if (importedItems.Count > 0)
             {
                 lastImportedMacro = importedItems[^1];
@@ -2258,6 +2423,44 @@ public partial class MacroLibraryPanel : UserControl
         }
 
         return resolved;
+    }
+
+    private static IReadOnlyDictionary<string, string> LoadNeighborLibraryReferenceMap(
+        IReadOnlyList<SmartImportFile> selectedFiles)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var directory in selectedFiles
+            .Select(file => Path.GetDirectoryName(file.FullPath))
+            .Where(directory => !string.IsNullOrWhiteSpace(directory))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var libraryPath = Path.Combine(directory!, "library.json");
+            if (!File.Exists(libraryPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                foreach (var item in new MacroLibraryStore(directory!).Load().Items)
+                {
+                    map.TryAdd(item.Id, item.Name);
+                    foreach (var alias in item.Aliases ?? [])
+                    {
+                        if (!string.IsNullOrWhiteSpace(alias))
+                        {
+                            map.TryAdd(alias, item.Name);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Neighbor library indexes are best-effort hints for nested macro.call names.
+            }
+        }
+
+        return map;
     }
 
     private static IReadOnlyList<AuxiliaryMacroFile> LoadConversionAuxiliaryFiles(string selectedFileName)
@@ -2401,7 +2604,7 @@ public partial class MacroLibraryPanel : UserControl
         if (bundle.Primary.Count == 1 && bundle.Dependencies.Count == 0)
         {
             var entry = bundle.Primary[0];
-            var export = MacroConversionService.ExportFromMcrx(entry.Document, format);
+            var export = MacroConversionService.ExportFromMcrx(entry.Document, format, libraryItems: snapshot.Items);
             var dialog = new SaveFileDialog
             {
                 Filter = FormatFilter(format),
@@ -2467,7 +2670,7 @@ public partial class MacroLibraryPanel : UserControl
 
         foreach (var entry in bundle.Primary)
         {
-            var export = MacroConversionService.ExportFromMcrx(entry.Document, format, entry.RelativePath);
+            var export = MacroConversionService.ExportFromMcrx(entry.Document, format, entry.RelativePath, snapshot.Items);
             var path = AllocateExportPath(directory, export.FileName, written);
             File.WriteAllText(path, export.Output);
             written.Add(Path.GetFullPath(path));
@@ -2481,7 +2684,7 @@ public partial class MacroLibraryPanel : UserControl
             Directory.CreateDirectory(depsDirectory);
             foreach (var entry in bundle.Dependencies)
             {
-                var export = MacroConversionService.ExportFromMcrx(entry.Document, format, entry.RelativePath);
+                var export = MacroConversionService.ExportFromMcrx(entry.Document, format, entry.RelativePath, snapshot.Items);
                 var path = AllocateExportPath(depsDirectory, export.FileName, written);
                 File.WriteAllText(path, export.Output);
                 written.Add(Path.GetFullPath(path));
@@ -2849,7 +3052,11 @@ public partial class MacroLibraryPanel : UserControl
         var source = snapshot.Items.First(item => item.Id == macroId);
         var document = state.LibraryStore.ReadMacro(macroId);
         var copyName = CreateUniqueMacroName($"{source.Name} Copy", targetGroupId, targetFolder, null);
-        var created = state.LibraryStore.CreateMacro(document with { Name = copyName }, targetFolder, groupId: targetGroupId);
+        var created = state.LibraryStore.CreateMacro(
+            document with { Name = copyName },
+            targetFolder,
+            aliases: source.Aliases,
+            groupId: targetGroupId);
 
         state.SelectedMacroId = created.Id;
         selectedGroupId = created.GroupId;
@@ -2870,7 +3077,11 @@ public partial class MacroLibraryPanel : UserControl
             && string.Equals(item.Folder, folder, StringComparison.Ordinal)))
         {
             var document = state.LibraryStore.ReadMacro(item.Id);
-            state.LibraryStore.CreateMacro(document with { Name = item.Name }, copiedFolder, groupId: targetGroupId);
+            state.LibraryStore.CreateMacro(
+                document with { Name = item.Name },
+                copiedFolder,
+                aliases: item.Aliases,
+                groupId: targetGroupId);
         }
 
         state.SelectedMacroId = null;

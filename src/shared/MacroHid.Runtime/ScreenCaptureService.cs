@@ -122,4 +122,51 @@ public static class ScreenCaptureService
 
         return result;
     }
+
+    /// <summary>
+    /// Detects exclusive-fullscreen / protected captures that come back near-black or flat.
+    /// </summary>
+    public static bool LooksBlankOrUniform(byte[] pixels, int width, int height)
+    {
+        if (pixels.Length < 4 || width <= 0 || height <= 0)
+        {
+            return true;
+        }
+
+        var stepX = Math.Max(1, width / 32);
+        var stepY = Math.Max(1, height / 32);
+        var min = 255;
+        var max = 0;
+        long total = 0;
+        var samples = 0;
+        for (var y = 0; y < height; y += stepY)
+        {
+            for (var x = 0; x < width; x += stepX)
+            {
+                var index = ((y * width) + x) * 4;
+                if (index + 2 >= pixels.Length)
+                {
+                    continue;
+                }
+
+                var b = pixels[index];
+                var g = pixels[index + 1];
+                var r = pixels[index + 2];
+                var luma = (r * 299 + g * 587 + b * 114) / 1000;
+                if (luma < min) min = luma;
+                if (luma > max) max = luma;
+                total += luma;
+                samples++;
+            }
+        }
+
+        if (samples == 0)
+        {
+            return true;
+        }
+
+        var average = total / samples;
+        var span = max - min;
+        return span <= 6 && average <= 18;
+    }
 }

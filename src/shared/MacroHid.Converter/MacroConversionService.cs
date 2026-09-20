@@ -314,7 +314,11 @@ public static class MacroConversionService
         return trimmed.Length <= maximumLength ? trimmed : trimmed[..maximumLength] + "…";
     }
 
-    public static MacroExportResult ExportFromMcrx(MacroDocument document, MacroConversionFormat targetFormat, string? sourceFileName = null)
+    public static MacroExportResult ExportFromMcrx(
+        MacroDocument document,
+        MacroConversionFormat targetFormat,
+        string? sourceFileName = null,
+        IReadOnlyList<MacroLibraryItem>? libraryItems = null)
     {
         if (targetFormat == MacroConversionFormat.Auto)
         {
@@ -326,7 +330,7 @@ public static class MacroConversionService
         {
             MacroConversionFormat.MacroHidMcrx => McrxSerializer.Serialize(document),
             MacroConversionFormat.MacroConverterXml => ExportMacroConverterXml(document, diagnostics),
-            MacroConversionFormat.RazerSynapseXml => ExportRazerXml(document, diagnostics),
+            MacroConversionFormat.RazerSynapseXml => ExportRazerXml(document, diagnostics, libraryItems),
             MacroConversionFormat.Lua => ExportLua(document, diagnostics),
             MacroConversionFormat.XMouse => ExportXMouse(document, diagnostics),
             MacroConversionFormat.QMacro => ExportQMacro(document, diagnostics),
@@ -335,6 +339,82 @@ public static class MacroConversionService
         };
 
         return new MacroExportResult(output, targetFormat, diagnostics, BuildExportFileName(document.Name, targetFormat, sourceFileName));
+    }
+
+    public static IReadOnlyList<MacroDocument> CollectReferencedMcrxDocuments(
+        IReadOnlyList<MacroDocument> selected,
+        IReadOnlyList<AuxiliaryMacroFile> auxiliaryFiles)
+    {
+        var seeds = selected.Where(document => document is not null).ToList();
+        var candidates = new List<MacroDocument>();
+        foreach (var file in auxiliaryFiles)
+        {
+            try
+            {
+                if (DetectFormat(file.Content, file.FileName) != MacroConversionFormat.MacroHidMcrx)
+                {
+                    continue;
+                }
+
+                var parsed = McrxParser.Parse(file.Content);
+                if (seeds.Any(seed => SameImportedDocument(seed, parsed)))
+                {
+                    continue;
+                }
+
+                candidates.Add(parsed);
+            }
+            catch
+            {
+                // Neighbor files are best-effort dependency hints.
+            }
+        }
+
+        var extras = new List<MacroDocument>();
+        var pending = new Queue<string>(seeds.SelectMany(MacroCallReferenceCollector.Collect));
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (pending.TryDequeue(out var reference))
+        {
+            if (!visited.Add(reference) || FindsImportedDocument(seeds.Concat(extras), reference) is not null)
+            {
+                continue;
+            }
+
+            var match = FindsImportedDocument(candidates, reference);
+            if (match is null)
+            {
+                continue;
+            }
+
+            extras.Add(match);
+            foreach (var nested in MacroCallReferenceCollector.Collect(match))
+            {
+                pending.Enqueue(nested);
+            }
+        }
+
+        return extras;
+    }
+
+    private static MacroDocument? FindsImportedDocument(IEnumerable<MacroDocument> documents, string reference)
+    {
+        var trimmed = reference.Trim();
+        return documents.FirstOrDefault(document =>
+            string.Equals(document.Id, trimmed, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(document.Name, trimmed, StringComparison.CurrentCultureIgnoreCase)
+            || (Guid.TryParse(document.Id, out var left) && Guid.TryParse(trimmed, out var right) && left == right));
+    }
+
+    private static bool SameImportedDocument(MacroDocument left, MacroDocument right)
+    {
+        if (!string.IsNullOrWhiteSpace(left.Id)
+            && string.Equals(left.Id, right.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.Equals(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase)
+            && left.Steps.Count == right.Steps.Count;
     }
 
     public static string BuildExportFileName(string macroName, MacroConversionFormat format, string? sourceFileName = null)
@@ -1454,6 +1534,7 @@ public static class MacroConversionService
                 ("count", 1),
                 ("holdMs", ToMilliseconds(key.Hold)))),
             TextStep text => Node("keyboard.text", "Text", Data(("text", text.Text))),
+            CommentStep => Node("wait", "Comment", Data(("ms", 0))),
             WaitStep wait => Node("wait", "Wait", Data(("ms", ToMilliseconds(wait.Duration)))),
             MacroCallStep macro => Node("macro.call", "Call macro", Data(("macro", macro.Macro))),
             _ => Node("wait", "Unsupported", Data(("ms", 0)))
@@ -1517,6 +1598,8 @@ public static class MacroConversionService
                 case TextStep text:
                     yield return $"{prefix}macro.text(\"{EscapeLua(text.Text)}\")";
                     break;
+                case CommentStep:
+                    break;
                 case WaitStep wait:
                     yield return $"{prefix}macro.wait({ToMilliseconds(wait.Duration)})";
                     break;
@@ -1562,6 +1645,8 @@ public static class MacroConversionService
                     break;
                 case TextStep text:
                     yield return $"{prefix}SayString \"{EscapeQuoted(text.Text)}\"";
+                    break;
+                case CommentStep:
                     break;
                 case WaitStep wait:
                     yield return $"{prefix}Delay {ToMilliseconds(wait.Duration)}";
@@ -1611,6 +1696,8 @@ public static class MacroConversionService
                 case TextStep text:
                     yield return text.Text;
                     break;
+                case CommentStep:
+                    break;
                 case WaitStep wait:
                     yield return $"{{WAITMS:{ToMilliseconds(wait.Duration)}}}";
                     break;
@@ -1631,7 +1718,10 @@ public static class MacroConversionService
         }
     }
 
-    private static string ExportRazerXml(MacroDocument document, List<MacroConversionDiagnostic> diagnostics)
+    private static string ExportRazerXml(
+        MacroDocument document,
+        List<MacroConversionDiagnostic> diagnostics,
+        IReadOnlyList<MacroLibraryItem>? libraryItems = null)
     {
         var events = new List<XElement>
         {
@@ -1640,19 +1730,25 @@ public static class MacroConversionService
                 new XElement("recordProfile", new XElement("mmtSetting", 0)),
                 new XElement("selected", false))
         };
-        AddRazerEvents(document.Steps, events, diagnostics);
+        var moduleIndex = 0;
+        AddRazerEvents(document.Steps, events, diagnostics, libraryItems, ref moduleIndex);
 
         return new XDocument(
             new XElement("Macro",
                 new XElement("Name", document.Name),
                 new XElement("MacroEvents", events),
                 new XElement("DelaySetting", 0),
-                new XElement("Guid", Guid.NewGuid()),
+                new XElement("Guid", FormatRazerGuid(document.Id) ?? DeterministicRazerGuid(document.Name)),
                 new XElement("Version", 4),
                 new XElement("MouseMoveType", "none"))).ToString();
     }
 
-    private static void AddRazerEvents(IReadOnlyList<MacroStep> steps, List<XElement> events, List<MacroConversionDiagnostic> diagnostics)
+    private static void AddRazerEvents(
+        IReadOnlyList<MacroStep> steps,
+        List<XElement> events,
+        List<MacroConversionDiagnostic> diagnostics,
+        IReadOnlyList<MacroLibraryItem>? libraryItems,
+        ref int moduleIndex)
     {
         foreach (var step in steps)
         {
@@ -1670,7 +1766,7 @@ public static class MacroConversionService
                 case MouseButtonStep button:
                     events.Add(RazerMouseEvent(button.Button, button.Kind == ButtonActionKind.Down ? 0 : 1, events.Count));
                     break;
-                case KeyStep key:
+                case KeyStep { Kind: KeyActionKind.Tap } key:
                     events.Add(RazerKeyEvent(key.Key, 0, events.Count));
                     if (key.Hold > TimeSpan.Zero)
                     {
@@ -1679,13 +1775,27 @@ public static class MacroConversionService
 
                     events.Add(RazerKeyEvent(key.Key, 1, events.Count));
                     break;
+                case KeyStep { Kind: KeyActionKind.Down } key:
+                    events.Add(RazerKeyEvent(key.Key, 0, events.Count));
+                    if (key.Hold > TimeSpan.Zero)
+                    {
+                        events.Add(RazerDelayEvent(key.Hold.TotalMilliseconds));
+                    }
+
+                    break;
+                case KeyStep { Kind: KeyActionKind.Up } key:
+                    events.Add(RazerKeyEvent(key.Key, 1, events.Count));
+                    break;
                 case WaitStep wait:
                     events.Add(RazerDelayEvent(wait.Duration.TotalMilliseconds));
                     break;
                 case RepeatStep repeat:
                     events.Add(RazerLoopEvent(repeat.Count, 0));
-                    AddRazerEvents(repeat.Steps, events, diagnostics);
+                    AddRazerEvents(repeat.Steps, events, diagnostics, libraryItems, ref moduleIndex);
                     events.Add(RazerLoopEvent(repeat.Count, 1));
+                    break;
+                case MacroCallStep call:
+                    events.Add(RazerModuleCallEvent(call, libraryItems, moduleIndex++));
                     break;
                 default:
                     diagnostics.Warning("razer.unsupportedStep", $"Step '{step.GetType().Name}' cannot be exported to Razer Synapse XML and was skipped.");
@@ -1940,6 +2050,36 @@ public static class MacroConversionService
             new XElement("LoopEvent", new XElement("State", state)),
             new XElement("selected", false),
             new XElement("isPairing", false));
+    }
+
+    private static XElement RazerModuleCallEvent(
+        MacroCallStep call,
+        IReadOnlyList<MacroLibraryItem>? libraryItems,
+        int mpIndex)
+    {
+        var item = libraryItems is null ? null : MacroLibraryResolver.Resolve(libraryItems, call.Macro);
+        var name = !string.IsNullOrWhiteSpace(item?.Name) ? item.Name : call.Macro.Trim();
+        var guid = FormatRazerGuid(item?.Id) ?? FormatRazerGuid(call.Macro) ?? DeterministicRazerGuid(name);
+        return new XElement("MacroEvent",
+            new XElement("Type", 7),
+            new XElement("MPIndex", mpIndex),
+            new XElement("guid", guid),
+            new XElement("Name", name),
+            new XElement("selected", false));
+    }
+
+    private static string? FormatRazerGuid(string? value)
+    {
+        return Guid.TryParse(value, out var guid) ? guid.ToString("D") : null;
+    }
+
+    private static string DeterministicRazerGuid(string value)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value.Trim().ToLowerInvariant()));
+        var guidBytes = bytes[..16];
+        guidBytes[6] = (byte)((guidBytes[6] & 0x0F) | 0x50);
+        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80);
+        return new Guid(guidBytes).ToString("D");
     }
 
     private static bool TryParseModifierToken(string token, out HidModifier modifier)

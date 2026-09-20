@@ -152,6 +152,9 @@ internal sealed class ManagedMacroControlFlowRunner
                     }
                     break;
 
+                case CommentStep:
+                    break;
+
                 case TextStep text:
                     Submit(new TextInputAction(text.Text));
                     break;
@@ -559,6 +562,8 @@ internal static class MacroControlFlowInspector
             switch (step)
             {
                 case StopCurrentSequenceStep or StopCurrentIterationStep or StopAllSequencesStep or WindowActivateStep or OcrExtractTextStep or OcrClickStep:
+                    return true;
+                case TextStep text when !string.IsNullOrEmpty(text.Text):
                     return true;
                 case RepeatStep repeat when InspectSteps(repeat.Steps, macroResolver, visitingDocuments, visitingNames, depth):
                     return true;

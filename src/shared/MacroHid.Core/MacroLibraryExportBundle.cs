@@ -42,7 +42,9 @@ public static class MacroLibraryExportBundles
             }
         }
 
-        return new MacroLibraryExportBundle(primary, deps.Values.ToList());
+        return RewriteBundleCalls(
+            new MacroLibraryExportBundle(primary, deps.Values.ToList()),
+            snapshot);
     }
 
     public static MacroLibraryExportBundle FromItems(
@@ -83,6 +85,26 @@ public static class MacroLibraryExportBundles
             }
         }
 
-        return new MacroLibraryExportBundle(primary, deps.Values.ToList());
+        return RewriteBundleCalls(
+            new MacroLibraryExportBundle(primary, deps.Values.ToList()),
+            snapshot);
+    }
+
+    private static MacroLibraryExportBundle RewriteBundleCalls(
+        MacroLibraryExportBundle bundle,
+        MacroLibrarySnapshot snapshot)
+    {
+        MacroLibraryExportEntry Rewrite(MacroLibraryExportEntry entry) =>
+            entry with
+            {
+                Document = MacroCallRewriter.RewriteToLibraryNames(
+                    entry.Document,
+                    snapshot.Items,
+                    entry.Item.GroupId)
+            };
+
+        return new MacroLibraryExportBundle(
+            bundle.Primary.Select(Rewrite).ToList(),
+            bundle.Dependencies.Select(Rewrite).ToList());
     }
 }

@@ -11,8 +11,11 @@ public sealed record MacroLibraryItem(
     DateTimeOffset UpdatedAt,
     IReadOnlyList<string>? Aliases = null,
     string GroupId = MacroLibraryStore.GlobalGroupId,
-    bool IsLocked = false)
+    bool IsLocked = false,
+    MacroKind Kind = MacroKind.Normal)
 {
+    public bool IsConditionMacro => Kind == MacroKind.Condition;
+
     public bool MatchesReference(string? reference)
     {
         if (string.IsNullOrWhiteSpace(reference))
@@ -23,7 +26,56 @@ public sealed record MacroLibraryItem(
         var normalized = reference.Trim();
         return string.Equals(Id, normalized, StringComparison.OrdinalIgnoreCase)
             || string.Equals(Name, normalized, StringComparison.CurrentCultureIgnoreCase)
-            || (Aliases?.Any(alias => string.Equals(alias, normalized, StringComparison.OrdinalIgnoreCase)) == true);
+            || (Aliases?.Any(alias => string.Equals(alias, normalized, StringComparison.OrdinalIgnoreCase)) == true)
+            || MatchesNormalizedGuid(normalized);
+    }
+
+    private bool MatchesNormalizedGuid(string normalized)
+    {
+        if (!Guid.TryParse(normalized, out var parsed))
+        {
+            return false;
+        }
+
+        return MatchesGuid(Id, parsed)
+            || (Aliases?.Any(alias => MatchesGuid(alias, parsed)) == true);
+    }
+
+    private static bool MatchesGuid(string? value, Guid parsed)
+    {
+        return Guid.TryParse(value, out var candidate) && candidate == parsed;
+    }
+}
+
+public static class MacroLibraryResolver
+{
+    public static MacroLibraryItem? Resolve(
+        IEnumerable<MacroLibraryItem> items,
+        string? reference,
+        string? preferredGroupId = null)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return null;
+        }
+
+        var matches = items.Where(item => item.MatchesReference(reference)).ToList();
+        if (matches.Count == 0)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(preferredGroupId))
+        {
+            var preferred = matches.FirstOrDefault(item =>
+                string.Equals(item.GroupId, preferredGroupId, StringComparison.OrdinalIgnoreCase));
+            if (preferred is not null)
+            {
+                return preferred;
+            }
+        }
+
+        return matches[0];
     }
 }
 
@@ -85,9 +137,15 @@ public sealed class MacroLibraryStore
             index.GroupFolders.AsReadOnly());
     }
 
-    public MacroLibraryItem CreateMacro(string name, string? folder = null, IReadOnlyList<MacroStep>? steps = null, string? groupId = null)
+    public MacroLibraryItem CreateMacro(string name, string? folder = null, IReadOnlyList<MacroStep>? steps = null, string? groupId = null, MacroKind kind = MacroKind.Normal)
     {
-        var document = new MacroDocument(1, NormalizeName(name), PlaybackSettings.Default, steps ?? []);
+        var document = new MacroDocument(
+            1,
+            NormalizeName(name),
+            PlaybackSettings.Default,
+            steps ?? [],
+            Conditions: kind == MacroKind.Condition ? [] : null,
+            Kind: kind);
         return CreateMacro(document, folder, groupId: groupId);
     }
 
@@ -99,6 +157,7 @@ public sealed class MacroLibraryStore
         var id = Guid.NewGuid().ToString("N");
         var normalizedGroupId = NormalizeGroupId(groupId);
         EnsureGroupExists(index, normalizedGroupId);
+        var kind = document.Kind;
         var item = new MacroLibraryItem(
             id,
             NormalizeName(document.Name),
@@ -106,12 +165,14 @@ public sealed class MacroLibraryStore
             CreateFileName(document.Name, id),
             DateTimeOffset.UtcNow,
             MergeAliases(aliases, document.Id),
-            normalizedGroupId);
+            normalizedGroupId,
+            IsLocked: false,
+            Kind: kind);
 
         EnsureGroupFolder(index, item.GroupId, item.Folder);
         index.Items.Add(item);
         index.SelectedMacroId = item.Id;
-        SaveDocumentFile(item, document with { Name = item.Name });
+        SaveDocumentFile(item, document with { Name = item.Name, Kind = kind });
         SaveIndex(index);
         return item;
     }
@@ -190,10 +251,20 @@ public sealed class MacroLibraryStore
         SaveIndex(index);
     }
 
+    public MacroLibraryItem? TryGetItem(string id)
+    {
+        var index = LoadIndex();
+        return index.Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+    }
+
     public MacroDocument ReadMacro(string id)
     {
         var item = FindItem(LoadIndex(), id);
-        return McrxParser.Parse(File.ReadAllText(GetMacroPath(item)));
+        var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(item)));
+        // Prefer index kind when older .mcrx files omit kind.
+        return document.Kind == item.Kind
+            ? document
+            : document with { Kind = item.Kind != MacroKind.Normal ? item.Kind : document.Kind };
     }
 
     public MacroLibraryItem SaveMacro(string id, MacroDocument document)
@@ -210,11 +281,12 @@ public sealed class MacroLibraryStore
         var updated = previous with
         {
             Name = NormalizeName(document.Name),
+            Kind = document.Kind,
             UpdatedAt = DateTimeOffset.UtcNow
         };
         index.Items[itemIndex] = updated;
         index.SelectedMacroId = updated.Id;
-        SaveDocumentFile(updated, document with { Name = updated.Name });
+        SaveDocumentFile(updated, document with { Name = updated.Name, Kind = updated.Kind });
         SaveIndex(index);
         return updated;
     }
@@ -274,7 +346,11 @@ public sealed class MacroLibraryStore
         var index = LoadIndex();
         var source = FindItem(index, id);
         var document = ReadMacro(id);
-        return CreateMacro(document with { Name = NormalizeName(newName) }, source.Folder, groupId: source.GroupId);
+        return CreateMacro(
+            document with { Name = NormalizeName(newName), Kind = source.Kind },
+            source.Folder,
+            aliases: source.Aliases,
+            groupId: source.GroupId);
     }
 
     public void DeleteMacro(string id)
@@ -323,7 +399,8 @@ public sealed class MacroLibraryStore
     public IReadOnlyList<MacroLibraryItem> ImportMacros(
         IReadOnlyList<MacroDocument> documents,
         string? folder = null,
-        string? groupId = null)
+        string? groupId = null,
+        IReadOnlyDictionary<string, string>? extraReferenceMap = null)
     {
         var created = new List<MacroLibraryItem>();
         var idMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -335,7 +412,52 @@ public sealed class MacroLibraryStore
                 idMap[document.Id] = item.Id;
             }
 
+            if (!string.IsNullOrWhiteSpace(document.Name))
+            {
+                idMap.TryAdd(document.Name.Trim(), item.Id);
+            }
+
             created.Add(item);
+        }
+
+        var snapshot = Load();
+        var targetGroupId = NormalizeGroupId(groupId);
+        var createdIds = created.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in snapshot.Items
+            .Where(item => !createdIds.Contains(item.Id))
+            .OrderBy(item => string.Equals(item.GroupId, targetGroupId, StringComparison.OrdinalIgnoreCase) ? 0 : 1))
+        {
+            idMap.TryAdd(item.Id, item.Id);
+            foreach (var key in ExpandReferenceKeys(item.Id))
+            {
+                idMap.TryAdd(key, item.Id);
+            }
+            foreach (var alias in item.Aliases ?? [])
+            {
+                foreach (var key in ExpandReferenceKeys(alias))
+                {
+                    idMap.TryAdd(key, item.Id);
+                }
+            }
+        }
+
+        if (extraReferenceMap is not null)
+        {
+            foreach (var pair in extraReferenceMap)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key) || idMap.ContainsKey(pair.Key))
+                {
+                    continue;
+                }
+
+                var local = MacroLibraryResolver.Resolve(snapshot.Items, pair.Value, targetGroupId)
+                    ?? MacroLibraryResolver.Resolve(snapshot.Items, pair.Key, targetGroupId);
+                var destination = local?.Id ?? pair.Value;
+                foreach (var key in ExpandReferenceKeys(pair.Key))
+                {
+                    idMap.TryAdd(key, destination);
+                }
+            }
         }
 
         foreach (var item in created)
@@ -622,6 +744,24 @@ public sealed class MacroLibraryStore
     private static string NormalizeGroupId(string? groupId)
     {
         return string.IsNullOrWhiteSpace(groupId) ? GlobalGroupId : groupId.Trim();
+    }
+
+    private static IEnumerable<string> ExpandReferenceKeys(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            yield break;
+        }
+
+        var trimmed = value.Trim();
+        yield return trimmed;
+        if (!Guid.TryParse(trimmed, out var guid))
+        {
+            yield break;
+        }
+
+        yield return guid.ToString("D");
+        yield return guid.ToString("N");
     }
 
     private static IReadOnlyList<string> NormalizeAliases(IReadOnlyList<string>? aliases)

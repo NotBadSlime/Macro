@@ -51,6 +51,12 @@ public sealed record PlaybackDelayProfile(
 
 public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
 {
+    /// <summary>
+    /// Cap each waitable-timer sleep so <see cref="WaitUntil"/> can re-check
+    /// cancellation promptly (Stop during long delays / gate then-actions).
+    /// </summary>
+    private const long CancellationPollChunkUs = 15_000;
+
     private readonly IHighResolutionClock clock;
     private readonly PlaybackDelayProfile profile;
     private readonly int calibratedSpinIterations;
@@ -87,7 +93,8 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
             var remainingUs = ToMicroseconds(remainingTicks, qpcFrequency);
             if (profile.UseHighResolutionWaitableTimer
                 && remainingUs > profile.FinalSpinWindowUs + 750
-                && TryWaitWithHighResolutionWaitableTimer(remainingUs - profile.FinalSpinWindowUs))
+                && TryWaitWithHighResolutionWaitableTimer(
+                    Math.Min(remainingUs - profile.FinalSpinWindowUs, CancellationPollChunkUs)))
             {
                 continue;
             }
@@ -354,29 +361,45 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         var nativePreparedPlan = cachedPreparedPlan ?? localPreparedPlan;
 
         var plannedIterationStartTick = clock.GetTimestamp();
+        var playbackTriggerTick = plannedIterationStartTick;
 
         try
         {
-            if (!TryWaitForStartupGatesOrCancel(
-                    document,
-                    conditionEvaluator,
-                    delayStrategy,
-                    ref plannedIterationStartTick,
-                    qpcFrequency,
-                    cancellationToken))
-            {
-                ApplyTimingStats(timingRecorder);
-                return new PlaybackRunResult(
-                    PlaybackRunStatus.Completed,
-                    iterationsCompleted,
-                    actionsSubmitted,
-                    Cancelled: true,
-                    inputSink.GetStats());
-            }
-
             while (iterationsCompleted < iterationsTarget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                plannedIterationStartTick = clock.GetTimestamp();
+                var timeline = new ConditionTimeline(
+                    document.EffectiveConditions.Count,
+                    playbackTriggerTick,
+                    plannedIterationStartTick);
+                var gateWait = TryWaitForStartupGatesOrCancel(
+                    document,
+                    conditionEvaluator,
+                    delayStrategy,
+                    options.Precision,
+                    ref plannedIterationStartTick,
+                    qpcFrequency,
+                    cancellationToken,
+                    playbackTriggerTick,
+                    timeline);
+                if (gateWait == StartupGateWaitResult.Failed)
+                {
+                    ApplyTimingStats(timingRecorder);
+                    return new PlaybackRunResult(
+                        PlaybackRunStatus.Completed,
+                        iterationsCompleted,
+                        actionsSubmitted,
+                        Cancelled: true,
+                        inputSink.GetStats());
+                }
+
+                if (gateWait == StartupGateWaitResult.SkipIteration)
+                {
+                    iterationsCompleted++;
+                    continue;
+                }
+
                 var iterationPlan = plan.RequiresResampling || options.PixelMode == PixelEvaluationMode.Live
                     ? plan.Resample()
                     : plan;
@@ -396,11 +419,22 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         runCancellation.Cancel,
                         cancellationToken,
                         ref sequence,
-                        ref actionsSubmitted))
+                        ref actionsSubmitted,
+                        out var nativeStopIteration,
+                        timeline))
                 {
                     using var pauseCoordinator = HasPauseMainTimelineCondition(document)
                         ? new PlaybackPauseCoordinator(clock)
                         : null;
+                    using var iterationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    var iterationToken = iterationCancellation.Token;
+                    var conditionStopIterationRequested = 0;
+                    void RequestStopIteration()
+                    {
+                        Interlocked.Exchange(ref conditionStopIterationRequested, 1);
+                        iterationCancellation.Cancel();
+                    }
+
                     var monitors = CreateConditionMonitors(
                         document,
                         conditionEvaluator,
@@ -408,26 +442,28 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         qpcFrequency,
                         options.Precision,
                         runCancellation.Cancel,
-                        pauseCoordinator: pauseCoordinator);
+                        RequestStopIteration,
+                        pauseCoordinator: pauseCoordinator,
+                        timeline: timeline);
                     try
                     {
                         ActivateAllMonitors(monitors);
 
                         for (var batchIndex = 0; batchIndex < iterationPlan.Batches.Count; batchIndex++)
                         {
-                            cancellationToken.ThrowIfCancellationRequested();
+                            iterationToken.ThrowIfCancellationRequested();
 
                             var batch = iterationPlan.Batches[batchIndex];
                             var dueTick = iterationStartTick + batch.DueTick;
                             if (pauseCoordinator is null)
                             {
-                                delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, options.NoWait);
+                                delayStrategy.WaitUntil(dueTick, qpcFrequency, iterationToken, options.NoWait);
                             }
                             else
                             {
-                                pauseCoordinator.WaitUntil(dueTick, delayStrategy, qpcFrequency, cancellationToken, options.NoWait);
+                                pauseCoordinator.WaitUntil(dueTick, delayStrategy, qpcFrequency, iterationToken, options.NoWait);
                             }
-                            cancellationToken.ThrowIfCancellationRequested();
+                            iterationToken.ThrowIfCancellationRequested();
                             RecordJitter(timingRecorder, dueTick, qpcFrequency);
 
                             if (inputSink is SendInputMacroSink batchSink)
@@ -451,17 +487,35 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                             delayStrategy,
                             iterationStartTick + iterationDurationTicks,
                             qpcFrequency,
-                            cancellationToken,
+                            iterationToken,
                             options.NoWait,
                             pauseCoordinator);
                         CompleteAllMonitorsAfterCurrentEvaluation(monitors);
-                        WaitForTriggeredConditionActions(monitors, cancellationToken);
+                        WaitForTriggeredConditionActions(monitors, iterationToken);
                         DeactivateAllMonitors(monitors);
+                    }
+                    catch (OperationCanceledException) when (
+                        Volatile.Read(ref conditionStopIterationRequested) != 0
+                        && !cancellationToken.IsCancellationRequested)
+                    {
+                        nativeStopIteration = true;
                     }
                     finally
                     {
                         DisposeMonitors(monitors);
                     }
+
+                    if (Volatile.Read(ref conditionStopIterationRequested) != 0)
+                    {
+                        nativeStopIteration = true;
+                    }
+                }
+
+                if (nativeStopIteration)
+                {
+                    iterationsCompleted++;
+                    plannedIterationStartTick = clock.GetTimestamp();
+                    continue;
                 }
 
                 iterationsCompleted++;
@@ -506,8 +560,11 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         Action stopAllRequested,
         CancellationToken cancellationToken,
         ref uint sequence,
-        ref int actionsSubmitted)
+        ref int actionsSubmitted,
+        out bool stopIterationRequested,
+        ConditionTimeline? timeline = null)
     {
+        stopIterationRequested = false;
         if (!CanAttemptNativeIteration(options))
         {
             return false;
@@ -527,7 +584,16 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
         using (nativeControl)
         using (var pauseCoordinator = nativeControl is null ? null : new PlaybackPauseCoordinator(clock, nativeControl))
+        using (var iterationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
         {
+            var iterationToken = iterationCancellation.Token;
+            var conditionStopIterationRequested = 0;
+            void RequestStopIteration()
+            {
+                Interlocked.Exchange(ref conditionStopIterationRequested, 1);
+                iterationCancellation.Cancel();
+            }
+
             var monitors = CreateConditionMonitors(
                 document,
                 conditionEvaluator,
@@ -535,7 +601,9 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 qpcFrequency,
                 options.Precision,
                 stopAllRequested,
-                pauseCoordinator: pauseCoordinator);
+                RequestStopIteration,
+                pauseCoordinator: pauseCoordinator,
+                timeline: timeline);
             try
             {
                 ActivateAllMonitors(monitors);
@@ -544,7 +612,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         options,
                         iterationPlan,
                         nativePreparedPlan,
-                        cancellationToken,
+                        iterationToken,
                         ref sequence,
                         ref actionsSubmitted,
                         nativeControl))
@@ -557,12 +625,20 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     delayStrategy,
                     iterationStartTick + iterationDurationTicks,
                     qpcFrequency,
-                    cancellationToken,
+                    iterationToken,
                     options.NoWait,
                     pauseCoordinator);
                 CompleteAllMonitorsAfterCurrentEvaluation(monitors);
-                WaitForTriggeredConditionActions(monitors, cancellationToken);
+                WaitForTriggeredConditionActions(monitors, iterationToken);
                 DeactivateAllMonitors(monitors);
+                stopIterationRequested = Volatile.Read(ref conditionStopIterationRequested) != 0;
+                return true;
+            }
+            catch (OperationCanceledException) when (
+                Volatile.Read(ref conditionStopIterationRequested) != 0
+                && !cancellationToken.IsCancellationRequested)
+            {
+                stopIterationRequested = true;
                 return true;
             }
             finally
@@ -753,21 +829,35 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         Action stopAllRequested,
         Action? stopIterationRequested = null,
         bool applyStepWindows = true,
-        PlaybackPauseCoordinator? pauseCoordinator = null)
+        PlaybackPauseCoordinator? pauseCoordinator = null,
+        ConditionTimeline? timeline = null)
     {
         var monitors = new List<ConditionMonitor>();
         var conditionWindows = applyStepWindows
             ? CreateConditionTimeWindows(document, qpcFrequency)
             : [];
-        foreach (var cond in document.EffectiveConditions)
+        var allConditions = document.EffectiveConditions;
+        for (var index = 0; index < allConditions.Count; index++)
         {
+            var cond = allConditions[index];
             if (cond.ExecutionMode == ConditionExecutionMode.GateMainSequence)
             {
                 continue;
             }
 
+            if (!cond.HasActivationConstraint)
+            {
+                continue;
+            }
+
+            var intervals = ConditionActivationSchedule.Resolve(cond, conditionWindows, qpcFrequency);
+            if (intervals.Count == 0)
+            {
+                continue;
+            }
+
             monitors.Add(new ConditionMonitor(
-                ApplyConditionTimeWindow(cond, conditionWindows, qpcFrequency),
+                cond,
                 evaluator,
                 inputSink,
                 macroResolver,
@@ -776,7 +866,10 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 precision,
                 stopAllRequested,
                 stopIterationRequested,
-                pauseCoordinator));
+                pauseCoordinator,
+                timeline,
+                index,
+                intervals));
         }
         return monitors;
     }
@@ -794,29 +887,44 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         var actionsSubmitted = 0;
         var sequence = 1u;
         using var conditionEvaluator = new CompositeConditionEvaluator(livePixelEvaluator);
+        var playbackTriggerTick = clock.GetTimestamp();
         try
         {
-            var gateStartTick = clock.GetTimestamp();
-            if (!TryWaitForStartupGatesOrCancel(
-                    document,
-                    conditionEvaluator,
-                    delayStrategy,
-                    ref gateStartTick,
-                    qpcFrequency,
-                    cancellationToken))
-            {
-                return new PlaybackRunResult(
-                    PlaybackRunStatus.Completed,
-                    iterationsCompleted,
-                    actionsSubmitted,
-                    Cancelled: true,
-                    inputSink.GetStats());
-            }
-
             while (iterationsCompleted < iterationsTarget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var iterationStartTick = clock.GetTimestamp();
+                var gateStartTick = clock.GetTimestamp();
+                var timeline = new ConditionTimeline(
+                    document.EffectiveConditions.Count,
+                    playbackTriggerTick,
+                    gateStartTick);
+                var gateWait = TryWaitForStartupGatesOrCancel(
+                    document,
+                    conditionEvaluator,
+                    delayStrategy,
+                    options.Precision,
+                    ref gateStartTick,
+                    qpcFrequency,
+                    cancellationToken,
+                    playbackTriggerTick,
+                    timeline);
+                if (gateWait == StartupGateWaitResult.Failed)
+                {
+                    return new PlaybackRunResult(
+                        PlaybackRunStatus.Completed,
+                        iterationsCompleted,
+                        actionsSubmitted,
+                        Cancelled: true,
+                        inputSink.GetStats());
+                }
+
+                if (gateWait == StartupGateWaitResult.SkipIteration)
+                {
+                    iterationsCompleted++;
+                    continue;
+                }
+
+                var iterationStartTick = gateStartTick;
                 using var iterationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var iterationToken = iterationCancellation.Token;
                 var conditionStopIterationRequested = 0;
@@ -835,8 +943,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     options.Precision,
                     runCancellation.Cancel,
                     StopIteration,
-                    applyStepWindows: false,
-                    pauseCoordinator: pauseCoordinator);
+                    pauseCoordinator: pauseCoordinator,
+                    timeline: timeline);
                 var runner = new ManagedMacroControlFlowRunner(
                     inputSink,
                     delayStrategy,
@@ -948,7 +1056,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     }
 
     /// <summary>
-    /// Waits until every GateMainSequence condition currently matches (AND).
+    /// Waits until every gate in the list currently matches (AND within the list).
+    /// Prefer <see cref="WaitForStartupGatesSequentially"/> for ordered startup stages.
     /// Returns false on timeout; throws on cancellation.
     /// </summary>
     public static bool WaitForStartupGates(
@@ -959,7 +1068,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         long triggerTick,
         long qpcFrequency,
         CancellationToken cancellationToken,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        IReadOnlyList<ConditionTimeInterval>? activationIntervals = null)
     {
         if (gates.Count == 0)
         {
@@ -970,39 +1080,37 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             ? value
             : TimeSpan.FromMilliseconds(25);
         var pollTicks = Math.Max(1, (long)Math.Round(poll.TotalSeconds * qpcFrequency, MidpointRounding.AwayFromZero));
-        TimeSpan? deadline = null;
-        foreach (var gate in gates)
-        {
-            if (gate.WindowEnd is not { } end)
-            {
-                continue;
-            }
-
-            deadline = deadline is { } current
-                ? (current <= end ? current : end)
-                : end;
-        }
+        var intervals = activationIntervals
+            ?? BuildLegacyGateIntervals(gates);
 
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var now = clock.GetTimestamp();
             var elapsedMs = (now - triggerTick) * 1000.0 / qpcFrequency;
-            if (deadline is { } end && elapsedMs > end.TotalMilliseconds)
+            if (ConditionActivationSchedule.IsPastAll(intervals, elapsedMs))
             {
                 return false;
+            }
+
+            if (!ConditionActivationSchedule.Contains(intervals, elapsedMs))
+            {
+                var nextStart = ConditionActivationSchedule.NextStartAfter(intervals, elapsedMs);
+                if (nextStart is null)
+                {
+                    return false;
+                }
+
+                var dueTick = triggerTick
+                    + (long)Math.Round(nextStart.Value.TotalSeconds * qpcFrequency, MidpointRounding.AwayFromZero);
+                delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait: false);
+                continue;
             }
 
             var allMatched = true;
             foreach (var gate in gates)
             {
-                if (gate.WindowStart is { } start && elapsedMs < start.TotalMilliseconds)
-                {
-                    allMatched = false;
-                    break;
-                }
-
-                if (!evaluator.Evaluate(gate.Condition))
+                if (!evaluator.Evaluate(gate.Condition, cancellationToken))
                 {
                     allMatched = false;
                     break;
@@ -1018,38 +1126,260 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         }
     }
 
-    private bool TryWaitForStartupGatesOrCancel(
+    private static IReadOnlyList<ConditionTimeInterval> BuildLegacyGateIntervals(
+        IReadOnlyList<ConditionalDirective> gates)
+    {
+        var intervals = new List<ConditionTimeInterval>();
+        foreach (var gate in gates)
+        {
+            if (!gate.HasTimeRange && !gate.HasStepRange)
+            {
+                continue;
+            }
+
+            intervals.Add(new ConditionTimeInterval(gate.WindowStart ?? TimeSpan.Zero, gate.WindowEnd));
+        }
+
+        return intervals.Count > 0
+            ? intervals
+            : [new ConditionTimeInterval(TimeSpan.Zero, null)];
+    }
+
+    /// <summary>
+    /// Waits for each GateMainSequence condition in document order. After a gate matches,
+    /// invokes <paramref name="onGatePassed"/> (used to run that gate's then-actions) before
+    /// advancing to the next gate. Main sequence should start only after this returns true.
+    /// </summary>
+    public static bool WaitForStartupGatesSequentially(
+        IReadOnlyList<ConditionalDirective> gates,
+        IConditionEvaluator evaluator,
+        IHighResolutionClock clock,
+        IPlaybackDelayStrategy delayStrategy,
+        long qpcFrequency,
+        CancellationToken cancellationToken,
+        Action<ConditionalDirective>? onGatePassed = null,
+        TimeSpan? pollInterval = null,
+        long? playbackTriggerTick = null,
+        long? mainIterationTick = null,
+        ConditionTimeline? timeline = null,
+        IReadOnlyList<ConditionalDirective>? allConditions = null,
+        IReadOnlyList<StepTimeWindow>? stepTimeWindows = null)
+    {
+        var playbackTick = playbackTriggerTick ?? clock.GetTimestamp();
+        var iterationTick = mainIterationTick ?? playbackTick;
+        var previousFinishedTick = iterationTick;
+        var windows = stepTimeWindows ?? [];
+
+        foreach (var gate in gates)
+        {
+            var conditionIndex = IndexOfCondition(allConditions, gate);
+            var baseTick = ResolveGateBaseTick(gate, conditionIndex, playbackTick, iterationTick, previousFinishedTick);
+            var intervals = ConditionActivationSchedule.ResolveStartupGate();
+
+            if (!WaitForStartupGates(
+                    [gate],
+                    evaluator,
+                    clock,
+                    delayStrategy,
+                    baseTick,
+                    qpcFrequency,
+                    cancellationToken,
+                    pollInterval,
+                    intervals))
+            {
+                return false;
+            }
+
+            onGatePassed?.Invoke(gate);
+            previousFinishedTick = clock.GetTimestamp();
+            if (conditionIndex >= 0)
+            {
+                timeline?.MarkFinished(conditionIndex, previousFinishedTick);
+            }
+        }
+
+        return true;
+    }
+
+    private static int IndexOfCondition(IReadOnlyList<ConditionalDirective>? allConditions, ConditionalDirective gate)
+    {
+        if (allConditions is null)
+        {
+            return -1;
+        }
+
+        for (var i = 0; i < allConditions.Count; i++)
+        {
+            if (ReferenceEquals(allConditions[i], gate)
+                || string.Equals(allConditions[i].Id, gate.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static long ResolveGateBaseTick(
+        ConditionalDirective gate,
+        int conditionIndex,
+        long playbackTriggerTick,
+        long mainIterationTick,
+        long previousFinishedTick)
+    {
+        return gate.TimeBase switch
+        {
+            ConditionTimeBase.MainIteration => mainIterationTick,
+            ConditionTimeBase.AfterPreviousCondition when conditionIndex <= 0 => mainIterationTick,
+            ConditionTimeBase.AfterPreviousCondition => previousFinishedTick,
+            _ => playbackTriggerTick
+        };
+    }
+
+    private enum StartupGateWaitResult
+    {
+        Proceed,
+        SkipIteration,
+        Failed
+    }
+
+    private StartupGateWaitResult TryWaitForStartupGatesOrCancel(
         MacroDocument document,
         CompositeConditionEvaluator conditionEvaluator,
         IPlaybackDelayStrategy delayStrategy,
+        PrecisionMode precision,
         ref long plannedIterationStartTick,
         long qpcFrequency,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long playbackTriggerTick,
+        ConditionTimeline timeline)
     {
         var gates = document.EffectiveConditions
             .Where(condition => condition.ExecutionMode == ConditionExecutionMode.GateMainSequence)
             .ToList();
         if (gates.Count == 0)
         {
-            return true;
+            timeline.SetMainIterationTick(plannedIterationStartTick);
+            return StartupGateWaitResult.Proceed;
         }
 
-        var triggerTick = clock.GetTimestamp();
-        if (!WaitForStartupGates(
-                gates,
-                conditionEvaluator,
-                clock,
-                delayStrategy,
-                triggerTick,
-                qpcFrequency,
-                cancellationToken))
+        try
         {
-            return false;
+            var stepWindows = CreateConditionTimeWindows(document, qpcFrequency);
+            if (!WaitForStartupGatesSequentially(
+                    gates,
+                    conditionEvaluator,
+                    clock,
+                    delayStrategy,
+                    qpcFrequency,
+                    cancellationToken,
+                    gate =>
+                    {
+                        var flow = ExecuteStartupGateThenSteps(gate, delayStrategy, precision, cancellationToken);
+                        if (flow == MacroControlFlowResult.StopAll)
+                        {
+                            throw new OperationCanceledException();
+                        }
+
+                        if (flow is MacroControlFlowResult.StopIteration or MacroControlFlowResult.StopCurrent)
+                        {
+                            throw new StartupGateStopIterationException();
+                        }
+                    },
+                    playbackTriggerTick: playbackTriggerTick,
+                    mainIterationTick: plannedIterationStartTick,
+                    timeline: timeline,
+                    allConditions: document.EffectiveConditions,
+                    stepTimeWindows: stepWindows))
+            {
+                return StartupGateWaitResult.Failed;
+            }
+        }
+        catch (StartupGateStopIterationException)
+        {
+            // Stop-iteration in gate then-actions: skip main this round; Toggle/Hold loop continues.
+            return StartupGateWaitResult.SkipIteration;
         }
 
-        // Restart iteration timeline after the gate so main sequence DueTicks are relative to gate pass.
+        // Restart iteration timeline after the gates so main sequence DueTicks are relative to gate pass.
         plannedIterationStartTick = clock.GetTimestamp();
-        return true;
+        timeline.SetMainIterationTick(plannedIterationStartTick);
+        return StartupGateWaitResult.Proceed;
+    }
+
+    private MacroControlFlowResult ExecuteStartupGateThenSteps(
+        ConditionalDirective gate,
+        IPlaybackDelayStrategy delayStrategy,
+        PrecisionMode precision,
+        CancellationToken cancellationToken)
+    {
+        if (gate.ThenSteps.Count == 0)
+        {
+            return MacroControlFlowResult.Completed;
+        }
+
+        var document = new MacroDocument(1, "_startup_gate_then", PlaybackSettings.Default, gate.ThenSteps, null);
+        if (MacroControlFlowInspector.RequiresManagedExecution(document, macroResolver))
+        {
+            uint managedSequence = 100_000;
+            var managedActionsSubmitted = 0;
+            var runner = new ManagedMacroControlFlowRunner(
+                inputSink,
+                delayStrategy,
+                clock,
+                pixelEvaluator: null,
+                macroResolver);
+            return runner.Run(
+                document,
+                clock.GetTimestamp(),
+                clock.Frequency,
+                cancellationToken,
+                noWait: false,
+                ref managedSequence,
+                ref managedActionsSubmitted);
+        }
+
+        var plan = CompiledPlaybackPlan.Create(
+            document,
+            clock.Frequency,
+            pixelEvaluator: null,
+            macroResolver);
+
+        if (CanUseNativePrecision(precision)
+            && inputSink is SendInputMacroSink
+            && NativePlaybackEngine.TryRun(
+                plan,
+                precision,
+                cancellationToken,
+                out _,
+                out _,
+                enableCpuScan: false,
+                engineMode: NativePlaybackEngineMode.Inline))
+        {
+            return MacroControlFlowResult.Completed;
+        }
+
+        var startTick = clock.GetTimestamp();
+        uint sequence = 100_000;
+        foreach (var batch in plan.Batches)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            delayStrategy.WaitUntil(startTick + batch.DueTick, clock.Frequency, cancellationToken, noWait: false);
+            if (inputSink is SendInputMacroSink sendInput)
+            {
+                sendInput.SubmitPrepared(sequence, batch.PreparedBatch);
+                sequence += (uint)batch.PreparedBatch.ActionCount;
+            }
+            else
+            {
+                foreach (var action in batch.PreparedBatch.Actions)
+                {
+                    inputSink.Submit(sequence++, action);
+                }
+            }
+        }
+
+        return MacroControlFlowResult.Completed;
     }
 
     private static void ActivateAllMonitors(List<ConditionMonitor> monitors)
@@ -1126,7 +1456,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     {
         var windows = new List<StepTimeWindow>();
         var elapsedTicks = 0L;
-        AddStepTimeWindows(document.Steps, [], windows, ref elapsedTicks, qpcFrequency, depth: 0);
+        var visiting = new HashSet<MacroDocument>(ReferenceEqualityComparer.Instance) { document };
+        AddStepTimeWindows(document.Steps, [], windows, ref elapsedTicks, qpcFrequency, depth: 0, visiting);
         return windows;
     }
 
@@ -1136,7 +1467,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         List<StepTimeWindow> windows,
         ref long elapsedTicks,
         long qpcFrequency,
-        int depth)
+        int depth,
+        HashSet<MacroDocument> visiting)
     {
         if (depth > 16)
         {
@@ -1148,15 +1480,15 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             var step = steps[i];
             var path = parentPath.Concat([i]).ToArray();
             var startTicks = elapsedTicks;
-            var durationTicks = EstimateStepDurationTicks(step, qpcFrequency, depth);
+            var durationTicks = EstimateStepDurationTicks(step, qpcFrequency, depth, visiting);
 
             windows.Add(new StepTimeWindow(windows.Count, path, startTicks, startTicks + durationTicks));
 
             if (step is RepeatStep repeat)
             {
-                var oneIterationTicks = EstimateStepsDurationTicks(repeat.Steps, qpcFrequency, depth + 1);
+                var oneIterationTicks = EstimateStepsDurationTicks(repeat.Steps, qpcFrequency, depth + 1, visiting);
                 var firstIterationElapsed = elapsedTicks;
-                AddStepTimeWindows(repeat.Steps, path, windows, ref firstIterationElapsed, qpcFrequency, depth + 1);
+                AddStepTimeWindows(repeat.Steps, path, windows, ref firstIterationElapsed, qpcFrequency, depth + 1, visiting);
                 elapsedTicks += oneIterationTicks * Math.Max(1, repeat.Count);
             }
             else
@@ -1166,19 +1498,37 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         }
     }
 
-    private long EstimateStepsDurationTicks(IReadOnlyList<MacroStep> steps, long qpcFrequency, int depth)
+    private long EstimateStepsDurationTicks(
+        IReadOnlyList<MacroStep> steps,
+        long qpcFrequency,
+        int depth,
+        HashSet<MacroDocument> visiting)
     {
+        if (depth > 16)
+        {
+            return 0L;
+        }
+
         var total = 0L;
         foreach (var step in steps)
         {
-            total += EstimateStepDurationTicks(step, qpcFrequency, depth);
+            total += EstimateStepDurationTicks(step, qpcFrequency, depth, visiting);
         }
 
         return total;
     }
 
-    private long EstimateStepDurationTicks(MacroStep step, long qpcFrequency, int depth)
+    private long EstimateStepDurationTicks(
+        MacroStep step,
+        long qpcFrequency,
+        int depth,
+        HashSet<MacroDocument> visiting)
     {
+        if (depth > 16)
+        {
+            return 0L;
+        }
+
         static long ToTicks(TimeSpan duration, long frequency) =>
             (long)Math.Round(duration.TotalSeconds * frequency, MidpointRounding.AwayFromZero);
 
@@ -1192,87 +1542,38 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 + ToTicks(ocrClick.Interval, qpcFrequency) * Math.Max(0, Math.Clamp(ocrClick.ClickCount, 1, 3) - 1),
             ConsumerStep consumer => ToTicks(consumer.Hold, qpcFrequency),
             WaitStep wait => ToTicks(wait.MaxDuration ?? wait.Duration, qpcFrequency),
-            RepeatStep repeat => EstimateStepsDurationTicks(repeat.Steps, qpcFrequency, depth + 1) * Math.Max(1, repeat.Count),
-            MacroCallStep macro when macroResolver is not null && macroResolver(macro.Macro) is { } document =>
-                EstimateStepsDurationTicks(document.Steps, qpcFrequency, depth + 1),
-            PixelWhenStep pixel => EstimateStepsDurationTicks(pixel.ThenSteps, qpcFrequency, depth + 1),
+            RepeatStep repeat => EstimateStepsDurationTicks(repeat.Steps, qpcFrequency, depth + 1, visiting) * Math.Max(1, repeat.Count),
+            MacroCallStep macro => EstimateMacroCallDurationTicks(macro, qpcFrequency, depth, visiting),
+            PixelWhenStep pixel => EstimateStepsDurationTicks(pixel.ThenSteps, qpcFrequency, depth + 1, visiting),
             _ => 0L
         };
     }
 
-    private static ConditionalDirective ApplyConditionTimeWindow(
-        ConditionalDirective directive,
-        IReadOnlyList<StepTimeWindow> stepTimeWindows,
-        long qpcFrequency)
+    private long EstimateMacroCallDurationTicks(
+        MacroCallStep macro,
+        long qpcFrequency,
+        int depth,
+        HashSet<MacroDocument> visiting)
     {
-        if (stepTimeWindows.Count == 0)
+        if (macroResolver is null || macroResolver(macro.Macro) is not { } document)
         {
-            return directive;
+            return 0L;
         }
 
-        var startWindow = FindStepTimeWindow(stepTimeWindows, directive.StartStepPath, directive.StartStepIndex);
-        var endWindow = FindStepTimeWindow(stepTimeWindows, directive.EndStepPath, directive.EndStepIndex) ?? startWindow;
-        if (startWindow is null || endWindow is null)
+        if (!visiting.Add(document))
         {
-            return directive;
+            return 0L;
         }
 
-        var stepStart = ToTimeSpan(startWindow.StartTicks, qpcFrequency);
-        var selectedEnd = Math.Max(endWindow.EndTicks, startWindow.StartTicks);
-        var iterationEnd = Math.Max(selectedEnd, stepTimeWindows.Max(window => window.EndTicks));
-        var iterationEndTime = ToTimeSpan(iterationEnd, qpcFrequency);
-
-        var windowStart = MaxTimeSpan(directive.WindowStart, stepStart);
-        var windowEnd = directive.WindowEnd is { } explicitEnd
-            ? MinTimeSpan(explicitEnd, iterationEndTime) ?? explicitEnd
-            : iterationEndTime;
-        if (windowEnd <= windowStart)
+        try
         {
-            windowEnd = windowStart + directive.EffectivePollInterval;
+            return EstimateStepsDurationTicks(document.Steps, qpcFrequency, depth + 1, visiting);
         }
-
-        return directive with
+        finally
         {
-            WindowStart = windowStart,
-            WindowEnd = windowEnd
-        };
-    }
-
-    private static StepTimeWindow? FindStepTimeWindow(
-        IReadOnlyList<StepTimeWindow> windows,
-        IReadOnlyList<int>? path,
-        int fallbackIndex)
-    {
-        if (path is { Count: > 0 })
-        {
-            var match = windows.FirstOrDefault(window => window.Path.SequenceEqual(path));
-            if (match is not null)
-            {
-                return match;
-            }
+            visiting.Remove(document);
         }
-
-        return fallbackIndex >= 0 && fallbackIndex < windows.Count
-            ? windows[fallbackIndex]
-            : null;
     }
-
-    private static TimeSpan ToTimeSpan(long ticks, long qpcFrequency)
-    {
-        return TimeSpan.FromSeconds(ticks / (double)qpcFrequency);
-    }
-
-    private static TimeSpan MaxTimeSpan(TimeSpan? first, TimeSpan second)
-    {
-        return first is { } value && value > second ? value : second;
-    }
-
-    private static TimeSpan? MinTimeSpan(TimeSpan? first, TimeSpan second)
-    {
-        return first is { } value && value < second ? value : second;
-    }
-
-    private sealed record StepTimeWindow(int Index, IReadOnlyList<int> Path, long StartTicks, long EndTicks);
 
     private Func<PixelCondition, bool> GetPixelEvaluator(PixelEvaluationMode mode)
     {
@@ -1360,3 +1661,5 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         }
     }
 }
+
+internal sealed class StartupGateStopIterationException : Exception;

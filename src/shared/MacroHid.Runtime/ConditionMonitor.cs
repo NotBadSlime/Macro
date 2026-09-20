@@ -4,7 +4,7 @@ namespace MacroHid.Runtime;
 
 public interface IConditionEvaluator
 {
-    bool Evaluate(IConditionMatcher matcher);
+    bool Evaluate(IConditionMatcher matcher, CancellationToken cancellationToken = default);
 }
 
 public sealed class ConditionMonitor : IDisposable
@@ -19,6 +19,9 @@ public sealed class ConditionMonitor : IDisposable
     private readonly Action? stopAllRequested;
     private readonly Action? stopIterationRequested;
     private readonly PlaybackPauseCoordinator? pauseCoordinator;
+    private readonly ConditionTimeline? timeline;
+    private readonly int conditionIndex;
+    private readonly IReadOnlyList<ConditionTimeInterval> activationIntervals;
     private readonly IHighResolutionClock clock = new QpcHighResolutionClock();
     private readonly IPlaybackDelayStrategy delayStrategy;
 
@@ -58,7 +61,10 @@ public sealed class ConditionMonitor : IDisposable
         PrecisionMode precision = PrecisionMode.ExtremeDuringPlayback,
         Action? stopAllRequested = null,
         Action? stopIterationRequested = null,
-        PlaybackPauseCoordinator? pauseCoordinator = null)
+        PlaybackPauseCoordinator? pauseCoordinator = null,
+        ConditionTimeline? timeline = null,
+        int conditionIndex = -1,
+        IReadOnlyList<ConditionTimeInterval>? activationIntervals = null)
     {
         this.directive = directive;
         this.evaluator = evaluator;
@@ -70,7 +76,27 @@ public sealed class ConditionMonitor : IDisposable
         this.stopAllRequested = stopAllRequested;
         this.stopIterationRequested = stopIterationRequested;
         this.pauseCoordinator = pauseCoordinator;
+        this.timeline = timeline;
+        this.conditionIndex = conditionIndex;
+        this.activationIntervals = activationIntervals
+            ?? BuildLegacyIntervals(directive);
         delayStrategy = new QpcPlaybackDelayStrategy(clock, precision);
+    }
+
+    private static IReadOnlyList<ConditionTimeInterval> BuildLegacyIntervals(ConditionalDirective directive)
+    {
+        if (!directive.HasTimeRange && !directive.HasStepRange)
+        {
+            return [];
+        }
+
+        return
+        [
+            new ConditionTimeInterval(
+                directive.WindowStart ?? TimeSpan.Zero,
+                directive.WindowEnd,
+                directive.TimeBase)
+        ];
     }
 
     public bool HasTriggered => triggered;
@@ -129,66 +155,119 @@ public sealed class ConditionMonitor : IDisposable
         var pollTicks = Math.Max(1, (long)Math.Round(directive.EffectivePollInterval.TotalSeconds * frequency, MidpointRounding.AwayFromZero));
         var nextPollTick = clock.GetTimestamp();
 
-        while (!cancellationToken.IsCancellationRequested && active && !triggered)
+        try
         {
-            try
+            while (!cancellationToken.IsCancellationRequested && active && !triggered)
             {
-                if (!WaitUntilInsideTimeWindow(cancellationToken))
+                try
+                {
+                    if (!WaitUntilInsideTimeWindow(cancellationToken))
+                    {
+                        return;
+                    }
+
+                    if (evaluator.Evaluate(directive.Condition, cancellationToken))
+                    {
+                        triggered = true;
+                        using var pauseLease = directive.ExecutionMode == ConditionExecutionMode.PauseMainTimeline
+                            ? pauseCoordinator?.Pause()
+                            : null;
+                        ExecuteThenSteps(cancellationToken);
+                        return;
+                    }
+
+                    nextPollTick += pollTicks;
+                    delayStrategy.WaitUntil(nextPollTick, frequency, cancellationToken, noWait: false);
+                }
+                catch (OperationCanceledException)
                 {
                     return;
                 }
-
-                if (evaluator.Evaluate(directive.Condition))
-                {
-                    triggered = true;
-                    using var pauseLease = directive.ExecutionMode == ConditionExecutionMode.PauseMainTimeline
-                        ? pauseCoordinator?.Pause()
-                        : null;
-                    ExecuteThenSteps(cancellationToken);
-                    return;
-                }
-
-                nextPollTick += pollTicks;
-                delayStrategy.WaitUntil(nextPollTick, frequency, cancellationToken, noWait: false);
             }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
+        }
+        finally
+        {
+            timeline?.MarkFinished(conditionIndex, clock.GetTimestamp());
         }
     }
 
     private bool WaitUntilInsideTimeWindow(CancellationToken cancellationToken)
     {
-        if (macroStartTick <= 0 || qpcFrequency <= 0)
+        if (activationIntervals.Count == 0)
+        {
+            return false;
+        }
+
+        if (qpcFrequency <= 0 && EffectiveFrequency() <= 0)
         {
             return true;
         }
 
+        var frequency = EffectiveFrequency();
         while (!cancellationToken.IsCancellationRequested && active)
         {
             pauseCoordinator?.WaitUntilResumed(cancellationToken);
             RuntimeNativeMethods.QueryPerformanceCounter(out var now);
-            var elapsedTicks = pauseCoordinator?.GetTimelineElapsedTicks(macroStartTick, now)
-                ?? now - macroStartTick;
-            var elapsedMs = elapsedTicks * 1000.0 / qpcFrequency;
 
-            if (directive.WindowEnd is { } end && elapsedMs > end.TotalMilliseconds)
+            if (IsInsideActivationWindow(now, frequency, cancellationToken))
+            {
+                return true;
+            }
+
+            if (IsPastAllActivationWindows(now, frequency, cancellationToken))
             {
                 return false;
             }
 
-            if (directive.WindowStart is { } start && elapsedMs < start.TotalMilliseconds)
+            var nextStart = NextActivationStartAfter(now, frequency, cancellationToken);
+            if (nextStart is not { } next)
             {
-                var dueTick = macroStartTick + (long)Math.Round(start.TotalSeconds * qpcFrequency, MidpointRounding.AwayFromZero);
-                if (pauseCoordinator is null)
-                {
-                    delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait: false);
-                }
-                else
-                {
-                    pauseCoordinator.WaitUntil(dueTick, delayStrategy, qpcFrequency, cancellationToken, noWait: false);
-                }
+                return false;
+            }
+
+            var baseTick = ResolveAnchorBaseTick(next.Anchor, cancellationToken);
+            if (baseTick <= 0)
+            {
+                delayStrategy.WaitUntil(
+                    now + Math.Max(1, frequency / 200),
+                    frequency,
+                    cancellationToken,
+                    noWait: false);
+                continue;
+            }
+
+            var dueTick = baseTick + (long)Math.Round(next.Start.TotalSeconds * frequency, MidpointRounding.AwayFromZero);
+            if (pauseCoordinator is null)
+            {
+                delayStrategy.WaitUntil(dueTick, frequency, cancellationToken, noWait: false);
+            }
+            else
+            {
+                pauseCoordinator.WaitUntil(dueTick, delayStrategy, frequency, cancellationToken, noWait: false);
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsInsideActivationWindow(long nowTick, long frequency, CancellationToken cancellationToken)
+    {
+        foreach (var interval in activationIntervals)
+        {
+            var baseTick = ResolveAnchorBaseTick(interval.Anchor, cancellationToken);
+            if (baseTick <= 0)
+            {
+                continue;
+            }
+
+            var elapsedMs = ElapsedMs(nowTick, baseTick, frequency);
+            if (elapsedMs < interval.Start.TotalMilliseconds)
+            {
+                continue;
+            }
+
+            if (interval.End is { } end && elapsedMs > end.TotalMilliseconds)
+            {
                 continue;
             }
 
@@ -197,6 +276,100 @@ public sealed class ConditionMonitor : IDisposable
 
         return false;
     }
+
+    private bool IsPastAllActivationWindows(long nowTick, long frequency, CancellationToken cancellationToken)
+    {
+        if (activationIntervals.Count == 0)
+        {
+            return true;
+        }
+
+        foreach (var interval in activationIntervals)
+        {
+            if (interval.End is null)
+            {
+                return false;
+            }
+
+            var baseTick = ResolveAnchorBaseTick(interval.Anchor, cancellationToken);
+            if (baseTick <= 0)
+            {
+                return false;
+            }
+
+            var elapsedMs = ElapsedMs(nowTick, baseTick, frequency);
+            if (elapsedMs <= interval.End.Value.TotalMilliseconds)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private (TimeSpan Start, ConditionTimeBase Anchor)? NextActivationStartAfter(
+        long nowTick,
+        long frequency,
+        CancellationToken cancellationToken)
+    {
+        (TimeSpan Start, ConditionTimeBase Anchor)? next = null;
+        foreach (var interval in activationIntervals)
+        {
+            var baseTick = ResolveAnchorBaseTick(interval.Anchor, cancellationToken);
+            if (baseTick <= 0)
+            {
+                continue;
+            }
+
+            var elapsedMs = ElapsedMs(nowTick, baseTick, frequency);
+            if (elapsedMs < interval.Start.TotalMilliseconds)
+            {
+                if (next is not { } current || interval.Start < current.Start)
+                {
+                    next = (interval.Start, interval.Anchor);
+                }
+            }
+        }
+
+        return next;
+    }
+
+    private double ElapsedMs(long nowTick, long baseTick, long frequency)
+    {
+        var elapsedTicks = pauseCoordinator?.GetTimelineElapsedTicks(baseTick, nowTick)
+            ?? nowTick - baseTick;
+        return elapsedTicks * 1000.0 / frequency;
+    }
+
+    private long ResolveAnchorBaseTick(ConditionTimeBase anchor, CancellationToken cancellationToken)
+    {
+        if (timeline is null || conditionIndex < 0)
+        {
+            return macroStartTick;
+        }
+
+        while (!cancellationToken.IsCancellationRequested && active)
+        {
+            var baseTick = timeline.ResolveBaseTick(conditionIndex, anchor);
+            if (baseTick > 0
+                || anchor != ConditionTimeBase.AfterPreviousCondition
+                || conditionIndex <= 0)
+            {
+                return baseTick > 0 ? baseTick : macroStartTick;
+            }
+
+            delayStrategy.WaitUntil(
+                clock.GetTimestamp() + Math.Max(1, EffectiveFrequency() / 200),
+                EffectiveFrequency(),
+                cancellationToken,
+                noWait: false);
+        }
+
+        return 0;
+    }
+
+    private long ResolveWindowBaseTick(CancellationToken cancellationToken)
+        => ResolveAnchorBaseTick(directive.TimeBase, cancellationToken);
 
     private void ExecuteThenSteps(CancellationToken cancellationToken)
     {
@@ -278,7 +451,8 @@ public sealed class ConditionMonitor : IDisposable
     public void Dispose()
     {
         Deactivate();
-        try { monitorThread?.Join(TimeSpan.FromMilliseconds(500)); } catch { }
+        // Keep join short: after Cancel, OCR/delays should exit within a poll chunk.
+        try { monitorThread?.Join(TimeSpan.FromMilliseconds(200)); } catch { }
         cts.Dispose();
     }
 
@@ -290,7 +464,7 @@ public sealed class CompositeConditionEvaluator : IConditionEvaluator, IDisposab
     private readonly Func<PixelCondition, bool> pixelEvaluator;
     private readonly Func<TemplateMatcher, bool> templateEvaluator;
     private readonly Func<PixelHashMatcher, bool> pixelHashEvaluator;
-    private readonly Func<TextMatcher, bool> textEvaluator;
+    private readonly Func<TextMatcher, bool>? customTextEvaluator;
     private readonly Lazy<PaddleOcrBridge> ocrBridge = new(() => new PaddleOcrBridge());
 
     public CompositeConditionEvaluator(
@@ -302,17 +476,18 @@ public sealed class CompositeConditionEvaluator : IConditionEvaluator, IDisposab
         this.pixelEvaluator = pixelEvaluator ?? ScreenPixelSampler.Matches;
         this.templateEvaluator = templateEvaluator ?? EvaluateTemplate;
         this.pixelHashEvaluator = pixelHashEvaluator ?? EvaluatePixelHash;
-        this.textEvaluator = textEvaluator ?? EvaluateText;
+        customTextEvaluator = textEvaluator;
     }
 
-    public bool Evaluate(IConditionMatcher matcher)
+    public bool Evaluate(IConditionMatcher matcher, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         return matcher switch
         {
             PixelMatcher pixel => EvaluatePixel(pixel),
             TemplateMatcher template => templateEvaluator(template),
             PixelHashMatcher hash => pixelHashEvaluator(hash),
-            TextMatcher text => textEvaluator(text),
+            TextMatcher text => customTextEvaluator?.Invoke(text) ?? EvaluateText(text, cancellationToken),
             _ => false
         };
     }
@@ -346,7 +521,7 @@ public sealed class CompositeConditionEvaluator : IConditionEvaluator, IDisposab
         return PixelHashEngine.Matches(hash.Region, hash.ReferenceHash, hash.SimilarityThreshold);
     }
 
-    private bool EvaluateText(TextMatcher text)
+    private bool EvaluateText(TextMatcher text, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(text.ExpectedText) || !ocrBridge.Value.IsAvailable)
         {
@@ -358,7 +533,8 @@ public sealed class CompositeConditionEvaluator : IConditionEvaluator, IDisposab
             text.ExpectedText,
             text.Contains,
             text.Language,
-            text.UseRegex);
+            text.UseRegex,
+            cancellationToken);
     }
 
     public void Dispose()

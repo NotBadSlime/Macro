@@ -1,113 +1,199 @@
-# MacroHID
+# MacroHID 使用说明
 
-Current stable release: `1.3.0`
+MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。通过 Windows `SendInput` 发送输入，不安装驱动、不改 Secure Boot。适合合法的本机桌面自动化；控制管理员窗口时，请以管理员身份启动本软件。
 
-## 中文
+宏数据默认保存在 `%APPDATA%\MacroHID\MacroLibrary`。卸载时默认保留，重新安装后仍可继续使用。
 
-MacroHID 是一个面向 Windows 10/11 x64 的本机宏自动化工具。当前版本采用纯用户态 `SendInput` 路线，不安装驱动、不启用测试签名、不修改 Secure Boot；它适用于合法的本机桌面自动化、普通应用以及以同等权限运行的管理员应用。
+---
 
-### 主要能力
+## 界面总览
 
-- WPF 桌面编辑器 MacroStudio：宏数据库、IDEA 风格工具窗口、可视化序列、条件序列、MCRX JSON 面板、动作面板和播放控制。
-- 键鼠录制：一键记录键盘按下/抬起、鼠标按键/移动/滚轮以及动作间的真实延迟，停止后直接插入当前宏序列。
-- 全局触发键：支持单键、组合键、Ctrl/Alt/Shift/Win、鼠标侧键，以及每个宏独立的播放模式和进程筛选。
-- 播放模式：按下切换循环、按住循环、播放 N 次，并支持执行中停止。
-- 指令覆盖：键盘按下/抬起、Unicode 文本、指定窗口到前台、OCR 正则提取文本到剪贴板、OCR 文字坐标点击、鼠标按下/抬起、坐标点击、相对/绝对移动、滚轮、水平滚轮、媒体键、延迟、随机延迟、循环、调用宏、像素条件。
-- 条件序列：一个宏包含基础序列和条件序列；基础序列直接执行，条件序列在播放后按像素/时间窗口等条件触发 then-actions。
-- 内置转换器：支持 MacroHID `.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、按键精灵/QMacro、GIMacros JSON 的导入导出，不依赖外部 Electron 转换器。
-- 三档用户态精度模式：基础（目标 0.5ms）、高性能（目标 0.25ms）、极限（目标 0.1ms）；极限档会优先使用进程内 x64 native playback DLL。密集 1ms/2ms 循环在 auto 模式下优先使用 inline native 路径压低单步尖峰，显式 standby 模式保留 2 worker 低启动路径；DLL 不可用时自动回退到 managed ultra。
+启动 MacroStudio 后，工作区由若干可显示、可停靠、可浮动的面板组成。用顶部「窗口」菜单，或左下角工具窗口按钮，可以显示、隐藏、浮动、停靠这些面板；布局乱了可以用「重置布局」。
 
-### 快速开始
+常用面板：
 
-```powershell
-dotnet build MacroHID.sln --configuration Release
-dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release
-.\scripts\Build-LocalRun.ps1 -Configuration Release
-.\artifacts\local-run\MacroStudio\MacroStudio.exe
-```
+- **宏数据库管理**：管理宏文件、文件夹、条件宏，以及导入导出。
+- **序列**：当前宏按下触发后立刻执行的主流程。
+- **条件序列**：播放过程中按像素、文字、时间或步骤范围监视画面，成立后再跑一组动作。
+- **动作面板**：把延迟、键鼠、OCR、调用宏等动作点进或拖进序列。
+- **播放控制**：给当前宏设触发键、播放模式、进程筛选，以及开始监听 / 立即运行。
+- **MCRX JSON**：当前宏的原始 JSON，改完合法内容会同步到序列和条件。
 
-`Build-LocalRun.ps1` 会先构建 `MacroHid.NativePlayback.dll`，再把它复制到 MacroStudio、MacroRunner 和 LatencyProbe 输出目录。
+语言可在界面里切换简体中文、繁体中文和英文。深色 / 浅色主题随系统或程序设置切换。
 
-构建安装包：
+---
 
-```powershell
-.\scripts\Build-Installer.ps1 -Configuration Release
-```
+## 宏数据库
 
-安装包输出到：
+宏数据库按资源管理器的方式工作：宏像文件，文件夹用来分类。
 
-```text
-artifacts\installer\MacroHID-Setup-x64.exe
-```
+**新建**
 
-### 文档
+- 「宏文件」：普通宏，有主序列，也可以再加条件。
+- 「条件宏」：橙色条目，只装一组条件（含触发后动作）。把它拖进普通宏的条件列表，或用条件面板的「宏库 → 插入条件宏」，即可复用同一套条件。不要把条件宏拖进「触发后执行」。
 
-- [安装说明](docs/installer.md)
-- [使用说明](docs/usage.md)
-- [1.3.0 正式版说明](docs/release-1.3.0.md)
-- [1.2.0 正式版说明](docs/release-1.2.0.md)
-- [1.1.0 正式版说明](docs/release-1.1.0.md)
-- [1.0.0 正式版说明](docs/release-1.0.0.md)
-- [精度说明](docs/precision.md)
-- [当前精度水平](docs/current-precision-status.md)
-- [架构说明](docs/architecture.md)
-- [MCRX 格式](docs/mcrx-format.md)
+**整理**
 
-### 边界
+- `Ctrl` / `Shift` 多选，`Ctrl+A` 全选。
+- 拖动可移动；复制、粘贴、删除、锁定均可批量操作。
+- 「查看」可切换详细信息、列表、小图标、大图标；「排序方式」可选自定义顺序、名称、修改日期。
+- 双击进入文件夹，「向上一级」或 `Backspace` 返回。空白处右键可新建、粘贴、改视图、排序、刷新。
 
-MacroHID 不绕过安全边界，不支持安全桌面、UAC 弹窗、反作弊保护、受保护进程或系统级输入隔离。要控制管理员权限窗口，请以管理员身份启动 MacroStudio 或 MacroRunner。
+**锁定**
 
-## English
+选中宏后，在序列顶部点「锁定编辑」。锁定后仍可运行、监听、导出，但不能改步骤、条件、JSON、名称、播放参数，也不能删除。解锁后才能继续改。
 
-MacroHID is a local Windows input macro tool for Windows 10/11 x64. The current version is fully user-mode and submits input through Windows `SendInput`; it does not install a driver, enable test-signing, or require Secure Boot changes. It is intended for legal local desktop automation, normal applications, and elevated applications running at the same integrity level.
+**快捷键**
 
-### Highlights
+`F2` 重命名，`Delete` 删除，`Ctrl+A` 全选，`Ctrl+C` / `Ctrl+V` 复制粘贴，`Ctrl+D` 复制宏，`Ctrl+N` 新建宏，`Ctrl+Shift+N` 新建文件夹，`F5` 刷新。
 
-- MacroStudio WPF editor: macro database, IDEA-style tool windows, visual sequence editing, condition sequences, MCRX JSON panel, action palette, and playback controls.
-- Input recording: capture keyboard down/up, mouse buttons, movement, wheels, and real inter-action delays, then insert the result directly into the current sequence.
-- Global triggers: single keys, key chords, Ctrl/Alt/Shift/Win, mouse side buttons, per-macro playback mode, and optional foreground process filter.
-- Playback modes: toggle loop, hold loop, fixed N runs, and stop while running.
-- Step coverage: keyboard down/up, Unicode text, targeted window activation with foreground confirmation, OCR regex/capture-group extraction to the clipboard, OCR text-coordinate clicks, mouse down/up, coordinate clicks, relative/absolute movement, vertical/horizontal wheel, media keys, fixed/random waits, loops, macro calls, and pixel conditions.
-- Condition sequences: each macro has a base sequence and condition directives; the base sequence runs directly, while condition then-actions run only after their condition is met.
-- Built-in converter: imports/exports MacroHID `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, and GIMacros JSON formats without launching the external Electron converter.
-- Three user-mode precision modes: Basic (0.5ms target), High Performance (0.25ms target), and Extreme (0.1ms target); Extreme prefers the in-process x64 native playback DLL. Dense 1ms/2ms loops prefer the inline native path in auto mode to reduce per-step spikes, while explicit standby mode keeps a two-worker low-startup path; MacroHID automatically falls back to managed ultra when the DLL is unavailable.
+序列和条件列表支持 `Delete`、`Ctrl+A` / `C` / `X` / `V`；序列还支持 `Ctrl+Z` / `Y` 撤销还原。
 
-### Quick Start
+---
 
-```powershell
-dotnet build MacroHID.sln --configuration Release
-dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release
-.\scripts\Build-LocalRun.ps1 -Configuration Release
-.\artifacts\local-run\MacroStudio\MacroStudio.exe
-```
+## 动作面板与主序列
 
-`Build-LocalRun.ps1` builds `MacroHid.NativePlayback.dll` first, then copies it into the MacroStudio, MacroRunner, and LatencyProbe output folders.
+主序列是宏触发后马上执行的步骤列表。在动作面板里点击即可在当前位置插入，也可以拖到序列里的目标位置。点序列里的步骤卡片，右侧会打开可视化属性。
 
-Build the installer:
+动作面板右上角可以改各类动作的文字色、图标色和底色。
 
-```powershell
-.\scripts\Build-Installer.ps1 -Configuration Release
-```
+### 可添加的动作
 
-The setup package is written to:
+- **延迟**：固定毫秒，或随机范围。
+- **键盘功能**：按下、抬起，或输入字符。
+- **鼠标按键**：左 / 右 / 中 / 侧键 X1 X2，按下或抬起，可带坐标。
+- **鼠标移动**：相对位移或绝对坐标。
+- **滚轮**：垂直或水平。
+- **指定窗口到前台**：从正在运行的窗口里选目标，按进程名，可选再匹配标题或标题正则。会恢复最小化窗口，并等到该进程真正成为前台后再继续。
+- **OCR 获取文本**：框选屏幕区域，按普通文字或正则从识别结果里抽出一段，写入剪贴板。可先「测试提取（不写剪贴板）」。下拉里有常用规则，例如全部文字、连续数字、过滤指定词后再留数字、UID 后面的内容、冒号或等号后面的内容。
+- **OCR 文字点击**：框选区域，按文字或正则找到文字框中心再点击。可指定第 N 个匹配、单击 / 双击 / 三击、坐标偏移，也可先「测试定位（不点击）」。
+- **文本功能**：把内容贴进当前输入框（走剪贴板粘贴，相当于 Ctrl+V）。
+- **宏**：调用宏数据库里的另一个宏。序列里点「进入子宏」可跳进去改被调用的宏，再用「返回上一宏」回来。
+- **循环**：循环内部还可以继续拖步骤。
+- **注释**：只作标记，播放时不执行。
+- **停止本层宏动作**：退出当前这次宏调用，外层接着跑。
+- **停止本轮播放**：丢掉本轮主序列剩下的步骤；「按下循环 / 按住循环」会进入下一轮（下一轮仍会走启动门闩）。
+- **停止本次播放**：整次播放立刻结束，和外层循环一起停，效果接近再按一次触发键停止。
 
-```text
-artifacts\installer\MacroHID-Setup-x64.exe
-```
+宏可以调用自己。放在序列末尾的自调用按可取消的尾调用处理，不会无限涨调用栈；再按触发键可以停。
 
-### Documentation
+### 录制输入
 
-- [Installation](docs/installer.md)
-- [Usage Guide](docs/usage.md)
-- [1.3.0 Release Notes](docs/release-1.3.0.md)
-- [1.2.0 Release Notes](docs/release-1.2.0.md)
-- [1.1.0 Release Notes](docs/release-1.1.0.md)
-- [1.0.0 Release Notes](docs/release-1.0.0.md)
-- [Precision Notes](docs/precision.md)
-- [Current Precision Status](docs/current-precision-status.md)
-- [Architecture](docs/architecture.md)
-- [MCRX Format](docs/mcrx-format.md)
+点序列顶部「录制输入」，先选模式：
 
-### Scope
+- **复刻录入**：保留真实按键间隔。
+- **延迟录入**：每个输入之间固定 5ms。
+- **无延迟录入**：输入之间不加等待。
 
-MacroHID does not bypass security boundaries. Secure desktop, UAC prompts, anti-cheat contexts, protected processes, and system-level input isolation are out of scope. To control elevated windows, run MacroStudio or MacroRunner as Administrator.
+主窗口会最小化。只记录键盘按下 / 抬起、鼠标左中右及侧键、垂直 / 水平滚轮，**不记录鼠标移动**。按 `Ctrl+Shift+F12` 结束；这个停止组合键本身不会写进宏。录制期间会暂停全局触发监听，结束后自动恢复。锁定的宏不能录制。
+
+条件里也可以录：先选中一条条件，再点「触发后执行」旁边的「录制输入」，结果只会进该条件的触发动作，不会进主序列。
+
+### 编辑操作
+
+序列支持多选、框选、拖动排序、拖进循环、复制剪切粘贴、删除、上移下移。把左侧宏拖进序列，会复制它的步骤。
+
+---
+
+## 条件序列
+
+每个普通宏都可以带条件。播放开始后：
+
+1. 若有「启动前门闩」条件，先按列表顺序逐个等待画面条件成立；某条成立后可以先跑它自己的「触发后执行」，全部门闩通过后再开主序列。
+2. 主序列按步骤执行。
+3. 其余条件在各自允许的步骤范围或时间范围内监视；成立后执行该条的「触发后执行」。
+
+普通条件至少要设「执行步骤范围」或「时间范围」之一；两端都空无法保存或运行。两者是 **或** 的关系：落在任一段里就会监视，中间空档不监视。步骤范围可选「（不限）」。选中步骤范围时，主序列里对应步骤会标红。
+
+门闩条件从按下播放 / 触发就开始等，不必设步骤或时间范围。
+
+### 条件怎么配
+
+- **名称**：方便在列表里辨认。
+- **类型**：常见是像素颜色或 OCR 文字。像素可取单点或框选区域，并设目标颜色和容差。OCR 可设期望文字，支持包含匹配或带超时的正则。
+- **触发动作执行方式**
+  - **同时执行**：主序列继续跑，条件动作并行。
+  - **暂停主时间线**：主序列停住，等条件动作做完再从原处继续。
+  - **启动前门闩**：触发后先等这条（及列表里其他门闩）成立，再开主序列。
+- **时间范围**：单位毫秒，起点和终点都可以留空表示这一侧不限制。计时基准三选一：
+  - **按下播放**：从按下触发 / 开始播放算。
+  - **进入该条件**：从上一条条件判定结束（含它的触发后动作）算起；第一条则从本轮主序列开始算。
+  - **主序列本轮**：从本轮主序列开始算；按下循环进入下一轮会重置。
+- **触发后执行**：条件成立后要跑的动作，编辑方式和主序列相同。
+
+### 条件宏
+
+可以把当前宏里选中的条件（含触发后动作）「提取到宏库」，生成橙色条件宏；原宏里的条件仍会保留。之后在别的宏里插入同一份条件包即可。
+
+### 播放时要注意的边界
+
+- 每条条件在一次播放迭代里最多触发一次；进入下一轮「播放 N 次」或循环时，会重新监听、重新判断。
+- 条件动作可以再调用其他宏。「停止本层宏动作」只退出那次嵌套调用，后面的条件动作仍会继续。
+- 「停止本轮播放」结束当前轮主序列，但外层循环还在；下一轮会新建条件监听。
+- 「停止本次播放」（直接写在条件动作里，或写在被调用的宏里）会停掉主序列和整个外层循环。
+- 在条件动作里调用「当前这个宏」时，只跑它的主序列，不会再套一层该宏自己的条件监听。若要做「画面出现 → 跑完条件动作 → 结束本轮 → 下一轮再判断」，请把宏设成按下循环或按住循环，条件选「暂停主时间线」，并在条件动作末尾放「停止本轮播放」。要彻底退出循环，再按触发键，或使用「停止本次播放」。
+
+跨窗口取字再点击时，建议顺序是：指定聊天窗口到前台 → OCR 获取文本（正则抽到剪贴板）→ 指定游戏窗口到前台 → OCR 文字点击「粘贴 / 搜索」。不必再对消息双击或发 Ctrl+C。「指定窗口到前台」确认成功后才会走下一步，不依赖 Alt+Tab 的窗口顺序。
+
+---
+
+## 播放控制
+
+先在宏数据库里选中一个宏，再在播放控制里设置。
+
+### 播放模式
+
+- **播放 N 次**：触发后跑指定次数，默认 1。
+- **按下循环**：按一次开始循环，再按一次停止。
+- **按住循环**：按住触发键时循环，松开停止。
+
+### 触发键
+
+点「捕获」，然后按下要用来启动宏的键或组合键。支持主键盘、数字小键盘（开或关 Num Lock 都按物理小键盘识别）、符号键、F1–F24、Ctrl / Alt / Shift / Win，以及标准鼠标 1–5 键（左、右、中、侧键）。
+
+游戏鼠标第 6 键及以后，Windows 标准消息通常识别不到。请在鼠标驱动里映射成 F13–F24，再捕获为触发键。
+
+**进程筛选**：填前台进程名，例如 `chrome.exe`。只有当前最前面的窗口属于该进程时，这个宏才会被触发。留空表示不限制。
+
+### 监听与运行
+
+- **开始监听**：当前宏进入热键待命。开始前必须先有触发键。
+- **一键监听**：尽量把库里已设触发键的宏都打开监听。若多个宏抢同一触发键，会提示冲突，冲突的那些不会启动。
+- **立即运行**：不按热键，马上播当前宏。
+- 标题栏 **暂停监听**：临时关掉全部触发，已保存的热键不会丢。捕获触发键或步骤按键时也会自动暂停；点「恢复监听」回到暂停前的集合。
+
+宏没反应时，依次检查：有没有触发键、播放模式和次数、进程筛选是否太严、是否已开始监听、标题栏是不是还停在「已暂停监听」。
+
+### 精度
+
+「全局运行」里可选三档：
+
+- **基础**：目标约 0.5ms。
+- **高性能**：目标约 0.25ms。
+- **极限**：目标约 0.1ms，会优先走进程内 native 播放。可填「极限核心掩码」（例如 `0x1F`）把播放线程钉在指定 CPU 核心上，减少抖动；留空则自动选核。
+
+这些数字是优化目标和探测阈值，Windows 用户态仍可能被系统抢占，出现偶发长尾延迟。含复杂控制流或 native 库不可用时，会自动退回可取消的托管播放。
+
+---
+
+## 导入和导出
+
+入口在宏数据库。
+
+**导入**：支持 MacroHID `.mcrx`、MacroConverter XML、雷云 / Razer Synapse XML、Lua / Logitech Lua、XMouse、按键精灵 / QMacro、GIMacros JSON。文件框可多选。`.mcrx` 的主宏和子宏会一起导入，并重映射「调用宏」引用。雷云 XML 可同时选主宏和子宏，或把它们放在同一目录，程序会按 GUID 先导入子宏，再在主宏里保留嵌套调用。失败时会弹出文件名、行列、原因和原文；批量导入会继续处理其余文件并汇总失败项。
+
+**导出**：选中宏或文件夹后点导出，按向导选格式。分享本软件宏时优先用 **MacroHID MCRX**。多选宏会导出到同一目录，夹外依赖写到「依赖子宏」。导出文件夹可选两个子文件夹或 ZIP，会带上文件夹内宏和依赖。把「宏文件夹 + 依赖子宏」一起发给别人即可。
+
+---
+
+## MCRX JSON
+
+需要精细改结构时，打开 MCRX JSON 面板。改完后，合法 JSON 会立刻刷新主序列和条件序列；不合法时保留你正在改的内容，并显示错误，不会把已有序列冲掉。
+
+---
+
+## 使用边界
+
+MacroHID 不会绕过 Windows 安全边界。安全桌面、UAC 弹窗、反作弊保护、受保护进程、系统级输入隔离都不支持。目标程序是管理员权限时，请同样以管理员启动 MacroStudio。
+
+仅用于你有权操作的本机环境。

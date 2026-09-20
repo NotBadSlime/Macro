@@ -98,20 +98,70 @@ public sealed class SendInputMacroSink : IMacroInputSink
 
     public void Submit(uint sequence, InputAction action)
     {
+        SubmitActions(sequence, [action]);
+    }
+
+    public void SubmitBatch(uint startSequence, IReadOnlyList<InputAction> actions)
+    {
+        SubmitActions(startSequence, actions);
+    }
+
+    public void SubmitPrepared(uint startSequence, PreparedInputBatch prepared)
+    {
+        if (prepared.Actions.Any(action => action is TextInputAction))
+        {
+            SubmitActions(startSequence, prepared.Actions);
+            return;
+        }
+
+        SubmitNativeBatch(prepared);
+    }
+
+    private void SubmitActions(uint startSequence, IReadOnlyList<InputAction> actions)
+    {
         if (!IsAvailable)
         {
             throw new PlatformNotSupportedException("SendInput is only available on Windows.");
         }
 
-        SubmitPrepared(sequence, PreparedInputBatch.FromActions([action]));
+        var pending = new List<InputAction>();
+        foreach (var action in actions)
+        {
+            if (action is TextInputAction text)
+            {
+                FlushPending(pending);
+                SubmitText(text.Text);
+                continue;
+            }
+
+            pending.Add(action);
+        }
+
+        FlushPending(pending);
     }
 
-    public void SubmitBatch(uint startSequence, IReadOnlyList<InputAction> actions)
+    private void FlushPending(List<InputAction> pending)
     {
-        SubmitPrepared(startSequence, PreparedInputBatch.FromActions(actions));
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        SubmitNativeBatch(PreparedInputBatch.FromActions(pending));
+        pending.Clear();
     }
 
-    public void SubmitPrepared(uint startSequence, PreparedInputBatch prepared)
+    private void SubmitText(string text)
+    {
+        if (ClipboardTextSender.TrySend(text, this, CancellationToken.None, out _))
+        {
+            return;
+        }
+
+        SubmitNativeBatch(PreparedInputBatch.FromActions([new TextInputAction(text)]));
+    }
+
+    private void SubmitNativeBatch(PreparedInputBatch prepared)
     {
         if (!IsAvailable)
         {

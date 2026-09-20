@@ -30,7 +30,20 @@ public static class McrxParser
             id = null;
         }
 
-        return MacroStepNormalizer.Normalize(new MacroDocument(version, name, playback, steps, conditions, id));
+        var kind = root.TryGetProperty("kind", out var kindProperty)
+            ? ParseMacroKind(kindProperty.GetString())
+            : MacroKind.Normal;
+
+        return MacroStepNormalizer.Normalize(new MacroDocument(version, name, playback, steps, conditions, id, kind));
+    }
+
+    private static MacroKind ParseMacroKind(string? value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "condition" or "conditionmacro" or "条件宏" => MacroKind.Condition,
+            _ => MacroKind.Normal
+        };
     }
 
     private static PlaybackSettings ParsePlayback(JsonElement playbackElement)
@@ -135,6 +148,7 @@ public static class McrxParser
             "key.up" => ParseKey(stepElement, KeyActionKind.Up),
             "key.tap" => ParseKey(stepElement, KeyActionKind.Tap),
             "key.text" => new TextStep(GetString(stepElement, "text", string.Empty) ?? string.Empty),
+            "comment" => new CommentStep(GetString(stepElement, "text", string.Empty) ?? string.Empty),
             "mouse.move" => ParseMouseMove(stepElement),
             "mouse.down" => ParseMouseButton(stepElement, ButtonActionKind.Down),
             "mouse.up" => ParseMouseButton(stepElement, ButtonActionKind.Up),
@@ -543,9 +557,19 @@ public static class McrxParser
         var windowEnd = GetOptionalTimeSpan(elem, "windowEndMs");
         var startPath = ParseOptionalStepPath(elem, "startPath");
         var endPath = ParseOptionalStepPath(elem, "endPath");
+        if (startStep < 0 || endStep < 0)
+        {
+            startStep = -1;
+            endStep = -1;
+            startPath = null;
+            endPath = null;
+        }
         var executionMode = elem.TryGetProperty("executionMode", out var executionModeProp)
             ? ParseEnum<ConditionExecutionMode>(executionModeProp.GetString(), "condition execution mode")
             : ConditionExecutionMode.Parallel;
+        var timeBase = elem.TryGetProperty("timeBase", out var timeBaseProp)
+            ? ParseEnum<ConditionTimeBase>(timeBaseProp.GetString(), "condition time base")
+            : ConditionTimeBase.PlaybackTrigger;
         var thenSteps = elem.TryGetProperty("then", out var thenProp)
             ? ParseSteps(thenProp)
             : Array.Empty<MacroStep>();
@@ -564,7 +588,8 @@ public static class McrxParser
             windowEnd,
             startPath,
             endPath,
-            executionMode);
+            executionMode,
+            timeBase);
     }
 
     private static IReadOnlyList<int>? ParseOptionalStepPath(JsonElement elem, string name)

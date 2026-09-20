@@ -102,9 +102,23 @@ public sealed class PaddleOcrBridge : IDisposable
                 "capture empty"));
         }
 
+        if (ScreenCaptureService.LooksBlankOrUniform(pixels, region.Width, region.Height))
+        {
+            return PublishRecognition(new OcrRecognitionResult(
+                true,
+                false,
+                BackendName,
+                string.Empty,
+                "capture blank (use borderless/windowed mode; exclusive fullscreen often blocks OCR)"));
+        }
+
         try
         {
             await EnsureProcessRunning(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -140,6 +154,10 @@ public sealed class PaddleOcrBridge : IDisposable
         {
             response = await SendRequestDetailedAsync(json, cancellationToken);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return PublishRecognition(new OcrRecognitionResult(
@@ -163,12 +181,15 @@ public sealed class PaddleOcrBridge : IDisposable
 
         if (string.IsNullOrWhiteSpace(response.Text))
         {
+            var hint = Math.Max(region.Width, region.Height) < 120
+                ? "recognition empty (tiny/single-glyph regions often fail on Windows OCR; use pixel color or a larger text region)"
+                : "recognition empty";
             return PublishRecognition(new OcrRecognitionResult(
                 true,
                 false,
                 BackendName,
                 string.Empty,
-                "recognition empty"));
+                hint));
         }
 
         return PublishRecognition(new OcrRecognitionResult(
@@ -185,13 +206,18 @@ public sealed class PaddleOcrBridge : IDisposable
         string expectedText,
         bool contains = true,
         string language = "ch",
-        bool useRegex = false)
+        bool useRegex = false,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var result = RecognizeWithDiagnosticsAsync(region, language, CancellationToken.None).GetAwaiter().GetResult();
+            var result = RecognizeWithDiagnosticsAsync(region, language, cancellationToken).GetAwaiter().GetResult();
             if (string.IsNullOrEmpty(result.Text)) return false;
             return TextMatches(result.Text, expectedText, contains, useRegex);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

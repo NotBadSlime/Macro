@@ -23,7 +23,8 @@ public static class MacroLibraryExportWriter
 
         var exportRoot = Path.Combine(parentDirectory, exportRootName);
         var primaryDirectory = Path.Combine(exportRoot, primaryFolderName);
-        WriteEntries(bundle.Primary, primaryDirectory, format);
+        var libraryItems = BundleItems(bundle);
+        WriteEntries(bundle.Primary, primaryDirectory, format, libraryItems);
 
         if (bundle.Dependencies.Count > 0)
         {
@@ -31,7 +32,7 @@ public static class MacroLibraryExportWriter
                 throw new ArgumentException("Dependencies folder name is required when dependencies exist.", nameof(dependenciesFolderName));
 
             var dependenciesDirectory = Path.Combine(exportRoot, dependenciesFolderName);
-            WriteEntries(bundle.Dependencies, dependenciesDirectory, format);
+            WriteEntries(bundle.Dependencies, dependenciesDirectory, format, libraryItems);
         }
     }
 
@@ -67,12 +68,13 @@ public static class MacroLibraryExportWriter
     private static void WriteEntries(
         IReadOnlyList<MacroLibraryExportEntry> entries,
         string directory,
-        MacroConversionFormat format)
+        MacroConversionFormat format,
+        IReadOnlyList<MacroLibraryItem> libraryItems)
     {
         Directory.CreateDirectory(directory);
         foreach (var entry in entries)
         {
-            var export = MacroConversionService.ExportFromMcrx(entry.Document, format, entry.RelativePath);
+            var export = MacroConversionService.ExportFromMcrx(entry.Document, format, entry.RelativePath, libraryItems);
             var relativePath = ResolveRelativePath(entry.RelativePath, export.FileName);
             var path = Path.Combine(directory, relativePath);
             var parent = Path.GetDirectoryName(path);
@@ -80,6 +82,13 @@ public static class MacroLibraryExportWriter
                 Directory.CreateDirectory(parent);
             File.WriteAllText(path, export.Output);
         }
+    }
+
+    private static IReadOnlyList<MacroLibraryItem> BundleItems(MacroLibraryExportBundle bundle)
+    {
+        return bundle.Primary.Select(entry => entry.Item)
+            .Concat(bundle.Dependencies.Select(entry => entry.Item))
+            .ToList();
     }
 
     private static string ResolveRelativePath(string? relativePath, string exportFileName)

@@ -137,6 +137,8 @@ public static class InputActionCompiler
                 case KeyStep key:
                     CompileKey(key, actions, startTick, qpcFrequency, pressGaps, ref elapsedTicks);
                     break;
+                case CommentStep:
+                    break;
                 case TextStep text:
                     Schedule(pressGaps, actions, new TextInputAction(text.Text), startTick, text, ref elapsedTicks);
                     break;

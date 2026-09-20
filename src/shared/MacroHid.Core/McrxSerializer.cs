@@ -33,6 +33,11 @@ public static class McrxSerializer
             root["id"] = document.Id;
         }
 
+        if (document.Kind != MacroKind.Normal)
+        {
+            root["kind"] = "condition";
+        }
+
         return root.ToJsonString(Options);
     }
 
@@ -97,6 +102,11 @@ public static class McrxSerializer
             {
                 ["type"] = "key.text",
                 ["text"] = text.Text
+            },
+            CommentStep comment => new JsonObject
+            {
+                ["type"] = "comment",
+                ["text"] = comment.Text
             },
             MouseMoveStep move => SerializeMouseMove(move),
             MouseButtonStep button => SerializeMouseButton(button),
@@ -398,15 +408,23 @@ public static class McrxSerializer
         {
             ["id"] = cond.Id,
             ["name"] = cond.Name,
-            ["startStep"] = cond.StartStepIndex,
-            ["endStep"] = cond.EndStepIndex,
             ["type"] = cond.Condition.Type
         };
 
-        if (!string.IsNullOrWhiteSpace(cond.StartStepPathText))
-            obj["startPath"] = cond.StartStepPathText;
-        if (!string.IsNullOrWhiteSpace(cond.EndStepPathText))
-            obj["endPath"] = cond.EndStepPathText;
+        if (cond.HasStepRange)
+        {
+            obj["startStep"] = cond.StartStepIndex;
+            obj["endStep"] = cond.EndStepIndex;
+            if (!string.IsNullOrWhiteSpace(cond.StartStepPathText))
+                obj["startPath"] = cond.StartStepPathText;
+            if (!string.IsNullOrWhiteSpace(cond.EndStepPathText))
+                obj["endPath"] = cond.EndStepPathText;
+        }
+        else
+        {
+            obj["startStep"] = -1;
+            obj["endStep"] = -1;
+        }
 
         SerializeConditionMatcher(obj, cond.Condition);
 
@@ -420,6 +438,8 @@ public static class McrxSerializer
             obj["onConflict"] = cond.OnConflict.ToString();
         if (cond.ExecutionMode != ConditionExecutionMode.Parallel)
             obj["executionMode"] = cond.ExecutionMode.ToString();
+        if (cond.TimeBase != ConditionTimeBase.PlaybackTrigger)
+            obj["timeBase"] = cond.TimeBase.ToString();
         if (cond.ThenSteps.Count > 0)
             obj["then"] = SerializeSteps(cond.ThenSteps);
 

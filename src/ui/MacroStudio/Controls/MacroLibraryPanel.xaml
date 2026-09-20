@@ -373,6 +373,7 @@
                             <Button.ContextMenu>
                                 <ContextMenu x:Name="NewMacroContextMenu">
                                     <MenuItem x:Name="ToolbarNewMacroMenuItem" Header="宏文件" InputGestureText="Ctrl+N" Click="NewMacro_Click" />
+                                    <MenuItem x:Name="ToolbarNewConditionMacroMenuItem" Header="条件宏" Click="NewConditionMacro_Click" />
                                     <MenuItem x:Name="ToolbarNewFolderMenuItem" Header="文件夹" InputGestureText="Ctrl+Shift+N" Click="NewFolder_Click" />
                                 </ContextMenu>
                             </Button.ContextMenu>
@@ -444,6 +445,8 @@
                         <ContextMenu Opened="MacroTreeContextMenu_Opened"
                                      Closed="MacroTreeContextMenu_Closed">
                             <MenuItem x:Name="RenameMenuItem" Header="重命名" InputGestureText="F2" Click="RenameMenuItem_Click" />
+                            <MenuItem x:Name="InsertConditionMacroMenuItem" Header="插入到当前宏" Click="InsertConditionMacroMenuItem_Click" />
+                            <MenuItem x:Name="EditConditionMacroMenuItem" Header="编辑条件宏" Click="EditConditionMacroMenuItem_Click" />
                             <MenuItem x:Name="CopyMenuItem" Header="复制" InputGestureText="Ctrl+C" Click="CopyMenuItem_Click" />
                             <MenuItem x:Name="PasteMenuItem" Header="粘贴" InputGestureText="Ctrl+V" Click="PasteMenuItem_Click" />
                             <Separator />
@@ -507,9 +510,12 @@
                         <ListView.ContextMenu>
                             <ContextMenu Opened="ExplorerContextMenu_Opened" Closed="MacroTreeContextMenu_Closed">
                                 <MenuItem x:Name="ExplorerExportMacroMenuItem" Header="导出" Click="ExportMacro_Click" />
+                                <MenuItem x:Name="ExplorerInsertConditionMacroMenuItem" Header="插入到当前宏" Click="InsertConditionMacroMenuItem_Click" />
+                                <MenuItem x:Name="ExplorerEditConditionMacroMenuItem" Header="编辑条件宏" Click="EditConditionMacroMenuItem_Click" />
                                 <MenuItem x:Name="ExplorerExportFolderMenuItem" Header="导出该宏文件夹" Click="ExportFolderMenuItem_Click" />
                                 <MenuItem x:Name="ExplorerNewMenuItem" Header="新建">
                                     <MenuItem x:Name="ExplorerNewMacroMenuItem" Header="宏文件" InputGestureText="Ctrl+N" Click="NewMacro_Click" />
+                                    <MenuItem x:Name="ExplorerNewConditionMacroMenuItem" Header="条件宏" Click="NewConditionMacro_Click" />
                                     <MenuItem x:Name="ExplorerNewFolderMenuItem" Header="文件夹" InputGestureText="Ctrl+Shift+N" Click="NewFolder_Click" />
                                 </MenuItem>
                                 <Separator x:Name="ExplorerContextMenuPrimarySeparator" />

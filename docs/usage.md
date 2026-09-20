@@ -1,5 +1,7 @@
 # MacroHID Usage Guide / MacroHID 使用说明
 
+面向用户的完整中文使用教程见仓库根目录 [README.md](../README.md)。下文保留开发者启动命令与英文对照。
+
 ## 中文
 
 ### 1. 启动

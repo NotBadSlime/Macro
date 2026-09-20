@@ -398,7 +398,11 @@
 
                 <StackPanel x:Name="TextEditPanel" Margin="0,0,0,10">
                     <TextBlock x:Name="TextActionLabelText" Text="文本" Style="{StaticResource FieldLabel}" />
-                    <TextBox x:Name="StepTextBox" Height="72" AcceptsReturn="True" TextWrapping="Wrap" />
+                    <TextBox x:Name="StepTextBox"
+                             Height="72"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             PreviewKeyDown="StepTextBox_PreviewKeyDown" />
                 </StackPanel>
 
                 <StackPanel x:Name="LoopEditPanel" Margin="0,0,0,10">

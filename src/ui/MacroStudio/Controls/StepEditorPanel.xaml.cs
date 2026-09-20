@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MacroHid.Core;
 using MacroHid.Runtime;
 using MacroStudio.Services;
@@ -165,6 +166,7 @@ public partial class StepEditorPanel : UserControl
         updatingEditor = false;
         StepEditorFieldsPanel.Visibility = Visibility.Visible;
         ApplyStepEditButton.IsEnabled = true;
+        FocusPrimaryEditor();
     }
 
     public void SetHintText(string text)
@@ -185,7 +187,7 @@ public partial class StepEditorPanel : UserControl
             ocrClick: step is OcrClickStep,
             timing: step is MouseMoveStep,
             delay: step is WaitStep,
-            text: step is TextStep,
+            text: step is TextStep or CommentStep,
             loop: step is RepeatStep,
             macro: step is MacroCallStep,
             pixel: step is PixelWhenStep);
@@ -274,7 +276,12 @@ public partial class StepEditorPanel : UserControl
                 PopulateDelayEditor(wait);
                 break;
             case TextStep text:
+                TextActionLabelText.Text = L("AddText");
                 StepTextBox.Text = text.Text;
+                break;
+            case CommentStep comment:
+                TextActionLabelText.Text = L("AddComment");
+                StepTextBox.Text = comment.Text;
                 break;
             case RepeatStep repeat:
                 LoopCountBox.Text = repeat.Count.ToString();
@@ -298,6 +305,53 @@ public partial class StepEditorPanel : UserControl
     }
 
     private void ApplyStepEdit_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyCurrentStepEdit();
+    }
+
+    public void FocusPrimaryEditor()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (TextEditPanel.Visibility == Visibility.Visible)
+            {
+                StepTextBox.Focus();
+                StepTextBox.CaretIndex = StepTextBox.Text.Length;
+                return;
+            }
+
+            if (MacroEditPanel.Visibility == Visibility.Visible)
+            {
+                MacroTargetBox.Focus();
+            }
+        }, DispatcherPriority.Input);
+    }
+
+    private void StepTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.Alt)
+        {
+            var box = StepTextBox;
+            var caret = box.CaretIndex;
+            box.Text = box.Text.Insert(caret, Environment.NewLine);
+            box.CaretIndex = caret + Environment.NewLine.Length;
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.None)
+        {
+            ApplyCurrentStepEdit();
+            e.Handled = true;
+        }
+    }
+
+    private void ApplyCurrentStepEdit()
     {
         if (updatingEditor) return;
         StepEdited?.Invoke(null!); // signal to MainWindow to apply
@@ -349,6 +403,7 @@ public partial class StepEditorPanel : UserControl
             OcrClickStep ocrClick => BuildEditedOcrClickStep(ocrClick),
             WaitStep wait => BuildEditedWaitStep(wait),
             TextStep => new TextStep(StepTextBox.Text),
+            CommentStep => new CommentStep(StepTextBox.Text),
             RepeatStep repeat => repeat with { Count = Math.Max(1, ReadInt(LoopCountBox.Text, repeat.Count)) },
             MacroCallStep => new MacroCallStep(ReadSelectedMacroName()),
             PixelWhenStep pixel => BuildEditedPixelStep(pixel),
@@ -485,15 +540,24 @@ public partial class StepEditorPanel : UserControl
         AnyKeyCaptureFinished?.Invoke();
     }
 
-    private void PickPixelColor_Click(object sender, RoutedEventArgs e)
+    private async void PickPixelColor_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryPickScreenPixel(out var x, out var y, out var color)) return;
-        PixelXBox.Text = x.ToString();
-        PixelYBox.Text = y.ToString();
-        PixelRBox.Text = color.R.ToString();
-        PixelGBox.Text = color.G.ToString();
-        PixelBBox.Text = color.B.ToString();
-        UpdatePixelPreview(color);
+        CoordinatePickerStarted?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            var result = await ScreenPixelSampler.PickScreenPixelAsync(Window.GetWindow(this));
+            if (!result.Ok) return;
+            PixelXBox.Text = result.X.ToString();
+            PixelYBox.Text = result.Y.ToString();
+            PixelRBox.Text = result.Color.R.ToString();
+            PixelGBox.Text = result.Color.G.ToString();
+            PixelBBox.Text = result.Color.B.ToString();
+            UpdatePixelPreview(result.Color);
+        }
+        finally
+        {
+            CoordinatePickerFinished?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private void PickMouseButtonCoordinate_Click(object sender, RoutedEventArgs e)

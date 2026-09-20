@@ -94,6 +94,25 @@
   <data name="MacroLibrary" xml:space="preserve"><value>宏数据库管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新建</value></data>
   <data name="NewMacroFile" xml:space="preserve"><value>宏文件</value></data>
+  <data name="NewConditionMacroFile" xml:space="preserve"><value>条件宏</value></data>
+  <data name="ExtractConditionPack" xml:space="preserve"><value>提取到宏库</value></data>
+  <data name="ExtractConditionPackHelp" xml:space="preserve"><value>将选中的条件（含触发后动作）提取为条件宏；未选中时提取全部。原宏中的条件会保留。</value></data>
+  <data name="ExtractConditionPackEmpty" xml:space="preserve"><value>没有可提取的条件。</value></data>
+  <data name="ExtractedConditionPackName" xml:space="preserve"><value>条件包（{0}）</value></data>
+  <data name="ExtractedConditionPackCreated" xml:space="preserve"><value>已创建条件宏“{0}”（{1} 个条件）。</value></data>
+  <data name="InsertedConditionPack" xml:space="preserve"><value>已插入条件包“{0}”（{1} 个条件）。</value></data>
+  <data name="InsertedMacroCall" xml:space="preserve"><value>已插入调用宏“{0}”。</value></data>
+  <data name="ConditionPackNotForThenActions" xml:space="preserve"><value>条件宏请拖到普通宏的条件列表，不能放到触发后动作里。</value></data>
+  <data name="ConditionLibraryMenu" xml:space="preserve"><value>宏库</value></data>
+  <data name="ConditionLibraryMenuHelp" xml:space="preserve"><value>插入宏库中选中的条件宏，或把当前条件提取为条件宏。</value></data>
+  <data name="InsertLibraryConditionMacro" xml:space="preserve"><value>插入条件宏…</value></data>
+  <data name="InsertLibraryConditionMacroHelp" xml:space="preserve"><value>从当前宏数据库中选择橙色条件宏，插入到本条件列表。</value></data>
+  <data name="SelectConditionMacroInLibraryFirst" xml:space="preserve"><value>请先在宏库选中一个橙色条件宏。</value></data>
+  <data name="ConditionMacroPickerTitle" xml:space="preserve"><value>选择条件宏</value></data>
+  <data name="InsertConditionMacro" xml:space="preserve"><value>插入</value></data>
+  <data name="NoConditionMacrosInDatabase" xml:space="preserve"><value>当前宏数据库中没有条件宏</value></data>
+  <data name="FilterConditionMacrosPlaceholder" xml:space="preserve"><value>筛选条件宏名称或文件夹</value></data>
+  <data name="DatabaseRootFolder" xml:space="preserve"><value>根目录</value></data>
   <data name="NewFolder" xml:space="preserve"><value>文件夹</value></data>
   <data name="DuplicateMacro" xml:space="preserve"><value>复制</value></data>
   <data name="Copy" xml:space="preserve"><value>复制</value></data>
@@ -101,6 +120,7 @@
   <data name="Rename" xml:space="preserve"><value>重命名</value></data>
   <data name="Undo" xml:space="preserve"><value>撤回</value></data>
   <data name="ClearAll" xml:space="preserve"><value>清空</value></data>
+  <data name="ClearAllConfirm" xml:space="preserve"><value>确定清空当前宏的全部步骤和条件？可用撤销恢复。</value></data>
   <data name="Delete" xml:space="preserve"><value>删除</value></data>
   <data name="LockMacro" xml:space="preserve"><value>锁定编辑</value></data>
   <data name="UnlockMacro" xml:space="preserve"><value>解除锁定</value></data>
@@ -119,6 +139,8 @@
   <data name="AddMouseMove" xml:space="preserve"><value>鼠标移动</value></data>
   <data name="AddWheel" xml:space="preserve"><value>滚轮</value></data>
   <data name="AddText" xml:space="preserve"><value>文本功能</value></data>
+  <data name="AddComment" xml:space="preserve"><value>注释</value></data>
+  <data name="AddCommentHint" xml:space="preserve"><value>只作标记，播放时不执行</value></data>
   <data name="AddMacro" xml:space="preserve"><value>宏</value></data>
   <data name="AddLoop" xml:space="preserve"><value>循环</value></data>
   <data name="AddStopCurrent" xml:space="preserve"><value>停止本层宏动作</value></data>
@@ -130,11 +152,11 @@
   <data name="AddMouseButtonHint" xml:space="preserve"><value>点击、按住与坐标</value></data>
   <data name="AddMouseMoveHint" xml:space="preserve"><value>相对或绝对移动</value></data>
   <data name="AddWheelHint" xml:space="preserve"><value>垂直/水平滚动</value></data>
-  <data name="AddTextHint" xml:space="preserve"><value>发送 Unicode 文本</value></data>
+  <data name="AddTextHint" xml:space="preserve"><value>粘贴文本到当前输入框（Ctrl+V）</value></data>
   <data name="AddMacroActionHint" xml:space="preserve"><value>调用宏数据库条目</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>重复一组步骤</value></data>
   <data name="AddStopCurrentHint" xml:space="preserve"><value>退出当前宏调用，外层继续执行</value></data>
-  <data name="AddStopIterationHint" xml:space="preserve"><value>跳过本轮剩余步骤，外层循环继续</value></data>
+  <data name="AddStopIterationHint" xml:space="preserve"><value>跳过本轮剩余步骤；按下/按住循环会进入下一轮（含启动门闩）</value></data>
   <data name="AddStopAllHint" xml:space="preserve"><value>立即终止整次宏播放</value></data>
   <data name="ActionPaletteDragHint" xml:space="preserve"><value>点击添加，或拖到序列的目标位置。</value></data>
   <data name="AddMacroHint" xml:space="preserve"><value>把左侧宏拖到序列里，可以复制它的步骤。</value></data>
@@ -208,6 +230,7 @@
   <data name="TemplateMouseMove" xml:space="preserve"><value>鼠标移动</value></data>
   <data name="TemplateMouseWheel" xml:space="preserve"><value>滚轮</value></data>
   <data name="TemplateText" xml:space="preserve"><value>文本功能</value></data>
+  <data name="TemplateComment" xml:space="preserve"><value>注释</value></data>
   <data name="TemplateMacro" xml:space="preserve"><value>宏</value></data>
   <data name="TemplateLoop" xml:space="preserve"><value>循环</value></data>
   <data name="TemplatePixel" xml:space="preserve"><value>像素条件</value></data>
@@ -254,6 +277,7 @@
   <data name="DateModified" xml:space="preserve"><value>修改日期</value></data>
   <data name="FileFolderType" xml:space="preserve"><value>文件夹</value></data>
   <data name="MacroFileType" xml:space="preserve"><value>宏文件</value></data>
+  <data name="ConditionMacroFileType" xml:space="preserve"><value>条件宏</value></data>
   <data name="FolderItemCount" xml:space="preserve"><value>{0} 个项目</value></data>
   <data name="UpOneLevel" xml:space="preserve"><value>返回上级</value></data>
   <data name="ViewDetails" xml:space="preserve"><value>详细信息</value></data>
@@ -286,18 +310,43 @@
   <data name="AlreadyEditingMacro" xml:space="preserve"><value>已在编辑该宏。</value></data>
   <data name="ReturnMacroMissing" xml:space="preserve"><value>上一宏已不存在，已清除返回记录。</value></data>
   <data name="ConditionListTitle" xml:space="preserve"><value>条件列表</value></data>
-  <data name="AddCondition" xml:space="preserve"><value>添加条件</value></data>
+  <data name="AddCondition" xml:space="preserve"><value>添加</value></data>
   <data name="DeleteCondition" xml:space="preserve"><value>删除</value></data>
-  <data name="EmptyConditionHint" xml:space="preserve"><value>暂无条件。先点「添加条件」，再在下方「触发后执行」里添加动作。</value></data>
+  <data name="EmptyConditionHint" xml:space="preserve"><value>暂无条件。可从宏库拖入橙色条件宏，或点「宏库 → 插入条件宏」/「添加」。</value></data>
   <data name="ThenActionsTitle" xml:space="preserve"><value>触发后执行</value></data>
   <data name="ThenActionsHint" xml:space="preserve"><value>条件成立后要跑的动作写在这里。点「添加动作」或从右侧拖入。</value></data>
   <data name="AddThenAction" xml:space="preserve"><value>添加动作</value></data>
   <data name="ThenActionEmptyHint" xml:space="preserve"><value>还没有动作。点上方「添加动作」开始。</value></data>
   <data name="SelectConditionBeforeThenAction" xml:space="preserve"><value>请先选中一条条件，再添加动作。</value></data>
-  <data name="ConditionGateModeHint" xml:space="preserve"><value>仅等待条件成立后启动主序列，不跑触发后动作。</value></data>
+  <data name="ConditionGateModeHint" xml:space="preserve"><value>按列表顺序逐个等待门闩，从按下播放/触发起直到条件成立；成立后可先跑该门闩的触发后动作，全部通过后再开主序列。无需设置步骤或时间范围。</value></data>
+  <data name="ConditionGateRangeHint" xml:space="preserve"><value>按下播放起</value></data>
+  <data name="ConditionTimeWindowTitle" xml:space="preserve"><value>时间范围</value></data>
+  <data name="ConditionStepRangeTitle" xml:space="preserve"><value>执行步骤范围</value></data>
+  <data name="ConditionStepRangeUnlimited" xml:space="preserve"><value>（不限）</value></data>
+  <data name="ConditionStepRangeOrTimeHint" xml:space="preserve"><value>可留空。与时间范围满足其一即监视；选择时左侧对应步骤会变红。</value></data>
+  <data name="ConditionRegionTitle" xml:space="preserve"><value>屏幕区域</value></data>
+  <data name="PickScreenRegion" xml:space="preserve"><value>选择区域</value></data>
+  <data name="ConditionRegionSinglePixelMode" xml:space="preserve"><value>单像素</value></data>
+  <data name="ConditionRegionTopLeft" xml:space="preserve"><value>左上角</value></data>
+  <data name="ConditionRegionBottomRight" xml:space="preserve"><value>右下角</value></data>
+  <data name="ConditionRegionUnset" xml:space="preserve"><value>未设置</value></data>
+  <data name="ConditionActivationInvalid" xml:space="preserve"><value>请至少设置步骤范围或时间范围之一。</value></data>
+  <data name="ConditionRangeOr" xml:space="preserve"><value>或</value></data>
+  <data name="ConditionTimeRangeOpenEnd" xml:space="preserve"><value>结束</value></data>
+  <data name="ConditionTimeBasePlayback" xml:space="preserve"><value>按下播放</value></data>
+  <data name="ConditionTimeBaseAfterPrevious" xml:space="preserve"><value>进入该条件</value></data>
+  <data name="ConditionTimeBaseMainIteration" xml:space="preserve"><value>主序列本轮</value></data>
+  <data name="ConditionTimeBasePlaybackHint" xml:space="preserve"><value>单位 ms，从按下播放/触发时开始计时。</value></data>
+  <data name="ConditionTimeBaseAfterPreviousHint" xml:space="preserve"><value>单位 ms，从上一条条件刚判定结束开始计时；第一条则从本轮主序列开始算。</value></data>
+  <data name="ConditionTimeBaseMainIterationHint" xml:space="preserve"><value>单位 ms，从本轮主序列开始计时（按下循环下一轮会重置）。</value></data>
+  <data name="ConditionTimeBasePlaybackShort" xml:space="preserve"><value>按下播放</value></data>
+  <data name="ConditionTimeBaseAfterPreviousShort" xml:space="preserve"><value>进条件</value></data>
+  <data name="ConditionTimeBaseMainIterationShort" xml:space="preserve"><value>本轮</value></data>
   <data name="ConditionGateBadge" xml:space="preserve"><value>门闩</value></data>
   <data name="ConditionPauseBadge" xml:space="preserve"><value>暂停</value></data>
   <data name="ConditionReadyBadge" xml:space="preserve"><value>就绪</value></data>
+  <data name="ColorPickFailedHint" xml:space="preserve"><value>取色失败。游戏请用无边框/窗口模式；独占全屏常会拦截截屏。</value></data>
+  <data name="ColorPickedStatus" xml:space="preserve"><value>已取色 RGB({0}, {1}, {2})。</value></data>
   <data name="DeleteMacroFolder" xml:space="preserve"><value>删除宏文件夹</value></data>
   <data name="UnlockSelected" xml:space="preserve"><value>解锁所选宏</value></data>
   <data name="SelectedMacrosLocked" xml:space="preserve"><value>已锁定所选的 {0} 个宏。</value></data>

@@ -102,6 +102,7 @@ public partial class MainWindow : Window
         ConditionPanel.Initialize(editorState);
 
         LibraryPanel.MacroSelected += OnMacroSelected;
+        LibraryPanel.InsertConditionMacroRequested += OnConditionListMacroLibraryDropped;
         LibraryPanel.MacroCreated += OnMacroCreated;
         LibraryPanel.MacroDuplicated += OnMacroDuplicated;
         LibraryPanel.MacroDeleted += OnMacroDeleted;
@@ -154,6 +155,9 @@ public partial class MainWindow : Window
         ConditionPanel.RecordingStartRequested += OnStartConditionRecording;
         ConditionPanel.RecordingStopRequested += OnStopRecording;
         ConditionPanel.StatusMessageRequested += msg => SetStatus(msg);
+        ConditionPanel.ExtractConditionPackRequested += OnExtractConditionPackRequested;
+        ConditionPanel.MacroLibraryDroppedOnConditionList += OnConditionListMacroLibraryDropped;
+        ConditionPanel.InsertSelectedLibraryConditionMacroRequested += OnInsertSelectedLibraryConditionMacro;
     }
 
     private void ConfigureWorkspaceDockHost()
@@ -978,6 +982,7 @@ public partial class MainWindow : Window
             var item = libraryStore.Load().Items.FirstOrDefault(candidate => string.Equals(candidate.Id, id, StringComparison.OrdinalIgnoreCase));
             ApplyEditLock(item?.IsLocked == true);
             SetStatus(document.Name);
+            SequencePanelControl.FocusMacroNameEditor();
         }
         catch (Exception ex)
         {
@@ -1240,7 +1245,16 @@ public partial class MainWindow : Window
 
     private void AutoSaveCurrentMacro(bool updateStatus)
     {
-        var targetMacroId = editorState.SelectedMacroId ?? activeEditorMacroId;
+        // Always prefer the macro open in the editor. Library selection of a condition pack
+        // must not retarget autosave, or the open document overwrites that pack file.
+        var targetMacroId = activeEditorMacroId;
+        if (targetMacroId is null
+            && editorState.SelectedMacroId is { } selectedId
+            && libraryStore.TryGetItem(selectedId)?.IsConditionMacro != true)
+        {
+            targetMacroId = selectedId;
+        }
+
         var existingItem = targetMacroId is null
             ? null
             : libraryStore.Load().Items.FirstOrDefault(candidate => string.Equals(candidate.Id, targetMacroId, StringComparison.OrdinalIgnoreCase));
@@ -1258,11 +1272,17 @@ public partial class MainWindow : Window
         }
         else
         {
-            item = libraryStore.CreateMacro(document);
+            item = libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
         }
 
-        editorState.SelectedMacroId = item.Id;
         activeEditorMacroId = item.Id;
+        if (editorState.SelectedMacroId is null
+            || string.Equals(editorState.SelectedMacroId, item.Id, StringComparison.OrdinalIgnoreCase)
+            || libraryStore.TryGetItem(editorState.SelectedMacroId)?.IsConditionMacro != true)
+        {
+            editorState.SelectedMacroId = item.Id;
+        }
+
         LibraryPanel.RefreshList();
         RefreshLibraryListeningState();
         if (updateStatus)
@@ -1305,7 +1325,9 @@ public partial class MainWindow : Window
         }
 
         var snapshot = libraryStore.Load();
-        var target = snapshot.Items.FirstOrDefault(item => item.MatchesReference(reference));
+        var preferredGroupId = snapshot.Items.FirstOrDefault(item =>
+            string.Equals(item.Id, editorState.SelectedMacroId ?? activeEditorMacroId, StringComparison.OrdinalIgnoreCase))?.GroupId;
+        var target = MacroLibraryResolver.Resolve(snapshot.Items, reference, preferredGroupId);
         if (target is null)
         {
             SetStatus(LocalizationService.Format("SubmacroNotFound", reference.Trim()));
@@ -1458,7 +1480,7 @@ public partial class MainWindow : Window
 
     private void OnEditLockChanged(bool isLocked)
     {
-        var macroId = editorState.SelectedMacroId ?? activeEditorMacroId;
+        var macroId = activeEditorMacroId ?? editorState.SelectedMacroId;
         if (macroId is null)
         {
             ApplyEditLock(false);
@@ -1538,15 +1560,82 @@ public partial class MainWindow : Window
         if (RejectLockedEdit()) return;
         try
         {
+            var item = libraryStore.TryGetItem(macroId);
             var document = libraryStore.ReadMacro(macroId);
-            SequencePanelControl.InsertStepsAtPath(document.Steps, parentPathText, insertIndex);
+            if (item?.IsConditionMacro == true || document.IsConditionMacro)
+            {
+                InsertConditionMacroPack(document);
+                return;
+            }
+
+            SequencePanelControl.InsertStepsAtPath(
+                [new MacroCallStep(document.Name)],
+                parentPathText,
+                insertIndex);
             RefreshConditionStepChoices();
-            SetStatus(LocalizationService.Format("InsertedMacroSteps", document.Name, document.Steps.Count));
+            SetStatus(LocalizationService.Format("InsertedMacroCall", document.Name));
         }
         catch (Exception ex)
         {
             SetStatus(ex.Message);
         }
+    }
+
+    private void OnConditionListMacroLibraryDropped(string macroId)
+    {
+        if (RejectLockedEdit()) return;
+        try
+        {
+            var item = libraryStore.TryGetItem(macroId);
+            var document = libraryStore.ReadMacro(macroId);
+            if (item?.IsConditionMacro == true || document.IsConditionMacro)
+            {
+                InsertConditionMacroPack(document);
+                return;
+            }
+
+            SetStatus(LocalizationService.Get("NormalMacroDropOnConditionsHint"));
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
+        }
+    }
+
+    private void OnInsertSelectedLibraryConditionMacro()
+    {
+        if (RejectLockedEdit()) return;
+
+        var candidates = LibraryPanel.ListConditionMacrosInCurrentDatabase();
+        if (candidates.Count == 0)
+        {
+            SetStatus(L("NoConditionMacrosInDatabase"));
+            return;
+        }
+
+        var dialog = new ConditionMacroPickerDialog(candidates);
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true
+            || string.IsNullOrWhiteSpace(dialog.SelectedMacroId))
+        {
+            return;
+        }
+
+        OnConditionListMacroLibraryDropped(dialog.SelectedMacroId);
+    }
+
+    private void InsertConditionMacroPack(MacroDocument document)
+    {
+        var pack = document.EffectiveConditions;
+        if (pack.Count == 0)
+        {
+            SetStatus(LocalizationService.Format("InsertedConditionPack", document.Name, 0));
+            return;
+        }
+
+        ConditionPanel.InsertConditionPack(pack, document.Name);
+        RefreshConditionStepChoices();
+        AutoSaveCurrentMacro(updateStatus: false);
+        SetStatus(LocalizationService.Format("InsertedConditionPack", document.Name, pack.Count));
     }
 
     private async void OnStartListeningGroups(IReadOnlyList<string> groupIds)
@@ -1950,6 +2039,11 @@ public partial class MainWindow : Window
             }
 
             if (document.Playback.Trigger is not { } trigger)
+            {
+                continue;
+            }
+
+            if (item.IsConditionMacro || document.IsConditionMacro)
             {
                 continue;
             }
@@ -2436,7 +2530,10 @@ public partial class MainWindow : Window
         }
         catch { }
 
-        var item = libraryStore.Load().Items.FirstOrDefault(candidate => candidate.MatchesReference(name));
+        var snapshot = libraryStore.Load();
+        var preferredGroupId = snapshot.Items.FirstOrDefault(item =>
+            string.Equals(item.Id, editorState.SelectedMacroId ?? activeEditorMacroId, StringComparison.OrdinalIgnoreCase))?.GroupId;
+        var item = MacroLibraryResolver.Resolve(snapshot.Items, name, preferredGroupId);
         return item is null ? null : libraryStore.ReadMacro(item.Id);
     }
 
@@ -2871,6 +2968,36 @@ public partial class MainWindow : Window
             SequencePanelControl.SetConditionHighlights(updated.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             CheckAndWarnConflicts(updated);
             ScheduleAutoSave();
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message);
+        }
+    }
+
+    private void OnExtractConditionPackRequested(IReadOnlyList<ConditionalDirective> pack, string suggestedName)
+    {
+        try
+        {
+            if (pack.Count == 0)
+            {
+                SetStatus(L("ExtractConditionPackEmpty"));
+                return;
+            }
+
+            var document = new MacroDocument(
+                1,
+                suggestedName,
+                PlaybackSettings.Default,
+                [],
+                pack.ToList(),
+                Kind: MacroKind.Condition);
+            var item = libraryStore.CreateMacro(
+                document,
+                folder: LibraryPanel.CurrentDatabaseFolder,
+                groupId: LibraryPanel.CurrentDatabaseGroupId);
+            LibraryPanel.RefreshList();
+            SetStatus(LocalizationService.Format("ExtractedConditionPackCreated", item.Name, pack.Count));
         }
         catch (Exception ex)
         {

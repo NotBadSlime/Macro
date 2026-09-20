@@ -258,6 +258,32 @@
                 </Grid>
             </Button>
 
+            <Button x:Name="AddCommentButton"
+                    Tag="Comment"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#E8EAED">
+                        <TextBlock Text="&#xE8BD;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddCommentText" Text="注释" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddCommentHintText" Text="只作标记，不执行任何动作" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
             <Button x:Name="AddMacroButton"
                     Tag="Macro"
                     Style="{StaticResource ActionPaletteCommandStyle}"

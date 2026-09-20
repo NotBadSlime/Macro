@@ -41,6 +41,24 @@ public enum ConditionExecutionMode
     GateMainSequence
 }
 
+/// <summary>
+/// Clock origin for <see cref="ConditionalDirective.WindowStart"/> / <see cref="ConditionalDirective.WindowEnd"/>.
+/// </summary>
+public enum ConditionTimeBase
+{
+    /// <summary>Elapsed since play/trigger for this run.</summary>
+    PlaybackTrigger = 0,
+
+    /// <summary>
+    /// Elapsed since the previous condition in list order finished
+    /// (then-actions included). First condition falls back to <see cref="MainIteration"/>.
+    /// </summary>
+    AfterPreviousCondition = 1,
+
+    /// <summary>Elapsed since the current main-sequence iteration started.</summary>
+    MainIteration = 2
+}
+
 public interface IConditionMatcher
 {
     string Type { get; }
@@ -93,7 +111,8 @@ public sealed record ConditionalDirective(
     TimeSpan? WindowEnd = null,
     IReadOnlyList<int>? StartStepPath = null,
     IReadOnlyList<int>? EndStepPath = null,
-    ConditionExecutionMode ExecutionMode = ConditionExecutionMode.Parallel)
+    ConditionExecutionMode ExecutionMode = ConditionExecutionMode.Parallel,
+    ConditionTimeBase TimeBase = ConditionTimeBase.PlaybackTrigger)
 {
     public TimeSpan EffectivePollInterval => PollInterval is { } value && value > TimeSpan.Zero
         ? value
@@ -102,6 +121,14 @@ public sealed record ConditionalDirective(
     public string StartStepPathText => FormatPath(StartStepPath);
     public string EndStepPathText => FormatPath(EndStepPath);
     public bool HasStepPaths => StartStepPath is { Count: > 0 } && EndStepPath is { Count: > 0 };
+
+    /// <summary>True when both step indexes are non-negative (a step range is bound).</summary>
+    public bool HasStepRange => StartStepIndex >= 0 && EndStepIndex >= 0;
+
+    /// <summary>True when an explicit time window start and/or end is set.</summary>
+    public bool HasTimeRange => WindowStart is not null || WindowEnd is not null;
+
+    public bool HasActivationConstraint => HasStepRange || HasTimeRange;
 
     public static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
