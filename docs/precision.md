@@ -12,7 +12,7 @@ MacroHID 现在提供三档精度模式。这里的 0.5ms / 0.25ms / 0.1ms 是 L
 
 - 基础 / `Balanced`：目标 0.5ms。保留高分辨率计时器，但减少自旋时间，优先降低 CPU 占用。
 - 高性能 / `ExtremeDuringPlayback`：目标 0.25ms，默认推荐。播放期间启用高优先级、QPC、短窗口自旋、低 GC 干扰和预编译输入批次。
-- 极限 / `UltraLowJitter`：目标 0.1ms。播放期间允许更高 CPU 占用，优先使用 `MacroHid.NativePlayback.dll` 的 x64 C++ in-process 播放引擎；native DLL 缺失或初始化失败时自动回退到 managed ultra。native auto 默认使用已预热的 standby engine、预创建 native plan 和 2 worker delayed rescue 来降低单个核心被抢占时的长尾；standby 不可用时才回退 inline native。native 路径会进入 Windows 实时进程级别和最高线程调度优先级，1ms/2ms 区间不使用普通 `Sleep(0/1)`。MacroStudio 启动后先做不扫描 CPU 的快速 standby 预热，保证第一次触发不背负全核心扫描成本；需要压低最大尖峰时，可用 affinity tuner 或播放面板的核心掩码做低抖动核心绑定。
+- 极限 / `UltraLowJitter`：目标 0.1ms。播放期间允许更高 CPU 占用，优先使用 `MacroHid.NativePlayback.dll` 的 x64 C++ in-process 播放引擎；native DLL 缺失或初始化失败时自动回退到 managed ultra。native auto 默认使用已预热的 standby engine、预创建 native plan 和 2 worker delayed rescue 来降低单个核心被抢占时的长尾；standby 不可用时才回退 inline native。native 路径会进入 Windows 实时进程级别和最高线程调度优先级，1ms/2ms 区间不使用普通 `Sleep(0/1)`。MacroStudio 启动后先做不扫描 CPU 的快速 standby 预热，保证第一次触发不背负全核心扫描成本；需要压低最大尖峰时，可用 affinity tuner 或宏数据库「全局运行」里的极限核心掩码做低抖动核心绑定。核编号对照表与参考文献见 [极限核心掩码说明](cpu-affinity.md)。
 
 默认精度模式为高性能 / `ExtremeDuringPlayback`：只在宏播放期间进入高性能调度模式，播放结束、停止或异常后恢复系统状态。追求最低最大偏差时，可以在播放控制面板把单个宏切换为“极限”。这个模式会影响系统调度，建议只在真正需要 1ms/2ms 节奏稳定性时使用。
 
