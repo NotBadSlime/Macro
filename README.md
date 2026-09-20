@@ -1,6 +1,6 @@
 # MacroHID 使用说明
 
-MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。通过 Windows `SendInput` 发送输入，不安装驱动、不改 Secure Boot。适合合法的本机桌面自动化；控制管理员窗口时，请以管理员身份启动本软件。
+MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。目的是把各大宏软件的宏集中到一处使用，集百家之长：导入雷云、罗技 Lua、按键精灵等常见格式后，在同一套编辑器和触发体系里一起跑。通过 Windows `SendInput` 发送输入，不安装驱动、不改 Secure Boot。适合合法的本机桌面自动化；控制管理员窗口时，请以管理员身份启动本软件。
 
 宏数据默认保存在 `%APPDATA%\MacroHID\MacroLibrary`。卸载时默认保留，重新安装后仍可继续使用。
 
