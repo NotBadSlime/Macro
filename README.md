@@ -4,7 +4,12 @@ MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。目的是把各大�
 
 宏数据默认保存在 `%APPDATA%\MacroHID\MacroLibrary`。卸载时默认保留，重新安装后仍可继续使用。
 
-当前正式版是 **1.3.0**。安装包在 GitHub [Releases](https://github.com/NotBadSlime/Macro/releases/tag/v1.3.0)，下载 `MacroHID-Setup-x64.exe`。需要先安装 [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（x64）。安装包不内置运行时。控制管理员窗口时，请以管理员身份运行 MacroStudio。
+当前正式版是 **1.3.0**。安装文件在 GitHub [Releases](https://github.com/NotBadSlime/Macro/releases/tag/v1.3.0)：
+
+- `MacroHID-Setup-x64.exe`：安装包。从浏览器下载后，请先右键该文件 → 属性 → 勾选「解除锁定」→ 确定，再双击安装。若弹出「无法在临时目录中执行文件 / Error 4551」或 Windows 安全中心提示「无法确认发布者」，按 [安装说明里的解除拦截步骤](docs/installer.md#从网上下载后被拦截) 处理，或改下便携包。
+- `MacroHID-Portable-x64.zip`：解压后运行 `MacroStudio\MacroStudio.exe`，不走安装向导。zip 同样先解除锁定再解压。
+
+需要先安装 [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（x64）。安装包不内置运行时。控制管理员窗口时，请以管理员身份运行 MacroStudio。
 
 ---
 

@@ -129,7 +129,20 @@ try {
         throw "Expected installer was not produced: $installer"
     }
 
+    $portableZip = Join-Path $outputRoot "MacroHID-Portable-x64.zip"
+    if (Test-Path $portableZip) {
+        Remove-Item -LiteralPath $portableZip -Force
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+        $inputRoot,
+        $portableZip,
+        [System.IO.Compression.CompressionLevel]::Optimal,
+        $false)
+
     Write-Host "Installer created: $installer"
+    Write-Host "Portable zip created: $portableZip"
 }
 finally {
     Pop-Location

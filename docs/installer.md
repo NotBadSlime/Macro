@@ -18,6 +18,7 @@
 
 ```text
 artifacts\installer\MacroHID-Setup-x64.exe
+artifacts\installer\MacroHID-Portable-x64.zip
 ```
 
 安装包包含：
@@ -68,6 +69,32 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 - 不使用 `pnputil`、`devcon`、VHF/KMDF 或 IOCTL。
 - 卸载时不会卸载驱动或修改系统启动策略；用户数据默认保留，也可在卸载确认中主动清除。
 
+### 从网上下载后被拦截
+
+从 GitHub 下载的 `MacroHID-Setup-x64.exe` 会带上浏览器的「来自互联网」标记。安装程序还要在临时目录里再解出一份 `.tmp` 来执行。当前安装包没有向 CA 购买的代码签名证书，Windows 11 的智能应用控制 / 应用程序控制策略可能直接拦住这份临时文件。
+
+典型提示：
+
+- `Unable to execute file in the temporary directory. Setup aborted.`
+- `Error 4551: 应用程序控制策略已阻止此文件。`
+- 安全中心：「此应用的一部分已被阻止」「无法确认谁发布了 …tmp」。
+
+按顺序试：
+
+1. **解除锁定后再装。** 右键安装包 → 属性 → 若有「解除锁定」则勾选 → 应用 → 确定。或在 PowerShell 中执行：
+
+   ```powershell
+   Unblock-File -Path "$env:USERPROFILE\Downloads\MacroHID-Setup-x64.exe"
+   ```
+
+   文件名若被改成 `MacroHID-Setup-x64 (1).exe`，路径要写成实际文件名。然后右键「以管理员身份运行」。
+
+2. **改用便携包。** 在同一 Releases 页下载 `MacroHID-Portable-x64.zip`，先对 zip 解除锁定，再解压，运行 `MacroStudio\MacroStudio.exe`。这样不会再走安装向导的临时目录解压。
+
+3. **仍被拦住。** 打开 Windows 安全中心 → 应用和浏览器控制 → **智能应用控制**。若处于「开」，未签名软件无法单独加白名单。可在确认文件来自本仓库 Releases 后，临时关掉智能应用控制再安装；微软说明关掉后有的版本不能再打开，除非重置系统，请自行权衡。
+
+从本机直接编译出的安装包（未经过浏览器下载）一般不会带互联网标记，通常可以直接装。
+
 ### 常见问题
 
 - 无法控制管理员窗口：请以管理员身份启动 MacroStudio/MacroRunner。
@@ -93,6 +120,7 @@ Output:
 
 ```text
 artifacts\installer\MacroHID-Setup-x64.exe
+artifacts\installer\MacroHID-Portable-x64.zip
 ```
 
 The setup package includes:
@@ -142,6 +170,12 @@ MacroHID uses Windows `SendInput` only:
 - Secure Boot does not need to be changed.
 - `pnputil`, `devcon`, VHF/KMDF, and IOCTL paths are not used.
 - Uninstall does not remove a driver or modify boot policy. User data is preserved by default and can be explicitly removed from the uninstall confirmation.
+
+### Blocked after downloading from the internet
+
+GitHub downloads carry Mark of the Web. Inno Setup then unpacks a `.tmp` helper under `%TEMP%`. This build is not Authenticode-signed, so Windows 11 Smart App Control may abort with Error 4551.
+
+Unblock the file first (`Properties` → Unblock, or `Unblock-File`), or use `MacroHID-Portable-x64.zip` after unblocking the zip. See the Chinese section above for Smart App Control notes.
 
 ### Troubleshooting
 
