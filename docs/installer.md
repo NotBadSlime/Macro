@@ -89,7 +89,7 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 
    文件名若被改成 `MacroHID-Setup-x64 (1).exe`，路径要写成实际文件名。然后右键「以管理员身份运行」。
 
-2. **改用便携包。** 在同一 Releases 页下载 `MacroHID-Portable-x64.zip`，先对 zip 解除锁定，再解压，运行 `MacroStudio\MacroStudio.exe`。这样不会再走安装向导的临时目录解压。
+2. **改用便携包。** 在同一 Releases 页下载 `MacroHID-Portable-x64.zip`，先对 zip 解除锁定，再解压。目录排布与安装版相同（`MacroStudio`、`MacroRunner`、`LatencyProbe`、`docs` 等）。双击根目录的 **MacroStudio** 快捷方式启动，不要把快捷方式单独拷走。
 
 3. **仍被拦住。** 打开 Windows 安全中心 → 应用和浏览器控制 → **智能应用控制**。若处于「开」，未签名软件无法单独加白名单。可在确认文件来自本仓库 Releases 后，临时关掉智能应用控制再安装；微软说明关掉后有的版本不能再打开，除非重置系统，请自行权衡。
 

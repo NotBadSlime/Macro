@@ -74,6 +74,69 @@ function Remove-InstallerDebugArtifacts([string]$Root) {
         Remove-Item -Force
 }
 
+function New-PortableRootShortcut([string]$ShortcutPath, [string]$ScriptFileName, [string]$IconRelativePath, [string]$Description) {
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($ShortcutPath)
+    $shortcut.TargetPath = Join-Path $env:SystemRoot "System32\wscript.exe"
+    $shortcut.Arguments = "//B //nologo `"$ScriptFileName`""
+    $shortcut.WorkingDirectory = ""
+    $shortcut.WindowStyle = 1
+    $shortcut.Description = $Description
+    $shortcut.IconLocation = "$IconRelativePath,0"
+    $shortcut.Save()
+}
+
+function New-PortableAppLayout([string]$SourceRoot, [string]$AppRoot) {
+    if (Test-Path $AppRoot) {
+        Remove-Item -LiteralPath $AppRoot -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Path $AppRoot -Force | Out-Null
+
+    foreach ($name in @("MacroStudio", "MacroRunner", "LatencyProbe", "scripts", "samples", "docs")) {
+        Copy-DirectoryIfExists (Join-Path $SourceRoot $name) (Join-Path $AppRoot $name)
+    }
+
+    Copy-Item -LiteralPath (Join-Path $SourceRoot "README.md") -Destination (Join-Path $AppRoot "README.md") -Force
+
+    $launchVbs = @"
+Option Explicit
+Dim fso, shell, root, exe
+Set fso = CreateObject("Scripting.FileSystemObject")
+root = fso.GetParentFolderName(WScript.ScriptFullName)
+exe = fso.BuildPath(fso.BuildPath(root, "MacroStudio"), "MacroStudio.exe")
+If Not fso.FileExists(exe) Then
+    MsgBox "找不到 MacroStudio\MacroStudio.exe。请把快捷方式留在解压后的 MacroHID 根目录。", 16, "MacroHID"
+    WScript.Quit 1
+End If
+Set shell = CreateObject("WScript.Shell")
+shell.CurrentDirectory = fso.GetParentFolderName(exe)
+shell.Run """" & exe & """", 1, False
+"@
+    Set-Content -LiteralPath (Join-Path $AppRoot "MacroStudio.vbs") -Value $launchVbs -Encoding ASCII
+
+    $launchCmd = @"
+@echo off
+set "ROOT=%~dp0"
+start "" "%ROOT%MacroStudio\MacroStudio.exe"
+"@
+    Set-Content -LiteralPath (Join-Path $AppRoot "MacroStudio.cmd") -Value $launchCmd -Encoding ASCII
+
+    New-PortableRootShortcut `
+        -ShortcutPath (Join-Path $AppRoot "MacroStudio.lnk") `
+        -ScriptFileName "MacroStudio.vbs" `
+        -IconRelativePath "MacroStudio\MacroStudio.exe" `
+        -Description "MacroStudio"
+
+    $missing = @(
+        (Join-Path $AppRoot "MacroStudio\MacroStudio.exe"),
+        (Join-Path $AppRoot "MacroStudio.lnk")
+    ) | Where-Object { -not (Test-Path $_) }
+    if ($missing.Count -gt 0) {
+        throw "Portable layout is missing: $($missing -join ', ')"
+    }
+}
+
 if ($InstallInno -and -not (Find-InnoCompiler)) {
     winget install --id JRSoftware.InnoSetup --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
 }
@@ -129,14 +192,22 @@ try {
         throw "Expected installer was not produced: $installer"
     }
 
+    $portableStage = Join-Path $outputRoot "portable-stage"
+    $portableAppRoot = Join-Path $portableStage "MacroHID"
     $portableZip = Join-Path $outputRoot "MacroHID-Portable-x64.zip"
+    if (Test-Path $portableStage) {
+        Remove-Item -LiteralPath $portableStage -Recurse -Force
+    }
+
     if (Test-Path $portableZip) {
         Remove-Item -LiteralPath $portableZip -Force
     }
 
+    New-PortableAppLayout -SourceRoot $inputRoot -AppRoot $portableAppRoot
+
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $inputRoot,
+        $portableStage,
         $portableZip,
         [System.IO.Compression.CompressionLevel]::Optimal,
         $false)
