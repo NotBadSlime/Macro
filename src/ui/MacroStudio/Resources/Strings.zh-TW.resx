@@ -440,4 +440,11 @@
   <data name="ListeningPausedHint" xml:space="preserve"><value>請先恢復監聽，再開始監聽。</value></data>
   <data name="ListeningPausedStatus" xml:space="preserve"><value>已暫停監聽。已儲存的觸發鍵不會被刪除。</value></data>
   <data name="ListeningResumePartial" xml:space="preserve"><value>已恢復 {0} 個監聽。</value></data>
+  <data name="ColorSampleHotkey" xml:space="preserve"><value>取色快捷鍵</value></data>
+  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>軟體核心全域巨集：MacroStudio 執行時始終可用。按下後複製滑鼠座標與像素色號，並短暫顯示。與巨集觸發鍵衝突時會提示並略過該巨集。</value></data>
+  <data name="ColorSampleCopied" xml:space="preserve"><value>已複製取色結果</value></data>
+  <data name="LibraryPath" xml:space="preserve"><value>巨集路徑</value></data>
+  <data name="LibraryPathHelp" xml:space="preserve"><value>資料庫 &gt; 資料夾 &gt; 巨集名。按 Enter 後巨集資料庫會跳到對應檔案或資料夾。</value></data>
+  <data name="LibraryPathNotFound" xml:space="preserve"><value>找不到這條巨集路徑。</value></data>
+  <data name="ListeningColorSampleConflict" xml:space="preserve"><value>以下巨集與取色快捷鍵衝突，未啟動監聽：{0}</value></data>
 </root>

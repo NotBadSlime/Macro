@@ -21,6 +21,9 @@ public partial class SequencePanel : UserControl
     private readonly List<string> undoStack = [];
     private readonly List<string> redoStack = [];
 
+    private bool updatingLibraryPath;
+    private string committedLibraryPath = string.Empty;
+
     public event Action? SaveLibraryRequested;
     public event Action? RunNowRequested;
     public event Action? StopRequested;
@@ -37,6 +40,7 @@ public partial class SequencePanel : UserControl
     public event Action<bool>? EditLockChanged;
     public event Action<string>? OpenReferencedMacroRequested;
     public event Action? ReturnPreviousMacroRequested;
+    public event Action<string>? LibraryPathNavigateRequested;
 
     public SequencePanel()
     {
@@ -98,6 +102,8 @@ public partial class SequencePanel : UserControl
         RecordInputButton.ToolTip = L("RecordingHelp");
         RecordingStatusText.Text = isRecording ? L("RecordingActive") : string.Empty;
         NameLabelText.Text = L("Name");
+        LibraryPathLabelText.Text = L("LibraryPath");
+        LibraryPathBox.ToolTip = L("LibraryPathHelp");
         ScheduledStepsLabelText.Text = L("ScheduledSteps");
         DurationLabelText.Text = L("Duration");
         MacroLockButton.Content = isReadOnly ? L("UnlockMacro") : L("LockMacro");
@@ -115,6 +121,50 @@ public partial class SequencePanel : UserControl
         SaveLibraryButton.IsEnabled = !value;
         RecordInputButton.IsEnabled = isRecording || !value;
         StepSequenceControl.SetReadOnly(value);
+    }
+
+    public void SetLibraryPath(string path)
+    {
+        committedLibraryPath = path ?? string.Empty;
+        updatingLibraryPath = true;
+        try
+        {
+            LibraryPathBox.Text = committedLibraryPath;
+        }
+        finally
+        {
+            updatingLibraryPath = false;
+        }
+    }
+
+    private void LibraryPathBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        CommitLibraryPath();
+        e.Handled = true;
+    }
+
+    private void LibraryPathBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!updatingLibraryPath)
+        {
+            CommitLibraryPath();
+        }
+    }
+
+    private void CommitLibraryPath()
+    {
+        var path = LibraryPathBox.Text.Trim();
+        if (string.Equals(path, committedLibraryPath, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        LibraryPathNavigateRequested?.Invoke(path);
     }
 
     public void SetRecordingState(bool recording, int inputCount = 0)

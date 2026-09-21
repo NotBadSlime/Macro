@@ -32,6 +32,16 @@
                                Foreground="{DynamicResource SecondaryText}"
                                Margin="0,5,0,0"
                                FontSize="12" />
+                    <TextBlock x:Name="LibraryPathLabelText"
+                               Text="宏路径"
+                               Style="{StaticResource FieldLabel}"
+                               Margin="0,8,0,0" />
+                    <TextBox x:Name="LibraryPathBox"
+                             Height="30"
+                             FontFamily="Consolas, Microsoft YaHei UI"
+                             ToolTip="数据库 > 文件夹 > 宏名。回车后宏数据库会跳到对应位置。"
+                             LostFocus="LibraryPathBox_LostFocus"
+                             KeyDown="LibraryPathBox_KeyDown" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Margin="14,0,0,0">
                     <TextBlock x:Name="ScheduledStepsLabelText" Text="计划步骤" Style="{StaticResource FieldLabel}" />

@@ -43,6 +43,7 @@ Windows SendInput / visible desktop pixels
   - XMouse。
   - QMacro。
   - GIMacros JSON。
+  - 耕地机脚本。
 
 - `src/shared/MacroHid.Runtime`
   - 播放控制器。
@@ -140,6 +141,7 @@ There is no kernel driver, no background Windows service, no VHF/KMDF layer, and
   - XMouse.
   - QMacro.
   - GIMacros JSON.
+  - GengDiJi scripts.
 
 - `src/shared/MacroHid.Runtime`
   - Playback controller.

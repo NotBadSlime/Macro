@@ -440,4 +440,11 @@
   <data name="ListeningPausedHint" xml:space="preserve"><value>请先恢复监听，再开始监听。</value></data>
   <data name="ListeningPausedStatus" xml:space="preserve"><value>已暂停监听。已保存的触发键不会被删除。</value></data>
   <data name="ListeningResumePartial" xml:space="preserve"><value>已恢复 {0} 个监听。</value></data>
+  <data name="ColorSampleHotkey" xml:space="preserve"><value>取色快捷键</value></data>
+  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>软件核心全局宏：MacroStudio 运行时始终可用。按下后复制鼠标坐标和像素色号，并短暂显示。与宏触发键冲突时会提示并跳过该宏。</value></data>
+  <data name="ColorSampleCopied" xml:space="preserve"><value>已复制取色结果</value></data>
+  <data name="LibraryPath" xml:space="preserve"><value>宏路径</value></data>
+  <data name="LibraryPathHelp" xml:space="preserve"><value>数据库 &gt; 文件夹 &gt; 宏名。回车后宏数据库会跳到对应文件或文件夹。</value></data>
+  <data name="LibraryPathNotFound" xml:space="preserve"><value>找不到这条宏路径。</value></data>
+  <data name="ListeningColorSampleConflict" xml:space="preserve"><value>以下宏与取色快捷键冲突，未启动监听：{0}</value></data>
 </root>

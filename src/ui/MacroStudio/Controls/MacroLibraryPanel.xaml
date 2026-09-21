@@ -317,12 +317,13 @@
                             Content="返回上级"
                             ToolTip="返回上级"
                             Click="UpFolder_Click" />
-                    <TextBlock x:Name="CurrentDatabaseTitleText"
+                    <TextBox x:Name="DatabasePathBox"
                                Grid.Column="4"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource PrimaryText}"
+                               Height="30"
+                               VerticalContentAlignment="Center"
                                FontWeight="SemiBold"
-                               TextTrimming="CharacterEllipsis" />
+                               KeyDown="DatabasePathBox_KeyDown"
+                               LostFocus="DatabasePathBox_LostFocus" />
                 </Grid>
 
                 <StackPanel x:Name="DatabaseOnlyControls">
@@ -504,6 +505,7 @@
                               PreviewMouseRightButtonDown="ExplorerListView_PreviewMouseRightButtonDown"
                               PreviewMouseMove="ExplorerListView_PreviewMouseMove"
                               DragOver="ExplorerListView_DragOver"
+                              DragLeave="ExplorerListView_DragLeave"
                               Drop="ExplorerListView_Drop"
                               KeyDown="ExplorerListView_KeyDown"
                               AllowDrop="True">
@@ -588,6 +590,28 @@
                                    FontSize="10"
                                    TextWrapping="Wrap"
                                    Margin="0,4,0,10" />
+                        <TextBlock x:Name="ColorSampleHotkeyLabelText"
+                                   Text="取色快捷键"
+                                   Style="{StaticResource FieldLabel}" />
+                        <DockPanel Margin="0,0,0,4" LastChildFill="True">
+                            <Button x:Name="CaptureColorSampleButton"
+                                    DockPanel.Dock="Right"
+                                    Width="72"
+                                    Height="30"
+                                    Content="捕获"
+                                    Click="CaptureColorSample_Click" />
+                            <TextBox x:Name="ColorSampleHotkeyBox"
+                                     Height="30"
+                                     Margin="0,0,8,0"
+                                     VerticalContentAlignment="Center"
+                                     TextChanged="RuntimePrecision_TextChanged" />
+                        </DockPanel>
+                        <TextBlock x:Name="ColorSampleHotkeyHelpText"
+                                   Text="软件核心全局宏：MacroStudio 运行时始终可用。按下后复制鼠标坐标和像素色号，并短暂显示。与宏触发键冲突时会提示并跳过该宏。"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   FontSize="10"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10" />
                         <Border Height="1"
                                 Margin="0,2,0,10"
                                 Background="{DynamicResource PanelBorder}" />

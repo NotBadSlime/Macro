@@ -35,6 +35,8 @@ public partial class MacroLibraryPanel : UserControl
 
     private readonly LowLevelMouseProc libraryDragMouseHookProc;
     private readonly DispatcherTimer explorerHorizontalScrollTimer;
+    private readonly DispatcherTimer colorSampleCaptureCommitTimer;
+    private readonly List<HidKey> capturedColorSampleKeys = [];
     private MacroEditorState? state;
     private bool suppressSelection;
     private readonly HashSet<string> expandedGroups = new(StringComparer.OrdinalIgnoreCase);
@@ -53,6 +55,8 @@ public partial class MacroLibraryPanel : UserControl
     private bool refreshTreeAfterRename;
     private bool updatingRuntimePrecisionControls;
     private bool updatingGroupControls;
+    private bool updatingDatabasePath;
+    private bool capturingColorSample;
     private bool libraryDragInProgress;
     private ScrollViewer? macroTreeScrollViewer;
     private ScrollViewer? explorerScrollViewer;
@@ -80,6 +84,8 @@ public partial class MacroLibraryPanel : UserControl
     public event Action? StopListeningAllRequested;
     public event Action? PrecisionSettingsEdited;
     public event Action? LibraryStructureEdited;
+    public event Action? ColorSampleCaptureStarted;
+    public event Action? ColorSampleCaptureFinished;
 
     public MacroLibraryPanel()
     {
@@ -90,6 +96,11 @@ public partial class MacroLibraryPanel : UserControl
             Interval = TimeSpan.FromMilliseconds(16)
         };
         explorerHorizontalScrollTimer.Tick += ExplorerHorizontalScrollTimer_Tick;
+        colorSampleCaptureCommitTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(450)
+        };
+        colorSampleCaptureCommitTimer.Tick += (_, _) => CommitColorSampleCapture();
     }
 
     public void Initialize(MacroEditorState editorState)
@@ -118,6 +129,10 @@ public partial class MacroLibraryPanel : UserControl
         AffinityMaskLabelText.Text = L("AffinityMask");
         AffinityMaskHelpText.Text = L("AffinityMaskHelp");
         AffinityMaskBox.ToolTip = L("AffinityMaskHelp");
+        ColorSampleHotkeyLabelText.Text = L("ColorSampleHotkey");
+        ColorSampleHotkeyHelpText.Text = L("ColorSampleHotkeyHelp");
+        ColorSampleHotkeyBox.ToolTip = L("ColorSampleHotkeyHelp");
+        CaptureColorSampleButton.Content = capturingColorSample ? L("Cancel") : L("Capture");
         ListeningTitleText.Text = L("Listening");
         StopEveryListeningButton.Content = L("StopListeningAll");
         RenameMenuItem.Header = L("Rename");
@@ -189,6 +204,7 @@ public partial class MacroLibraryPanel : UserControl
     }
 
     public string AffinityMaskText => AffinityMaskBox.Text.Trim();
+    public string ColorSampleHotkeyText => ColorSampleHotkeyBox.Text.Trim();
 
     public string CurrentDatabaseGroupId => showingDatabaseContents
         ? activeDatabaseGroupId
@@ -258,6 +274,9 @@ public partial class MacroLibraryPanel : UserControl
         try
         {
             AffinityMaskBox.Text = settings.AffinityMask;
+            ColorSampleHotkeyBox.Text = string.IsNullOrWhiteSpace(settings.ColorSampleHotkey)
+                ? CoreHotkeys.DefaultColorSampleText
+                : settings.ColorSampleHotkey;
             foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
             {
                 if (string.Equals(item.Tag?.ToString(), ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
@@ -634,7 +653,7 @@ public partial class MacroLibraryPanel : UserControl
         ExportMacroButton.IsEnabled = showingDatabaseContents;
         CopyMenuItem.Visibility = databaseVisibility;
         PasteMenuItem.Visibility = databaseVisibility;
-        CurrentDatabaseTitleText.Text = GetDatabaseTitleText();
+        SyncDatabasePathBox();
         DeleteMenuItem.Header = showingDatabaseContents ? L("Delete") : L("DeleteDatabase");
         DeleteDatabaseButton.IsEnabled = !showingDatabaseContents && GetSelectedEditableGroup() is not null;
         ApplyExplorerViewMode();
@@ -670,9 +689,90 @@ public partial class MacroLibraryPanel : UserControl
             return L("MacroLibrary");
         }
 
-        return string.IsNullOrWhiteSpace(currentDatabaseFolder)
-            ? $"{L("MacroLibrary")} / {group.Name}"
-            : $"{L("MacroLibrary")} / {group.Name} / {currentDatabaseFolder}";
+        return MacroLibraryPath.Format(group.Name, currentDatabaseFolder, null);
+    }
+
+    private void SyncDatabasePathBox()
+    {
+        if (DatabasePathBox is null)
+        {
+            return;
+        }
+
+        updatingDatabasePath = true;
+        try
+        {
+            DatabasePathBox.Text = GetDatabaseTitleText();
+        }
+        finally
+        {
+            updatingDatabasePath = false;
+        }
+    }
+
+    public bool TryReveal(string path, out MacroLibraryItem? item)
+    {
+        item = null;
+        if (state is null)
+        {
+            return false;
+        }
+
+        state.ReloadLibrary();
+        var location = MacroLibraryPath.ResolveLocation(state.LibrarySnapshot, path);
+        if (location is null)
+        {
+            return false;
+        }
+
+        showingDatabaseContents = true;
+        activeDatabaseGroupId = location.GroupId;
+        currentDatabaseFolder = location.Folder;
+        selectedGroupId = location.GroupId;
+        selectedFolder = string.IsNullOrWhiteSpace(location.Folder) ? null : location.Folder;
+        selectedManagerGroupIds.Clear();
+        selectedManagerGroupIds.Add(location.GroupId);
+        item = string.IsNullOrWhiteSpace(location.MacroId)
+            ? null
+            : state.LibrarySnapshot.Items.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, location.MacroId, StringComparison.OrdinalIgnoreCase));
+        state.SelectedMacroId = item?.Id;
+        state.LibraryStore.SetSelected(item?.Id);
+        RefreshTree();
+        return true;
+    }
+
+    private void DatabasePathBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        CommitDatabasePath();
+        e.Handled = true;
+    }
+
+    private void DatabasePathBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!updatingDatabasePath)
+        {
+            CommitDatabasePath();
+        }
+    }
+
+    private void CommitDatabasePath()
+    {
+        if (updatingDatabasePath || state is null)
+        {
+            return;
+        }
+
+        if (!TryReveal(DatabasePathBox.Text, out _))
+        {
+            ResultMessage?.Invoke(L("LibraryPathNotFound"));
+            SyncDatabasePathBox();
+        }
     }
 
     private void MacroSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshList();
@@ -690,6 +790,118 @@ public partial class MacroLibraryPanel : UserControl
     private void RuntimePrecision_TextChanged(object sender, TextChangedEventArgs e)
     {
         NotifyPrecisionSettingsEdited();
+    }
+
+    private void CaptureColorSample_Click(object sender, RoutedEventArgs e)
+    {
+        if (capturingColorSample)
+        {
+            StopColorSampleCapture(commit: false);
+            return;
+        }
+
+        capturingColorSample = true;
+        capturedColorSampleKeys.Clear();
+        ColorSampleCaptureStarted?.Invoke();
+        updatingRuntimePrecisionControls = true;
+        ColorSampleHotkeyBox.Text = string.Empty;
+        CaptureColorSampleButton.Content = L("Cancel");
+        updatingRuntimePrecisionControls = false;
+        AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureColorSample_KeyDown), true);
+        AddHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureColorSample_KeyUp), true);
+    }
+
+    private void CaptureColorSample_KeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
+        {
+            return;
+        }
+
+        var virtualKey = KeyInterop.VirtualKeyFromKey(key);
+        if (!GlobalKeyboardHook.TryMapVirtualKeyToHidKey(virtualKey, out var hidKey))
+        {
+            StopColorSampleCapture(commit: false);
+            e.Handled = true;
+            return;
+        }
+
+        if (!capturedColorSampleKeys.Contains(hidKey))
+        {
+            capturedColorSampleKeys.Add(hidKey);
+        }
+
+        updatingRuntimePrecisionControls = true;
+        ColorSampleHotkeyBox.Text = new HotkeyGesture(ReadColorSampleModifiers(), capturedColorSampleKeys, []).ToString();
+        updatingRuntimePrecisionControls = false;
+        colorSampleCaptureCommitTimer.Stop();
+        colorSampleCaptureCommitTimer.Start();
+        e.Handled = true;
+    }
+
+    private void CaptureColorSample_KeyUp(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is not (Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin))
+        {
+            return;
+        }
+
+        if (capturedColorSampleKeys.Count == 0)
+        {
+            return;
+        }
+
+        CommitColorSampleCapture();
+        e.Handled = true;
+    }
+
+    private void CommitColorSampleCapture()
+    {
+        if (!capturingColorSample)
+        {
+            colorSampleCaptureCommitTimer.Stop();
+            return;
+        }
+
+        StopColorSampleCapture(commit: true);
+    }
+
+    private void StopColorSampleCapture(bool commit)
+    {
+        if (!capturingColorSample)
+        {
+            return;
+        }
+
+        capturingColorSample = false;
+        colorSampleCaptureCommitTimer.Stop();
+        CaptureColorSampleButton.Content = L("Capture");
+        RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureColorSample_KeyDown));
+        RemoveHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureColorSample_KeyUp));
+        ColorSampleCaptureFinished?.Invoke();
+        if (commit)
+        {
+            if (string.IsNullOrWhiteSpace(ColorSampleHotkeyBox.Text))
+            {
+                updatingRuntimePrecisionControls = true;
+                ColorSampleHotkeyBox.Text = CoreHotkeys.DefaultColorSampleText;
+                updatingRuntimePrecisionControls = false;
+            }
+
+            NotifyPrecisionSettingsEdited();
+        }
+    }
+
+    private static HidModifier ReadColorSampleModifiers()
+    {
+        var modifiers = HidModifier.None;
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) modifiers |= HidModifier.LeftCtrl;
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) modifiers |= HidModifier.LeftShift;
+        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0) modifiers |= HidModifier.LeftAlt;
+        if ((Keyboard.Modifiers & ModifierKeys.Windows) != 0) modifiers |= HidModifier.LeftGui;
+        return modifiers;
     }
 
     private void NotifyPrecisionSettingsEdited()
@@ -1391,6 +1603,13 @@ public partial class MacroLibraryPanel : UserControl
 
     private void ExplorerListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
+        if (libraryDragInProgress)
+        {
+            ScrollExplorerByWheelDelta(e.Delta);
+            e.Handled = true;
+            return;
+        }
+
         if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0)
         {
             return;
@@ -1521,6 +1740,12 @@ public partial class MacroLibraryPanel : UserControl
             handled = QueueExplorerHorizontalScroll(GetWheelDelta(wParam) / WheelDelta * 72.0);
         }
 
+        if (msg == WM_MOUSEWHEEL && libraryDragInProgress && IsScreenPointInsideExplorer(lParam))
+        {
+            ScrollExplorerByWheelDelta(GetWheelDelta(wParam));
+            handled = true;
+        }
+
         if (msg == WM_MOUSEWHEEL && libraryDragInProgress && IsScreenPointInsideMacroTree(lParam))
         {
             ScrollMacroTreeByWheelDelta(GetWheelDelta(wParam));
@@ -1541,7 +1766,17 @@ public partial class MacroLibraryPanel : UserControl
         var screenPoint = new Point(
             unchecked((short)(packed & 0xFFFF)),
             unchecked((short)((packed >> 16) & 0xFFFF)));
-        var localPoint = ExplorerListView.PointFromScreen(screenPoint);
+        return IsScreenPointInsideExplorer(screenPoint.X, screenPoint.Y);
+    }
+
+    private bool IsScreenPointInsideExplorer(double screenX, double screenY)
+    {
+        if (!ExplorerListView.IsLoaded || !ExplorerListView.IsVisible)
+        {
+            return false;
+        }
+
+        var localPoint = ExplorerListView.PointFromScreen(new Point(screenX, screenY));
         return localPoint.X >= 0
             && localPoint.Y >= 0
             && localPoint.X <= ExplorerListView.ActualWidth
@@ -1577,6 +1812,13 @@ public partial class MacroLibraryPanel : UserControl
             && libraryDragMouseHookHandle != IntPtr.Zero)
         {
             var data = Marshal.PtrToStructure<MouseLowLevelHookStruct>(lParam);
+            if (IsScreenPointInsideExplorer(data.Point.X, data.Point.Y))
+            {
+                var delta = unchecked((short)((data.MouseData >> 16) & 0xFFFF));
+                Dispatcher.BeginInvoke(new Action(() => ScrollExplorerByWheelDelta(delta)), DispatcherPriority.Input);
+                return new IntPtr(1);
+            }
+
             if (IsScreenPointInsideMacroTree(data.Point.X, data.Point.Y))
             {
                 var delta = unchecked((short)((data.MouseData >> 16) & 0xFFFF));
@@ -1663,6 +1905,58 @@ public partial class MacroLibraryPanel : UserControl
     private void ScrollMacroTreeByWheelDelta(int delta)
     {
         var scrollViewer = GetMacroTreeScrollViewer();
+        if (scrollViewer is null)
+        {
+            return;
+        }
+
+        var lines = SystemParameters.WheelScrollLines <= 0 ? 3 : SystemParameters.WheelScrollLines;
+        var offsetDelta = -(delta / WheelDelta) * lines;
+        var target = Math.Clamp(scrollViewer.VerticalOffset + offsetDelta, 0, scrollViewer.ScrollableHeight);
+        scrollViewer.ScrollToVerticalOffset(target);
+    }
+
+    private ScrollViewer? GetExplorerScrollViewer()
+    {
+        return explorerScrollViewer ??= FindVisualChild<ScrollViewer>(ExplorerListView);
+    }
+
+    private void AutoScrollExplorer(Point position)
+    {
+        var scrollViewer = GetExplorerScrollViewer();
+        if (scrollViewer is null)
+        {
+            return;
+        }
+
+        const double edgeSize = 36;
+        var now = Environment.TickCount64;
+        if (now - lastLibraryAutoScrollTick < LibraryAutoScrollIntervalMilliseconds)
+        {
+            return;
+        }
+
+        if (position.Y < edgeSize)
+        {
+            lastLibraryAutoScrollTick = now;
+            scrollViewer.LineUp();
+            scrollViewer.LineUp();
+        }
+        else if (position.Y > ExplorerListView.ActualHeight - edgeSize)
+        {
+            lastLibraryAutoScrollTick = now;
+            scrollViewer.LineDown();
+            scrollViewer.LineDown();
+        }
+        else
+        {
+            lastLibraryAutoScrollTick = 0;
+        }
+    }
+
+    private void ScrollExplorerByWheelDelta(int delta)
+    {
+        var scrollViewer = GetExplorerScrollViewer();
         if (scrollViewer is null)
         {
             return;
@@ -1953,18 +2247,39 @@ public partial class MacroLibraryPanel : UserControl
             .ToArray();
         if (macroIds.Length == 0) return;
 
-        DragDrop.DoDragDrop(
-            ExplorerListView,
-            new DataObject(MacroLibraryDragFormat, macroIds),
-            DragDropEffects.Copy | DragDropEffects.Move);
+        try
+        {
+            libraryDragInProgress = true;
+            StartLibraryDragWheelHook();
+            DragDrop.DoDragDrop(
+                ExplorerListView,
+                new DataObject(MacroLibraryDragFormat, macroIds),
+                DragDropEffects.Copy | DragDropEffects.Move);
+        }
+        finally
+        {
+            StopLibraryDragWheelHook();
+            libraryDragInProgress = false;
+        }
     }
 
     private void ExplorerListView_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(MacroLibraryDragFormat)
-            ? DragDropEffects.Move
-            : DragDropEffects.None;
+        if (!e.Data.GetDataPresent(MacroLibraryDragFormat))
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        AutoScrollExplorer(e.GetPosition(ExplorerListView));
+        e.Effects = DragDropEffects.Move;
         e.Handled = true;
+    }
+
+    private void ExplorerListView_DragLeave(object sender, DragEventArgs e)
+    {
+        lastLibraryAutoScrollTick = 0;
     }
 
     private void ExplorerListView_Drop(object sender, DragEventArgs e)

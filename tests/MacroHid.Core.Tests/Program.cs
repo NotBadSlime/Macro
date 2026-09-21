@@ -53,6 +53,8 @@ var tests = new (string Name, Action Body)[]
     ("Precision mode profiles expose target jitter budgets", PrecisionModeProfilesExposeTargetJitterBudgets),
     ("MCRX parser covers ultra low jitter precision mode", McrxParserCoversUltraLowJitterPrecisionMode),
     ("MCRX parser covers playback affinity mask", McrxParserCoversPlaybackAffinityMask),
+    ("Color sample text copies coordinates and hex color", ColorSampleTextCopiesCoordinatesAndHexColor),
+    ("Macro library path formats explorer breadcrumbs and resolves macros", MacroLibraryPathFormatsExplorerBreadcrumbsAndResolvesMacros),
     ("Playback process filter matches foreground process names", PlaybackProcessFilterMatchesForegroundProcessNames),
     ("Global keyboard hook separates duplicate Tab bindings by foreground process", GlobalKeyboardHookSeparatesDuplicateTabBindingsByForegroundProcess),
     ("MCRX parser covers modifier-only and mouse side button triggers", McrxParserCoversModifierOnlyAndMouseSideButtonTriggers),
@@ -131,7 +133,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 1.3.0", MacroHidReleaseVersionIsOneThreeZero),
+    ("MacroHID release version is 1.4.0", MacroHidReleaseVersionIsOneFourZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("MacroStudio uses launcher style soft workbench shell", MacroStudioUsesLauncherStyleSoftWorkbenchShell),
@@ -164,6 +166,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio supports macro call selection and playback autosave", MacroStudioSupportsMacroCallSelectionAndPlaybackAutosave),
     ("MacroStudio exposes global precision selector in macro library", MacroStudioExposesGlobalPrecisionSelectorInMacroLibrary),
     ("MacroStudio exposes ultra affinity mask control", MacroStudioExposesUltraAffinityMaskControl),
+    ("MacroStudio exposes core color sample hotkey and library path navigation", MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation),
     ("MacroStudio keeps precision as a global runtime setting", MacroStudioKeepsPrecisionAsGlobalRuntimeSetting),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
@@ -275,6 +278,8 @@ var tests = new (string Name, Action Body)[]
     ("Embedded converter preserves supplied Razer modules as nested calls", EmbeddedConverterPreservesSuppliedRazerModulesAsNestedCalls),
     ("Embedded converter imports GIMacros JSON", EmbeddedConverterImportsGIMacrosJson),
     ("Embedded converter exports GIMacros JSON", EmbeddedConverterExportsGIMacrosJson),
+    ("Embedded converter imports GengDiJi scripts", EmbeddedConverterImportsGengDiJiScripts),
+    ("Embedded converter exports GengDiJi scripts", EmbeddedConverterExportsGengDiJiScripts),
     ("Embedded converter exports MacroConverter formats", EmbeddedConverterExportsMacroConverterFormats),
     ("Embedded converter exports Razer key down and up without doubling", EmbeddedConverterExportsRazerKeyDownAndUpWithoutDoubling),
     ("MacroStudio condition list supports wheel scroll while dragging", MacroStudioConditionListSupportsWheelScrollWhileDragging),
@@ -1942,6 +1947,47 @@ static void McrxParserCoversPlaybackAffinityMask()
     Assert.Contains("\"affinityMask\": \"0x1F\"", serialized);
 }
 
+static void ColorSampleTextCopiesCoordinatesAndHexColor()
+{
+    var text = ColorSampleText.Format(120, 340, new RgbColor(0x3A, 0x7B, 0xD5));
+    Assert.Equal("X=120 Y=340 坐标  色号：#3A7BD5", text);
+    Assert.Equal("UpArrow", CoreHotkeys.DefaultColorSampleText);
+    Assert.Equal("__core.colorSample", CoreHotkeys.ColorSampleId);
+    Assert.Equal("UpArrow", CoreHotkeys.NormalizeText(""));
+    Assert.Equal("F13", CoreHotkeys.ParseOrDefault("F13").ToString());
+}
+
+static void MacroLibraryPathFormatsExplorerBreadcrumbsAndResolvesMacros()
+{
+    var formatted = MacroLibraryPath.Format("全局", "战斗", "连发");
+    Assert.Equal("全局 > 战斗 > 连发", formatted);
+    Assert.Equal("全局 > 连发", MacroLibraryPath.Format("全局", "", "连发"));
+
+    var parsed = MacroLibraryPath.Parse("全局 > 战斗 > 连发");
+    Assert.Equal("全局", parsed.GroupKey);
+    Assert.Equal("战斗", parsed.Folder);
+    Assert.Equal("连发", parsed.MacroName);
+
+    var slashParsed = MacroLibraryPath.Parse("全局/战斗/连发");
+    Assert.Equal("战斗", slashParsed.Folder);
+
+    var snapshot = new MacroLibrarySnapshot(
+        [
+            new MacroLibraryItem("id-root", "连发", "", "lianfa.mcrx", DateTimeOffset.UtcNow, GroupId: MacroLibraryStore.GlobalGroupId),
+            new MacroLibraryItem("id-folder", "连发", "战斗", "lianfa2.mcrx", DateTimeOffset.UtcNow, GroupId: MacroLibraryStore.GlobalGroupId)
+        ],
+        null,
+        ["战斗"],
+        [new MacroLibraryGroup(MacroLibraryStore.GlobalGroupId, "全局", "", true)],
+        [new MacroLibraryFolder(MacroLibraryStore.GlobalGroupId, "战斗")]);
+
+    Assert.Equal("id-folder", MacroLibraryPath.ResolveMacro(snapshot, "全局 > 战斗 > 连发")?.Id);
+    Assert.Equal("id-root", MacroLibraryPath.ResolveMacro(snapshot, "全局 > 连发")?.Id);
+    Assert.Equal("id-folder", MacroLibraryPath.ResolveLocation(snapshot, "全局 > 战斗 > 连发")?.MacroId);
+    Assert.Equal("战斗", MacroLibraryPath.ResolveLocation(snapshot, "全局 > 战斗")?.Folder);
+    Assert.True(MacroLibraryPath.ResolveLocation(snapshot, "全局 > 战斗")?.MacroId is null);
+}
+
 static void PlaybackProcessFilterMatchesForegroundProcessNames()
 {
     Assert.True(PlaybackProcessFilter.Matches(null, "notepad"));
@@ -3428,23 +3474,23 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsOneThreeZero()
+static void MacroHidReleaseVersionIsOneFourZero()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.3.0.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.4.0.md"));
 
-    Assert.Contains("<Version>1.3.0</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>1.3.0.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>1.3.0.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>1.4.0</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>1.4.0.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>1.4.0.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"1.3.0\"", installer);
-    Assert.Contains("[string]$Version = \"1.3.0\"", installerBuild);
-    Assert.Contains("Current stable release: `1.3.0`", readme);
-    Assert.Contains("MacroHID `1.3.0` 是当前正式版", releaseNotes);
-    Assert.Contains("Git tag：`v1.3.0`", releaseNotes);
+    Assert.Contains("#define AppVersion \"1.4.0\"", installer);
+    Assert.Contains("[string]$Version = \"1.4.0\"", installerBuild);
+    Assert.Contains("当前正式版是 **1.4.0**", readme);
+    Assert.Contains("MacroHID `1.4.0` 是当前正式版", releaseNotes);
+    Assert.Contains("Git tag：`v1.4.0`", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -4277,6 +4323,38 @@ static void MacroStudioExposesUltraAffinityMaskControl()
     Assert.Contains("限制极限模式播放线程", simplified);
     Assert.Contains("<value>極限核心遮罩</value>", traditional);
     Assert.Contains("限制極限模式播放執行緒", traditional);
+}
+
+static void MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation()
+{
+    var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var sequenceXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml"));
+    var sequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var hookCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "GlobalKeyboardHook.cs"));
+    var overlayCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ColorSampleOverlayWindow.cs"));
+    var settingsCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Services", "RuntimePrecisionSettingsStore.cs"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("ColorSampleHotkeyBox", libraryXaml);
+    Assert.Contains("CaptureColorSampleButton", libraryXaml);
+    Assert.Contains("DatabasePathBox", libraryXaml);
+    Assert.Contains("TryReveal", libraryCode);
+    Assert.Contains("StartLibraryDragWheelHook()", libraryCode);
+    Assert.Contains("ScrollExplorerByWheelDelta", libraryCode);
+    Assert.Contains("AutoScrollExplorer", libraryCode);
+    Assert.Contains("IsScreenPointInsideExplorer(data.Point.X, data.Point.Y)", libraryCode);
+    Assert.Contains("LibraryPathBox", sequenceXaml);
+    Assert.Contains("LibraryPathNavigateRequested", sequenceCode);
+    Assert.Contains("CoreHotkeys.ColorSampleId", mainWindowCode);
+    Assert.Contains("CopyColorSample", mainWindowCode);
+    Assert.Contains("RefreshKeyboardHook", mainWindowCode);
+    Assert.Contains("ShouldSwallowColorSampleKey", hookCode);
+    Assert.Contains("TimeSpan.FromMilliseconds(1500)", overlayCode);
+    Assert.Contains("ColorSampleHotkey", settingsCode);
+    Assert.Contains("取色快捷键", simplified);
+    Assert.Contains("宏路径", simplified);
 }
 
 static void MacroStudioKeepsPrecisionAsGlobalRuntimeSetting()
@@ -6913,6 +6991,101 @@ static void EmbeddedConverterExportsGIMacrosJson()
     Assert.True(imported.Document.Steps.OfType<RepeatStep>().Any(step => step.Count == 2));
 }
 
+static void EmbeddedConverterImportsGengDiJiScripts()
+{
+    const string script = """
+    预加载
+    {
+    press('enter', 100);
+    map(15);
+    book(20);
+    click([0, 0], 5);
+    click([65535, 65535], 5);
+    tpc([32768, 32768], 10);
+    kDown('alt', 5);
+    kUp('alt', 20);
+    moveR([1000, 0], 60);
+    }
+    钓客#0
+    {
+    click([54231, 60979], 40);
+    }
+    """;
+
+    GengDiJiScript.TestScreenBounds = (0, 0, 1920, 1080);
+    try
+    {
+        var result = MacroConversionService.ImportToMcrx(new MacroImportRequest(script, "gengdiji-route.txt"));
+        Assert.Equal(MacroConversionFormat.GengDiJi, result.SourceFormat);
+        Assert.Equal("gengdiji-route", result.Document.Name);
+        Assert.True(result.Document.Steps.OfType<CommentStep>().Any(step => step.Text == "预加载"));
+        Assert.True(result.Document.Steps.OfType<CommentStep>().Any(step => step.Text == "钓客#0"));
+        Assert.True(result.Document.Steps.OfType<KeyStep>().Any(step => step.Kind == KeyActionKind.Down && step.Key == HidKey.Enter));
+        Assert.True(result.Document.Steps.OfType<KeyStep>().Any(step => step.Key == HidKey.M));
+        Assert.True(result.Document.Steps.OfType<KeyStep>().Any(step => step.Key == HidKey.F1));
+        Assert.True(result.Document.Steps.OfType<KeyStep>().Any(step => step.Key == HidKey.LeftAlt));
+
+        var moves = result.Document.Steps.OfType<MouseMoveStep>().Where(step => step.Mode == MouseMoveMode.Absolute).ToArray();
+        Assert.True(moves.Any(step => step.X == 0 && step.Y == 0));
+        Assert.True(moves.Any(step => step.X == 1919 && step.Y == 1079));
+        Assert.True(result.Diagnostics.Any(item => item.Code == "gengdiji.tpcConfirm"));
+        Assert.True(result.Document.Steps.OfType<WaitStep>().Any(step => step.Duration == TimeSpan.FromMilliseconds(100)));
+
+        var qmacroTxt = MacroConversionService.DetectFormat("MoveTo 640, 360\nDelay 250\n", "sample.txt");
+        Assert.Equal(MacroConversionFormat.QMacro, qmacroTxt);
+
+        var samplePath = @"E:\耕地机宏文件实例\-6.txt";
+        if (File.Exists(samplePath))
+        {
+            var sample = MacroConversionService.ImportToMcrx(new MacroImportRequest(File.ReadAllText(samplePath), samplePath));
+            Assert.Equal(MacroConversionFormat.GengDiJi, sample.SourceFormat);
+            Assert.True(sample.Document.Steps.OfType<CommentStep>().Any(step => step.Text.Contains("提前预加载", StringComparison.Ordinal)));
+            Assert.True(sample.Document.Steps.OfType<MouseMoveStep>().Any());
+            Assert.True(sample.Document.Steps.OfType<KeyStep>().Any(step => step.Key == HidKey.Enter));
+        }
+    }
+    finally
+    {
+        GengDiJiScript.TestScreenBounds = null;
+    }
+}
+
+static void EmbeddedConverterExportsGengDiJiScripts()
+{
+    GengDiJiScript.TestScreenBounds = (0, 0, 1920, 1080);
+    try
+    {
+        var document = new MacroDocument(
+            1,
+            "导出示例",
+            [
+                new KeyStep(KeyActionKind.Tap, HidKey.Enter, HidModifier.None, TimeSpan.Zero),
+                new WaitStep(TimeSpan.FromMilliseconds(100)),
+                new MouseMoveStep(MouseMoveMode.Absolute, 0, 0, TimeSpan.Zero),
+                new MouseButtonStep(MouseButton.Left, ButtonActionKind.Down, TimeSpan.Zero),
+                new MouseButtonStep(MouseButton.Left, ButtonActionKind.Up, TimeSpan.Zero),
+                new WaitStep(TimeSpan.FromMilliseconds(5)),
+                new MouseMoveStep(MouseMoveMode.Relative, 4, 0, TimeSpan.Zero),
+                new WaitStep(TimeSpan.FromMilliseconds(60))
+            ]);
+
+        var export = MacroConversionService.ExportFromMcrx(document, MacroConversionFormat.GengDiJi, "route.txt");
+        Assert.Equal("route.txt", export.FileName);
+        Assert.Contains("press('enter', 100);", export.Output);
+        Assert.Contains("click([0, 0], 5);", export.Output);
+        Assert.Contains("moveR3D([4, 0], 60);", export.Output);
+
+        var imported = MacroConversionService.ImportToMcrx(new MacroImportRequest(export.Output, "route.txt"));
+        Assert.Equal(MacroConversionFormat.GengDiJi, imported.SourceFormat);
+        Assert.True(imported.Document.Steps.OfType<KeyStep>().Any(step => step.Key == HidKey.Enter));
+        Assert.True(imported.Document.Steps.OfType<MouseMoveStep>().Any(step => step.Mode == MouseMoveMode.Absolute && step.X == 0 && step.Y == 0));
+    }
+    finally
+    {
+        GengDiJiScript.TestScreenBounds = null;
+    }
+}
+
 static void EmbeddedConverterExportsMacroConverterFormats()
 {
     var document = new MacroDocument(
@@ -8018,7 +8191,7 @@ static void MacroStudioMacroLibraryUsesProgressiveDatabaseViews()
     var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
 
     Assert.Contains("BackToManagerButton", libraryXaml);
-    Assert.Contains("CurrentDatabaseTitleText", libraryXaml);
+    Assert.Contains("DatabasePathBox", libraryXaml);
     Assert.Contains("ManagerOnlyControls", libraryXaml);
     Assert.Contains("DatabaseOnlyControls", libraryXaml);
     Assert.Contains("LibraryImportExportPanel", libraryXaml);

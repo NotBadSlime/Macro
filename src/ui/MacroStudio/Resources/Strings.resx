@@ -614,4 +614,11 @@
   <data name="ListeningPausedHint" xml:space="preserve"><value>Resume listening before starting listeners.</value></data>
   <data name="ListeningPausedStatus" xml:space="preserve"><value>Listening paused. Saved triggers are unchanged.</value></data>
   <data name="ListeningResumePartial" xml:space="preserve"><value>Restored {0} listener(s).</value></data>
+  <data name="ColorSampleHotkey" xml:space="preserve"><value>Color sample hotkey</value></data>
+  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>Core global macro: available while MacroStudio is running. Copies cursor X/Y and pixel #RRGGBB, then shows them briefly. Conflicting macro triggers are skipped with a warning.</value></data>
+  <data name="ColorSampleCopied" xml:space="preserve"><value>Color sample copied</value></data>
+  <data name="LibraryPath" xml:space="preserve"><value>Macro path</value></data>
+  <data name="LibraryPathHelp" xml:space="preserve"><value>Database &gt; folder &gt; macro. Press Enter to jump the library to that file or folder.</value></data>
+  <data name="LibraryPathNotFound" xml:space="preserve"><value>Could not find that database path.</value></data>
+  <data name="ListeningColorSampleConflict" xml:space="preserve"><value>These macros use the color-sample hotkey and were not started: {0}</value></data>
 </root>

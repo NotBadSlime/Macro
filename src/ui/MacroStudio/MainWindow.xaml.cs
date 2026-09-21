@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private readonly SendInputMacroSink inputSink = new();
     private readonly ActionTemplateInsertGate actionTemplateInsertGate = new();
     private readonly DispatcherTimer autoSaveTimer;
+    private readonly ColorSampleOverlayWindow colorSampleOverlay = new();
     private RuntimePrecisionSettings runtimePrecisionSettings = RuntimePrecisionSettingsStore.Load();
 
     private GlobalKeyboardHook? keyboardHook;
@@ -42,6 +43,7 @@ public partial class MainWindow : Window
     private bool listening;
     private bool listeningPaused;
     private bool pauseOwnedByCapture;
+    private bool coreHotkeysSuspended;
     private readonly List<string> pausedListeningIds = [];
     private bool updatingLanguageComboBox;
     private bool updatingWorkspaceMenu;
@@ -85,6 +87,7 @@ public partial class MainWindow : Window
         InitializeWorkspacePanels();
         ApplyLocalization();
         InitializeMacroLibrary();
+        RefreshKeyboardHook();
         StateChanged += (_, _) => RefreshWindowChromeButtons();
         RefreshWindowChromeButtons();
     }
@@ -116,6 +119,8 @@ public partial class MainWindow : Window
         LibraryPanel.StopListeningAllRequested += OnStopListeningAll;
         LibraryPanel.PrecisionSettingsEdited += OnPrecisionSettingsEdited;
         LibraryPanel.LibraryStructureEdited += OnLibraryStructureEdited;
+        LibraryPanel.ColorSampleCaptureStarted += PauseListeningForCapture;
+        LibraryPanel.ColorSampleCaptureFinished += ResumeListeningAfterCapture;
 
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
         SequencePanelControl.RunNowRequested += OnRunNow;
@@ -133,6 +138,7 @@ public partial class MainWindow : Window
         SequencePanelControl.EditLockChanged += OnEditLockChanged;
         SequencePanelControl.OpenReferencedMacroRequested += OnOpenReferencedMacroRequested;
         SequencePanelControl.ReturnPreviousMacroRequested += OnReturnPreviousMacroRequested;
+        SequencePanelControl.LibraryPathNavigateRequested += OnLibraryPathNavigate;
 
         JsonPanel.EditorTextChanged += OnJsonPanelEditorTextChanged;
         JsonPanel.ApplyJsonRequested += OnApplyJsonRequested;
@@ -958,6 +964,7 @@ public partial class MainWindow : Window
         else
         {
             SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
+            SequencePanelControl.SetLibraryPath(string.Empty);
             SequencePanelControl.ClearUndoHistory();
             RefreshConditionStepChoices();
             ApplyEditLock(false);
@@ -981,6 +988,7 @@ public partial class MainWindow : Window
             CheckAndWarnConflicts(document);
             var item = libraryStore.Load().Items.FirstOrDefault(candidate => string.Equals(candidate.Id, id, StringComparison.OrdinalIgnoreCase));
             ApplyEditLock(item?.IsLocked == true);
+            SetLibraryPathForItem(item, document.Name);
             SetStatus(document.Name);
             SequencePanelControl.FocusMacroNameEditor();
         }
@@ -1182,7 +1190,16 @@ public partial class MainWindow : Window
             runtimePrecisionSettings = ReadRuntimePrecisionSettingsFromPanel();
             RuntimePrecisionSettingsStore.Save(runtimePrecisionSettings);
             WarmUpRuntimePrecision();
-            RestartListeningWithCurrentSettings();
+            if (listening)
+            {
+                RestartListeningWithCurrentSettings();
+            }
+            else
+            {
+                RefreshKeyboardHook();
+            }
+
+            WarnColorSampleConflicts();
         }
         catch (Exception ex)
         {
@@ -1194,7 +1211,7 @@ public partial class MainWindow : Window
     {
         var precision = LibraryPanel.GetSelectedPrecisionMode();
         var affinityMask = PlaybackAffinityMask.NormalizeOrThrow(LibraryPanel.AffinityMaskText);
-        return new RuntimePrecisionSettings(precision, affinityMask);
+        return new RuntimePrecisionSettings(precision, affinityMask, LibraryPanel.ColorSampleHotkeyText);
     }
 
     private void WarmUpRuntimePrecision()
@@ -1216,8 +1233,7 @@ public partial class MainWindow : Window
         if (activeIds.Count == 0)
         {
             listening = false;
-            keyboardHook?.Dispose();
-            keyboardHook = null;
+            RefreshKeyboardHook();
             RefreshLibraryListeningState();
             return;
         }
@@ -1228,8 +1244,7 @@ public partial class MainWindow : Window
         if (candidates.Count == 0)
         {
             listening = false;
-            keyboardHook?.Dispose();
-            keyboardHook = null;
+            RefreshKeyboardHook();
             RefreshLibraryListeningState();
             return;
         }
@@ -1729,8 +1744,6 @@ public partial class MainWindow : Window
     private void OnStopListeningAll()
     {
         listening = false;
-        keyboardHook?.Dispose();
-        keyboardHook = null;
         StopListeningControllers();
         playbackController?.Stop();
         if (listeningPaused)
@@ -1738,6 +1751,7 @@ public partial class MainWindow : Window
             pausedListeningIds.Clear();
         }
 
+        RefreshKeyboardHook();
         RefreshLibraryListeningState();
         PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusIdle"));
         PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
@@ -1763,9 +1777,8 @@ public partial class MainWindow : Window
             pausedListeningIds.AddRange(listeningControllers.Keys);
             OnStopPlayback();
             listening = false;
-            keyboardHook?.Dispose();
-            keyboardHook = null;
             StopListeningControllers();
+            RefreshKeyboardHook();
             RefreshLibraryListeningState();
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusIdle"));
             PlaybackPanelControl.SetPlaybackResult(L("HotkeyListenerStopped"));
@@ -1785,11 +1798,13 @@ public partial class MainWindow : Window
     {
         listeningPaused = false;
         pauseOwnedByCapture = false;
+        coreHotkeysSuspended = false;
         UpdatePauseListeningButton();
         var ids = pausedListeningIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         pausedListeningIds.Clear();
         if (ids.Count == 0)
         {
+            RefreshKeyboardHook();
             SetStatus(L("Idle"));
             return;
         }
@@ -1801,6 +1816,7 @@ public partial class MainWindow : Window
                 .ToList();
             if (candidates.Count == 0)
             {
+                RefreshKeyboardHook();
                 SetStatus(L("Idle"));
                 return;
             }
@@ -1817,8 +1833,10 @@ public partial class MainWindow : Window
 
     private void PauseListeningForCapture()
     {
+        coreHotkeysSuspended = true;
         if (listeningPaused)
         {
+            RefreshKeyboardHook();
             return;
         }
 
@@ -1828,8 +1846,10 @@ public partial class MainWindow : Window
 
     private void ResumeListeningAfterCapture()
     {
+        coreHotkeysSuspended = false;
         if (!listeningPaused || !pauseOwnedByCapture)
         {
+            RefreshKeyboardHook();
             return;
         }
 
@@ -1897,14 +1917,23 @@ public partial class MainWindow : Window
         IReadOnlyList<ListeningCandidate> candidates,
         IReadOnlyCollection<string>? preferredIds = null)
     {
+        var colorSample = runtimePrecisionSettings.ColorSampleGesture;
+        var skipped = candidates
+            .Where(candidate => CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
+            .Select(candidate => candidate.Document.Name)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        var eligible = candidates
+            .Where(candidate => !CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
+            .ToList();
+
         var resolved = ListeningTriggerResolver.Resolve(
-            candidates,
+            eligible,
             candidate => candidate.Item.Id,
             (left, right) => string.Equals(left.Trigger.ToString(), right.Trigger.ToString(), StringComparison.OrdinalIgnoreCase)
                 && ProcessFiltersOverlap(left, right),
             preferredIds);
 
-        var bindings = new List<HotkeyBinding>();
         var controllers = new Dictionary<string, MacroPlaybackController>(StringComparer.OrdinalIgnoreCase);
         var macroNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var groupProcessFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1912,7 +1941,6 @@ public partial class MainWindow : Window
         {
             var item = candidate.Item;
             var document = candidate.Document;
-            bindings.Add(new HotkeyBinding(item.Id, candidate.Trigger));
             var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
             var options = CreatePlaybackOptions(document);
             executor.Prepare(document, options);
@@ -1921,18 +1949,14 @@ public partial class MainWindow : Window
             groupProcessFilters[item.Id] = candidate.GroupProcessFilter;
         }
 
-        if (bindings.Count == 0)
-            throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
+        if (controllers.Count == 0)
+            throw new InvalidOperationException(
+                skipped.Count > 0
+                    ? LocalizationService.Format("ListeningColorSampleConflict", string.Join("、", skipped))
+                    : L("ChooseTriggerBeforeListening"));
 
-        keyboardHook?.Dispose();
-        keyboardHook = null;
         StopListeningControllers();
         listening = false;
-
-        keyboardHook = new GlobalKeyboardHook();
-        keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
-        keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
-        keyboardHook.Start(bindings);
 
         foreach (var (id, controller) in controllers)
         {
@@ -1951,8 +1975,14 @@ public partial class MainWindow : Window
 
         playbackController = null;
         listening = true;
+        RefreshKeyboardHook();
         RefreshLibraryListeningState();
-        return bindings.Count;
+        if (skipped.Count > 0)
+        {
+            SetStatus(LocalizationService.Format("ListeningColorSampleConflict", string.Join("、", skipped)));
+        }
+
+        return controllers.Count;
     }
 
     private void StopListeningControllers()
@@ -1989,36 +2019,50 @@ public partial class MainWindow : Window
 
     private void RestartKeyboardHookFromListeningControllers()
     {
+        listening = listeningControllers.Count > 0;
+        RefreshKeyboardHook();
+    }
+
+    private void RefreshKeyboardHook()
+    {
         keyboardHook?.Dispose();
         keyboardHook = null;
 
-        var activeIds = listeningControllers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (activeIds.Count == 0)
+        var bindings = new List<HotkeyBinding>();
+        if (!coreHotkeysSuspended && macroRecorder is null)
         {
-            listening = false;
-            return;
+            bindings.Add(new HotkeyBinding(CoreHotkeys.ColorSampleId, runtimePrecisionSettings.ColorSampleGesture));
         }
 
-        var candidates = BuildListeningCandidates()
-            .Where(candidate => activeIds.Contains(candidate.Item.Id))
-            .ToList();
-        var candidateIds = candidates.Select(candidate => candidate.Item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var id in activeIds.Where(id => !candidateIds.Contains(id)).ToList())
+        if (listeningControllers.Count > 0)
         {
-            StopListeningController(id);
+            var activeIds = listeningControllers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var candidates = BuildListeningCandidates()
+                .Where(candidate => activeIds.Contains(candidate.Item.Id))
+                .ToList();
+            var colorSample = runtimePrecisionSettings.ColorSampleGesture;
+            foreach (var candidate in candidates)
+            {
+                if (CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
+                {
+                    StopListeningController(candidate.Item.Id);
+                    continue;
+                }
+
+                bindings.Add(new HotkeyBinding(candidate.Item.Id, candidate.Trigger));
+            }
         }
 
-        if (candidates.Count == 0)
+        listening = listeningControllers.Count > 0;
+        if (bindings.Count == 0)
         {
-            listening = false;
             return;
         }
 
         keyboardHook = new GlobalKeyboardHook();
         keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
         keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
-        keyboardHook.Start(candidates.Select(candidate => new HotkeyBinding(candidate.Item.Id, candidate.Trigger)));
-        listening = true;
+        keyboardHook.Start(bindings);
     }
 
     private List<ListeningCandidate> BuildListeningCandidates()
@@ -2136,6 +2180,15 @@ public partial class MainWindow : Window
             conflictIds.Add(right.Item.Id);
         }
 
+        var colorSample = runtimePrecisionSettings.ColorSampleGesture;
+        foreach (var candidate in candidates)
+        {
+            if (CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
+            {
+                conflictIds.Add(candidate.Item.Id);
+            }
+        }
+
         var states = new Dictionary<string, MacroLibraryListenState>(StringComparer.OrdinalIgnoreCase);
         foreach (var candidate in candidates)
         {
@@ -2165,6 +2218,83 @@ public partial class MainWindow : Window
             .Take(8)
             .Select(pair => $"{pair.Left.Document.Name} / {pair.Right.Document.Name}: {pair.Left.Trigger}");
         return $"{LocalizationService.Get("ListeningConflict")}\n{string.Join("\n", lines)}";
+    }
+
+    private void CopyColorSample()
+    {
+        if (!GetCursorPos(out var point) || !Controls.ScreenPixelSampler.TryReadPixel(point.x, point.y, out var color))
+        {
+            return;
+        }
+
+        var text = ColorSampleText.Format(point.x, point.y, color);
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch
+        {
+            return;
+        }
+
+        colorSampleOverlay.ShowSample(text);
+        SetStatus($"{L("ColorSampleCopied")}  {text}");
+    }
+
+    private void WarnColorSampleConflicts()
+    {
+        var colorSample = runtimePrecisionSettings.ColorSampleGesture;
+        var names = BuildListeningCandidates()
+            .Where(candidate => CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
+            .Select(candidate => candidate.Document.Name)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        if (names.Count == 0)
+        {
+            return;
+        }
+
+        SetStatus(LocalizationService.Format("ListeningColorSampleConflict", string.Join("、", names)));
+        RefreshLibraryListeningState();
+    }
+
+    private void SetLibraryPathForItem(MacroLibraryItem? item, string fallbackName)
+    {
+        if (item is null)
+        {
+            SequencePanelControl.SetLibraryPath(fallbackName);
+            return;
+        }
+
+        var groupName = libraryStore.Load().Groups
+            .FirstOrDefault(group => string.Equals(group.Id, item.GroupId, StringComparison.OrdinalIgnoreCase))
+            ?.Name ?? item.GroupId;
+        SequencePanelControl.SetLibraryPath(MacroLibraryPath.Format(groupName, item.Folder, item.Name));
+    }
+
+    private void OnLibraryPathNavigate(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        if (!LibraryPanel.TryReveal(path, out var item))
+        {
+            SetStatus(L("LibraryPathNotFound"));
+            return;
+        }
+
+        if (item is not null && !item.IsConditionMacro)
+        {
+            if (!string.Equals(item.Id, activeEditorMacroId, StringComparison.OrdinalIgnoreCase))
+            {
+                OnMacroSelected(item.Id);
+                return;
+            }
+        }
+
+        SetStatus(path);
     }
 
     private async void OnRunNow()
@@ -2274,6 +2404,7 @@ public partial class MainWindow : Window
             OnStopPlayback();
 
             // Recording input must not also activate macros that are listening.
+            coreHotkeysSuspended = true;
             keyboardHook?.Dispose();
             keyboardHook = null;
 
@@ -2397,6 +2528,7 @@ public partial class MainWindow : Window
     {
         try
         {
+            coreHotkeysSuspended = false;
             RestartKeyboardHookFromListeningControllers();
         }
         catch (Exception ex)
@@ -2541,6 +2673,12 @@ public partial class MainWindow : Window
     {
         _ = Dispatcher.InvokeAsync(async () =>
         {
+            if (string.Equals(e.Id, CoreHotkeys.ColorSampleId, StringComparison.OrdinalIgnoreCase))
+            {
+                CopyColorSample();
+                return;
+            }
+
             if (!listeningControllers.TryGetValue(e.Id, out var controller)) return;
             var foregroundProcess = ForegroundProcessService.GetForegroundProcessName();
             var groupProcessFilter = listeningGroupProcessFilters.TryGetValue(e.Id, out var groupFilter)
@@ -2882,6 +3020,7 @@ public partial class MainWindow : Window
         windowSource?.RemoveHook(WindowProcedure);
         windowSource = null;
         keyboardHook?.Dispose();
+        colorSampleOverlay.Close();
         DisposeMacroRecorder();
         StopListeningControllers();
         playbackController?.Stop();
@@ -3125,6 +3264,9 @@ public partial class MainWindow : Window
 
     private const int WM_GETMINMAXINFO = 0x0024;
     private const int MONITOR_DEFAULTTONEAREST = 2;
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT lpPoint);
 
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int dwFlags);

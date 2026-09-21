@@ -29,7 +29,7 @@ artifacts\installer\MacroHID-Portable-x64.zip
 - `MacroHid.NativePlayback.dll`：极限模式的用户态 x64 native 播放引擎，随 MacroStudio/MacroRunner/LatencyProbe 一起安装。
 - `samples`：示例 `.mcrx` 宏。
 - `docs`：安装、使用、精度、架构和格式说明。
-- 内置宏转换库：MacroHID、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro、GIMacros JSON。
+- 内置宏转换库：MacroHID、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro、GIMacros JSON、耕地机。
 
 ### 本机开发验证
 
@@ -131,7 +131,7 @@ The setup package includes:
 - `MacroHid.NativePlayback.dll`: the user-mode x64 native playback engine for Extreme mode, installed alongside MacroStudio, MacroRunner, and LatencyProbe.
 - `samples`: sample `.mcrx` macros.
 - `docs`: installation, usage, precision, architecture, and format documentation.
-- Built-in conversion libraries for MacroHID, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, and GIMacros JSON.
+- Built-in conversion libraries for MacroHID, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, GIMacros JSON, and GengDiJi.
 
 ### Local Development Run
 

@@ -18,7 +18,8 @@ public static class MacroConversionService
         new(MacroConversionFormat.Lua, "Lua / Logitech Lua", ".lua", "Lua macro (*.lua)|*.lua", true, true),
         new(MacroConversionFormat.XMouse, "XMouse", ".xmbcs", "XMouse profile (*.xmbcs;*.xml)|*.xmbcs;*.xml", true, true),
         new(MacroConversionFormat.QMacro, "QMacro / 按键精灵", ".mq", "QMacro script (*.mq;*.txt)|*.mq;*.txt", true, true),
-        new(MacroConversionFormat.GIMacrosJson, "GIMacros JSON", ".json", "GIMacros JSON (*.json)|*.json", true, true)
+        new(MacroConversionFormat.GIMacrosJson, "GIMacros JSON", ".json", "GIMacros JSON (*.json)|*.json", true, true),
+        new(MacroConversionFormat.GengDiJi, "耕地机", ".txt", "耕地机脚本 (*.txt)|*.txt", true, true)
     ];
 
     public static IReadOnlyList<MacroFormatInfo> GetFormats()
@@ -62,6 +63,12 @@ public static class MacroConversionService
             && Regex.IsMatch(content, "<MacroEvents>", RegexOptions.IgnoreCase))
         {
             return MacroConversionFormat.RazerSynapseXml;
+        }
+
+        if (GengDiJiScript.LooksLike(content)
+            || (extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) && GengDiJiScript.LooksLike(content)))
+        {
+            return MacroConversionFormat.GengDiJi;
         }
 
         if (Regex.IsMatch(content, "\\b(macro\\.(begin|move|click|wait|key|text|loop)|PressMouseButton|ReleaseMouseButton|Sleep|PressAndReleaseKey|OnEvent)\\b", RegexOptions.IgnoreCase)
@@ -147,6 +154,7 @@ public static class MacroConversionService
                 MacroConversionFormat.XMouse => ImportXMouse(request.Content, diagnostics),
                 MacroConversionFormat.QMacro => ImportQMacro(request.Content, diagnostics),
                 MacroConversionFormat.GIMacrosJson => ImportGIMacrosJson(request.Content, request.FileName, request.AuxiliaryFiles ?? [], diagnostics),
+                MacroConversionFormat.GengDiJi => GengDiJiScript.Import(request.Content, request.FileName, diagnostics),
                 _ => throw new NotSupportedException($"Unsupported import format '{format}'.")
             };
 
@@ -335,6 +343,7 @@ public static class MacroConversionService
             MacroConversionFormat.XMouse => ExportXMouse(document, diagnostics),
             MacroConversionFormat.QMacro => ExportQMacro(document, diagnostics),
             MacroConversionFormat.GIMacrosJson => ExportGIMacrosJson(document, diagnostics),
+            MacroConversionFormat.GengDiJi => GengDiJiScript.Export(document, diagnostics),
             _ => throw new NotSupportedException($"Unsupported export format '{targetFormat}'.")
         };
 
@@ -2094,6 +2103,9 @@ public static class MacroConversionService
         };
         return modifier != HidModifier.None;
     }
+
+    internal static bool TryParseGengDiJiKey(string value, out HidKey key) =>
+        TryParseKey(value, out key, out _);
 
     private static bool TryParseKey(string value, out HidKey key, out HidModifier modifiers)
     {

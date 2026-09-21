@@ -288,6 +288,11 @@ public sealed class GlobalKeyboardHook : IDisposable
                 {
                     HandleKeyUp(data.VirtualKeyCode, data.ScanCode, (data.Flags & LlkHfExtended) != 0);
                 }
+
+                if (ShouldSwallowColorSampleKey(data.VirtualKeyCode, data.ScanCode, (data.Flags & LlkHfExtended) != 0))
+                {
+                    return new IntPtr(1);
+                }
             }
         }
 
@@ -387,6 +392,21 @@ public sealed class GlobalKeyboardHook : IDisposable
             triggersDown.Remove(id);
             TriggerReleased?.Invoke(this, new HotkeyTriggeredEventArgs(id, currentGesture));
         }
+    }
+
+    private bool ShouldSwallowColorSampleKey(int virtualKey, int scanCode, bool isExtended)
+    {
+        if (!gestures.TryGetValue(CoreHotkeys.ColorSampleId, out var gesture))
+        {
+            return false;
+        }
+
+        if (!TryMapVirtualKeyToHidKey(virtualKey, scanCode, isExtended, out var hidKey))
+        {
+            return false;
+        }
+
+        return gesture.Keys.Contains(hidKey);
     }
 
     private bool GestureIsDown(HotkeyGesture trigger)

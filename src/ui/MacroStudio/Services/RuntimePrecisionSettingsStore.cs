@@ -8,9 +8,12 @@ namespace MacroStudio.Services;
 
 public sealed record RuntimePrecisionSettings(
     PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback,
-    string AffinityMask = "")
+    string AffinityMask = "",
+    string ColorSampleHotkey = "")
 {
-    public static RuntimePrecisionSettings Default { get; } = new();
+    public static RuntimePrecisionSettings Default { get; } = new(ColorSampleHotkey: CoreHotkeys.DefaultColorSampleText);
+
+    public HotkeyGesture ColorSampleGesture => CoreHotkeys.ParseOrDefault(ColorSampleHotkey);
 }
 
 public static class RuntimePrecisionSettingsStore
@@ -58,7 +61,11 @@ public static class RuntimePrecisionSettingsStore
     private static RuntimePrecisionSettings Normalize(RuntimePrecisionSettings settings)
     {
         var affinityMask = PlaybackAffinityMask.NormalizeOrThrow(settings.AffinityMask);
-        return settings with { AffinityMask = affinityMask };
+        return settings with
+        {
+            AffinityMask = affinityMask,
+            ColorSampleHotkey = CoreHotkeys.NormalizeText(settings.ColorSampleHotkey)
+        };
     }
 
     private static string GetSettingsPath()

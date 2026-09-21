@@ -109,7 +109,7 @@
 - 按下后循环：按一次开始循环，再按一次停止。
 - 按住后循环：按住触发键时循环，松开停止。
 
-触发键支持单键、组合键、Ctrl、Alt、Shift、Win、F1–F24、完整数字小键盘（`Numpad0`–`Numpad9`、`NumpadDivide/Multiply/Minus/Plus/Decimal/Enter`）、主键盘符号键（`Minus/Equal/LeftBracket/RightBracket/Backslash/Semicolon/Quote/Grave/Comma/Period/Slash`）以及标准鼠标 1–5 键（左、右、中、X1、X2）。数字小键盘在 Num Lock 开启或关闭时都按物理小键盘键识别。进程筛选可指定前台窗口进程名，例如 `YuanShen.exe`；只有当前前台进程匹配时该宏才会触发。标题栏的“暂停监听”会停止全部触发键监听，但不会清除已保存的热键。捕获触发键或步骤按键时会自动暂停监听；点击“恢复监听”后，会恢复到暂停前的监听集合。
+触发键支持单键、组合键、Ctrl、Alt、Shift、Win、F1–F24、完整数字小键盘（`Numpad0`–`Numpad9`、`NumpadDivide/Multiply/Minus/Plus/Decimal/Enter`）、主键盘符号键（`Minus/Equal/LeftBracket/RightBracket/Backslash/Semicolon/Quote/Grave/Comma/Period/Slash`）以及标准鼠标 1–5 键（左、右、中、X1、X2）。数字小键盘在 Num Lock 开启或关闭时都按物理小键盘键识别。进程筛选可指定前台窗口进程名，例如 `YuanShen.exe`；只有当前前台进程匹配时该宏才会触发。标题栏的“暂停监听”会停止宏触发键监听，但不会清除已保存的热键，也不会关掉「全局运行」里的取色快捷键。捕获触发键、步骤按键或取色快捷键时会暂时停掉全部全局热键；点击“恢复监听”后，会恢复到暂停前的监听集合。取色默认 `UpArrow`，会复制坐标和 `#RRGGBB` 并短暂显示；与宏触发键冲突时会提示并跳过该宏。序列顶部的宏路径（`数据库 > 文件夹 > 宏名`）回车后会让宏数据库跳到对应位置。
 
 Windows 标准鼠标消息只定义到 Mouse1–Mouse5。游戏鼠标的第 6 个及以后按钮通常由厂商驱动映射成键盘键；建议在鼠标软件中映射为 F13–F24，再直接捕获为宏触发键。
 
@@ -123,7 +123,7 @@ MCRX JSON 面板显示当前宏的原始 JSON。修改 JSON 后，合法内容�
 
 宏数据库中提供导入/导出：
 
-- 导入：`.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro、GIMacros JSON；文件选择器支持多选批量导入。对 `.mcrx` 主宏+子宏会一起导入并重映射 `macro.call` 引用。对于雷云 XML，可同时选择主宏和子宏；程序也会搜索同目录文件，自动识别 GUID 引用、先导入子宏，再在主宏中保留嵌套“调用宏”动作。
+- 导入：`.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro、GIMacros JSON、耕地机 `.txt`；文件选择器支持多选批量导入。耕地机脚本按命名 `{ }` 路段导入为一条宏（路段名写成注释），坐标 0–65535 映射到当前虚拟桌面；`map`/`book` 分别为 M / F1，`tpc` 展开为选点点击加常见确认点（约 `54231,60979`）。与按键精灵 `.txt` 冲突时，识别到耕地机函数则优先按耕地机导入。对 `.mcrx` 主宏+子宏会一起导入并重映射 `macro.call` 引用。对于雷云 XML，可同时选择主宏和子宏；程序也会搜索同目录文件，自动识别 GUID 引用、先导入子宏，再在主宏中保留嵌套“调用宏”动作。
 - 导出：点击导出打开向导选择格式；默认推荐 `MacroHID MCRX`。可多选宏后导出到同一目录（夹外依赖会写入「依赖子宏」）。导出宏文件夹时可选择两个子文件夹或 ZIP，自动打包文件夹内宏与依赖子宏；分享请带上「宏文件夹 + 依赖子宏」。
 
 导入失败时会弹出错误详情，包含文件名、解析失败的行号/列号、具体原因和对应原文；批量导入会继续处理其他文件并汇总所有失败项。
@@ -252,7 +252,7 @@ The MCRX JSON panel shows the current macro document. Valid edits update the bas
 
 Import/export lives in the macro library:
 
-- Import: `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, and GIMacros JSON. The file picker supports multi-select batch import. For `.mcrx` main/submacro sets, MacroStudio imports them together and remaps `macro.call` references. For Razer XML, select the main macro and submacros together—or keep them in the same folder—and MacroStudio automatically resolves GUID references, imports submacros first, and preserves nested macro-call actions in the main macro.
+- Import: `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, GIMacros JSON, and GengDiJi `.txt` scripts. GengDiJi named `{ }` route blocks become one macro with comment labels; 0–65535 coordinates map to the virtual desktop, and `tpc` expands to a waypoint click plus a common confirm click. The file picker supports multi-select batch import. For `.mcrx` main/submacro sets, MacroStudio imports them together and remaps `macro.call` references. For Razer XML, select the main macro and submacros together—or keep them in the same folder—and MacroStudio automatically resolves GUID references, imports submacros first, and preserves nested macro-call actions in the main macro.
 - Export: open the export wizard to choose a format; prefer `MacroHID MCRX`. Multi-select macros to export them into the same folder (out-of-folder dependencies land under Dependencies). Folder export can write two subfolders or a ZIP and automatically packs macros plus dependencies—share the folder together with its Dependencies package.
 
 An import failure opens detailed diagnostics with the file name, failed line/column, reason, and source line. Batch import continues with the remaining files and summarizes every failure.

@@ -11,7 +11,8 @@ public enum MacroConversionFormat
     Lua,
     XMouse,
     QMacro,
-    GIMacrosJson
+    GIMacrosJson,
+    GengDiJi
 }
 
 public enum MacroDiagnosticSeverity
