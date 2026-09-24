@@ -126,11 +126,40 @@
                            Foreground="{DynamicResource SecondaryText}"
                            Text="数量" />
                 <TextBox x:Name="AutoSelectCountBox"
-                         Width="48"
-                         Height="30"
+                         Width="56"
+                         Height="34"
                          Margin="8,0,0,0"
+                         Padding="0"
+                         VerticalAlignment="Center"
+                         HorizontalContentAlignment="Center"
                          VerticalContentAlignment="Center"
-                         Text="2" />
+                         TextAlignment="Center"
+                         Text="2">
+                    <TextBox.Template>
+                        <ControlTemplate TargetType="TextBox">
+                            <Border x:Name="Bd"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="11"
+                                    SnapsToDevicePixels="True">
+                                <ScrollViewer x:Name="PART_ContentHost"
+                                              Margin="6,0"
+                                              Focusable="False"
+                                              HorizontalScrollBarVisibility="Hidden"
+                                              VerticalScrollBarVisibility="Disabled" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.45" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </TextBox.Template>
+                </TextBox>
                 <Button x:Name="AutoSelectButton"
                         MinWidth="96"
                         Margin="8,0,0,0"
