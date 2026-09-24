@@ -2,6 +2,8 @@ using MacroHid.Core;
 
 namespace MacroHid.Runtime;
 
+public readonly record struct CoreSample(int ProcessorNumber, long MaxLateUs);
+
 public readonly record struct CoreMeasureResult(
     bool Measured,
     int PrimaryProcessor,
@@ -9,6 +11,8 @@ public readonly record struct CoreMeasureResult(
     long PrimaryMaxLateUs,
     long SecondaryMaxLateUs)
 {
+    public IReadOnlyList<CoreSample> Samples { get; init; } = [];
+
     internal static CoreMeasureResult From(MhpRunStats stats, bool statusOk)
     {
         var primary = ToProcessor(stats.SelectedWorker0);
@@ -72,6 +76,11 @@ public static class NativePlaybackWarmup
 
     public static CoreMeasureResult MeasureCheckedCores(string? affinityMask)
     {
+        return MeasureCheckedCores(affinityMask, null);
+    }
+
+    public static CoreMeasureResult MeasureCheckedCores(string? affinityMask, Action<int, int, int, long>? progress)
+    {
         var normalizedMask = PlaybackAffinityMask.NormalizeOrThrow(affinityMask);
         if (string.IsNullOrWhiteSpace(normalizedMask) || !OperatingSystem.IsWindows())
         {
@@ -82,18 +91,39 @@ public static class NativePlaybackWarmup
         {
             using var affinityScope = ProcessAffinityScope.TryEnter(normalizedMask);
             Shutdown();
+            var samples = ScanCores(progress);
             var measured = TryWarmUp(scanCpu: true, out var stats);
             if (measured)
             {
                 warmedAffinityMask = normalizedMask;
             }
 
-            return CoreMeasureResult.From(stats, measured);
+            return CoreMeasureResult.From(stats, measured) with
+            {
+                Samples = samples
+            };
         }
         catch
         {
             return default;
         }
+    }
+
+    private static IReadOnlyList<CoreSample> ScanCores(Action<int, int, int, long>? progress)
+    {
+        NativePlaybackInterop.CoreProgressCallback? callback = progress is null
+            ? null
+            : (processor, completed, total, maxLate) => progress(unchecked((int)processor), completed, total, maxLate);
+        var buffer = new MhpCoreSample[64];
+        NativePlaybackInterop.MhpScanCores(buffer, (uint)buffer.Length, out var written, callback);
+        var count = Math.Min(written, (uint)buffer.Length);
+        var samples = new List<CoreSample>((int)count);
+        for (var index = 0; index < count; index++)
+        {
+            samples.Add(new CoreSample(unchecked((int)buffer[index].ProcessorNumber), buffer[index].MaxLateUs));
+        }
+
+        return samples;
     }
 
     private static bool TryWarmUp(bool scanCpu, out MhpRunStats stats)

@@ -109,9 +109,23 @@ extern "C"
         int64_t selectedWorker1MaxLateUs;
     };
 
+    struct MhpCoreSample
+    {
+        uint32_t processorNumber;
+        int64_t maxLateUs;
+    };
+
+    typedef void (__cdecl *MhpCoreProgressFn)(uint32_t processorNumber, int32_t completed, int32_t total, int64_t maxLateUs);
+
     __declspec(dllexport) MhpStatus __cdecl MhpWarmEngine(
         const MhpRunOptions* options,
         MhpRunStats* stats);
+
+    __declspec(dllexport) MhpStatus __cdecl MhpScanCores(
+        MhpCoreSample* samples,
+        uint32_t capacity,
+        uint32_t* written,
+        MhpCoreProgressFn progress);
 
     __declspec(dllexport) void __cdecl MhpShutdownEngine();
 

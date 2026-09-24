@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.4.1",
+    [string]$Version = "1.5.0",
 
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
@@ -74,15 +74,15 @@ function Remove-InstallerDebugArtifacts([string]$Root) {
         Remove-Item -Force
 }
 
-function New-PortableRootShortcut([string]$ShortcutPath, [string]$ScriptFileName, [string]$IconRelativePath, [string]$Description) {
+function New-PortableRootShortcut([string]$ShortcutPath, [string]$TargetPath, [string]$WorkingDirectory, [string]$Description) {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($ShortcutPath)
-    $shortcut.TargetPath = Join-Path $env:SystemRoot "System32\wscript.exe"
-    $shortcut.Arguments = "//B //nologo `"$ScriptFileName`""
-    $shortcut.WorkingDirectory = ""
+    $shortcut.TargetPath = $TargetPath
+    $shortcut.Arguments = ""
+    $shortcut.WorkingDirectory = $WorkingDirectory
     $shortcut.WindowStyle = 1
     $shortcut.Description = $Description
-    $shortcut.IconLocation = "$IconRelativePath,0"
+    $shortcut.IconLocation = "$TargetPath,0"
     $shortcut.Save()
 }
 
@@ -124,8 +124,8 @@ start "" "%ROOT%MacroStudio\MacroStudio.exe"
 
     New-PortableRootShortcut `
         -ShortcutPath (Join-Path $AppRoot "MacroStudio.lnk") `
-        -ScriptFileName "MacroStudio.vbs" `
-        -IconRelativePath "MacroStudio\MacroStudio.exe" `
+        -TargetPath (Join-Path $AppRoot "MacroStudio\MacroStudio.exe") `
+        -WorkingDirectory (Join-Path $AppRoot "MacroStudio") `
         -Description "MacroStudio"
 
     $missing = @(

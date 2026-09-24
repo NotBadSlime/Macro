@@ -626,7 +626,7 @@ namespace
         return choice;
     }
 
-    std::vector<CoreChoice> ScanEligibleCores(bool enableCpuScan)
+    std::vector<CoreChoice> ScanEligibleCores(bool enableCpuScan, MhpCoreProgressFn progress = nullptr, bool force = false)
     {
         static std::mutex cacheMutex;
         static std::vector<CoreChoice> cachedChoices;
@@ -643,14 +643,36 @@ namespace
             return {};
         }
 
+        std::vector<CoreChoice> cachedSnapshot;
+        bool useCache = false;
         {
             std::lock_guard<std::mutex> guard(cacheMutex);
-            if (cacheValid
+            if (!force
+                && cacheValid
                 && cachedProcessMask == processMask
                 && (!enableCpuScan || cacheMeasuredWithJitter || PlaybackIsActive()))
             {
-                return cachedChoices;
+                cachedSnapshot = cachedChoices;
+                useCache = true;
             }
+        }
+
+        if (useCache)
+        {
+            if (progress != nullptr && enableCpuScan && !PlaybackIsActive())
+            {
+                const int total = static_cast<int>(cachedSnapshot.size());
+                for (int index = 0; index < total; index++)
+                {
+                    progress(
+                        cachedSnapshot[static_cast<size_t>(index)].processorNumber,
+                        index + 1,
+                        total,
+                        cachedSnapshot[static_cast<size_t>(index)].maxLateUs);
+                }
+            }
+
+            return cachedSnapshot;
         }
 
         if (enableCpuScan && PlaybackIsActive())
@@ -672,6 +694,11 @@ namespace
             }
 
             const auto topology = LookupLogicalCore(bit);
+            if (progress != nullptr && enableCpuScan)
+            {
+                progress(bit, static_cast<int32_t>(logicalIndex + 1), static_cast<int32_t>(allowedProcessorCount), -1);
+            }
+
             const auto candidate = enableCpuScan
                 ? MeasureCandidateCore(
                     thread,
@@ -686,6 +713,14 @@ namespace
             if (candidate.mask != 0)
             {
                 choices.push_back(candidate);
+                if (progress != nullptr && enableCpuScan)
+                {
+                    progress(
+                        candidate.processorNumber,
+                        static_cast<int32_t>(logicalIndex + 1),
+                        static_cast<int32_t>(allowedProcessorCount),
+                        candidate.maxLateUs);
+                }
             }
 
             logicalIndex++;
@@ -2120,6 +2155,37 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpWarmEngine(
         : QueryFrequency();
     effectiveOptions.nativeEngineMode = MhpNativeEngineStandby;
     return g_standbyEngine.Warm(&effectiveOptions, stats);
+}
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpScanCores(
+    MhpCoreSample* samples,
+    uint32_t capacity,
+    uint32_t* written,
+    MhpCoreProgressFn progress)
+{
+    const auto choices = ScanEligibleCores(true, progress, true);
+    uint32_t count = 0;
+    if (samples != nullptr)
+    {
+        for (const auto& choice : choices)
+        {
+            if (count >= capacity)
+            {
+                break;
+            }
+
+            samples[count].processorNumber = choice.processorNumber;
+            samples[count].maxLateUs = choice.maxLateUs;
+            count++;
+        }
+    }
+
+    if (written != nullptr)
+    {
+        *written = count;
+    }
+
+    return MhpOk;
 }
 
 extern "C" __declspec(dllexport) void __cdecl MhpShutdownEngine()

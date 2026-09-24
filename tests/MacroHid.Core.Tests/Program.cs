@@ -133,7 +133,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 1.4.1", MacroHidReleaseVersionIsOneFourOne),
+    ("MacroHID release version is 1.5.0", MacroHidReleaseVersionIsOneFiveZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("MacroStudio uses launcher style soft workbench shell", MacroStudioUsesLauncherStyleSoftWorkbenchShell),
@@ -171,6 +171,7 @@ var tests = new (string Name, Action Body)[]
     ("Core selection measures a process once per appearance", CoreSelectionMeasuresAProcessOncePerAppearance),
     ("Core selection skips scanning while playback is active", CoreSelectionSkipsScanningWhilePlaybackIsActive),
     ("Core picker can test the checked cores before confirming", CorePickerCanTestCheckedCoresBeforeConfirming),
+    ("Core selection auto-picks the lowest latency distinct cores", CoreSelectionAutoPicksLowestLatencyDistinctCores),
     ("MacroStudio exposes core color sample hotkey and library path navigation", MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation),
     ("MacroStudio keeps precision as a global runtime setting", MacroStudioKeepsPrecisionAsGlobalRuntimeSetting),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
@@ -3479,23 +3480,23 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsOneFourOne()
+static void MacroHidReleaseVersionIsOneFiveZero()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.4.1.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.5.0.md"));
 
-    Assert.Contains("<Version>1.4.1</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>1.4.1.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>1.4.1.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>1.5.0</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>1.5.0.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>1.5.0.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"1.4.1\"", installer);
-    Assert.Contains("[string]$Version = \"1.4.1\"", installerBuild);
-    Assert.Contains("当前正式版是 **1.4.1**", readme);
-    Assert.Contains("MacroHID `1.4.1` 是当前正式版", releaseNotes);
-    Assert.Contains("Git tag：`v1.4.1`", releaseNotes);
+    Assert.Contains("#define AppVersion \"1.5.0\"", installer);
+    Assert.Contains("[string]$Version = \"1.5.0\"", installerBuild);
+    Assert.Contains("当前正式版是 **1.5.0**", readme);
+    Assert.Contains("MacroHID `1.5.0` 是当前正式版", releaseNotes);
+    Assert.Contains("Git tag：`v1.5.0`", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -4423,14 +4424,53 @@ static void CorePickerCanTestCheckedCoresBeforeConfirming()
     var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
 
     Assert.Contains("x:Name=\"TestButton\"", dialogXaml);
+    Assert.Contains("x:Name=\"SelectAllButton\"", dialogXaml);
+    Assert.Contains("x:Name=\"SelectNoneButton\"", dialogXaml);
+    Assert.Contains("Binding ResultText", dialogXaml);
     Assert.Contains("Click=\"TestButton_Click\"", dialogXaml);
     Assert.Contains("MeasureCheckedCores", dialogCode);
+    Assert.Contains("CoreSelectionTestingCore", dialogCode);
     Assert.Contains("measureBlocked?.Invoke() == true", dialogCode);
     Assert.Contains("CoreSelectionTestResult", dialogCode);
     Assert.Contains("public static CoreMeasureResult MeasureCheckedCores", warmup);
+    Assert.Contains("MhpScanCores", warmup);
     Assert.Contains("selectedWorker0MaxLateUs", native);
+    Assert.Contains("progress(bit,", native);
     Assert.Contains("name=\"CoreSelectionTest\"", english);
+    Assert.Contains("name=\"CoreSelectionSelectAll\"", english);
     Assert.Contains("<value>测试</value>", simplified);
+    Assert.Contains("<value>全选</value>", simplified);
+    Assert.Contains("x:Name=\"AutoSelectButton\"", dialogXaml);
+    Assert.Contains("x:Name=\"SortByResultButton\"", dialogXaml);
+    Assert.Contains("SelectByMeasuredLatency", dialogCode);
+}
+
+static void CoreSelectionAutoPicksLowestLatencyDistinctCores()
+{
+    (int ProcessorNumber, int PhysicalCoreId, long MaxLateUs)[] measured =
+    [
+        (0, 0, 0),
+        (1, 0, 1),
+        (4, 2, 8),
+        (5, 2, 0),
+        (8, 4, 2),
+        (9, 4, 3),
+    ];
+
+    var two = LogicalProcessorInventory.SelectByMeasuredLatency(measured, 2);
+    Assert.Equal(2, two.Count);
+    Assert.Equal(5, two[0]);
+    Assert.Equal(1, two[1]);
+
+    var four = LogicalProcessorInventory.SelectByMeasuredLatency(measured, 4);
+    Assert.Equal(4, four.Count);
+    Assert.Equal(5, four[0]);
+    Assert.Equal(1, four[1]);
+    Assert.Equal(8, four[2]);
+    Assert.Equal(0, four[3]);
+
+    Assert.Empty(LogicalProcessorInventory.SelectByMeasuredLatency(measured, 0));
+    Assert.Empty(LogicalProcessorInventory.SelectByMeasuredLatency([], 2));
 }
 
 static void MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation()

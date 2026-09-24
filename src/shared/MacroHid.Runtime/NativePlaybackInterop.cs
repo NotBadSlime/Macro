@@ -103,14 +103,31 @@ internal struct NativeOutlierEvent
     public long LateUs;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct MhpCoreSample
+{
+    public uint ProcessorNumber;
+    public long MaxLateUs;
+}
+
 internal static partial class NativePlaybackInterop
 {
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void CoreProgressCallback(uint processorNumber, int completed, int total, long maxLateUs);
+
     private const string LibraryName = "MacroHid.NativePlayback.dll";
 
     [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl, SetLastError = true)]
     public static extern MhpStatus MhpWarmEngine(
         ref MhpRunOptions options,
         out MhpRunStats stats);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    public static extern MhpStatus MhpScanCores(
+        [Out] MhpCoreSample[] samples,
+        uint capacity,
+        out uint written,
+        NativePlaybackInterop.CoreProgressCallback? progress);
 
     [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
     public static extern void MhpShutdownEngine();

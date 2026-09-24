@@ -103,6 +103,43 @@ public static class LogicalProcessorInventory
         return selected;
     }
 
+    public static IReadOnlyList<int> SelectByMeasuredLatency(
+        IReadOnlyList<(int ProcessorNumber, int PhysicalCoreId, long MaxLateUs)> measured,
+        int count)
+    {
+        if (count <= 0 || measured.Count == 0)
+        {
+            return [];
+        }
+
+        var ordered = measured
+            .OrderBy(item => item.MaxLateUs)
+            .ThenBy(item => item.ProcessorNumber)
+            .ToArray();
+        var ranked = ordered
+            .Select(item => new LogicalProcessor(item.ProcessorNumber, item.PhysicalCoreId, 0))
+            .ToArray();
+        var selected = DistinctPhysicalWorkers(ranked, count).ToList();
+        if (selected.Count < count)
+        {
+            foreach (var item in ordered)
+            {
+                if (selected.Contains(item.ProcessorNumber))
+                {
+                    continue;
+                }
+
+                selected.Add(item.ProcessorNumber);
+                if (selected.Count == count)
+                {
+                    break;
+                }
+            }
+        }
+
+        return selected;
+    }
+
     private static List<LogicalProcessor> QueryWindowsCores()
     {
         var length = 0;

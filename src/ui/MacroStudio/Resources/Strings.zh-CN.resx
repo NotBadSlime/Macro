@@ -67,6 +67,21 @@
   <data name="CoreSelectionBusy" xml:space="preserve"><value>请先停止正在播放的宏，再选择核心。</value></data>
   <data name="CoreSelectionStarted" xml:space="preserve"><value>正在按勾选的核心测量并绑定。</value></data>
   <data name="CoreSelectionTest" xml:space="preserve"><value>测试</value></data>
+  <data name="CoreSelectionSelectAll" xml:space="preserve"><value>全选</value></data>
+  <data name="CoreSelectionSelectNone" xml:space="preserve"><value>全不选</value></data>
+  <data name="CoreResultHeader" xml:space="preserve"><value>结果</value></data>
+  <data name="CoreResultNone" xml:space="preserve"><value>—</value></data>
+  <data name="CoreResultPending" xml:space="preserve"><value>测试中</value></data>
+  <data name="CoreResultLate" xml:space="preserve"><value>最大 {0} µs</value></data>
+  <data name="CoreResultPlayback" xml:space="preserve"><value>最大 {0} µs · 播放</value></data>
+  <data name="CoreSelectionTestingCore" xml:space="preserve"><value>正在测试逻辑核 {0}（{1}/{2}）</value></data>
+  <data name="CoreSelectionSortByResult" xml:space="preserve"><value>按结果排序</value></data>
+  <data name="CoreSelectionAutoSelect" xml:space="preserve"><value>自动选择</value></data>
+  <data name="CoreSelectionCount" xml:space="preserve"><value>数量</value></data>
+  <data name="CoreSelectionNeedResults" xml:space="preserve"><value>请先测试，再按结果自动选择。</value></data>
+  <data name="CoreSelectionCountInvalid" xml:space="preserve"><value>数量请填写至少为 1 的整数。</value></data>
+  <data name="CoreSelectionAutoSelected" xml:space="preserve"><value>已按延迟从低到高勾选 {0} 个核心。</value></data>
+  <data name="CoreSelectionSorted" xml:space="preserve"><value>已按最大延迟从低到高排序。</value></data>
   <data name="CoreSelectionTesting" xml:space="preserve"><value>正在测量勾选的核心…</value></data>
   <data name="CoreSelectionTestFailed" xml:space="preserve"><value>这次测量没有完成。</value></data>
   <data name="CoreSelectionTestResult" xml:space="preserve"><value>播放核 {0}（最大 {1} µs）、{2}（最大 {3} µs）。</value></data>

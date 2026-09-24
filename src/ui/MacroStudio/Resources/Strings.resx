@@ -111,6 +111,51 @@
   <data name="CoreSelectionTest" xml:space="preserve">
     <value>Test</value>
   </data>
+  <data name="CoreSelectionSelectAll" xml:space="preserve">
+    <value>Select all</value>
+  </data>
+  <data name="CoreSelectionSelectNone" xml:space="preserve">
+    <value>Select none</value>
+  </data>
+  <data name="CoreResultHeader" xml:space="preserve">
+    <value>Result</value>
+  </data>
+  <data name="CoreResultNone" xml:space="preserve">
+    <value>—</value>
+  </data>
+  <data name="CoreResultPending" xml:space="preserve">
+    <value>Testing…</value>
+  </data>
+  <data name="CoreResultLate" xml:space="preserve">
+    <value>Max {0} µs</value>
+  </data>
+  <data name="CoreResultPlayback" xml:space="preserve">
+    <value>Max {0} µs · playback</value>
+  </data>
+  <data name="CoreSelectionTestingCore" xml:space="preserve">
+    <value>Testing logical processor {0} ({1}/{2})</value>
+  </data>
+  <data name="CoreSelectionSortByResult" xml:space="preserve">
+    <value>Sort by result</value>
+  </data>
+  <data name="CoreSelectionAutoSelect" xml:space="preserve">
+    <value>Auto-select</value>
+  </data>
+  <data name="CoreSelectionCount" xml:space="preserve">
+    <value>Count</value>
+  </data>
+  <data name="CoreSelectionNeedResults" xml:space="preserve">
+    <value>Test the cores before auto-selecting.</value>
+  </data>
+  <data name="CoreSelectionCountInvalid" xml:space="preserve">
+    <value>Enter a whole number of at least 1.</value>
+  </data>
+  <data name="CoreSelectionAutoSelected" xml:space="preserve">
+    <value>Checked {0} cores with the lowest latency.</value>
+  </data>
+  <data name="CoreSelectionSorted" xml:space="preserve">
+    <value>Sorted by maximum latency, lowest first.</value>
+  </data>
   <data name="CoreSelectionTesting" xml:space="preserve">
     <value>Measuring the checked cores…</value>
   </data>
