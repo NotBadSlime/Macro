@@ -85,6 +85,10 @@ internal struct MhpRunStats
     public uint WorkerPriorityAppliedCount;
     public uint WorkerMmcssAppliedCount;
     public uint WorkerPriorityBoostDisabledCount;
+    public uint SelectedWorker0;
+    public uint SelectedWorker1;
+    public long SelectedWorker0MaxLateUs;
+    public long SelectedWorker1MaxLateUs;
 }
 
 [StructLayout(LayoutKind.Sequential)]

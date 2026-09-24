@@ -51,6 +51,26 @@
   <data name="ProcessFilter" xml:space="preserve"><value>进程筛选</value></data>
   <data name="AffinityMask" xml:space="preserve"><value>极限核心掩码</value></data>
   <data name="AffinityMaskHelp" xml:space="preserve"><value>仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。</value></data>
+  <data name="ChooseCores" xml:space="preserve"><value>选择核心</value></data>
+  <data name="ChooseCoresTitle" xml:space="preserve"><value>选择核心</value></data>
+  <data name="ChooseCoresHelp" xml:space="preserve"><value>勾选要测量的逻辑核。默认勾选性能核，不含逻辑核 0。点「测试」会测量勾选的核心并显示结果；点确定后写入掩码。</value></data>
+  <data name="CoreProcessorText" xml:space="preserve"><value>逻辑核 {0}</value></data>
+  <data name="CorePhysicalText" xml:space="preserve"><value>物理核 {0}</value></data>
+  <data name="CorePerformance" xml:space="preserve"><value>性能核</value></data>
+  <data name="CoreEfficiency" xml:space="preserve"><value>能效核</value></data>
+  <data name="CoreSiblingText" xml:space="preserve"><value>同核：{0}</value></data>
+  <data name="CoreLogicalHeader" xml:space="preserve"><value>逻辑核</value></data>
+  <data name="CorePhysicalHeader" xml:space="preserve"><value>物理核</value></data>
+  <data name="CoreKindHeader" xml:space="preserve"><value>类型</value></data>
+  <data name="CoreSiblingHeader" xml:space="preserve"><value>超线程</value></data>
+  <data name="CoreSelectionNone" xml:space="preserve"><value>请至少勾选一个核心。</value></data>
+  <data name="CoreSelectionBusy" xml:space="preserve"><value>请先停止正在播放的宏，再选择核心。</value></data>
+  <data name="CoreSelectionStarted" xml:space="preserve"><value>正在按勾选的核心测量并绑定。</value></data>
+  <data name="CoreSelectionTest" xml:space="preserve"><value>测试</value></data>
+  <data name="CoreSelectionTesting" xml:space="preserve"><value>正在测量勾选的核心…</value></data>
+  <data name="CoreSelectionTestFailed" xml:space="preserve"><value>这次测量没有完成。</value></data>
+  <data name="CoreSelectionTestResult" xml:space="preserve"><value>播放核 {0}（最大 {1} µs）、{2}（最大 {3} µs）。</value></data>
+  <data name="CoreSelectionTestResultSingle" xml:space="preserve"><value>播放核 {0}（最大 {1} µs）。</value></data>
   <data name="ChooseTriggerBeforeListening" xml:space="preserve"><value>开始监听前请选择触发键。</value></data>
   <data name="HotkeyListenerStarted" xml:space="preserve"><value>上次结果：热键监听已启动</value></data>
   <data name="HotkeyListenerStopped" xml:space="preserve"><value>上次结果：热键监听已停止</value></data>

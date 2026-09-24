@@ -2,6 +2,29 @@ using MacroHid.Core;
 
 namespace MacroHid.Runtime;
 
+public readonly record struct CoreMeasureResult(
+    bool Measured,
+    int PrimaryProcessor,
+    int SecondaryProcessor,
+    long PrimaryMaxLateUs,
+    long SecondaryMaxLateUs)
+{
+    internal static CoreMeasureResult From(MhpRunStats stats, bool statusOk)
+    {
+        var primary = ToProcessor(stats.SelectedWorker0);
+        var secondary = ToProcessor(stats.SelectedWorker1);
+        var primaryLate = stats.SelectedWorker0MaxLateUs;
+        var secondaryLate = stats.SelectedWorker1MaxLateUs;
+        var measured = statusOk
+            && primary >= 0
+            && primaryLate >= 0
+            && primaryLate != long.MaxValue;
+        return new CoreMeasureResult(measured, primary, secondary, primaryLate, secondaryLate);
+    }
+
+    private static int ToProcessor(uint value) => value == uint.MaxValue ? -1 : checked((int)value);
+}
+
 public static class NativePlaybackWarmup
 {
     private static int cpuScanReady;
@@ -39,14 +62,46 @@ public static class NativePlaybackWarmup
             return;
         }
 
-        TryWarmUp(scanCpu: true);
+        TryWarmUp(scanCpu: false);
     }
 
     public static void TryWarmUp(bool scanCpu)
     {
+        TryWarmUp(scanCpu, out _);
+    }
+
+    public static CoreMeasureResult MeasureCheckedCores(string? affinityMask)
+    {
+        var normalizedMask = PlaybackAffinityMask.NormalizeOrThrow(affinityMask);
+        if (string.IsNullOrWhiteSpace(normalizedMask) || !OperatingSystem.IsWindows())
+        {
+            return default;
+        }
+
+        try
+        {
+            using var affinityScope = ProcessAffinityScope.TryEnter(normalizedMask);
+            Shutdown();
+            var measured = TryWarmUp(scanCpu: true, out var stats);
+            if (measured)
+            {
+                warmedAffinityMask = normalizedMask;
+            }
+
+            return CoreMeasureResult.From(stats, measured);
+        }
+        catch
+        {
+            return default;
+        }
+    }
+
+    private static bool TryWarmUp(bool scanCpu, out MhpRunStats stats)
+    {
+        stats = default;
         if (!OperatingSystem.IsWindows())
         {
-            return;
+            return false;
         }
 
         try
@@ -61,25 +116,36 @@ public static class NativePlaybackWarmup
                 NativeEngineMode = (int)NativeEngineMode.Standby
             };
 
-            var status = NativePlaybackInterop.MhpWarmEngine(ref options, out _);
+            var status = NativePlaybackInterop.MhpWarmEngine(ref options, out stats);
             if (scanCpu && status == MhpStatus.Ok)
             {
                 Volatile.Write(ref cpuScanReady, 1);
             }
+
+            return scanCpu && status == MhpStatus.Ok;
         }
         catch
         {
-            // Warm-up is opportunistic. Playback will fall back to managed ultra if native is unavailable.
+            return false;
         }
-
     }
 
     public static void QueueWarmUpForAffinityMask(string? affinityMask)
     {
+        QueueWarmUpForAffinityMask(affinityMask, force: false);
+    }
+
+    public static void QueueWarmUpForAffinityMask(string? affinityMask, bool force)
+    {
         var normalizedMask = PlaybackAffinityMask.NormalizeOrThrow(affinityMask);
-        if (string.Equals(normalizedMask, warmedAffinityMask, StringComparison.OrdinalIgnoreCase))
+        if (!force && string.Equals(normalizedMask, warmedAffinityMask, StringComparison.OrdinalIgnoreCase))
         {
             return;
+        }
+
+        if (force)
+        {
+            warmedAffinityMask = string.Empty;
         }
 
         _ = Task.Run(() => TryWarmUpForAffinityMask(normalizedMask));

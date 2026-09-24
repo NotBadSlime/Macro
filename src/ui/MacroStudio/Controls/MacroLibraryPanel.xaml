@@ -589,7 +589,14 @@
                                    Foreground="{DynamicResource SecondaryText}"
                                    FontSize="10"
                                    TextWrapping="Wrap"
-                                   Margin="0,4,0,10" />
+                                   Margin="0,4,0,8" />
+                        <Button x:Name="ChooseCoresButton"
+                                HorizontalAlignment="Left"
+                                MinWidth="96"
+                                Height="30"
+                                Margin="0,0,0,10"
+                                Content="选择核心"
+                                Click="ChooseCoresButton_Click" />
                         <TextBlock x:Name="ColorSampleHotkeyLabelText"
                                    Text="取色快捷键"
                                    Style="{StaticResource FieldLabel}" />

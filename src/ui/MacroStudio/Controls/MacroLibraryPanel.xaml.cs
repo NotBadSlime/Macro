@@ -83,6 +83,7 @@ public partial class MacroLibraryPanel : UserControl
     public event Action<IReadOnlyList<string>>? StopListeningGroupsRequested;
     public event Action? StopListeningAllRequested;
     public event Action? PrecisionSettingsEdited;
+    public event Action? ChooseCoresRequested;
     public event Action? LibraryStructureEdited;
     public event Action? ColorSampleCaptureStarted;
     public event Action? ColorSampleCaptureFinished;
@@ -129,6 +130,7 @@ public partial class MacroLibraryPanel : UserControl
         AffinityMaskLabelText.Text = L("AffinityMask");
         AffinityMaskHelpText.Text = L("AffinityMaskHelp");
         AffinityMaskBox.ToolTip = L("AffinityMaskHelp");
+        ChooseCoresButton.Content = L("ChooseCores");
         ColorSampleHotkeyLabelText.Text = L("ColorSampleHotkey");
         ColorSampleHotkeyHelpText.Text = L("ColorSampleHotkeyHelp");
         ColorSampleHotkeyBox.ToolTip = L("ColorSampleHotkeyHelp");
@@ -790,6 +792,18 @@ public partial class MacroLibraryPanel : UserControl
     private void RuntimePrecision_TextChanged(object sender, TextChangedEventArgs e)
     {
         NotifyPrecisionSettingsEdited();
+    }
+
+    private void ChooseCoresButton_Click(object sender, RoutedEventArgs e)
+    {
+        ChooseCoresRequested?.Invoke();
+    }
+
+    public void ApplyAffinityMask(string mask)
+    {
+        updatingRuntimePrecisionControls = true;
+        AffinityMaskBox.Text = mask;
+        updatingRuntimePrecisionControls = false;
     }
 
     private void CaptureColorSample_Click(object sender, RoutedEventArgs e)

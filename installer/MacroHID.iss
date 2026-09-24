@@ -7,7 +7,7 @@
 #endif
 
 #ifndef AppVersion
-#define AppVersion "1.4.0"
+#define AppVersion "1.4.1"
 #endif
 
 #define AppName "MacroHID"
@@ -21,6 +21,9 @@ AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\MacroHID
 DefaultGroupName=MacroHID
+DisableDirPage=no
+AlwaysShowDirOnReadyPage=yes
+UsePreviousAppDir=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible

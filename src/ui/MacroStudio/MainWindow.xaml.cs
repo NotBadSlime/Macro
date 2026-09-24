@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -26,6 +27,9 @@ public partial class MainWindow : Window
     private readonly SendInputMacroSink inputSink = new();
     private readonly ActionTemplateInsertGate actionTemplateInsertGate = new();
     private readonly DispatcherTimer autoSaveTimer;
+    private readonly DispatcherTimer coreSelectionTimer;
+    private readonly CoreSelectionSchedule coreSelectionSchedule = new();
+    private int coreSelectionPollInFlight;
     private readonly ColorSampleOverlayWindow colorSampleOverlay = new();
     private RuntimePrecisionSettings runtimePrecisionSettings = RuntimePrecisionSettingsStore.Load();
 
@@ -75,6 +79,11 @@ public partial class MainWindow : Window
             Interval = TimeSpan.FromMilliseconds(450)
         };
         autoSaveTimer.Tick += (_, _) => PerformDebouncedAutoSave();
+        coreSelectionTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        coreSelectionTimer.Tick += (_, _) => PollAutomaticCoreSelection();
         ContentRendered += MainWindow_ContentRendered;
         LocalizationService.Initialize();
         ConfigureWorkspaceDockHost();
@@ -87,6 +96,8 @@ public partial class MainWindow : Window
         InitializeWorkspacePanels();
         ApplyLocalization();
         InitializeMacroLibrary();
+        coreSelectionTimer.Start();
+        PollAutomaticCoreSelection();
         RefreshKeyboardHook();
         StateChanged += (_, _) => RefreshWindowChromeButtons();
         RefreshWindowChromeButtons();
@@ -118,6 +129,7 @@ public partial class MainWindow : Window
         LibraryPanel.StopListeningGroupsRequested += OnStopListeningGroups;
         LibraryPanel.StopListeningAllRequested += OnStopListeningAll;
         LibraryPanel.PrecisionSettingsEdited += OnPrecisionSettingsEdited;
+        LibraryPanel.ChooseCoresRequested += OnChooseCoresRequested;
         LibraryPanel.LibraryStructureEdited += OnLibraryStructureEdited;
         LibraryPanel.ColorSampleCaptureStarted += PauseListeningForCapture;
         LibraryPanel.ColorSampleCaptureFinished += ResumeListeningAfterCapture;
@@ -1219,6 +1231,166 @@ public partial class MainWindow : Window
         NativePlaybackWarmup.QueueWarmUpForPrecision(
             runtimePrecisionSettings.Precision,
             runtimePrecisionSettings.AffinityMask);
+    }
+
+    private void OnChooseCoresRequested()
+    {
+        if (IsCoreSelectionBlocked())
+        {
+            SetStatus(L("CoreSelectionBusy"));
+            return;
+        }
+
+        var savedMask = runtimePrecisionSettings.AffinityMask;
+        var dialog = new CorePickerDialog(savedMask, IsCoreSelectionBlocked);
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true)
+        {
+            RestoreMaskAfterCancelledTest(savedMask, dialog);
+            return;
+        }
+
+        if (IsCoreSelectionBlocked())
+        {
+            SetStatus(L("CoreSelectionBusy"));
+            RestoreMaskAfterCancelledTest(savedMask, dialog);
+            return;
+        }
+
+        LibraryPanel.ApplyAffinityMask(dialog.SelectedMask);
+        runtimePrecisionSettings = ReadRuntimePrecisionSettingsFromPanel();
+        RuntimePrecisionSettingsStore.Save(runtimePrecisionSettings);
+        var alreadyMeasured = dialog.LastMeasureSucceeded
+            && string.Equals(dialog.LastMeasuredMask, dialog.SelectedMask, StringComparison.OrdinalIgnoreCase);
+        if (!alreadyMeasured)
+        {
+            NativePlaybackWarmup.QueueWarmUpForAffinityMask(runtimePrecisionSettings.AffinityMask, force: true);
+        }
+
+        SetStatus(string.IsNullOrWhiteSpace(dialog.LastResultText) ? L("CoreSelectionStarted") : dialog.LastResultText);
+    }
+
+    private void RestoreMaskAfterCancelledTest(string savedMask, CorePickerDialog dialog)
+    {
+        if (!dialog.LastMeasureSucceeded
+            || string.Equals(dialog.LastMeasuredMask, savedMask, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(savedMask))
+        {
+            NativePlaybackWarmup.Shutdown();
+            return;
+        }
+
+        NativePlaybackWarmup.QueueWarmUpForAffinityMask(savedMask, force: true);
+    }
+
+    private void PollAutomaticCoreSelection()
+    {
+        if (runtimePrecisionSettings.Precision != PrecisionMode.UltraLowJitter)
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref coreSelectionPollInFlight, 1, 0) != 0)
+        {
+            return;
+        }
+
+        var filters = editorState.LibrarySnapshot.Groups
+            .Where(group => !group.IsGlobal && !string.IsNullOrWhiteSpace(group.ProcessFilter))
+            .Select(group => group.ProcessFilter)
+            .ToArray();
+        _ = Task.Run(() =>
+        {
+            var names = QueryRunningProcessNames();
+            Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    ApplyAutomaticCoreSelection(filters, names);
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref coreSelectionPollInFlight, 0);
+                }
+            });
+        });
+    }
+
+    private void ApplyAutomaticCoreSelection(IReadOnlyList<string> filters, IReadOnlyList<string> runningProcessNames)
+    {
+        if (runtimePrecisionSettings.Precision != PrecisionMode.UltraLowJitter)
+        {
+            return;
+        }
+
+        var blocked = IsCoreSelectionBlocked();
+        if (!coreSelectionSchedule.TryConsumeAutomatic(filters, runningProcessNames, blocked))
+        {
+            return;
+        }
+
+        var mask = runtimePrecisionSettings.AffinityMask;
+        if (string.IsNullOrWhiteSpace(mask))
+        {
+            var defaults = LogicalProcessorInventory.DefaultSelection(LogicalProcessorInventory.Query());
+            if (defaults.Count == 0)
+            {
+                return;
+            }
+
+            mask = LogicalProcessorInventory.MaskFromProcessors(defaults);
+            LibraryPanel.ApplyAffinityMask(mask);
+            runtimePrecisionSettings = ReadRuntimePrecisionSettingsFromPanel();
+            RuntimePrecisionSettingsStore.Save(runtimePrecisionSettings);
+        }
+
+        if (IsCoreSelectionBlocked())
+        {
+            return;
+        }
+
+        NativePlaybackWarmup.QueueWarmUpForAffinityMask(mask, force: true);
+    }
+
+    private bool IsCoreSelectionBlocked()
+    {
+        if (playbackController?.Status is PlaybackStatus.Running or PlaybackStatus.Stopping)
+        {
+            return true;
+        }
+
+        return listeningControllers.Values.Any(controller =>
+            controller.Status is PlaybackStatus.Running or PlaybackStatus.Stopping);
+    }
+
+    private static string[] QueryRunningProcessNames()
+    {
+        try
+        {
+            var processes = Process.GetProcesses();
+            try
+            {
+                return processes
+                    .Select(process => process.ProcessName)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            finally
+            {
+                foreach (var process in processes)
+                {
+                    process.Dispose();
+                }
+            }
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private void RestartListeningWithCurrentSettings()

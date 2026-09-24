@@ -274,7 +274,29 @@ namespace
         int64_t p999LateUs = std::numeric_limits<int64_t>::max();
         int64_t meanLateUs = std::numeric_limits<int64_t>::max();
         int64_t score = std::numeric_limits<int64_t>::max();
+        uint32_t physicalCoreId = std::numeric_limits<uint32_t>::max();
+        uint32_t efficiencyClass = 0;
     };
+
+    std::atomic<int> g_playbackActive{ 0 };
+
+    struct PlaybackActivityScope
+    {
+        PlaybackActivityScope()
+        {
+            g_playbackActive.fetch_add(1, std::memory_order_acq_rel);
+        }
+
+        ~PlaybackActivityScope()
+        {
+            g_playbackActive.fetch_sub(1, std::memory_order_acq_rel);
+        }
+    };
+
+    bool PlaybackIsActive()
+    {
+        return g_playbackActive.load(std::memory_order_acquire) != 0;
+    }
 
     struct RedundantWaitState
     {
@@ -461,14 +483,110 @@ namespace
         return candidate.processorNumber > best.processorNumber;
     }
 
+    struct LogicalCoreTopology
+    {
+        uint32_t physicalCoreId = 0;
+        uint32_t efficiencyClass = 0;
+    };
+
+    std::vector<LogicalCoreTopology> QueryLogicalCoreTopology()
+    {
+        const auto processorSlots = static_cast<size_t>(sizeof(DWORD_PTR) * 8);
+        std::vector<LogicalCoreTopology> topology(processorSlots);
+        for (uint32_t bit = 0; bit < processorSlots; bit++)
+        {
+            topology[bit].physicalCoreId = bit;
+        }
+
+        DWORD length = 0;
+        GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &length);
+        if (length == 0)
+        {
+            return topology;
+        }
+
+        std::vector<unsigned char> buffer(length);
+        auto* info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data());
+        if (!GetLogicalProcessorInformationEx(RelationProcessorCore, info, &length))
+        {
+            return topology;
+        }
+
+        uint32_t physicalCoreId = 0;
+        DWORD offset = 0;
+        while (offset + sizeof(DWORD) * 2 < length)
+        {
+            auto* current = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data() + offset);
+            if (current->Size == 0 || offset + current->Size > length)
+            {
+                break;
+            }
+
+            if (current->Relationship == RelationProcessorCore)
+            {
+                const auto& core = current->Processor;
+                for (WORD groupIndex = 0; groupIndex < core.GroupCount; groupIndex++)
+                {
+                    const auto& group = core.GroupMask[groupIndex];
+                    if (group.Group != 0)
+                    {
+                        continue;
+                    }
+
+                    for (uint32_t bit = 0; bit < processorSlots; bit++)
+                    {
+                        const KAFFINITY bitMask = static_cast<KAFFINITY>(1) << bit;
+                        if ((group.Mask & bitMask) == 0)
+                        {
+                            continue;
+                        }
+
+                        topology[bit].physicalCoreId = physicalCoreId;
+                        topology[bit].efficiencyClass = core.EfficiencyClass;
+                    }
+                }
+
+                physicalCoreId++;
+            }
+
+            offset += current->Size;
+        }
+
+        return topology;
+    }
+
+    LogicalCoreTopology LookupLogicalCore(uint32_t processorNumber)
+    {
+        static std::vector<LogicalCoreTopology> topology = QueryLogicalCoreTopology();
+        if (processorNumber >= topology.size())
+        {
+            return LogicalCoreTopology{ processorNumber, 0 };
+        }
+
+        return topology[processorNumber];
+    }
+
+    bool g_cpuScanCacheValid = false;
+    bool g_cpuScanCacheMeasuredWithJitter = false;
+
+    bool CpuScanCacheReady()
+    {
+        return g_cpuScanCacheValid && g_cpuScanCacheMeasuredWithJitter;
+    }
+
     CoreChoice MeasureCandidateCore(
         HANDLE thread,
         DWORD_PTR mask,
         uint32_t index,
         uint32_t allowedProcessorCount,
-        int64_t frequency)
+        int64_t frequency,
+        int sampleCount,
+        uint32_t physicalCoreId,
+        uint32_t efficiencyClass)
     {
         CoreChoice choice{ mask, index, ProcessorNumberFromMask(mask), std::numeric_limits<int64_t>::max() };
+        choice.physicalCoreId = physicalCoreId;
+        choice.efficiencyClass = efficiencyClass;
         const DWORD_PTR previous = SetThreadAffinityMask(thread, mask);
         if (previous == 0)
         {
@@ -480,8 +598,9 @@ namespace
         int64_t maxLate = 0;
         int64_t sumLate = 0;
         std::vector<int64_t> lateSamples;
-        lateSamples.reserve(CoreScanSamplesPerCore);
-        for (int i = 0; i < CoreScanSamplesPerCore; i++)
+        const int samples = std::max(1, sampleCount);
+        lateSamples.reserve(static_cast<size_t>(samples));
+        for (int i = 0; i < samples; i++)
         {
             SpinUntil(dueTick, nullptr);
             const int64_t late = std::max<int64_t>(0, ToMicroseconds(QueryCounter() - dueTick, frequency));
@@ -528,10 +647,15 @@ namespace
             std::lock_guard<std::mutex> guard(cacheMutex);
             if (cacheValid
                 && cachedProcessMask == processMask
-                && (!enableCpuScan || cacheMeasuredWithJitter))
+                && (!enableCpuScan || cacheMeasuredWithJitter || PlaybackIsActive()))
             {
                 return cachedChoices;
             }
+        }
+
+        if (enableCpuScan && PlaybackIsActive())
+        {
+            return {};
         }
 
         const int64_t frequency = QueryFrequency();
@@ -547,9 +671,18 @@ namespace
                 continue;
             }
 
+            const auto topology = LookupLogicalCore(bit);
             const auto candidate = enableCpuScan
-                ? MeasureCandidateCore(thread, mask, logicalIndex, allowedProcessorCount, frequency)
-                : CoreChoice{ mask, logicalIndex, ProcessorNumberFromMask(mask), 0, 0, 0, 0, static_cast<int64_t>(logicalIndex) };
+                ? MeasureCandidateCore(
+                    thread,
+                    mask,
+                    logicalIndex,
+                    allowedProcessorCount,
+                    frequency,
+                    CoreScanSamplesPerCore,
+                    topology.physicalCoreId,
+                    topology.efficiencyClass)
+                : CoreChoice{ mask, logicalIndex, ProcessorNumberFromMask(mask), 0, 0, 0, 0, static_cast<int64_t>(logicalIndex), topology.physicalCoreId, topology.efficiencyClass };
             if (candidate.mask != 0)
             {
                 choices.push_back(candidate);
@@ -563,6 +696,11 @@ namespace
             choices.end(),
             [](const CoreChoice& left, const CoreChoice& right)
             {
+                if (left.efficiencyClass != right.efficiencyClass)
+                {
+                    return left.efficiencyClass < right.efficiencyClass;
+                }
+
                 return CoreChoiceBetter(left, right);
             });
 
@@ -572,6 +710,8 @@ namespace
             cachedProcessMask = processMask;
             cacheValid = !choices.empty();
             cacheMeasuredWithJitter = enableCpuScan;
+            g_cpuScanCacheValid = cacheValid;
+            g_cpuScanCacheMeasuredWithJitter = cacheMeasuredWithJitter;
         }
 
         return choices;
@@ -593,12 +733,41 @@ namespace
 
         const auto choices = ScanEligibleCores(enableCpuScan);
         selected.reserve(std::min<int>(requestedCount, static_cast<int>(choices.size())));
+        std::vector<uint32_t> usedPhysicalCores;
         for (const auto& choice : choices)
         {
+            if (choice.processorNumber == 0 && static_cast<int>(choices.size()) > requestedCount)
+            {
+                continue;
+            }
+
+            if (std::find(usedPhysicalCores.begin(), usedPhysicalCores.end(), choice.physicalCoreId) != usedPhysicalCores.end())
+            {
+                continue;
+            }
+
+            usedPhysicalCores.push_back(choice.physicalCoreId);
             selected.push_back(choice);
             if (static_cast<int>(selected.size()) >= requestedCount)
             {
                 break;
+            }
+        }
+
+        if (static_cast<int>(selected.size()) < requestedCount)
+        {
+            for (const auto& choice : choices)
+            {
+                if (std::any_of(selected.begin(), selected.end(), [&](const CoreChoice& existing) { return existing.mask == choice.mask; }))
+                {
+                    continue;
+                }
+
+                selected.push_back(choice);
+                if (static_cast<int>(selected.size()) >= requestedCount)
+                {
+                    break;
+                }
             }
         }
 
@@ -915,9 +1084,9 @@ namespace
 
             if (options.precisionMode == MhpUltraLowJitter)
             {
-                const bool shouldPinToCore = options.enableCpuScan != 0;
+                const bool shouldPinToCore = options.enableCpuScan != 0 && CpuScanCacheReady();
                 stats.selectedCpuSet = CurrentProcessorNumber();
-                selectedCore = shouldPinToCore ? SelectLowestJitterCore(true) : CoreChoice{};
+                selectedCore = shouldPinToCore ? SelectLowestJitterCore(false) : CoreChoice{};
                 if (shouldPinToCore && selectedCore.mask != 0)
                 {
                     oldAffinityMask = SetThreadAffinityMask(thread, selectedCore.mask);
@@ -1737,6 +1906,10 @@ namespace
             stats->cpuSetAppliedCount = 0;
             stats->maxLateCpu = std::numeric_limits<uint32_t>::max();
             stats->maxLateWorker = -1;
+            stats->selectedWorker0 = workerCores[0].processorNumber;
+            stats->selectedWorker1 = workerCores[1].processorNumber;
+            stats->selectedWorker0MaxLateUs = workerCores[0].maxLateUs;
+            stats->selectedWorker1MaxLateUs = workerCores[1].maxLateUs;
         }
 
         std::array<DWORD_PTR, StandbyWorkerCount> WorkerMasks() const
@@ -2017,6 +2190,7 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
         return MhpInvalidArgument;
     }
 
+    PlaybackActivityScope playbackActivity;
     *stats = {};
     stats->selectedCpuSet = std::numeric_limits<uint32_t>::max();
     auto* nativePlan = static_cast<NativePlan*>(plan);

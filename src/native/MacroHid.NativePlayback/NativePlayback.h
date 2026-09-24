@@ -103,6 +103,10 @@ extern "C"
         uint32_t workerPriorityAppliedCount;
         uint32_t workerMmcssAppliedCount;
         uint32_t workerPriorityBoostDisabledCount;
+        uint32_t selectedWorker0;
+        uint32_t selectedWorker1;
+        int64_t selectedWorker0MaxLateUs;
+        int64_t selectedWorker1MaxLateUs;
     };
 
     __declspec(dllexport) MhpStatus __cdecl MhpWarmEngine(

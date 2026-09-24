@@ -133,7 +133,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 1.4.0", MacroHidReleaseVersionIsOneFourZero),
+    ("MacroHID release version is 1.4.1", MacroHidReleaseVersionIsOneFourOne),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("MacroStudio uses launcher style soft workbench shell", MacroStudioUsesLauncherStyleSoftWorkbenchShell),
@@ -166,6 +166,11 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio supports macro call selection and playback autosave", MacroStudioSupportsMacroCallSelectionAndPlaybackAutosave),
     ("MacroStudio exposes global precision selector in macro library", MacroStudioExposesGlobalPrecisionSelectorInMacroLibrary),
     ("MacroStudio exposes ultra affinity mask control", MacroStudioExposesUltraAffinityMaskControl),
+    ("Core selection keeps workers on distinct physical cores", CoreSelectionKeepsWorkersOnDistinctPhysicalCores),
+    ("Core selection defaults exclude logical processor zero", CoreSelectionDefaultsExcludeLogicalProcessorZero),
+    ("Core selection measures a process once per appearance", CoreSelectionMeasuresAProcessOncePerAppearance),
+    ("Core selection skips scanning while playback is active", CoreSelectionSkipsScanningWhilePlaybackIsActive),
+    ("Core picker can test the checked cores before confirming", CorePickerCanTestCheckedCoresBeforeConfirming),
     ("MacroStudio exposes core color sample hotkey and library path navigation", MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation),
     ("MacroStudio keeps precision as a global runtime setting", MacroStudioKeepsPrecisionAsGlobalRuntimeSetting),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
@@ -3474,23 +3479,23 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsOneFourZero()
+static void MacroHidReleaseVersionIsOneFourOne()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.4.0.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.4.1.md"));
 
-    Assert.Contains("<Version>1.4.0</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>1.4.0.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>1.4.0.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>1.4.1</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>1.4.1.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>1.4.1.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"1.4.0\"", installer);
-    Assert.Contains("[string]$Version = \"1.4.0\"", installerBuild);
-    Assert.Contains("当前正式版是 **1.4.0**", readme);
-    Assert.Contains("MacroHID `1.4.0` 是当前正式版", releaseNotes);
-    Assert.Contains("Git tag：`v1.4.0`", releaseNotes);
+    Assert.Contains("#define AppVersion \"1.4.1\"", installer);
+    Assert.Contains("[string]$Version = \"1.4.1\"", installerBuild);
+    Assert.Contains("当前正式版是 **1.4.1**", readme);
+    Assert.Contains("MacroHID `1.4.1` 是当前正式版", releaseNotes);
+    Assert.Contains("Git tag：`v1.4.1`", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -4323,6 +4328,109 @@ static void MacroStudioExposesUltraAffinityMaskControl()
     Assert.Contains("限制极限模式播放线程", simplified);
     Assert.Contains("<value>極限核心遮罩</value>", traditional);
     Assert.Contains("限制極限模式播放執行緒", traditional);
+    Assert.Contains("ChooseCoresButton", libraryXaml);
+    Assert.Contains("ChooseCoresRequested", libraryCode);
+    Assert.Contains("name=\"ChooseCores\"", english);
+    Assert.Contains("<value>选择核心</value>", simplified);
+    Assert.Contains("<value>選擇核心</value>", traditional);
+}
+
+static void CoreSelectionKeepsWorkersOnDistinctPhysicalCores()
+{
+    var ranked = new[]
+    {
+        new LogicalProcessor(1, 10, 0),
+        new LogicalProcessor(2, 10, 0),
+        new LogicalProcessor(3, 11, 0),
+        new LogicalProcessor(0, 12, 0)
+    };
+
+    var workers = LogicalProcessorInventory.DistinctPhysicalWorkers(ranked, 2);
+
+    Assert.Equal(2, workers.Count);
+    Assert.Equal(1, workers[0]);
+    Assert.Equal(3, workers[1]);
+    Assert.False(workers.Contains(2));
+    Assert.False(workers.Contains(0));
+}
+
+static void CoreSelectionDefaultsExcludeLogicalProcessorZero()
+{
+    var mixed = new[]
+    {
+        new LogicalProcessor(0, 0, 0),
+        new LogicalProcessor(1, 0, 0),
+        new LogicalProcessor(2, 1, 1)
+    };
+    var performance = LogicalProcessorInventory.DefaultSelection(mixed);
+    Assert.Equal(1, performance.Count);
+    Assert.Equal(1, performance[0]);
+
+    var efficiencyOnly = new[]
+    {
+        new LogicalProcessor(0, 0, 1),
+        new LogicalProcessor(4, 2, 1),
+        new LogicalProcessor(5, 3, 1)
+    };
+    var fallback = LogicalProcessorInventory.DefaultSelection(efficiencyOnly);
+    Assert.Equal(2, fallback.Count);
+    Assert.False(fallback.Contains(0));
+    Assert.True(fallback.Contains(4));
+    Assert.True(fallback.Contains(5));
+}
+
+static void CoreSelectionMeasuresAProcessOncePerAppearance()
+{
+    var startup = new CoreSelectionSchedule();
+    Assert.True(startup.TryConsumeAutomatic([], [], playbackBusy: false));
+    Assert.False(startup.TryConsumeAutomatic([], [], playbackBusy: false));
+
+    var named = new CoreSelectionSchedule();
+    Assert.True(named.TryConsumeAutomatic(["game.exe"], ["game"], playbackBusy: false));
+    Assert.False(named.TryConsumeAutomatic(["game.exe"], ["game"], playbackBusy: false));
+    Assert.False(named.TryConsumeAutomatic(["game.exe"], [], playbackBusy: false));
+    Assert.True(named.TryConsumeAutomatic(["game.exe"], ["game"], playbackBusy: false));
+
+    var busy = new CoreSelectionSchedule();
+    Assert.False(busy.TryConsumeAutomatic(["game"], ["game"], playbackBusy: true));
+    Assert.False(busy.TryConsumeAutomatic(["game"], ["game"], playbackBusy: false));
+}
+
+static void CoreSelectionSkipsScanningWhilePlaybackIsActive()
+{
+    var native = File.ReadAllText(Path.Combine("src", "native", "MacroHid.NativePlayback", "NativePlayback.cpp"));
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var warmup = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "NativePlaybackWarmup.cs"));
+
+    Assert.Contains("const bool shouldPinToCore = options.enableCpuScan != 0 && CpuScanCacheReady()", native);
+    Assert.Contains("selectedCore = shouldPinToCore ? SelectLowestJitterCore(false)", native);
+    Assert.Contains("if (enableCpuScan && PlaybackIsActive())", native);
+    Assert.DoesNotContain("SelectLowestJitterCore(true)", native);
+    Assert.Contains("TryWarmUp(scanCpu: false)", warmup);
+    Assert.Contains("PlaybackStatus.Running or PlaybackStatus.Stopping", mainWindow);
+    Assert.Contains("CoreSelectionBusy", mainWindow);
+    Assert.Contains("QueueWarmUpForAffinityMask(runtimePrecisionSettings.AffinityMask, force: true)", mainWindow);
+    Assert.Contains("coreSelectionSchedule.TryConsumeAutomatic", mainWindow);
+}
+
+static void CorePickerCanTestCheckedCoresBeforeConfirming()
+{
+    var dialogXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "CorePickerDialog.xaml"));
+    var dialogCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "CorePickerDialog.xaml.cs"));
+    var warmup = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "NativePlaybackWarmup.cs"));
+    var native = File.ReadAllText(Path.Combine("src", "native", "MacroHid.NativePlayback", "NativePlayback.cpp"));
+    var english = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.resx"));
+    var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+
+    Assert.Contains("x:Name=\"TestButton\"", dialogXaml);
+    Assert.Contains("Click=\"TestButton_Click\"", dialogXaml);
+    Assert.Contains("MeasureCheckedCores", dialogCode);
+    Assert.Contains("measureBlocked?.Invoke() == true", dialogCode);
+    Assert.Contains("CoreSelectionTestResult", dialogCode);
+    Assert.Contains("public static CoreMeasureResult MeasureCheckedCores", warmup);
+    Assert.Contains("selectedWorker0MaxLateUs", native);
+    Assert.Contains("name=\"CoreSelectionTest\"", english);
+    Assert.Contains("<value>测试</value>", simplified);
 }
 
 static void MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation()
@@ -6072,8 +6180,8 @@ static void NativePlaybackAvoidsBlindCpuPinningAndReportsStartupCosts()
     Assert.Contains("maxLoopEndLateUs", header);
     Assert.Contains("cacheMeasuredWithJitter", implementation);
     Assert.Contains("cachedProcessMask == processMask", implementation);
-    Assert.Contains("(!enableCpuScan || cacheMeasuredWithJitter)", implementation);
-    Assert.Contains("const bool shouldPinToCore = options.enableCpuScan != 0", implementation);
+    Assert.Contains("(!enableCpuScan || cacheMeasuredWithJitter || PlaybackIsActive())", implementation);
+    Assert.Contains("const bool shouldPinToCore = options.enableCpuScan != 0 && CpuScanCacheReady()", implementation);
     Assert.Contains("if (shouldPinToCore && selectedCore.mask != 0)", implementation);
     Assert.Contains("const bool shouldPinStandbyWorkers = options != nullptr && options->enableCpuScan != 0", implementation);
     Assert.Contains("if (!shouldPinStandbyWorkers)", implementation);
@@ -6456,6 +6564,8 @@ static void InstallerPreservesUserDataUnlessExplicitlyConfirmed()
     Assert.Contains("IDNO", iss);
     Assert.Contains("{userappdata}\\MacroHID", iss);
     Assert.Contains("DelTree(UserDataPath, True, True, True)", iss);
+    Assert.Contains("DisableDirPage=no", iss);
+    Assert.Contains("AlwaysShowDirOnReadyPage=yes", iss);
     Assert.DoesNotContain("[UninstallDelete]", iss);
     Assert.Contains("卸载时默认保留该目录", installerDoc);
     Assert.Contains("Silent uninstall always preserves user data", installerDoc);

@@ -7,6 +7,7 @@
 - Windows 10/11 x64。
 - .NET 8 Desktop Runtime。当前发布采用框架依赖模式，安装包不内置 .NET 运行时。
 - 如果要控制管理员权限应用，请以管理员身份启动 MacroStudio 或 MacroRunner。
+- 安装向导会显示「选择目标位置」，可改安装目录；默认是 `C:\Program Files\MacroHID`。覆盖安装时也会显示该页，并预填上次路径。
 
 ### 安装包构建
 
@@ -109,6 +110,7 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 - Windows 10/11 x64.
 - .NET 8 Desktop Runtime. Current builds are framework-dependent and do not bundle the .NET runtime.
 - To automate elevated applications, run MacroStudio or MacroRunner as Administrator.
+- The setup wizard shows Select Destination Location. The default is `C:\Program Files\MacroHID`; upgrades still show this page and prefill the previous folder.
 
 ### Build the Installer
 

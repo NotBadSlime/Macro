@@ -63,6 +63,66 @@
   <data name="AffinityMaskHelp" xml:space="preserve">
     <value>Only affects Extreme mode: limits playback threads and the native engine to selected CPU cores to reduce migration jitter. Leave empty for automatic selection. Example: 0x1F.</value>
   </data>
+  <data name="ChooseCores" xml:space="preserve">
+    <value>Choose cores</value>
+  </data>
+  <data name="ChooseCoresTitle" xml:space="preserve">
+    <value>Choose cores</value>
+  </data>
+  <data name="ChooseCoresHelp" xml:space="preserve">
+    <value>Check the logical processors to measure. Performance cores are selected by default, except logical processor 0. Test measures the checked cores and shows the result. Confirm saves the mask.</value>
+  </data>
+  <data name="CoreProcessorText" xml:space="preserve">
+    <value>Logical {0}</value>
+  </data>
+  <data name="CorePhysicalText" xml:space="preserve">
+    <value>Physical {0}</value>
+  </data>
+  <data name="CorePerformance" xml:space="preserve">
+    <value>Performance</value>
+  </data>
+  <data name="CoreEfficiency" xml:space="preserve">
+    <value>Efficiency</value>
+  </data>
+  <data name="CoreSiblingText" xml:space="preserve">
+    <value>Same core: {0}</value>
+  </data>
+  <data name="CoreLogicalHeader" xml:space="preserve">
+    <value>Logical</value>
+  </data>
+  <data name="CorePhysicalHeader" xml:space="preserve">
+    <value>Physical</value>
+  </data>
+  <data name="CoreKindHeader" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="CoreSiblingHeader" xml:space="preserve">
+    <value>Siblings</value>
+  </data>
+  <data name="CoreSelectionNone" xml:space="preserve">
+    <value>Select at least one core.</value>
+  </data>
+  <data name="CoreSelectionBusy" xml:space="preserve">
+    <value>Stop the current macro before choosing cores.</value>
+  </data>
+  <data name="CoreSelectionStarted" xml:space="preserve">
+    <value>Measuring the checked cores and binding them.</value>
+  </data>
+  <data name="CoreSelectionTest" xml:space="preserve">
+    <value>Test</value>
+  </data>
+  <data name="CoreSelectionTesting" xml:space="preserve">
+    <value>Measuring the checked cores…</value>
+  </data>
+  <data name="CoreSelectionTestFailed" xml:space="preserve">
+    <value>The measurement did not finish.</value>
+  </data>
+  <data name="CoreSelectionTestResult" xml:space="preserve">
+    <value>Playback cores {0} (max {1} µs) and {2} (max {3} µs).</value>
+  </data>
+  <data name="CoreSelectionTestResultSingle" xml:space="preserve">
+    <value>Playback core {0} (max {1} µs).</value>
+  </data>
   <data name="Capture" xml:space="preserve">
     <value>Capture</value>
   </data>
