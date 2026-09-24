@@ -31,14 +31,14 @@ jobs:
       - name: Build
         run: dotnet build MacroHID.sln --configuration Release --no-restore
 
-      - name: Run core tests
-        run: dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release --no-build
-
       - name: Build native playback engine
         shell: pwsh
         run: |
           # src\native\MacroHid.NativePlayback\MacroHid.NativePlayback.vcxproj
           .\scripts\Build-NativePlayback.ps1 -Configuration Release
+
+      - name: Run core tests
+        run: dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release --no-build
 
       - name: Run latency probe smoke test
         run: dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj --configuration Release --no-build -- --iterations 250 --interval-us 1000
