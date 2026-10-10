@@ -153,7 +153,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 1.5.0", MacroHidReleaseVersionIsOneFiveZero),
+    ("MacroHID release version is 1.6.0", MacroHidReleaseVersionIsOneFiveZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -3738,17 +3738,16 @@ static void MacroHidReleaseVersionIsOneFiveZero()
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "release-1.5.0.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "1.6.0.md"));
 
-    Assert.Contains("<Version>1.5.0</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>1.5.0.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>1.5.0.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>1.6.0</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>1.6.0.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>1.6.0.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"1.5.0\"", installer);
-    Assert.Contains("[string]$Version = \"1.5.0\"", installerBuild);
-    Assert.Contains("当前正式版是 **1.5.0**", readme);
-    Assert.Contains("MacroHID `1.5.0` 是当前正式版", releaseNotes);
-    Assert.Contains("Git tag：`v1.5.0`", releaseNotes);
+    Assert.Contains("#define AppVersion \"1.6.0\"", installer);
+    Assert.Contains("[string]$Version = \"1.6.0\"", installerBuild);
+    Assert.Contains("当前正式版是 **1.6.0**", readme);
+    Assert.Contains("MacroHID 1.6.0", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
