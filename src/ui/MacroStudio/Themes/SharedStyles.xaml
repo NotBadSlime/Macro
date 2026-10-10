@@ -1648,7 +1648,11 @@
                                                       StrokeThickness="1.5"
                                                       VerticalAlignment="Center"
                                                       Margin="0,0,4,0" />
-                                                <ContentPresenter VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Header, RelativeSource={RelativeSource AncestorType=controls:CollapsibleSection}}"
+                                                           FontWeight="SemiBold"
+                                                           FontSize="13"
+                                                           Foreground="{DynamicResource PrimaryText}"
+                                                           VerticalAlignment="Center" />
                                             </DockPanel>
                                         </Border>
                                         <ControlTemplate.Triggers>

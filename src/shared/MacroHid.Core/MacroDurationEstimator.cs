@@ -48,6 +48,12 @@ public static class MacroDurationEstimator
                 EstimateSteps(repeat.Steps, macroResolver, visiting, depth + 1),
                 Math.Max(0, repeat.Count)),
             PixelWhenStep pixel => EstimateSteps(pixel.ThenSteps, macroResolver, visiting, depth + 1),
+            ParallelStep parallel => MaxRange(
+                EstimateSteps(parallel.Left.Steps, macroResolver, visiting, depth + 1),
+                EstimateSteps(parallel.Right.Steps, macroResolver, visiting, depth + 1)),
+            ParallelBranchStep branch => EstimateSteps(branch.Steps, macroResolver, visiting, depth + 1),
+            TextWhenStep text => EstimateSteps(text.ThenSteps, macroResolver, visiting, depth + 1),
+            WeakNetStep weak when weak.Action == WeakNetAction.Hold => Fixed(weak.EffectiveDuration),
             MacroCallStep macro => EstimateMacroCall(macro, macroResolver, visiting, depth),
             _ => Zero
         };
@@ -95,6 +101,13 @@ public static class MacroDurationEstimator
         {
             visiting.Remove(document);
         }
+    }
+
+    private static MacroDurationRange MaxRange(MacroDurationRange left, MacroDurationRange right)
+    {
+        return new MacroDurationRange(
+            left.Min > right.Min ? left.Min : right.Min,
+            left.Max > right.Max ? left.Max : right.Max);
     }
 
     private static MacroDurationRange Fixed(TimeSpan duration) => new(duration, duration);

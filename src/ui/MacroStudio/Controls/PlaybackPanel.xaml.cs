@@ -82,7 +82,6 @@ public partial class PlaybackPanel : UserControl
         {
             StopCapture();
         }
-
         CaptureTriggerButton.IsEnabled = !value;
         PlaybackModeBox.IsEnabled = !value;
         PlaybackCountTextBox.IsEnabled = !value && GetSelectedPlaybackMode() == PlaybackMode.FixedCount;
@@ -110,6 +109,7 @@ public partial class PlaybackPanel : UserControl
         StartListeningButton.Content = L("StartListening");
         StopListeningButton.Content = L("StopListening");
         RunNowButton.Content = L("RunNow");
+        RunNowButton.ToolTip = L("RunNowOnceHint");
         StopPlaybackButton.Content = L("Stop");
 
         foreach (var item in PlaybackModeBox.Items.OfType<ComboBoxItem>())

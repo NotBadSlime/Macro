@@ -126,6 +126,7 @@
                         <Button x:Name="MinimizeWindowButton"
                                 Style="{StaticResource WindowControlButton}"
                                 Content="&#xE921;"
+                                ToolTip="最小化"
                                 Click="MinimizeWindow_Click" />
                         <Button x:Name="MaximizeWindowButton"
                                 Style="{StaticResource WindowControlButton}"

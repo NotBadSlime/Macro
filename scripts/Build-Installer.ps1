@@ -1,17 +1,19 @@
 param(
-    [string]$Version = "1.5.0",
+    [string]$Version = "1.6.0",
 
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
 
-    [switch]$InstallInno
+    [switch]$InstallInno,
+
+    [string]$OutputRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $artifactRoot = Join-Path $repoRoot "artifacts"
 $inputRoot = Join-Path $artifactRoot "installer-input"
-$outputRoot = Join-Path $artifactRoot "installer"
+$outputRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) { Join-Path $artifactRoot "installer" } else { $OutputRoot }
 $issPath = Join-Path $repoRoot "installer\MacroHID.iss"
 
 function Find-InnoCompiler {

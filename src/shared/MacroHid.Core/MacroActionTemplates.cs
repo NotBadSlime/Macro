@@ -15,6 +15,18 @@ public enum MacroActionTemplateKind
     Macro,
     Loop,
     Pixel,
+    TextWhen,
+    WeakNetStart,
+    WeakNetStop,
+    NetLimitStart,
+    NetLimitStop,
+    NetLimiterStart,
+    NetLimiterStop,
+    ClockShift,
+    ClockRestore,
+    FrameLockStart,
+    FrameLockStop,
+    Parallel,
     StopCurrent,
     StopIteration,
     StopAll
@@ -60,6 +72,49 @@ public static class MacroActionTemplateFactory
             MacroActionTemplateKind.Comment => [new CommentStep("注释")],
             MacroActionTemplateKind.Macro => [new MacroCallStep(string.Empty)],
             MacroActionTemplateKind.Loop => [new RepeatStep(2, [])],
+            MacroActionTemplateKind.TextWhen => [new TextWhenStep(
+                ScreenRegion.FromRect(0, 0, 640, 360),
+                "文字",
+                [])],
+            MacroActionTemplateKind.WeakNetStart => [new WeakNetStep(
+                "YuanShen.exe",
+                WeakNetAction.Start,
+                TimeSpan.Zero,
+                TimeSpan.FromHours(1))],
+            MacroActionTemplateKind.WeakNetStop => [new WeakNetStep(
+                string.Empty,
+                WeakNetAction.Stop,
+                TimeSpan.Zero,
+                TimeSpan.Zero)],
+            MacroActionTemplateKind.NetLimitStart => [new NetLimitStep(
+                "YuanShen.exe",
+                NetLimitAction.Start,
+                NetLimitStep.DefaultBytesPerSecond)],
+            MacroActionTemplateKind.NetLimitStop => [new NetLimitStep(
+                string.Empty,
+                NetLimitAction.Stop,
+                NetLimitStep.DefaultBytesPerSecond)],
+            MacroActionTemplateKind.NetLimiterStart => [new NetLimitStep(
+                "YuanShen.exe",
+                NetLimitAction.Start,
+                NetLimitStep.DefaultBytesPerSecond,
+                NetLimitEngine.NetLimiter)],
+            MacroActionTemplateKind.NetLimiterStop => [new NetLimitStep(
+                string.Empty,
+                NetLimitAction.Stop,
+                NetLimitStep.DefaultBytesPerSecond,
+                NetLimitEngine.NetLimiter)],
+            MacroActionTemplateKind.ClockShift => [new ClockShiftStep(
+                ClockShiftAction.Shift,
+                TimeSpan.FromHours(1))],
+            MacroActionTemplateKind.ClockRestore => [new ClockShiftStep(
+                ClockShiftAction.Restore,
+                TimeSpan.Zero)],
+            MacroActionTemplateKind.FrameLockStart => [new FrameLockStep("YuanShen.exe", FrameLockAction.Start, 60)],
+            MacroActionTemplateKind.FrameLockStop => [new FrameLockStep("YuanShen.exe", FrameLockAction.Stop, 60)],
+            MacroActionTemplateKind.Parallel => [new ParallelStep(
+                new ParallelBranchStep("分支 1", []),
+                new ParallelBranchStep("分支 2", []))],
             MacroActionTemplateKind.StopCurrent => [new StopCurrentSequenceStep()],
             MacroActionTemplateKind.StopIteration => [new StopCurrentIterationStep()],
             MacroActionTemplateKind.StopAll => [new StopAllSequencesStep()],

@@ -15,6 +15,27 @@
   <data name="AppTitle" xml:space="preserve">
     <value>MacroHID Studio</value>
   </data>
+  <data name="Minimize" xml:space="preserve"><value>Minimize</value></data>
+  <data name="MinimizeToTray" xml:space="preserve">
+    <value>Minimize to tray</value>
+  </data>
+  <data name="CloseWindow" xml:space="preserve"><value>Close</value></data>
+  <data name="CloseWindowPromptTitle" xml:space="preserve"><value>Close window</value></data>
+  <data name="CloseWindowPromptText" xml:space="preserve"><value>The minimize button always goes to the taskbar. Choose what the close button does this time.</value></data>
+  <data name="CloseToTray" xml:space="preserve"><value>Minimize to tray</value></data>
+  <data name="CloseToTrayHint" xml:space="preserve"><value>Hide the window. Macros that are already listening keep running.</value></data>
+  <data name="CloseAndExit" xml:space="preserve"><value>Exit</value></data>
+  <data name="CloseAndExitHint" xml:space="preserve"><value>Stop playback and leave MacroHID.</value></data>
+  <data name="RememberCloseChoice" xml:space="preserve"><value>Remember this choice</value></data>
+  <data name="CloseButtonBehavior" xml:space="preserve"><value>Close button</value></data>
+  <data name="CloseButtonAsk" xml:space="preserve"><value>Ask every time</value></data>
+  <data name="CloseButtonBehaviorHelp" xml:space="preserve"><value>Minimize always sends the window to the taskbar. The close button can hide it in the tray or exit. Ask every time until you pick one here or check Remember on the prompt.</value></data>
+  <data name="TrayShow" xml:space="preserve">
+    <value>Show window</value>
+  </data>
+  <data name="TrayExit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
   <data name="Language" xml:space="preserve">
     <value>Language</value>
   </data>
@@ -53,6 +74,21 @@
   </data>
   <data name="Trigger" xml:space="preserve">
     <value>Trigger</value>
+  </data>
+  <data name="StopTrigger" xml:space="preserve">
+    <value>Force stop key</value>
+  </data>
+  <data name="CaptureStopTriggerHint" xml:space="preserve">
+    <value>For example Alt+Tab or Tab</value>
+  </data>
+  <data name="StopTriggerHint" xml:space="preserve">
+    <value>Stops every playing macro and releases keys that are still held. It never starts a macro.</value>
+  </data>
+  <data name="StopTriggerMustDiffer" xml:space="preserve">
+    <value>The force stop key must be different from the playback trigger.</value>
+  </data>
+  <data name="ForceStopTriggered" xml:space="preserve">
+    <value>Force stop triggered; held keys were released.</value>
   </data>
   <data name="ProcessFilter" xml:space="preserve">
     <value>Process Filter</value>
@@ -219,6 +255,9 @@
   <data name="RunNow" xml:space="preserve">
     <value>Run Now</value>
   </data>
+  <data name="RunNowOnceHint" xml:space="preserve">
+    <value>Run Now plays one pass and does not start an infinite loop. Press Esc if the pointer is stuck.</value>
+  </data>
   <data name="Stop" xml:space="preserve">
     <value>Stop</value>
   </data>
@@ -285,6 +324,17 @@
   <data name="GlobalRuntime" xml:space="preserve">
     <value>Global runtime</value>
   </data>
+  <data name="MacroBasicControl" xml:space="preserve"><value>Macro basics</value></data>
+  <data name="PrecisionControl" xml:space="preserve"><value>Precision</value></data>
+  <data name="ZeroGapHold" xml:space="preserve"><value>Default gap</value></data>
+  <data name="ZeroGapHoldHelp" xml:space="preserve"><value>When a key or button has no delay between press and release, playback holds it for this long so the target still sees the press. Unit: microseconds. 0 sends press and release at the same moment. Default is 10000, which is 10 ms.</value></data>
+  <data name="ModifierChordHold" xml:space="preserve"><value>Chord gap</value></data>
+  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>Ctrl, Shift, Alt, and Win chords are stretched to at least this long. If the modifier is released before the foreground app observes it, the shortcut does not fire. Default is 30000 microseconds, which is 30 ms. A longer delay written in the macro is kept.</value></data>
+  <data name="Microseconds" xml:space="preserve"><value>µs</value></data>
+  <data name="HoldMicrosecondsInvalid" xml:space="preserve"><value>Enter a whole number of microseconds from 0 through 60000000.</value></data>
+  <data name="ClearHotkey" xml:space="preserve"><value>Clear</value></data>
+  <data name="ForceStopConflictsWithColorSample" xml:space="preserve"><value>The force stop key must be different from the color sample hotkey.</value></data>
+  <data name="ListeningForceStopConflict" xml:space="preserve"><value>These macros use the force-stop key and were not started: {0}</value></data>
   <data name="PrecisionBalanced" xml:space="preserve">
     <value>Basic</value>
   </data>
@@ -296,6 +346,39 @@
   </data>
   <data name="Sequence" xml:space="preserve">
     <value>Sequence</value>
+  </data>
+  <data name="DelayAdjustLabel" xml:space="preserve">
+    <value>Delay offset</value>
+  </data>
+  <data name="DelayAdjustHelp" xml:space="preserve">
+    <value>Positive values lengthen every delay. Negative values shorten them, but not below the minimum.</value>
+  </data>
+  <data name="DelayAdjustButton" xml:space="preserve">
+    <value>Adjust all delays</value>
+  </data>
+  <data name="DelayAdjustButtonHelp" xml:space="preserve">
+    <value>Adjust every delay card in the current sequence, including delays inside loops and pixel conditions. Delays already at the minimum stay put when the offset is negative. Undo restores the previous values.</value>
+  </data>
+  <data name="DelayFloorLabel" xml:space="preserve">
+    <value>Minimum</value>
+  </data>
+  <data name="DelayFloorHelp" xml:space="preserve">
+    <value>A negative offset will not go below this many milliseconds. A delay that is already at or under the minimum stays unchanged.</value>
+  </data>
+  <data name="DelayFloorInvalid" xml:space="preserve">
+    <value>Enter a minimum of 0 milliseconds or more.</value>
+  </data>
+  <data name="DelayAdjustInvalid" xml:space="preserve">
+    <value>Enter a number of milliseconds, such as 10 or -5.</value>
+  </data>
+  <data name="DelayAdjustNone" xml:space="preserve">
+    <value>This sequence has no delay cards.</value>
+  </data>
+  <data name="DelayAdjustUnchanged" xml:space="preserve">
+    <value>The delays did not change.</value>
+  </data>
+  <data name="DelayAdjustApplied" xml:space="preserve">
+    <value>Adjusted {0} delays.</value>
   </data>
   <data name="MacroValid" xml:space="preserve">
     <value>Macro valid</value>
@@ -439,6 +522,78 @@
   <data name="AddTextHint" xml:space="preserve"><value>Paste text into the focused field (Ctrl+V)</value></data>
   <data name="AddMacroActionHint" xml:space="preserve"><value>Call a library macro</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>Repeat a group of steps</value></data>
+  <data name="AddPixelHint" xml:space="preserve"><value>Match one screen pixel</value></data>
+  <data name="AddTextWhen" xml:space="preserve"><value>Text condition</value></data>
+  <data name="AddTextWhenHint" xml:space="preserve"><value>Run the following actions after the text appears</value></data>
+  <data name="AddWeakNet" xml:space="preserve"><value>Disconnect</value></data>
+  <data name="AddWeakNetHint" xml:space="preserve"><value>Drop a program's external packets. Set the clock offset on the card; playback restores it</value></data>
+  <data name="AddWeakNetStart" xml:space="preserve"><value>Start disconnect</value></data>
+  <data name="AddWeakNetStartHint" xml:space="preserve"><value>Drop external packets. Set the clock offset on the card</value></data>
+  <data name="AddWeakNetStop" xml:space="preserve"><value>Stop disconnect</value></data>
+  <data name="AddWeakNetStopHint" xml:space="preserve"><value>Restore the network. The clock returns when playback ends</value></data>
+  <data name="AddNetLimitStart" xml:space="preserve"><value>Start weak network</value></data>
+  <data name="AddNetLimitStartHint" xml:space="preserve"><value>Built-in limit, no extra install. Default 695 B/s, editable on the card</value></data>
+  <data name="AddNetLimitStop" xml:space="preserve"><value>Stop weak network</value></data>
+  <data name="AddNetLimitStopHint" xml:space="preserve"><value>Remove the limit and restore normal speed</value></data>
+  <data name="AddNetLimiterStart" xml:space="preserve"><value>NetLimiter limit</value></data>
+  <data name="AddNetLimiterStartHint" xml:space="preserve"><value>Use an installed NetLimiter. Default 695 B/s, editable</value></data>
+  <data name="AddNetLimiterStop" xml:space="preserve"><value>Stop NetLimiter</value></data>
+  <data name="AddNetLimiterStopHint" xml:space="preserve"><value>Remove the NetLimiter limit. Does nothing if it is not installed</value></data>
+  <data name="AddClockShift" xml:space="preserve"><value>Shift system time</value></data>
+  <data name="AddClockShiftHint" xml:space="preserve"><value>Move the system clock forward. Set the amount on the card</value></data>
+  <data name="AddClockRestore" xml:space="preserve"><value>Restore system time</value></data>
+  <data name="AddClockRestoreHint" xml:space="preserve"><value>Put the clock back now. Playback end restores it too</value></data>
+  <data name="AddParallel" xml:space="preserve"><value>Parallel</value></data>
+  <data name="AddParallelHint" xml:space="preserve"><value>Detect on two branches, then continue</value></data>
+  <data name="TemplateTextWhen" xml:space="preserve"><value>text condition</value></data>
+  <data name="TemplateWeakNet" xml:space="preserve"><value>disconnect</value></data>
+  <data name="TemplateWeakNetStart" xml:space="preserve"><value>start disconnect</value></data>
+  <data name="TemplateWeakNetStop" xml:space="preserve"><value>stop disconnect</value></data>
+  <data name="TemplateNetLimitStart" xml:space="preserve"><value>start weak network</value></data>
+  <data name="TemplateNetLimitStop" xml:space="preserve"><value>stop weak network</value></data>
+  <data name="TemplateNetLimiterStart" xml:space="preserve"><value>NetLimiter limit</value></data>
+  <data name="TemplateNetLimiterStop" xml:space="preserve"><value>stop NetLimiter</value></data>
+  <data name="TemplateClockShift" xml:space="preserve"><value>shift system time</value></data>
+  <data name="TemplateClockRestore" xml:space="preserve"><value>restore system time</value></data>
+  <data name="TemplateParallel" xml:space="preserve"><value>parallel</value></data>
+  <data name="WeakNetProcess" xml:space="preserve"><value>Process</value></data>
+  <data name="WeakNetAction" xml:space="preserve"><value>Action</value></data>
+  <data name="WeakNetDurationMs" xml:space="preserve"><value>Duration (ms)</value></data>
+  <data name="WeakNetHold" xml:space="preserve"><value>Hold</value></data>
+  <data name="WeakNetStart" xml:space="preserve"><value>Start</value></data>
+  <data name="WeakNetStop" xml:space="preserve"><value>Stop</value></data>
+  <data name="WeakNetShiftHours" xml:space="preserve"><value>Hours ahead</value></data>
+  <data name="WeakNetShiftMinutes" xml:space="preserve"><value>Minutes ahead</value></data>
+  <data name="WeakNetShiftHint" xml:space="preserve"><value>0 hours and 0 minutes leaves the clock unchanged. One playback uses only the first offset, then restores it. Maximum 24 hours.</value></data>
+  <data name="WeakNetStopHint" xml:space="preserve"><value>Restores the network. The clock still returns when playback ends.</value></data>
+  <data name="NetLimitProcess" xml:space="preserve"><value>Process</value></data>
+  <data name="NetLimitBytes" xml:space="preserve"><value>Limit (B/s)</value></data>
+  <data name="NetLimitHint" xml:space="preserve"><value>New cards start at 695. Only upload is limited; download is left alone. The number is bytes per second. Playback end removes it.</value></data>
+  <data name="NetLimitStopHint" xml:space="preserve"><value>Removes the limit and restores normal speed.</value></data>
+  <data name="NetLimiterHint" xml:space="preserve"><value>Uses NetLimiter if it is installed. New cards start at 695. Only upload is limited; download is left alone. The number is bytes per second.</value></data>
+  <data name="NetLimiterStopHint" xml:space="preserve"><value>Removes the NetLimiter limit. If NetLimiter is not installed, this card leaves the network unchanged.</value></data>
+  <data name="ClockShiftHint" xml:space="preserve"><value>0 hours and 0 minutes leaves the clock unchanged. One playback uses only the first shift. Disconnect cards still shift by default.</value></data>
+  <data name="ClockRestoreHint" xml:space="preserve"><value>Puts the clock back immediately. Playback end restores it if it is still shifted.</value></data>
+  <data name="AddFrameLockStart" xml:space="preserve"><value>Start frame lock</value></data>
+  <data name="AddFrameLockStartHint" xml:space="preserve"><value>Limit a program to the chosen FPS</value></data>
+  <data name="AddFrameLockStop" xml:space="preserve"><value>Stop frame lock</value></data>
+  <data name="AddFrameLockStopHint" xml:space="preserve"><value>Restore that program's previous frame limit</value></data>
+  <data name="TemplateFrameLockStart" xml:space="preserve"><value>start frame lock</value></data>
+  <data name="TemplateFrameLockStop" xml:space="preserve"><value>stop frame lock</value></data>
+  <data name="FrameLockProcess" xml:space="preserve"><value>Process</value></data>
+  <data name="FrameLockFps" xml:space="preserve"><value>Frame limit</value></data>
+  <data name="FrameLockHint" xml:space="preserve"><value>FPS is 1 to 1000. Stop restores the previous limit. Playback end restores it too.</value></data>
+  <data name="PaletteBasic" xml:space="preserve"><value>Basics</value></data>
+  <data name="PaletteAdvanced" xml:space="preserve"><value>Advanced</value></data>
+  <data name="PaletteLoop" xml:space="preserve"><value>Loop control</value></data>
+  <data name="ParallelTimeoutMs" xml:space="preserve"><value>Timeout (ms, empty waits until match or playback stops)</value></data>
+  <data name="ParallelStart" xml:space="preserve"><value>Parallel</value></data>
+  <data name="ParallelEnd" xml:space="preserve"><value>End parallel</value></data>
+  <data name="ParallelBranchEnd" xml:space="preserve"><value>End {0}</value></data>
+  <data name="TextWhenExpected" xml:space="preserve"><value>Expected text</value></data>
+  <data name="TextWhenContains" xml:space="preserve"><value>Contains</value></data>
+  <data name="TextWhenUseRegex" xml:space="preserve"><value>Regular expression</value></data>
+  <data name="TextWhenRegion" xml:space="preserve"><value>Region (left top right bottom)</value></data>
   <data name="AddStopCurrentHint" xml:space="preserve"><value>Exit this macro call and continue the caller</value></data>
   <data name="AddStopIterationHint" xml:space="preserve"><value>Skip remaining steps this round; toggle/hold loop starts the next round (including startup gates)</value></data>
   <data name="AddStopAllHint" xml:space="preserve"><value>Immediately stop the entire playback</value></data>
@@ -450,6 +605,8 @@
   <data name="Action" xml:space="preserve"><value>Action</value></data>
   <data name="MoveMode" xml:space="preserve"><value>Move Mode</value></data>
   <data name="TimingMs" xml:space="preserve"><value>Time (ms)</value></data>
+  <data name="MouseMoveDuration" xml:space="preserve"><value>Smooth time (ms)</value></data>
+  <data name="MouseMoveDurationHint" xml:space="preserve"><value>A relative move starts fast and slows into the target. Travel past the screen edge recenters the cursor and continues. 0 still splits long distances but looks like one flick. Absolute coordinates still jump immediately.</value></data>
   <data name="LoopCount" xml:space="preserve"><value>Loop Count</value></data>
   <data name="PixelIf" xml:space="preserve"><value>Pixel IF</value></data>
   <data name="PickColor" xml:space="preserve"><value>Pick Color</value></data>
@@ -476,6 +633,12 @@
   <data name="StopSelectedDatabasesListening" xml:space="preserve"><value>Stop {0} selected</value></data>
   <data name="GroupProcessFilter" xml:space="preserve"><value>Active process</value></data>
   <data name="GroupProcessFilterHelp" xml:space="preserve"><value>Enable this group only when the process is foreground, such as chrome.exe or notepad; chrome.</value></data>
+  <data name="BackgroundWindow" xml:space="preserve"><value>Background playback</value></data>
+  <data name="BackgroundProcess" xml:space="preserve"><value>Target process</value></data>
+  <data name="BackgroundSelectProcess" xml:space="preserve"><value>Choose</value></data>
+  <data name="BackgroundProcessPlaceholder" xml:space="preserve"><value>Use the database process</value></data>
+  <data name="BackgroundWindowHelp" xml:space="preserve"><value>Leave this empty to use the active process of the macro's database. Keys, clicks, and the wheel go to that window, and pixels and text are captured from it. The window may be covered, but not minimized.</value></data>
+  <data name="BackgroundProcessRequired" xml:space="preserve"><value>This macro is in the global database, which has no active process. Set the background playback target process.</value></data>
   <data name="ProcessGroupDatabaseSummary" xml:space="preserve"><value>Process group library · {0}</value></data>
   <data name="SelectProcess" xml:space="preserve"><value>Process</value></data>
   <data name="SelectProcessFile" xml:space="preserve"><value>File</value></data>

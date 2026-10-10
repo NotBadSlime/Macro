@@ -39,6 +39,11 @@ public static class ScreenPixelSampler
         {
             if (owner is not null)
             {
+                if (owner is MainWindow studio)
+                {
+                    studio.PushTaskbarMinimize();
+                }
+
                 owner.WindowState = WindowState.Minimized;
                 minimizedOwner = true;
                 await owner.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -71,6 +76,10 @@ public static class ScreenPixelSampler
             if (minimizedOwner && owner is not null && restoreState is { } state)
             {
                 owner.WindowState = state;
+                if (owner is MainWindow studio)
+                {
+                    studio.PopTaskbarMinimize();
+                }
             }
         }
     }

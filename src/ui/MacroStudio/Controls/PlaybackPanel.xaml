@@ -7,7 +7,6 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -59,7 +58,7 @@
                            Text="支持主键盘、数字小键盘、符号键、F1–F24 和标准鼠标 1–5 键。" />
             </StackPanel>
 
-            <StackPanel Grid.Row="3" Grid.Column="0">
+            <StackPanel Grid.Row="2" Grid.Column="0">
                 <TextBlock x:Name="ModeLabelText" Text="模式" Style="{StaticResource FieldLabel}" />
                 <ComboBox x:Name="PlaybackModeBox" Height="30" SelectionChanged="PlaybackModeBox_SelectionChanged">
                     <ComboBoxItem Tag="toggleLoop" Content="按下循环" />
@@ -67,12 +66,12 @@
                     <ComboBoxItem Tag="fixedCount" Content="播放 N 次" IsSelected="True" />
                 </ComboBox>
             </StackPanel>
-            <StackPanel Grid.Row="3" Grid.Column="2">
+            <StackPanel Grid.Row="2" Grid.Column="2">
                 <TextBlock x:Name="PlaybackCountLabelText" Text="次数" Style="{StaticResource FieldLabel}" />
                 <TextBox x:Name="PlaybackCountTextBox" Height="30" Text="1" TextChanged="PlaybackSettings_TextChanged" />
             </StackPanel>
 
-            <Grid Grid.Row="4" Grid.ColumnSpan="3" Margin="0,12,0,0">
+            <Grid Grid.Row="3" Grid.ColumnSpan="3" Margin="0,12,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />

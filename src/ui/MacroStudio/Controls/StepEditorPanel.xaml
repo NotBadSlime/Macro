@@ -365,8 +365,14 @@
                 </StackPanel>
 
                 <StackPanel x:Name="TimingEditPanel" Margin="0,0,0,10">
-                    <TextBlock x:Name="TimingLabelText" Text="时间（毫秒）" Style="{StaticResource FieldLabel}" />
+                    <TextBlock x:Name="TimingLabelText" Text="平滑时间（毫秒）" Style="{StaticResource FieldLabel}" />
                     <TextBox x:Name="TimingMsBox" Height="30" />
+                    <TextBlock x:Name="MouseMoveDurationHintText"
+                               Margin="0,4,0,0"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="相对移动会先快后慢地滑过去。超过屏幕的长距离会在边缘回中后继续。填 0 仍会分段发出，看起来像一帧拉枪。绝对坐标仍然瞬间到达。" />
                 </StackPanel>
 
                 <StackPanel x:Name="DelayEditPanel" Margin="0,0,0,10">
@@ -402,12 +408,101 @@
                              Height="72"
                              AcceptsReturn="True"
                              TextWrapping="Wrap"
-                             PreviewKeyDown="StepTextBox_PreviewKeyDown" />
+                             />
                 </StackPanel>
 
                 <StackPanel x:Name="LoopEditPanel" Margin="0,0,0,10">
                     <TextBlock x:Name="LoopCountLabelText" Text="循环次数" Style="{StaticResource FieldLabel}" />
                     <TextBox x:Name="LoopCountBox" Height="30" />
+                </StackPanel>
+
+                <StackPanel x:Name="NetLimitEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="NetLimitStopHintText" Text="取消限速，恢复原来的网速。" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="NetLimitProcessLabelText" Text="进程名" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="NetLimitProcessBox" Height="30" />
+                    <TextBlock x:Name="NetLimitBytesLabelText" Text="限速 (B/s)" Style="{StaticResource FieldLabel}" Margin="0,9,0,0" />
+                    <TextBox x:Name="NetLimitBytesBox" Height="30" />
+                    <TextBlock x:Name="NetLimitHintText" Text="新建时默认 695。只限制上传，下载不限，单位是字节/秒。" Style="{StaticResource FieldLabel}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel x:Name="ClockShiftEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="ClockRestoreHintText" Text="立刻把系统时间改回。播放结束时如果还没改回，也会自动改回。" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                    <Grid x:Name="ClockShiftRow">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="ClockShiftHoursLabelText" Text="拨快小时" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="ClockShiftHoursBox" Height="30" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="ClockShiftMinutesLabelText" Text="拨快分钟" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="ClockShiftMinutesBox" Height="30" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock x:Name="ClockShiftHintText" Text="填 0 小时 0 分钟则不改系统时间。同一次播放只按第一次拨快。断网卡片仍会默认拨快。" Style="{StaticResource FieldLabel}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel x:Name="WeakNetEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="WeakNetStopHintText" Text="恢复网络。系统时间仍在宏结束时改回。" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="WeakNetProcessLabelText" Text="进程名" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="WeakNetProcessBox" Height="30" />
+                    <TextBlock x:Name="WeakNetDurationLabelText" Text="持续毫秒" Style="{StaticResource FieldLabel}" Margin="0,9,0,0" />
+                    <TextBox x:Name="WeakNetDurationBox" Height="30" />
+                    <Grid x:Name="WeakNetShiftRow" Margin="0,9,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="WeakNetShiftHoursLabelText" Text="拨快小时" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="WeakNetShiftHoursBox" Height="30" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="WeakNetShiftMinutesLabelText" Text="拨快分钟" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="WeakNetShiftMinutesBox" Height="30" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock x:Name="WeakNetShiftHintText" Text="填 0 小时 0 分钟则不改系统时间。同一次播放只按第一次拨快，宏结束时改回。" Style="{StaticResource FieldLabel}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel x:Name="FrameLockEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="FrameLockProcessLabelText" Text="进程名" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="FrameLockProcessBox" Height="30" />
+                    <TextBlock x:Name="FrameLockFpsLabelText" Text="锁定帧数" Style="{StaticResource FieldLabel}" Margin="0,9,0,0" />
+                    <TextBox x:Name="FrameLockFpsBox" Height="30" />
+                    <TextBlock x:Name="FrameLockHintText" Text="帧数 1 到 1000。关闭时恢复原来的上限。播放结束也会恢复。" Style="{StaticResource FieldLabel}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel x:Name="ParallelEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="ParallelTimeoutLabelText" Text="超时（毫秒，留空直到成立）" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="ParallelTimeoutBox" Height="30" />
+                </StackPanel>
+
+                <StackPanel x:Name="TextWhenEditPanel" Margin="0,0,0,10">
+                    <TextBlock x:Name="TextWhenExpectedLabelText" Text="期望文字" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="TextWhenExpectedBox" Height="30" />
+                    <CheckBox x:Name="TextWhenContainsBox" Content="包含匹配" IsChecked="True" Margin="0,8,0,0" />
+                    <CheckBox x:Name="TextWhenRegexBox" Content="正则" Margin="0,4,0,0" />
+                    <TextBlock x:Name="TextWhenRegionLabelText" Text="区域（左 上 右 下）" Style="{StaticResource FieldLabel}" Margin="0,9,0,0" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="TextWhenLeftBox" Height="30" />
+                        <TextBox x:Name="TextWhenTopBox" Grid.Column="2" Height="30" />
+                        <TextBox x:Name="TextWhenRightBox" Grid.Column="4" Height="30" />
+                        <TextBox x:Name="TextWhenBottomBox" Grid.Column="6" Height="30" />
+                    </Grid>
                 </StackPanel>
 
                 <StackPanel x:Name="PixelEditPanel" Margin="0,0,0,10">

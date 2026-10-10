@@ -16,8 +16,13 @@ internal sealed class ManagedMacroControlFlowRunner
     private readonly IPlaybackDelayStrategy delayStrategy;
     private readonly IHighResolutionClock clock;
     private readonly Func<PixelCondition, bool>? pixelEvaluator;
+    private readonly Func<TextWhenStep, CancellationToken, bool>? textEvaluator;
     private readonly Func<string, MacroDocument?>? macroResolver;
     private readonly PlaybackPauseCoordinator? pauseCoordinator;
+    private readonly bool pollConditions;
+    private readonly object inputGate;
+    private readonly int parallelDepth;
+    private readonly InputPressFloor pressFloor;
 
     public ManagedMacroControlFlowRunner(
         IMacroInputSink inputSink,
@@ -25,14 +30,24 @@ internal sealed class ManagedMacroControlFlowRunner
         IHighResolutionClock clock,
         Func<PixelCondition, bool>? pixelEvaluator,
         Func<string, MacroDocument?>? macroResolver,
-        PlaybackPauseCoordinator? pauseCoordinator = null)
+        PlaybackPauseCoordinator? pauseCoordinator = null,
+        Func<TextWhenStep, CancellationToken, bool>? textEvaluator = null,
+        bool pollConditions = false,
+        object? inputGate = null,
+        int parallelDepth = 0,
+        InputPressFloor? pressFloor = null)
     {
         this.inputSink = inputSink;
         this.delayStrategy = delayStrategy;
         this.clock = clock;
         this.pixelEvaluator = pixelEvaluator;
+        this.textEvaluator = textEvaluator;
         this.macroResolver = macroResolver;
         this.pauseCoordinator = pauseCoordinator;
+        this.pollConditions = pollConditions;
+        this.inputGate = inputGate ?? new object();
+        this.parallelDepth = parallelDepth;
+        this.pressFloor = pressFloor ?? InputPressFloor.Factory;
     }
 
     public MacroControlFlowResult Run(
@@ -48,7 +63,7 @@ internal sealed class ManagedMacroControlFlowRunner
         var elapsedTicks = 0L;
         var nextSequence = sequence;
         var submittedActions = actionsSubmitted;
-        var pressGaps = new PressReleaseGapTracker(qpcFrequency);
+        var pressGaps = new PressReleaseGapTracker(qpcFrequency, pressFloor);
         PaddleOcrBridge? ocrBridge = null;
 
         try
@@ -120,22 +135,77 @@ internal sealed class ManagedMacroControlFlowRunner
                     break;
 
                 case PixelWhenStep pixel:
-                    if (pixel.WindowStart is { } windowStart)
+                    if (pollConditions && !noWait)
                     {
-                        elapsedTicks = Math.Max(elapsedTicks, ToTicks(windowStart, qpcFrequency));
-                    }
-
-                    if (pixelEvaluator?.Invoke(pixel.Condition) == true)
-                    {
-                        if (pixel.ThenSteps.Count > 0)
+                        if (WaitUntilPixelMatches(pixel, cancellationToken, qpcFrequency) && pixel.ThenSteps.Count > 0)
                         {
                             frames.Add(ExecutionFrame.ForBlock(pixel.ThenSteps, 1));
                         }
                     }
-                    else if (pixel.WindowEnd is { } windowEnd)
+                    else
                     {
-                        elapsedTicks = Math.Max(elapsedTicks, ToTicks(windowEnd, qpcFrequency));
+                        if (pixel.WindowStart is { } windowStart)
+                        {
+                            elapsedTicks = Math.Max(elapsedTicks, ToTicks(windowStart, qpcFrequency));
+                        }
+
+                        if (pixelEvaluator?.Invoke(pixel.Condition) == true)
+                        {
+                            if (pixel.ThenSteps.Count > 0)
+                            {
+                                frames.Add(ExecutionFrame.ForBlock(pixel.ThenSteps, 1));
+                            }
+                        }
+                        else if (pixel.WindowEnd is { } windowEnd)
+                        {
+                            elapsedTicks = Math.Max(elapsedTicks, ToTicks(windowEnd, qpcFrequency));
+                        }
                     }
+                    break;
+
+                case TextWhenStep textWhen:
+                    if (TextMatches(textWhen, cancellationToken, qpcFrequency, noWait) && textWhen.ThenSteps.Count > 0)
+                    {
+                        frames.Add(ExecutionFrame.ForBlock(textWhen.ThenSteps, 1));
+                    }
+                    break;
+
+                case WeakNetStep weakNet:
+                    WaitToCurrentTick();
+                    ExecuteWeakNet(weakNet, cancellationToken, qpcFrequency, noWait);
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    break;
+
+                case NetLimitStep netLimit:
+                    WaitToCurrentTick();
+                    ExecuteNetLimit(netLimit);
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    break;
+
+                case ClockShiftStep clockShift:
+                    WaitToCurrentTick();
+                    ExecuteClockShift(clockShift);
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    break;
+
+                case FrameLockStep frameLock:
+                    WaitToCurrentTick();
+                    ExecuteFrameLock(frameLock);
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    break;
+
+                case ParallelStep parallel:
+                    WaitToCurrentTick();
+                    var parallelOutcome = ExecuteParallel(parallel, qpcFrequency, cancellationToken, noWait);
+                    submittedActions += parallelOutcome.Actions;
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    if (parallelOutcome.Result is MacroControlFlowResult.StopAll or MacroControlFlowResult.StopIteration)
+                    {
+                        return parallelOutcome.Result;
+                    }
+                    break;
+
+                case ParallelBranchStep:
                     break;
 
                 case KeyStep key:
@@ -179,8 +249,19 @@ internal sealed class ManagedMacroControlFlowRunner
                     break;
 
                 case MouseMoveStep move:
-                    Submit(new MouseMoveInputAction(move.Mode, move.X, move.Y, move.Buttons));
-                    elapsedTicks += ToTicks(move.Duration, qpcFrequency);
+                    var moveOrigin = elapsedTicks;
+                    foreach (var slice in MouseMoveSmoothing.Split(move.Mode, move.X, move.Y, move.Duration))
+                    {
+                        elapsedTicks = moveOrigin + ToTicks(slice.Offset, qpcFrequency);
+                        Submit(new MouseMoveInputAction(slice.Mode, slice.X, slice.Y, move.Buttons));
+                    }
+
+                    var moveEnd = moveOrigin + ToTicks(move.Duration, qpcFrequency);
+                    if (elapsedTicks < moveEnd)
+                    {
+                        elapsedTicks = moveEnd;
+                    }
+
                     break;
 
                 case MouseWheelStep wheel:
@@ -299,6 +380,11 @@ internal sealed class ManagedMacroControlFlowRunner
                 }
             }
 
+            if (pollConditions)
+            {
+                WaitToCurrentTick();
+            }
+
             return MacroControlFlowResult.Completed;
         }
         finally
@@ -321,8 +407,11 @@ internal sealed class ManagedMacroControlFlowRunner
                 pauseCoordinator.WaitUntil(dueTick, delayStrategy, qpcFrequency, cancellationToken, noWait);
             }
             cancellationToken.ThrowIfCancellationRequested();
-            inputSink.Submit(nextSequence++, action);
-            submittedActions++;
+            lock (inputGate)
+            {
+                inputSink.Submit(nextSequence++, action);
+                submittedActions++;
+            }
         }
 
         void WaitToCurrentTick()
@@ -338,6 +427,233 @@ internal sealed class ManagedMacroControlFlowRunner
             }
             cancellationToken.ThrowIfCancellationRequested();
         }
+    }
+
+    private bool WaitUntilPixelMatches(PixelWhenStep pixel, CancellationToken cancellationToken, long qpcFrequency)
+    {
+        var intervalTicks = ToTicks(pixel.EffectivePollInterval, qpcFrequency);
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            if (pixelEvaluator?.Invoke(pixel.Condition) == true)
+            {
+                return true;
+            }
+
+            var next = clock.GetTimestamp() + Math.Max(1, intervalTicks);
+            delayStrategy.WaitUntil(next, qpcFrequency, cancellationToken, noWait: false);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return false;
+    }
+
+    private bool TextMatches(TextWhenStep step, CancellationToken cancellationToken, long qpcFrequency, bool noWait)
+    {
+        if (!(pollConditions && !noWait))
+        {
+            return textEvaluator?.Invoke(step, cancellationToken) == true;
+        }
+
+        var intervalTicks = ToTicks(step.EffectivePollInterval, qpcFrequency);
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            if (textEvaluator?.Invoke(step, cancellationToken) == true)
+            {
+                return true;
+            }
+
+            var next = clock.GetTimestamp() + Math.Max(1, intervalTicks);
+            delayStrategy.WaitUntil(next, qpcFrequency, cancellationToken, noWait: false);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return false;
+    }
+
+    private void ExecuteWeakNet(WeakNetStep step, CancellationToken cancellationToken, long qpcFrequency, bool noWait)
+    {
+        if (step.Action == WeakNetAction.Stop)
+        {
+            WeakNetSession.Stop();
+            return;
+        }
+
+        if (!WeakNetSession.TryStart(step.ProcessName, step.EffectiveTimeShift, out var error))
+        {
+            throw new InvalidOperationException(error ?? "无法开启断网。");
+        }
+
+        if (step.Action != WeakNetAction.Hold)
+        {
+            return;
+        }
+
+        try
+        {
+            var due = clock.GetTimestamp() + ToTicks(step.EffectiveDuration, qpcFrequency);
+            delayStrategy.WaitUntil(due, qpcFrequency, cancellationToken, noWait);
+        }
+        finally
+        {
+            WeakNetSession.Stop();
+        }
+    }
+
+    private static void ExecuteNetLimit(NetLimitStep step)
+    {
+        if (step.Action == NetLimitAction.Stop)
+        {
+            NetLimitSession.Stop(step.Engine);
+            return;
+        }
+
+        if (!NetLimitSession.TryStart(step.ProcessName, step.EffectiveBytesPerSecond, step.Engine, out var error))
+        {
+            throw new InvalidOperationException(error ?? "无法开启弱网限速。");
+        }
+    }
+
+    private static void ExecuteClockShift(ClockShiftStep step)
+    {
+        if (!PlaybackEffectScope.TryAcquire("network", out var ownershipError))
+            throw new InvalidOperationException(ownershipError);
+        if (step.Action == ClockShiftAction.Restore)
+        {
+            SystemTimeShift.Restore();
+            return;
+        }
+
+        try
+        {
+            SystemTimeShift.ShiftForwardOnce(step.EffectiveTimeShift);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(ex.Message);
+        }
+    }
+
+    private static void ExecuteFrameLock(FrameLockStep step)
+    {
+        var ok = step.Action == FrameLockAction.Stop
+            ? FrameLockSession.TryStop(step.ProcessName, out var error)
+            : FrameLockSession.TryStart(step.ProcessName, step.EffectiveFps, out error);
+        if (!ok)
+        {
+            throw new InvalidOperationException(error ?? "无法调整锁帧。");
+        }
+    }
+
+    private (MacroControlFlowResult Result, int Actions) ExecuteParallel(
+        ParallelStep parallel,
+        long qpcFrequency,
+        CancellationToken cancellationToken,
+        bool noWait)
+    {
+        if (parallelDepth >= 8)
+        {
+            throw new InvalidOperationException("Parallel nesting exceeded the safety limit.");
+        }
+
+        using var branchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (!noWait && parallel.Timeout is { } timeout && timeout > TimeSpan.Zero)
+        {
+            branchCancellation.CancelAfter(timeout);
+        }
+
+        var branches = new[] { parallel.Left.Steps, parallel.Right.Steps };
+        var results = new[] { MacroControlFlowResult.Completed, MacroControlFlowResult.Completed };
+        var counts = new int[2];
+        var errors = new Exception?[2];
+        var tasks = new Task[2];
+        for (var index = 0; index < branches.Length; index++)
+        {
+            var branchIndex = index;
+            var branchSteps = branches[index];
+            tasks[index] = Task.Run(() =>
+            {
+                try
+                {
+                    var branchRunner = new ManagedMacroControlFlowRunner(
+                        inputSink,
+                        delayStrategy,
+                        clock,
+                        pixelEvaluator,
+                        macroResolver,
+                        pauseCoordinator,
+                        textEvaluator,
+                        pollConditions: true,
+                        inputGate,
+                        parallelDepth + 1,
+                        pressFloor);
+                    uint sequence = 1;
+                    var submitted = 0;
+                    var document = new MacroDocument(1, "_parallel_branch", PlaybackSettings.Default, branchSteps);
+                    var flow = branchRunner.Run(
+                        document,
+                        clock.GetTimestamp(),
+                        qpcFrequency,
+                        branchCancellation.Token,
+                        noWait,
+                        ref sequence,
+                        ref submitted);
+                    counts[branchIndex] = submitted;
+                    results[branchIndex] = flow;
+                    if (flow is MacroControlFlowResult.StopAll or MacroControlFlowResult.StopIteration)
+                    {
+                        branchCancellation.Cancel();
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    errors[branchIndex] = ex;
+                    branchCancellation.Cancel();
+                }
+            }, branchCancellation.Token);
+        }
+
+        try
+        {
+            Task.WaitAll(tasks);
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(error => error is OperationCanceledException or TaskCanceledException))
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+        }
+
+        var failure = errors.FirstOrDefault(error => error is not null);
+        if (failure is not null)
+        {
+            if (failure is OperationCanceledException && cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            if (failure is not OperationCanceledException)
+            {
+                throw failure;
+            }
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+
+        if (results.Any(result => result == MacroControlFlowResult.StopAll))
+        {
+            return (MacroControlFlowResult.StopAll, counts.Sum());
+        }
+
+        if (results.Any(result => result == MacroControlFlowResult.StopIteration))
+        {
+            return (MacroControlFlowResult.StopIteration, counts.Sum());
+        }
+
+        return (MacroControlFlowResult.Completed, counts.Sum());
     }
 
     private static bool StopCurrentMacro(List<ExecutionFrame> frames)
@@ -536,7 +852,10 @@ internal static class MacroControlFlowInspector
             }
 
             if (step is RepeatStep repeat && ContainsControlInstruction(repeat.Steps)
-                || step is PixelWhenStep pixel && ContainsControlInstruction(pixel.ThenSteps))
+                || step is PixelWhenStep pixel && ContainsControlInstruction(pixel.ThenSteps)
+                || step is TextWhenStep text && ContainsControlInstruction(text.ThenSteps)
+                || step is ParallelStep parallel && (ContainsControlInstruction(parallel.Left.Steps) || ContainsControlInstruction(parallel.Right.Steps))
+                || step is ParallelBranchStep branch && ContainsControlInstruction(branch.Steps))
             {
                 return true;
             }
@@ -561,13 +880,15 @@ internal static class MacroControlFlowInspector
         {
             switch (step)
             {
-                case StopCurrentSequenceStep or StopCurrentIterationStep or StopAllSequencesStep or WindowActivateStep or OcrExtractTextStep or OcrClickStep:
+                case StopCurrentSequenceStep or StopCurrentIterationStep or StopAllSequencesStep or WindowActivateStep or OcrExtractTextStep or OcrClickStep or WeakNetStep or NetLimitStep or ClockShiftStep or ParallelStep or TextWhenStep or FrameLockStep:
                     return true;
                 case TextStep text when !string.IsNullOrEmpty(text.Text):
                     return true;
                 case RepeatStep repeat when InspectSteps(repeat.Steps, macroResolver, visitingDocuments, visitingNames, depth):
                     return true;
                 case PixelWhenStep pixel when InspectSteps(pixel.ThenSteps, macroResolver, visitingDocuments, visitingNames, depth):
+                    return true;
+                case ParallelBranchStep branch when InspectSteps(branch.Steps, macroResolver, visitingDocuments, visitingNames, depth):
                     return true;
                 case MacroCallStep macro when macroResolver is not null:
                 {

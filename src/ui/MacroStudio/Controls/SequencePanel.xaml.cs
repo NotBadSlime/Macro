@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -97,6 +98,7 @@ public partial class SequencePanel : UserControl
     {
         SaveLibraryButton.Content = L("SaveLibrary");
         RunNowHeaderButton.Content = L("RunNow");
+        RunNowHeaderButton.ToolTip = L("RunNowOnceHint");
         StopHeaderButton.Content = L("Stop");
         RecordInputButton.Content = L(isRecording ? "StopRecording" : "StartRecording");
         RecordInputButton.ToolTip = L("RecordingHelp");
@@ -106,6 +108,12 @@ public partial class SequencePanel : UserControl
         LibraryPathBox.ToolTip = L("LibraryPathHelp");
         ScheduledStepsLabelText.Text = L("ScheduledSteps");
         DurationLabelText.Text = L("Duration");
+        DelayAdjustLabel.Text = L("DelayAdjustLabel");
+        DelayAdjustBox.ToolTip = L("DelayAdjustHelp");
+        DelayFloorLabel.Text = L("DelayFloorLabel");
+        DelayFloorBox.ToolTip = L("DelayFloorHelp");
+        DelayAdjustButton.Content = L("DelayAdjustButton");
+        DelayAdjustButton.ToolTip = L("DelayAdjustButtonHelp");
         MacroLockButton.Content = isReadOnly ? L("UnlockMacro") : L("LockMacro");
         MacroLockButton.ToolTip = isReadOnly ? L("UnlockMacroHelp") : L("LockMacroHelp");
         StepSequenceControl.ApplyLocalization();
@@ -120,6 +128,9 @@ public partial class SequencePanel : UserControl
         MacroNameBox.IsReadOnly = value;
         SaveLibraryButton.IsEnabled = !value;
         RecordInputButton.IsEnabled = isRecording || !value;
+        DelayAdjustBox.IsEnabled = !value;
+        DelayFloorBox.IsEnabled = !value;
+        DelayAdjustButton.IsEnabled = !value;
         StepSequenceControl.SetReadOnly(value);
     }
 
@@ -392,6 +403,78 @@ public partial class SequencePanel : UserControl
         var preferredGroupId = snapshot.Items.FirstOrDefault(item =>
             string.Equals(item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase))?.GroupId;
         return MacroLibraryResolver.Resolve(snapshot.Items, reference, preferredGroupId);
+    }
+
+    private void DelayAdjustBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        ApplyDelayAdjustment();
+        e.Handled = true;
+    }
+
+    private void DelayAdjustButton_Click(object sender, RoutedEventArgs e) => ApplyDelayAdjustment();
+
+    private void ApplyDelayAdjustment()
+    {
+        if (isReadOnly)
+        {
+            return;
+        }
+
+        if (!TryReadMilliseconds(DelayAdjustBox.Text, out var milliseconds))
+        {
+            DelayAdjustStatusText.Text = L("DelayAdjustInvalid");
+            return;
+        }
+
+        if (!TryReadMilliseconds(DelayFloorBox.Text, out var floorMilliseconds) || floorMilliseconds < 0)
+        {
+            DelayAdjustStatusText.Text = L("DelayFloorInvalid");
+            return;
+        }
+
+        MacroDocument document;
+        try
+        {
+            document = McrxParser.Parse(EditorText);
+        }
+        catch (Exception ex)
+        {
+            DelayAdjustStatusText.Text = ex.Message;
+            return;
+        }
+
+        var adjusted = DelayBatchAdjustment.Shift(
+            document.Steps,
+            TimeSpan.FromMilliseconds(milliseconds),
+            TimeSpan.FromMilliseconds(floorMilliseconds));
+        if (adjusted.DelayCount == 0)
+        {
+            DelayAdjustStatusText.Text = L("DelayAdjustNone");
+            return;
+        }
+
+        if (adjusted.AdjustedCount == 0)
+        {
+            DelayAdjustStatusText.Text = L("DelayAdjustUnchanged");
+            return;
+        }
+
+        CaptureUndoSnapshot();
+        SetEditorDocument(document with { Steps = adjusted.Steps });
+        RaiseDocumentEdited();
+        DelayAdjustStatusText.Text = LocalizationService.Format("DelayAdjustApplied", adjusted.AdjustedCount);
+    }
+
+    private static bool TryReadMilliseconds(string text, out double milliseconds)
+    {
+        var trimmed = text.Trim();
+        return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.CurrentCulture, out milliseconds)
+            || double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out milliseconds);
     }
 
     private void SaveLibrary_Click(object sender, RoutedEventArgs e) => SaveLibraryRequested?.Invoke();

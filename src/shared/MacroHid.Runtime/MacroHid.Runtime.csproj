@@ -8,10 +8,23 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="LatencyProbe" />
+    <InternalsVisibleTo Include="MacroHid.Core.Tests" />
+    <InternalsVisibleTo Include="YuanShenMouseProbe" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="WeakNet\Native\WinDivert.dll" LogicalName="WinDivert.dll" />
+    <EmbeddedResource Include="WeakNet\Native\WinDivert64.sys" LogicalName="WinDivert64.sys" />
+    <Content Include="WeakNet\Native\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Link="WinDivert-LICENSE.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetLimiter" Version="5.3.18" />
   </ItemGroup>
 
 </Project>

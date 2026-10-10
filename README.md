@@ -4,12 +4,24 @@ MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。目的是把各大�
 
 宏数据默认保存在 `%APPDATA%\MacroHID\MacroLibrary`。卸载时默认保留，重新安装后仍可继续使用。
 
-当前正式版是 **1.5.0**。安装文件在 GitHub [Releases](https://github.com/NotBadSlime/Macro/releases/tag/v1.5.0)：
+当前正式版是 **1.6.0**。安装文件在 GitHub [Releases](https://github.com/NotBadSlime/Macro/releases/tag/v1.6.0)：
 
 - `MacroHID-Setup-x64.exe`：安装包。从浏览器下载后，请先右键该文件 → 属性 → 勾选「解除锁定」→ 确定，再双击安装。若弹出「无法在临时目录中执行文件 / Error 4551」或 Windows 安全中心提示「无法确认发布者」，按 [安装说明里的解除拦截步骤](docs/installer.md#从网上下载后被拦截) 处理，或改下便携包。
 - `MacroHID-Portable-x64.zip`：解压后得到与安装版相同的 `MacroHID` 目录，双击根目录里的 **MacroStudio** 快捷方式即可（也可以用 `MacroStudio.cmd`）。zip 同样先解除锁定再解压。
 
 需要先安装 [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（x64）。安装包不内置运行时。控制管理员窗口时，请以管理员身份运行 MacroStudio。
+
+### 1.6 新增与优化
+
+- 卡片编辑打开后聚焦第一个文本输入框（跳过下拉框）；Enter 确认，Alt+Enter 在多行输入框中换行。适用于主序列和条件触发动作。
+- 优化关闭窗口选择弹窗，统一图标、标题与说明的对齐；可选择收进托盘或停止播放并退出。
+- 播放结束和异常退出时释放宏按下的键鼠；支持独立强制停止按键，只停止、不启动播放。
+- 网络效果与锁帧由播放会话独占，多个宏争用时明确提示；其他宏结束不会清除当前效果。
+- 关闭内置弱网时释放等待发送的数据包；防火墙设置/恢复错误不再静默忽略。
+- 锁帧失败保留原始备份以便重试，重复恢复可安全执行；时间偏移按真实经过时间恢复。
+- 网络、时间和帧率卡片校验目标程序及数值范围，错误参数不再悄悄使用默认值。
+
+普通键鼠宏不需要驱动；断网/内置弱网功能使用随包提供的 WinDivert 驱动，需要管理员权限，可能需要在安全软件中允许该驱动。RTSS 锁帧需要安装并运行 RTSS；NetLimiter 引擎需要安装并运行 NetLimiter。网络与锁帧效果应先在目标程序中测试。
 
 ---
 

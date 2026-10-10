@@ -24,6 +24,20 @@ if (Environment.GetEnvironmentVariable("MACROHID_JSON_REFLECTION_DISABLED_PROBE"
 var tests = new (string Name, Action Body)[]
 {
     ("MCRX parser covers keyboard, mouse, wait, repeat, and pixel steps", McrxParserCoversBaselineSteps),
+    ("MCRX round trips weak net, parallel, and text conditions", McrxRoundTripsWeakNetParallelAndTextConditions),
+    ("Parallel branches accept inserts and reject deleting the branch header", ParallelBranchesAcceptInsertsAndRejectDeletingBranchHeader),
+    ("Parallel branches start together and a longer wait does not run sequentially", ParallelBranchesStartTogether),
+    ("Cancelling playback stops both parallel branches", CancellingPlaybackStopsBothParallelBranches),
+    ("Pixel condition inside a parallel branch waits until it matches", PixelConditionInsideParallelBranchWaitsUntilItMatches),
+    ("Weak net rejects system processes and stop is idempotent", WeakNetRejectsSystemProcessesAndStopIsIdempotent),
+    ("Weak net shifts the system clock forward one hour and restores it", WeakNetShiftsSystemClockForwardOneHourAndRestoresIt),
+    ("Clock restore ignores external clock changes and retries failures", ClockRestoreIgnoresExternalChanges),
+    ("Frame lock backups once, updates fps, and restores on stop", FrameLockBacksUpOnceUpdatesFpsAndRestoresOnStop),
+    ("Playback effect ownership isolates other macros", PlaybackEffectOwnershipIsolatesOtherMacros),
+    ("Frame lock retains backup after apply and restore failures", FrameLockRetainsBackupAfterFailures),
+    ("Net limit keeps the edited byte rate and defaults to 695", NetLimitKeepsEditedByteRateAndDefaultsTo695),
+    ("Weak net limits upload only", WeakNetLimitsUploadOnly),
+    ("Background window posts input, captures that window, and asks for a process in the global database", BackgroundWindowPostsInputAndCapturesThatWindow),
     ("MCRX parser covers wheel and consumer control steps", McrxParserCoversWheelAndConsumerSteps),
     ("MCRX parser covers key text steps", McrxParserCoversKeyTextSteps),
     ("MCRX parser covers mouse button coordinates", McrxParserCoversMouseButtonCoordinates),
@@ -78,6 +92,7 @@ var tests = new (string Name, Action Body)[]
     ("Playback runtime exposes precision context compiled plans and jitter stats", PlaybackRuntimeExposesPrecisionContextCompiledPlansAndJitterStats),
     ("Playback runtime phase locks loop iterations", PlaybackRuntimePhaseLocksLoopIterations),
     ("Compiled playback plan preserves trailing step duration", CompiledPlaybackPlanPreservesTrailingStepDuration),
+    ("Relative mouse moves spread across their duration", RelativeMouseMovesSpreadAcrossTheirDuration),
     ("Playback executor keeps conditions active until iteration end", PlaybackExecutorKeepsConditionsActiveUntilIterationEnd),
     ("Playback executor runs condition then actions during long single step", PlaybackExecutorRunsConditionThenActionsDuringLongSingleStep),
     ("Playback executor waits for slow condition evaluation started inside window", PlaybackExecutorWaitsForSlowConditionEvaluationStartedInsideWindow),
@@ -86,6 +101,8 @@ var tests = new (string Name, Action Body)[]
     ("Input action compiler keeps a hold gap for zero-delay key down and up", InputActionCompilerKeepsHoldGapForZeroDelayKeyDownAndUp),
     ("Input action compiler applies key down hold before matching key up", InputActionCompilerAppliesKeyDownHoldBeforeMatchingKeyUp),
     ("Input action compiler keeps simultaneous distinct key downs on the same tick", InputActionCompilerKeepsSimultaneousDistinctKeyDownsOnTheSameTick),
+    ("Modifier chord hold keeps a short copy shortcut down for 30ms", ModifierChordHoldKeepsShortCopyShortcutDownAndPreservesLongerHolds),
+    ("Input action compiler uses configured press floors", InputActionCompilerUsesConfiguredPressFloors),
     ("Compiled playback plan does not batch zero-delay key down and up", CompiledPlaybackPlanDoesNotBatchZeroDelayKeyDownAndUp),
     ("Input action compiler emits text actions", InputActionCompilerEmitsTextActions),
     ("Input action compiler expands macro calls and pixel windows", InputActionCompilerExpandsMacroCallsAndPixelWindows),
@@ -111,7 +128,10 @@ var tests = new (string Name, Action Body)[]
     ("Playback controller runs fixed count once by default", PlaybackControllerRunsFixedCountOnceByDefault),
     ("Playback controller stops fixed count on a second trigger press", PlaybackControllerStopsFixedCountOnSecondTriggerPress),
     ("Playback controller cancels hold loop when trigger is released", PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased),
+    ("Playback controller contains executor failures instead of faulting the UI task", PlaybackControllerContainsExecutorFailures),
     ("Playback executor checks cancellation before submitting delayed actions", PlaybackExecutorChecksCancellationBeforeDelayedActions),
+    ("Playback executor releases an ordinary KD key after an input failure", PlaybackExecutorReleasesOrdinaryKeyAfterInputFailure),
+    ("Toggle loop seals an unmatched KD before starting the next round", ToggleLoopSealsUnmatchedKeyBeforeNextRound),
     ("Playback executor resolves macro call steps", PlaybackExecutorResolvesMacroCallSteps),
     ("Playback executor stops only the current nested macro sequence", PlaybackExecutorStopsOnlyCurrentNestedSequence),
     ("Stop current macro layer advances root playback iterations", StopCurrentMacroLayerAdvancesRootPlaybackIterations),
@@ -136,6 +156,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroHID release version is 1.5.0", MacroHidReleaseVersionIsOneFiveZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
+    ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
     ("MacroStudio uses launcher style soft workbench shell", MacroStudioUsesLauncherStyleSoftWorkbenchShell),
     ("MacroStudio lays out base and conditional sequences side by side", MacroStudioLaysOutBaseAndConditionalSequencesSideBySide),
     ("MacroStudio opens condition then-action editor", MacroStudioOpensConditionThenActionEditor),
@@ -172,6 +193,7 @@ var tests = new (string Name, Action Body)[]
     ("Core selection skips scanning while playback is active", CoreSelectionSkipsScanningWhilePlaybackIsActive),
     ("Core picker can test the checked cores before confirming", CorePickerCanTestCheckedCoresBeforeConfirming),
     ("Core selection auto-picks the lowest latency distinct cores", CoreSelectionAutoPicksLowestLatencyDistinctCores),
+    ("Delay batch adjustment shifts every delay card and keeps undo", DelayBatchAdjustmentShiftsEveryDelayCardAndKeepsUndo),
     ("MacroStudio exposes core color sample hotkey and library path navigation", MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation),
     ("MacroStudio keeps precision as a global runtime setting", MacroStudioKeepsPrecisionAsGlobalRuntimeSetting),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
@@ -186,7 +208,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio keeps playback listening buttons below mode controls", MacroStudioKeepsPlaybackListeningButtonsBelowModeControls),
     ("MacroStudio autosaves sequence conditions and rebuilds listeners", MacroStudioAutosavesSequenceConditionsAndRebuildsListeners),
     ("MacroStudio drop insertion uses target row and suppresses drag click duplication", MacroStudioDropInsertionUsesTargetRowAndSuppressesDragClickDuplication),
-    ("MacroStudio supports multi-select drag feedback and keeps pixel conditions in condition panel", MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel),
+    ("MacroStudio supports multi-select drag feedback and sequence condition cards", MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel),
     ("MacroStudio hosts step properties inside sequence cards", MacroStudioHostsStepPropertiesInsideSequenceCards),
     ("MacroStudio closes inline editor after apply and returns focus to sequence", MacroStudioClosesInlineEditorAfterApplyAndReturnsFocusToSequence),
     ("MacroStudio closes inline editor on outside click but keeps coordinate picker open", MacroStudioClosesInlineEditorOnOutsideClickButKeepsCoordinatePickerOpen),
@@ -265,6 +287,7 @@ var tests = new (string Name, Action Body)[]
     ("LatencyProbe exposes native engine mode selection", LatencyProbeExposesNativeEngineModeSelection),
     ("MacroStudio warms native playback before first trigger", MacroStudioWarmsNativePlaybackBeforeFirstTrigger),
     ("Playback controller uses supplied execution options", PlaybackControllerUsesSuppliedExecutionOptions),
+    ("Run Now plays loop modes once and Esc can stop it", RunNowPlaysLoopModesOnceAndEscCanStopIt),
     ("Native warmup keeps the first trigger fast", NativeWarmupKeepsTheFirstTriggerFast),
     ("Runtime precreates native playback plans off the trigger hot path", RuntimePrecreatesNativePlaybackPlansOffTriggerHotPath),
     ("Runtime applies configured ultra affinity mask", RuntimeAppliesConfiguredUltraAffinityMask),
@@ -558,8 +581,69 @@ static void CompiledPlaybackPlanPreservesTrailingStepDuration()
     var plan = CompiledPlaybackPlan.Create(document, frequency);
 
     Assert.Equal(200_000, plan.DurationTicks);
-    Assert.Single(plan.Batches);
+    Assert.True(plan.Batches.Count > 1);
     Assert.Equal(0, plan.Batches[0].DueTick);
+    Assert.True(plan.Batches[^1].DueTick < plan.DurationTicks);
+    var moved = 0;
+    foreach (var batch in plan.Batches)
+    {
+        moved += Assert.IsType<MouseMoveInputAction>(batch.PreparedBatch.Actions[0]).X;
+    }
+
+    Assert.Equal(500, moved);
+}
+
+static void RelativeMouseMovesSpreadAcrossTheirDuration()
+{
+    const long frequency = 1_000_000;
+    var smooth = InputActionCompiler.Compile(
+        new MacroDocument(1, "smooth", [new MouseMoveStep(MouseMoveMode.Relative, 100, -50, TimeSpan.FromMilliseconds(40))]),
+        0,
+        frequency);
+    Assert.True(smooth.Count > 1);
+    Assert.Equal(100, smooth.Sum(action => ((MouseMoveInputAction)action.Action).X));
+    Assert.Equal(-50, smooth.Sum(action => ((MouseMoveInputAction)action.Action).Y));
+    Assert.Equal(0, smooth[0].DueTick);
+    Assert.True(smooth[^1].DueTick > 0);
+    Assert.True(smooth[^1].DueTick < 40_000);
+
+    var flick = InputActionCompiler.Compile(
+        new MacroDocument(1, "flick", [new MouseMoveStep(MouseMoveMode.Relative, 100, 0, TimeSpan.Zero)]),
+        0,
+        frequency);
+    Assert.True(flick.Count >= 1);
+    Assert.Equal(100, flick.Sum(action => ((MouseMoveInputAction)action.Action).X));
+
+    var longDrag = MouseMoveSmoothing.Split(MouseMoveMode.Relative, 2400, 0, TimeSpan.Zero);
+    Assert.True(longDrag.Count > 1);
+    Assert.Equal(2400, longDrag.Sum(slice => slice.X));
+    Assert.True(longDrag.All(slice => Math.Abs(slice.X) <= MouseMoveSmoothing.MaxDeltaPerSlice));
+
+    var absolute = InputActionCompiler.Compile(
+        new MacroDocument(1, "warp", [new MouseMoveStep(MouseMoveMode.Absolute, 10, 20, TimeSpan.FromMilliseconds(80))]),
+        0,
+        frequency);
+    Assert.Single(absolute);
+    Assert.Equal(new MouseMoveInputAction(MouseMoveMode.Absolute, 10, 20), absolute[0].Action);
+
+    var slices = MouseMoveSmoothing.Split(MouseMoveMode.Relative, 500, 0, TimeSpan.FromMilliseconds(200));
+    var early = 0;
+    var late = 0;
+    foreach (var slice in slices)
+    {
+        if (slice.Offset < TimeSpan.FromMilliseconds(100))
+        {
+            early += slice.X;
+        }
+        else
+        {
+            late += slice.X;
+        }
+    }
+
+    Assert.Equal(500, early + late);
+    Assert.True(early > late);
+    Assert.True(slices[0].X > slices[^1].X);
 }
 
 static void PlaybackExecutorKeepsConditionsActiveUntilIterationEnd()
@@ -708,15 +792,15 @@ static void InputActionCompilerExpandsHoldActions()
     Assert.Equal(6, actions.Count);
     Assert.Equal(10_000, actions[0].DueTick);
     Assert.Equal(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.LeftCtrl), actions[0].Action);
-    Assert.Equal(12_000, actions[1].DueTick);
+    Assert.Equal(40_000, actions[1].DueTick);
     Assert.Equal(new KeyInputAction(KeyActionKind.Up, HidKey.A, HidModifier.LeftCtrl), actions[1].Action);
-    Assert.Equal(12_000, actions[2].DueTick);
+    Assert.Equal(40_000, actions[2].DueTick);
     Assert.Equal(new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Down), actions[2].Action);
-    Assert.Equal(15_000, actions[3].DueTick);
+    Assert.Equal(43_000, actions[3].DueTick);
     Assert.Equal(new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Up), actions[3].Action);
-    Assert.Equal(15_000, actions[4].DueTick);
+    Assert.Equal(43_000, actions[4].DueTick);
     Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Down), actions[4].Action);
-    Assert.Equal(19_000, actions[5].DueTick);
+    Assert.Equal(47_000, actions[5].DueTick);
     Assert.Equal(new ConsumerInputAction(ConsumerControl.VolumeUp, ButtonActionKind.Up), actions[5].Action);
 }
 
@@ -776,8 +860,88 @@ static void InputActionCompilerKeepsSimultaneousDistinctKeyDownsOnTheSameTick()
     Assert.Equal(4, actions.Count);
     Assert.Equal(0, actions[0].DueTick);
     Assert.Equal(0, actions[1].DueTick);
-    Assert.Equal(10_000, actions[2].DueTick);
-    Assert.Equal(10_000, actions[3].DueTick);
+    Assert.Equal(30_000, actions[2].DueTick);
+    Assert.Equal(30_000, actions[3].DueTick);
+}
+
+static void ModifierChordHoldKeepsShortCopyShortcutDownAndPreservesLongerHolds()
+{
+    const long frequency = 1_000_000;
+    var shortChord = InputActionCompiler.Compile(
+        new MacroDocument(1, "copy", [new KeyStep(KeyActionKind.Tap, HidKey.C, HidModifier.LeftCtrl, TimeSpan.FromMilliseconds(5))]),
+        startTick: 0,
+        qpcFrequency: frequency);
+    Assert.Equal(0, shortChord[0].DueTick);
+    Assert.Equal(30_000, shortChord[1].DueTick);
+
+    var longChord = InputActionCompiler.Compile(
+        new MacroDocument(1, "copy-held", [new KeyStep(KeyActionKind.Tap, HidKey.C, HidModifier.LeftCtrl, TimeSpan.FromMilliseconds(80))]),
+        startTick: 0,
+        qpcFrequency: frequency);
+    Assert.Equal(80_000, longChord[1].DueTick);
+
+    var plain = InputActionCompiler.Compile(
+        new MacroDocument(1, "plain", [new KeyStep(KeyActionKind.Tap, HidKey.C, HidModifier.None, TimeSpan.FromMilliseconds(5))]),
+        startTick: 0,
+        qpcFrequency: frequency);
+    Assert.Equal(5_000, plain[1].DueTick);
+
+    var clock = new ModifierChordClock();
+    var down = new KeyInputAction(KeyActionKind.Down, HidKey.C, HidModifier.LeftCtrl);
+    var up = new KeyInputAction(KeyActionKind.Up, HidKey.C, HidModifier.LeftCtrl);
+    clock.NoteSent([down], actualTick: 1_000);
+    Assert.Equal(31_000, clock.AdjustDueTick([up], dueTick: 1_000, holdTicks: 30_000));
+    Assert.True(ModifierChordClock.TrySplit([down, up], out var splitAt));
+    Assert.Equal(1, splitAt);
+}
+
+static void InputActionCompilerUsesConfiguredPressFloors()
+{
+    const long frequency = 1_000_000;
+    var zeroFloor = new InputPressFloor(TimeSpan.Zero, TimeSpan.FromMilliseconds(30));
+    var zeroGap = InputActionCompiler.Compile(
+        new MacroDocument(1, "zero-floor",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.W, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, HidKey.W, HidModifier.None, TimeSpan.Zero)
+        ]),
+        startTick: 0,
+        qpcFrequency: frequency,
+        pressFloor: zeroFloor);
+    Assert.Equal(0, zeroGap[0].DueTick);
+    Assert.Equal(0, zeroGap[1].DueTick);
+
+    var twoMicroseconds = new InputPressFloor(TimeSpan.FromTicks(20), TimeSpan.FromMilliseconds(30));
+    var shortGap = InputActionCompiler.Compile(
+        new MacroDocument(1, "two-us",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.W, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, HidKey.W, HidModifier.None, TimeSpan.Zero)
+        ]),
+        startTick: 0,
+        qpcFrequency: frequency,
+        pressFloor: twoMicroseconds);
+    Assert.Equal(2, shortGap[1].DueTick);
+
+    var chordFloor = new InputPressFloor(TimeSpan.FromMilliseconds(10), TimeSpan.FromTicks(15_000));
+    var shortChord = InputActionCompiler.Compile(
+        new MacroDocument(1, "chord-floor", [new KeyStep(KeyActionKind.Tap, HidKey.C, HidModifier.LeftCtrl, TimeSpan.Zero)]),
+        startTick: 0,
+        qpcFrequency: frequency,
+        pressFloor: chordFloor);
+    Assert.Equal(1_500, shortChord[1].DueTick);
+
+    var explicitWait = InputActionCompiler.Compile(
+        new MacroDocument(1, "explicit",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.W, HidModifier.None, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromMilliseconds(5)),
+            new KeyStep(KeyActionKind.Up, HidKey.W, HidModifier.None, TimeSpan.Zero)
+        ]),
+        startTick: 0,
+        qpcFrequency: frequency,
+        pressFloor: new InputPressFloor(TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(30)));
+    Assert.Equal(5_000, explicitWait[1].DueTick);
 }
 
 static void CompiledPlaybackPlanDoesNotBatchZeroDelayKeyDownAndUp()
@@ -1832,6 +1996,7 @@ static void McrxParserCoversPlaybackHotkeySettings()
       "name": "hotkey-playback",
       "playback": {
         "trigger": "Ctrl+Alt+F8",
+        "stopTrigger": "Alt+Tab",
         "mode": "toggleLoop",
         "count": 3,
         "processFilter": "notepad.exe; chrome"
@@ -1849,10 +2014,13 @@ static void McrxParserCoversPlaybackHotkeySettings()
     Assert.Equal(HidKey.F8, document.Playback.Trigger!.Key);
     Assert.Equal(HidModifier.LeftCtrl | HidModifier.LeftAlt, document.Playback.Trigger.Modifiers);
     Assert.Equal("Ctrl+Alt+F8", document.Playback.Trigger.ToString());
+    Assert.Equal("Alt+Tab", document.Playback.StopTrigger!.ToString());
     Assert.Equal("notepad.exe; chrome", document.Playback.ProcessFilter);
 
     var serialized = McrxSerializer.Serialize(document);
     Assert.Contains("\"processFilter\": \"notepad.exe; chrome\"", serialized);
+    Assert.Contains("\"stopTrigger\"", serialized);
+    Assert.Equal("Alt+Tab", McrxParser.Parse(serialized).Playback.StopTrigger!.ToString());
 }
 
 static void McrxParserCoversPlaybackPrecisionMode()
@@ -2370,8 +2538,18 @@ static void McrxParserRejectsInvalidPlaybackSettings()
     }
     """;
 
+    const string duplicateStopTriggerJson = """
+    {
+      "version": 1,
+      "name": "duplicate-stop-trigger",
+      "playback": { "trigger": "Tab", "stopTrigger": "Tab", "mode": "toggleLoop" },
+      "steps": []
+    }
+    """;
+
     Assert.Throws<JsonException>(() => McrxParser.Parse(invalidCountJson));
     Assert.Throws<JsonException>(() => McrxParser.Parse(invalidTriggerJson));
+    Assert.Throws<JsonException>(() => McrxParser.Parse(duplicateStopTriggerJson));
 }
 
 static void SendInputEncoderMapsFunctionAndNavigationKeysDistinctly()
@@ -2517,7 +2695,10 @@ static void MacroStudioConfirmsBeforeClearingTheSequence()
     Assert.Contains("ClearAllConfirm", sequenceCode);
     Assert.Contains("FocusMacroNameEditor", sequenceCode);
     var editorCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml.cs"));
-    Assert.Contains("StepTextBox_PreviewKeyDown", editorCode);
+    Assert.Contains("PreviewKeyDown += Editor_PreviewKeyDown", editorCode);
+    Assert.Contains("e.Key == Key.System ? e.SystemKey : e.Key", editorCode);
+    Assert.Contains("FindPrimaryInput(StepEditorFieldsPanel)", editorCode);
+    Assert.Contains("box.SelectedText = Environment.NewLine", editorCode);
     Assert.Contains("ModifierKeys.Alt", editorCode);
     var paletteXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml"));
     Assert.Contains("AddCommentButton", paletteXaml);
@@ -2807,6 +2988,23 @@ static void PlaybackControllerCancelsHoldLoopWhenTriggerIsReleased()
     Assert.Equal(PlaybackStatus.Idle, controller.Status);
 }
 
+static void PlaybackControllerContainsExecutorFailures()
+{
+    var document = new MacroDocument(
+        1,
+        "foreground-switch-failure",
+        [new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+    var failure = new InvalidOperationException("simulated SendInput failure after foreground switch");
+    var controller = new MacroPlaybackController(document, new FailingPlaybackExecutor(failure));
+
+    controller.TriggerPressedAsync().GetAwaiter().GetResult();
+    var result = controller.WhenIdleAsync().GetAwaiter().GetResult();
+
+    Assert.Equal(PlaybackRunStatus.Failed, result.Status);
+    Assert.Equal(PlaybackStatus.Error, controller.Status);
+    Assert.True(ReferenceEquals(failure, controller.LastError));
+}
+
 static void PlaybackExecutorChecksCancellationBeforeDelayedActions()
 {
     var document = new MacroDocument(
@@ -2825,6 +3023,60 @@ static void PlaybackExecutorChecksCancellationBeforeDelayedActions()
 
     Assert.True(result.Cancelled);
     Assert.False(sink.Actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+
+static void PlaybackExecutorReleasesOrdinaryKeyAfterInputFailure()
+{
+    var keyDown = new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None);
+    var keyUp = new KeyInputAction(KeyActionKind.Up, HidKey.A, HidModifier.None);
+    var sink = new FailOnceInputSink(failOnAttempt: 2);
+    var document = new MacroDocument(
+        1,
+        "release-on-failure",
+        [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromMilliseconds(1)),
+            new KeyStep(KeyActionKind.Up, HidKey.A, HidModifier.None, TimeSpan.Zero)
+        ]);
+    var executor = new MacroPlaybackExecutor(sink);
+
+    Assert.Throws<InvalidOperationException>(() => executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.MatchAll, NoWait: true),
+        CancellationToken.None).GetAwaiter().GetResult());
+
+    Assert.Equal(keyDown, sink.Actions[0]);
+    Assert.Equal(keyUp, sink.Actions[^1]);
+    Assert.Equal(3, sink.Attempts);
+}
+
+static void ToggleLoopSealsUnmatchedKeyBeforeNextRound()
+{
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    var keyDown = new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None);
+    var keyUp = new KeyInputAction(KeyActionKind.Up, HidKey.A, HidModifier.None);
+    var sink = new CancellingOnActionInputSink(cancellation, keyDown, cancelAfterMatches: 2);
+    var document = new MacroDocument(
+        1,
+        "loop-unmatched-kd",
+        new PlaybackSettings(null, PlaybackMode.ToggleLoop, 1),
+        [new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+    var executor = new MacroPlaybackExecutor(sink);
+
+    var result = executor.RunAsync(
+        document,
+        new PlaybackExecutionOptions(PlaybackMode.ToggleLoop, 1, PixelEvaluationMode.MatchAll, NoWait: true),
+        cancellation.Token).GetAwaiter().GetResult();
+
+    Assert.True(result.Cancelled);
+    var actions = sink.Actions.ToArray();
+    var firstDown = Array.IndexOf(actions, keyDown);
+    var firstUp = Array.IndexOf(actions, keyUp);
+    var secondDown = Array.IndexOf(actions, keyDown, firstDown + 1);
+    Assert.True(firstDown >= 0);
+    Assert.True(firstUp > firstDown);
+    Assert.True(secondDown > firstUp);
+    Assert.Equal(keyUp, actions[^1]);
 }
 
 static void PlaybackExecutorResolvesMacroCallSteps()
@@ -3535,6 +3787,54 @@ static void MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea()
     Assert.Contains("ptMaxPosition", codeBehind);
     Assert.Contains("ptMaxSize", codeBehind);
     Assert.Contains("source.RemoveHook(WindowProcedure)", codeBehind);
+    Assert.Contains("WindowState = WindowState.Minimized", codeBehind);
+    Assert.Contains("ApplyCloseBehavior", codeBehind);
+    Assert.Contains("CloseButtonBehavior", codeBehind);
+    Assert.DoesNotContain("ShouldHideMinimizedWindowInTray()", codeBehind);
+    Assert.DoesNotContain("SC_MINIMIZE && taskbarMinimizeDepth == 0", codeBehind);
+}
+
+static void SwitchingScreensDoesNotMinimizeMacroStudioToTheTray()
+{
+    Assert.False(TrayMinimizePolicy.ShouldHideToTray(ScreenSwitch()));
+    Assert.False(TrayMinimizePolicy.ShouldHideToTray(ScreenSwitch() with { PointerOverTaskbar = true }));
+    Assert.False(TrayMinimizePolicy.ShouldHideToTray(ScreenSwitch() with { WinDownMinimizeChord = true }));
+    Assert.False(TrayMinimizePolicy.ShouldHideToTray(new TrayMinimizePolicy.Gesture(
+        ProgrammaticMinimize: false,
+        MonitorMoveChord: false,
+        DisplayTransition: true,
+        PointerOverTaskbar: true,
+        WinDownMinimizeChord: false)));
+    Assert.False(TrayMinimizePolicy.ShouldHideToTray(new TrayMinimizePolicy.Gesture(
+        ProgrammaticMinimize: true,
+        MonitorMoveChord: false,
+        DisplayTransition: false,
+        PointerOverTaskbar: true,
+        WinDownMinimizeChord: true)));
+    Assert.False(TrayMinimizePolicy.ShouldHideToTray(default));
+
+    Assert.True(TrayMinimizePolicy.ShouldHideToTray(new TrayMinimizePolicy.Gesture(
+        ProgrammaticMinimize: false,
+        MonitorMoveChord: false,
+        DisplayTransition: false,
+        PointerOverTaskbar: true,
+        WinDownMinimizeChord: false)));
+    Assert.True(TrayMinimizePolicy.ShouldHideToTray(new TrayMinimizePolicy.Gesture(
+        ProgrammaticMinimize: false,
+        MonitorMoveChord: false,
+        DisplayTransition: false,
+        PointerOverTaskbar: false,
+        WinDownMinimizeChord: true)));
+    Assert.True(TrayMinimizePolicy.IsMinimizeCommand(0xF020));
+    Assert.True(TrayMinimizePolicy.IsMinimizeCommand(0xF022));
+    Assert.False(TrayMinimizePolicy.IsMinimizeCommand(0xF010));
+
+    static TrayMinimizePolicy.Gesture ScreenSwitch() => new(
+        ProgrammaticMinimize: false,
+        MonitorMoveChord: true,
+        DisplayTransition: false,
+        PointerOverTaskbar: false,
+        WinDownMinimizeChord: false);
 }
 
 static void MacroStudioUsesLauncherStyleSoftWorkbenchShell()
@@ -4264,16 +4564,18 @@ static void MacroStudioExposesGlobalPrecisionSelectorInMacroLibrary()
     var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
     var traditional = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-TW.resx"));
 
+    var precisionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
     Assert.DoesNotContain("PrecisionModeBox", playbackXaml);
     Assert.DoesNotContain("GetSelectedPrecisionMode", playbackCode);
     Assert.Contains("GlobalRuntimeTitleText", libraryXaml);
-    Assert.Contains("PrecisionModeBox", libraryXaml);
-    Assert.Contains("Tag=\"balanced\"", libraryXaml);
-    Assert.Contains("Tag=\"extremeDuringPlayback\"", libraryXaml);
-    Assert.Contains("Tag=\"ultraLowJitter\"", libraryXaml);
+    Assert.Contains("PrecisionControlButton", libraryXaml);
+    Assert.Contains("PrecisionModeBox", precisionXaml);
+    Assert.Contains("Tag=\"balanced\"", precisionXaml);
+    Assert.Contains("Tag=\"extremeDuringPlayback\"", precisionXaml);
+    Assert.Contains("Tag=\"ultraLowJitter\"", precisionXaml);
     Assert.Contains("GetSelectedPrecisionMode", libraryCode);
     Assert.Contains("SetRuntimePrecisionControls", libraryCode);
-    Assert.Contains("PrecisionModeBox_SelectionChanged", libraryCode);
+    Assert.Contains("OnPrecisionControlRequested", mainWindowCode);
     Assert.Contains("LibraryPanel.GetSelectedPrecisionMode", mainWindowCode);
     Assert.Contains("RuntimePrecisionSettingsStore.Save", mainWindowCode);
     Assert.DoesNotContain("[\"precision\"] = ToPrecisionModeText(precision)", mainWindowCode);
@@ -4311,14 +4613,17 @@ static void MacroStudioExposesUltraAffinityMaskControl()
     var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
     var traditional = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-TW.resx"));
 
+    var precisionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
+    var precisionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml.cs"));
     Assert.DoesNotContain("AffinityMaskBox", playbackXaml);
     Assert.DoesNotContain("AffinityMaskText", playbackCode);
-    Assert.Contains("AffinityMaskBox", libraryXaml);
-    Assert.Contains("AffinityMaskLabelText", libraryXaml);
-    Assert.Contains("AffinityMaskHelpText", libraryXaml);
+    Assert.Contains("PrecisionControlButton", libraryXaml);
+    Assert.Contains("AffinityMaskBox", precisionXaml);
+    Assert.Contains("AffinityMaskLabelText", precisionXaml);
+    Assert.Contains("AffinityMaskHelpText", precisionXaml);
     Assert.Contains("AffinityMaskText", libraryCode);
     Assert.Contains("SetRuntimePrecisionControls", libraryCode);
-    Assert.Contains("AffinityMaskHelpText.Text = L(\"AffinityMaskHelp\")", libraryCode);
+    Assert.Contains("AffinityMaskHelpText.Text = L(\"AffinityMaskHelp\")", precisionCode);
     Assert.Contains("PlaybackAffinityMask.NormalizeOrThrow", mainWindowCode);
     Assert.DoesNotContain("[\"affinityMask\"] = affinityMask", mainWindowCode);
     Assert.Contains("NativePlaybackWarmup.QueueWarmUpForPrecision", mainWindowCode);
@@ -4329,8 +4634,8 @@ static void MacroStudioExposesUltraAffinityMaskControl()
     Assert.Contains("限制极限模式播放线程", simplified);
     Assert.Contains("<value>極限核心遮罩</value>", traditional);
     Assert.Contains("限制極限模式播放執行緒", traditional);
-    Assert.Contains("ChooseCoresButton", libraryXaml);
-    Assert.Contains("ChooseCoresRequested", libraryCode);
+    Assert.Contains("ChooseCoresButton", precisionXaml);
+    Assert.Contains("TryPickAffinityMask", mainWindowCode);
     Assert.Contains("name=\"ChooseCores\"", english);
     Assert.Contains("<value>选择核心</value>", simplified);
     Assert.Contains("<value>選擇核心</value>", traditional);
@@ -4473,6 +4778,63 @@ static void CoreSelectionAutoPicksLowestLatencyDistinctCores()
     Assert.Empty(LogicalProcessorInventory.SelectByMeasuredLatency([], 2));
 }
 
+static void DelayBatchAdjustmentShiftsEveryDelayCardAndKeepsUndo()
+{
+    MacroStep[] steps =
+    [
+        new WaitStep(TimeSpan.FromMilliseconds(10)),
+        new WaitStep(TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(40)),
+        new RepeatStep(2, [new WaitStep(TimeSpan.FromMilliseconds(5))]),
+        new PixelWhenStep(
+            new PixelCondition(new PixelCoordinate(CoordinateScope.Screen, 0, 0), new RgbColor(0, 0, 0), 0),
+            [new WaitStep(TimeSpan.FromMilliseconds(8))]),
+        new StopCurrentSequenceStep()
+    ];
+
+    var shifted = DelayBatchAdjustment.Shift(steps, TimeSpan.FromMilliseconds(3));
+    Assert.Equal(4, shifted.DelayCount);
+    Assert.Equal(4, shifted.AdjustedCount);
+    Assert.Equal(13, ((WaitStep)shifted.Steps[0]).Duration.TotalMilliseconds);
+    var random = (WaitStep)shifted.Steps[1];
+    Assert.Equal(23, random.Duration.TotalMilliseconds);
+    Assert.Equal(43, random.MaxDuration!.Value.TotalMilliseconds);
+    Assert.Equal(8, ((WaitStep)((RepeatStep)shifted.Steps[2]).Steps[0]).Duration.TotalMilliseconds);
+    Assert.Equal(11, ((WaitStep)((PixelWhenStep)shifted.Steps[3]).ThenSteps[0]).Duration.TotalMilliseconds);
+    Assert.True(shifted.Steps[4] is StopCurrentSequenceStep);
+
+    var clamped = DelayBatchAdjustment.Shift(steps, TimeSpan.FromMilliseconds(-100));
+    Assert.Equal(TimeSpan.Zero, ((WaitStep)clamped.Steps[0]).Duration);
+    var clampedRandom = (WaitStep)clamped.Steps[1];
+    Assert.Equal(TimeSpan.Zero, clampedRandom.Duration);
+    Assert.Equal(TimeSpan.Zero, clampedRandom.MaxDuration);
+
+    var unchanged = DelayBatchAdjustment.Shift(steps, TimeSpan.Zero);
+    Assert.Equal(4, unchanged.DelayCount);
+    Assert.Equal(0, unchanged.AdjustedCount);
+    Assert.True(ReferenceEquals(steps, unchanged.Steps));
+
+    MacroStep[] floored =
+    [
+        new WaitStep(TimeSpan.FromMilliseconds(1)),
+        new WaitStep(TimeSpan.FromMilliseconds(5)),
+        new WaitStep(TimeSpan.FromMilliseconds(0.4))
+    ];
+    var held = DelayBatchAdjustment.Shift(floored, TimeSpan.FromMilliseconds(-1), TimeSpan.FromMilliseconds(1));
+    Assert.Equal(1, held.AdjustedCount);
+    Assert.Equal(1, ((WaitStep)held.Steps[0]).Duration.TotalMilliseconds);
+    Assert.Equal(4, ((WaitStep)held.Steps[1]).Duration.TotalMilliseconds);
+    Assert.Equal(0.4, ((WaitStep)held.Steps[2]).Duration.TotalMilliseconds);
+
+    var sequenceCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "SequencePanel.xaml.cs"));
+    var applyStart = sequenceCode.IndexOf("private void ApplyDelayAdjustment()", StringComparison.Ordinal);
+    var saveStart = sequenceCode.IndexOf("private void SaveLibrary_Click", StringComparison.Ordinal);
+    Assert.True(applyStart >= 0 && saveStart > applyStart);
+    var applyBody = sequenceCode[applyStart..saveStart];
+    var undoIndex = applyBody.IndexOf("CaptureUndoSnapshot()", StringComparison.Ordinal);
+    var applyIndex = applyBody.IndexOf("SetEditorDocument(", StringComparison.Ordinal);
+    Assert.True(undoIndex >= 0 && applyIndex > undoIndex);
+}
+
 static void MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation()
 {
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
@@ -4485,8 +4847,10 @@ static void MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation()
     var settingsCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Services", "RuntimePrecisionSettingsStore.cs"));
     var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
 
-    Assert.Contains("ColorSampleHotkeyBox", libraryXaml);
-    Assert.Contains("CaptureColorSampleButton", libraryXaml);
+    var basicXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroBasicControlDialog.xaml"));
+    Assert.Contains("BasicControlButton", libraryXaml);
+    Assert.Contains("ColorSampleHotkeyBox", basicXaml);
+    Assert.Contains("CaptureColorSampleButton", basicXaml);
     Assert.Contains("DatabasePathBox", libraryXaml);
     Assert.Contains("TryReveal", libraryCode);
     Assert.Contains("StartLibraryDragWheelHook()", libraryCode);
@@ -4536,10 +4900,17 @@ static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()
 
     Assert.Contains("x:Name=\"TriggerTextBox\"", playbackXaml);
     Assert.Contains("IsReadOnly=\"True\"", playbackXaml);
+    var basicXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroBasicControlDialog.xaml"));
+    var basicCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroBasicControlDialog.xaml.cs"));
     Assert.Contains("x:Name=\"TriggerSupportHintText\"", playbackXaml);
+    Assert.DoesNotContain("x:Name=\"StopTriggerTextBox\"", playbackXaml);
+    Assert.Contains("x:Name=\"StopTriggerTextBox\"", basicXaml);
+    Assert.Contains("x:Name=\"CaptureStopTriggerButton\"", basicXaml);
+    Assert.Contains("ModifierChordHoldHelp", basicXaml);
     Assert.Contains("capturedTriggerKeys", playbackCode);
     Assert.Contains("capturedTriggerMouseButtons", playbackCode);
     Assert.Contains("ScheduleTriggerCaptureCommit", playbackCode);
+    Assert.Contains("CaptureStopTrigger_Click", basicCode);
     Assert.Contains("new HotkeyGesture(ReadCurrentModifiers(), capturedTriggerKeys", playbackCode);
     Assert.Contains("MouseButton.Left => MacroHid.Core.MouseButton.Left", playbackCode);
     Assert.Contains("MouseButton.Middle => MacroHid.Core.MouseButton.Middle", playbackCode);
@@ -4549,6 +4920,11 @@ static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()
     Assert.Contains("All(pressedMouseButtons.Contains)", hookCode);
     Assert.Contains("TryMapNumpadScanCode", hookCode);
     Assert.Contains("WmMiddleButtonDown", hookCode);
+
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    Assert.Contains("CoreHotkeys.ForceStopId", mainWindowCode);
+    Assert.Contains("PlaybackInputSafetyRegistry.ReleaseAllActiveInputs", mainWindowCode);
+    Assert.Contains("ForceStopConflictsWithColorSample", basicCode);
 }
 
 static void MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries()
@@ -4717,8 +5093,9 @@ static void MacroStudioKeepsPlaybackListeningButtonsBelowModeControls()
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
 
     var playbackRowDefinitions = playbackXaml.Split("<RowDefinition").Length - 1;
-    Assert.True(playbackRowDefinitions >= 5);
-    Assert.Contains("<Grid Grid.Row=\"4\"", playbackXaml);
+    Assert.True(playbackRowDefinitions >= 4);
+    Assert.Contains("<Grid Grid.Row=\"3\"", playbackXaml);
+    Assert.True(playbackXaml.IndexOf("PlaybackModeBox", StringComparison.Ordinal) < playbackXaml.IndexOf("StartListeningButton", StringComparison.Ordinal));
     Assert.Contains("StartListeningButton", playbackXaml);
     Assert.Contains("StopListeningButton", playbackXaml);
     Assert.DoesNotContain("<WrapPanel Grid.Row=\"4\"", playbackXaml);
@@ -4783,9 +5160,13 @@ static void MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel()
     Assert.Contains("UpdateDropIndicator", stepSequenceCode);
     Assert.Contains("DragGhostAdorner", stepSequenceCode);
     Assert.Contains("StepDragPathSeparator", stepSequenceCode);
-    Assert.DoesNotContain("AddPixelButton", actionPaletteXaml);
-    Assert.DoesNotContain("Tag=\"Pixel\"", actionPaletteXaml);
-    Assert.DoesNotContain("AddPixelText", actionPaletteCode);
+    Assert.Contains("AddPixelButton", actionPaletteXaml);
+    Assert.Contains("Tag=\"Pixel\"", actionPaletteXaml);
+    Assert.Contains("AddPixelText", actionPaletteCode);
+    Assert.Contains("Tag=\"TextWhen\"", actionPaletteXaml);
+    Assert.Contains("Tag=\"WeakNetStart\"", actionPaletteXaml);
+    Assert.Contains("Tag=\"WeakNetStop\"", actionPaletteXaml);
+    Assert.Contains("Tag=\"Parallel\"", actionPaletteXaml);
     Assert.Contains("AddConditionButton", conditionXaml);
     Assert.Contains("ConditionLibraryMenuButton", conditionXaml);
     Assert.Contains("InsertLibraryConditionMacroMenuItem", conditionXaml);
@@ -5174,9 +5555,11 @@ static void MacroStudioActionPaletteUsesIconCommandCards()
     Assert.Contains("ActionPaletteCommandStyle", sharedStyles);
     Assert.Contains("ActionPaletteIconBadgeStyle", sharedStyles);
     Assert.Contains("UniformGrid", paletteXaml);
-    Assert.Contains("ActionCommandGrid", paletteXaml);
+    Assert.Contains("BasicCommandGrid", paletteXaml);
+    Assert.Contains("AdvancedCommandGrid", paletteXaml);
+    Assert.Contains("LoopCommandGrid", paletteXaml);
     Assert.Contains("UpdateAdaptiveColumns", paletteCode);
-    Assert.Contains("ActionCommandGrid.Columns = ActualWidth >= 520 ? 2 : 1", paletteCode);
+    Assert.Contains("BasicCommandGrid.Columns = columns", paletteCode);
     Assert.Contains("Segoe Fluent Icons", paletteXaml);
     Assert.Contains("Text=\"&#xE823;\"", paletteXaml);
     Assert.Contains("Text=\"&#xE765;\"", paletteXaml);
@@ -6388,6 +6771,36 @@ static void PlaybackControllerUsesSuppliedExecutionOptions()
     Assert.DoesNotContain("document.Playback.Precision)", controller);
     Assert.Contains("var options = CreatePlaybackOptions(document)", mainWindow);
     Assert.Contains("new MacroPlaybackController(document, executor, options)", mainWindow);
+}
+
+static void RunNowPlaysLoopModesOnceAndEscCanStopIt()
+{
+    var loop = new PlaybackExecutionOptions(PlaybackMode.ToggleLoop, 0, PixelEvaluationMode.Live, NoWait: false)
+        .ForImmediateRun();
+    Assert.Equal(PlaybackMode.FixedCount, loop.Mode);
+    Assert.Equal(1, loop.Count);
+
+    var hold = new PlaybackExecutionOptions(PlaybackMode.HoldLoop, 4, PixelEvaluationMode.Live, NoWait: false)
+        .ForImmediateRun();
+    Assert.Equal(PlaybackMode.FixedCount, hold.Mode);
+    Assert.Equal(1, hold.Count);
+
+    var counted = new PlaybackExecutionOptions(PlaybackMode.FixedCount, 3, PixelEvaluationMode.Live, NoWait: false)
+        .ForImmediateRun();
+    Assert.Equal(PlaybackMode.FixedCount, counted.Mode);
+    Assert.Equal(3, counted.Count);
+
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    Assert.Contains("CreatePlaybackOptions(document).ForImmediateRun()", mainWindow);
+    Assert.Contains("CoreHotkeys.EmergencyStopId", mainWindow);
+    Assert.Contains("HidKey.Escape", mainWindow);
+    Assert.Contains("MouseCursorUnclip", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "SendInputMacroSink.cs")));
+    Assert.Contains("GetClipCursor", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MouseCursorUnclip.cs")));
+    Assert.Contains("GetClipCursor", File.ReadAllText(Path.Combine("src", "native", "MacroHid.NativePlayback", "NativePlayback.cpp")));
+    Assert.Contains("SubmitPlaybackInput", File.ReadAllText(Path.Combine("src", "native", "MacroHid.NativePlayback", "NativePlayback.cpp")));
+    Assert.Contains("next is MouseMoveInputAction", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "CompiledPlaybackPlan.cs")));
+    Assert.Contains("RunNowOnceHint", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx")));
+    Assert.Contains("RunNowOnceHint", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-TW.resx")));
 }
 
 static void NativeWarmupKeepsTheFirstTriggerFast()
@@ -9140,7 +9553,7 @@ static void MacroStudioLocksEveryMacroEditingSurface()
     Assert.Contains("if (isReadOnly) return", conditionCode);
     Assert.Contains("MacroEditor.IsReadOnly", jsonCode);
     Assert.Contains("CaptureTriggerButton.IsEnabled = !value", playbackCode);
-    Assert.Contains("ActionCommandGrid.IsEnabled = !value", actionCode);
+    Assert.Contains("BasicCommandGrid.IsEnabled = !value", actionCode);
 }
 
 static void MacroStudioScopesDeleteShortcutsAndPreservesImportedConditions()
@@ -9167,6 +9580,555 @@ static void MacroStudioScopesDeleteShortcutsAndPreservesImportedConditions()
     var importBody = mainWindow[importIndex..undoIndex];
     Assert.Contains("ConditionPanel.LoadConditions(document.EffectiveConditions)", importBody);
     Assert.Contains("SequencePanelControl.SetConditionHighlights(document.EffectiveConditions", importBody);
+}
+
+static void McrxRoundTripsWeakNetParallelAndTextConditions()
+{
+    var document = new MacroDocument(1, "weak-parallel",
+    [
+        new WeakNetStep("YuanShen.exe", WeakNetAction.Hold, TimeSpan.FromMilliseconds(1500)),
+        new WeakNetStep("YuanShen.exe", WeakNetAction.Start, TimeSpan.FromSeconds(3), TimeSpan.FromMinutes(90)),
+        new WeakNetStep("YuanShen.exe", WeakNetAction.Stop, TimeSpan.FromSeconds(3), TimeSpan.Zero),
+        new TextWhenStep(ScreenRegion.FromRect(1, 2, 30, 40), "确认", [new CommentStep("hit")], Contains: false, UseRegex: true),
+        new ParallelStep(
+            new ParallelBranchStep("左", [new WaitStep(TimeSpan.FromMilliseconds(10))]),
+            new ParallelBranchStep("右", [new CommentStep("right")]),
+            TimeSpan.FromMilliseconds(2500))
+    ]);
+
+    var parsed = McrxParser.Parse(McrxSerializer.Serialize(document));
+    var hold = Assert.IsType<WeakNetStep>(parsed.Steps[0]);
+    Assert.Equal("YuanShen.exe", hold.ProcessName);
+    Assert.Equal(WeakNetAction.Hold, hold.Action);
+    Assert.Equal(1500, hold.Duration.TotalMilliseconds);
+    Assert.Equal(TimeSpan.FromHours(1), hold.EffectiveTimeShift);
+    var started = Assert.IsType<WeakNetStep>(parsed.Steps[1]);
+    Assert.Equal(WeakNetAction.Start, started.Action);
+    Assert.Equal(TimeSpan.FromMinutes(90), started.EffectiveTimeShift);
+    Assert.Equal(TimeSpan.Zero, Assert.IsType<WeakNetStep>(parsed.Steps[2]).EffectiveTimeShift);
+    var text = Assert.IsType<TextWhenStep>(parsed.Steps[3]);
+    Assert.Equal("确认", text.ExpectedText);
+    Assert.False(text.Contains);
+    Assert.True(text.UseRegex);
+    Assert.Equal(1, text.Region.TopLeft.X);
+    Assert.Equal(40, text.Region.BottomRight.Y);
+    Assert.Equal("hit", Assert.IsType<CommentStep>(text.ThenSteps[0]).Text);
+    var parallel = Assert.IsType<ParallelStep>(parsed.Steps[4]);
+    Assert.Equal(2500, parallel.Timeout?.TotalMilliseconds);
+    Assert.Equal("左", parallel.Left.Name);
+    Assert.Equal(10, Assert.IsType<WaitStep>(parallel.Left.Steps[0]).Duration.TotalMilliseconds);
+    Assert.Equal("right", Assert.IsType<CommentStep>(parallel.Right.Steps[0]).Text);
+}
+
+static void ParallelBranchesAcceptInsertsAndRejectDeletingBranchHeader()
+{
+    var root = new List<MacroStep> { MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.Parallel) };
+    var inserted = MacroStepTreeEditor.InsertAtPath(root, [0, 0], 0, [new CommentStep("left")]);
+    inserted = MacroStepTreeEditor.InsertAtPath(inserted, [0, 1], 0, [new CommentStep("right")]).ToList();
+    Assert.Equal("left", Assert.IsType<CommentStep>(Assert.IsType<ParallelBranchStep>(MacroStepTreeEditor.GetAtPath(inserted, [0, 0])).Steps[0]).Text);
+    Assert.Equal("right", Assert.IsType<CommentStep>(Assert.IsType<ParallelBranchStep>(MacroStepTreeEditor.GetAtPath(inserted, [0, 1])).Steps[0]).Text);
+
+    var afterDelete = MacroStepTreeEditor.DeleteAtPath(inserted, [0, 0]);
+    Assert.True(MacroStepTreeEditor.GetAtPath(afterDelete, [0, 0]) is ParallelBranchStep { Steps.Count: 1 });
+    Assert.True(MacroStepTreeEditor.GetAtPath(afterDelete, [0, 1]) is ParallelBranchStep { Steps.Count: 1 });
+
+    var moved = MacroStepTreeEditor.MoveAtPath(inserted, [0, 1], [], 0);
+    Assert.True(moved[0] is ParallelStep);
+    Assert.Equal(1, moved.Count);
+}
+
+static void ParallelBranchesStartTogether()
+{
+    var submittedAt = new List<long>();
+    var sink = new RecordingMacroSink(_ =>
+    {
+        lock (submittedAt)
+        {
+            submittedAt.Add(Stopwatch.GetTimestamp());
+        }
+    });
+    var clock = new QpcHighResolutionClock();
+    var runner = new ManagedMacroControlFlowRunner(
+        sink,
+        new QpcPlaybackDelayStrategy(clock, PrecisionMode.Balanced),
+        clock,
+        _ => false,
+        null);
+    var document = new MacroDocument(1, "parallel-join",
+    [
+        new ParallelStep(
+            new ParallelBranchStep("a",
+            [
+                new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+                new WaitStep(TimeSpan.FromMilliseconds(300))
+            ]),
+            new ParallelBranchStep("b",
+            [
+                new KeyStep(KeyActionKind.Down, HidKey.B, HidModifier.None, TimeSpan.Zero),
+                new WaitStep(TimeSpan.FromMilliseconds(40))
+            ]))
+    ]);
+    uint sequence = 1;
+    var submitted = 0;
+    var watch = Stopwatch.StartNew();
+    runner.Run(document, clock.GetTimestamp(), clock.Frequency, CancellationToken.None, false, ref sequence, ref submitted);
+    watch.Stop();
+    Assert.Equal(2, submittedAt.Count);
+    var deltaMs = Math.Abs(submittedAt[0] - submittedAt[1]) * 1000.0 / Stopwatch.Frequency;
+    Assert.True(deltaMs < 220);
+    Assert.True(watch.ElapsedMilliseconds > 220);
+    Assert.True(watch.ElapsedMilliseconds < 2000);
+}
+
+static void CancellingPlaybackStopsBothParallelBranches()
+{
+    var clock = new QpcHighResolutionClock();
+    var runner = new ManagedMacroControlFlowRunner(
+        new RecordingMacroSink(_ => { }),
+        new QpcPlaybackDelayStrategy(clock, PrecisionMode.Balanced),
+        clock,
+        _ => false,
+        null);
+    var document = new MacroDocument(1, "parallel-cancel",
+    [
+        new ParallelStep(
+            new ParallelBranchStep("a", [new WaitStep(TimeSpan.FromSeconds(2))]),
+            new ParallelBranchStep("b", [new WaitStep(TimeSpan.FromSeconds(2))]))
+    ]);
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+    uint sequence = 1;
+    var submitted = 0;
+    var watch = Stopwatch.StartNew();
+    var cancelled = false;
+    try
+    {
+        runner.Run(document, clock.GetTimestamp(), clock.Frequency, cancellation.Token, false, ref sequence, ref submitted);
+    }
+    catch (OperationCanceledException)
+    {
+        cancelled = true;
+    }
+
+    watch.Stop();
+    Assert.True(cancelled);
+    Assert.True(watch.ElapsedMilliseconds < 800);
+}
+
+static void PixelConditionInsideParallelBranchWaitsUntilItMatches()
+{
+    var calls = 0;
+    var sink = new RecordingMacroSink(_ => { });
+    var clock = new FakeHighResolutionClock(10_000_000);
+    var runner = new ManagedMacroControlFlowRunner(
+        sink,
+        new ImmediatePlaybackDelayStrategy(clock),
+        clock,
+        _ => Interlocked.Increment(ref calls) >= 3,
+        null);
+    var document = new MacroDocument(1, "parallel-pixel",
+    [
+        new ParallelStep(
+            new ParallelBranchStep("detect",
+            [
+                new PixelWhenStep(
+                    new PixelCondition(new PixelCoordinate(CoordinateScope.Screen, 1, 2), new RgbColor(1, 2, 3), 0),
+                    [new KeyStep(KeyActionKind.Down, HidKey.F, HidModifier.None, TimeSpan.Zero)],
+                    PollInterval: TimeSpan.FromMilliseconds(5))
+            ]),
+            new ParallelBranchStep("other", []))
+    ]);
+    uint sequence = 1;
+    var submitted = 0;
+    runner.Run(document, clock.GetTimestamp(), clock.Frequency, CancellationToken.None, false, ref sequence, ref submitted);
+    Assert.True(calls >= 3);
+    Assert.Equal(1, sink.Actions.Count);
+    Assert.Equal(HidKey.F, Assert.IsType<KeyInputAction>(sink.Actions[0]).Key);
+}
+
+static void WeakNetRejectsSystemProcessesAndStopIsIdempotent()
+{
+    Assert.True(WeakNetSession.IsDeniedProcess("svchost.exe"));
+    Assert.True(WeakNetSession.IsDeniedProcess("lsass"));
+    Assert.True(WeakNetSession.IsDeniedProcess(@"C:\Windows\System32\csrss.exe"));
+    Assert.False(WeakNetSession.IsDeniedProcess("YuanShen.exe"));
+    Assert.False(WeakNetSession.TryStart("svchost.exe", TimeSpan.FromHours(2), out var error));
+    Assert.True(error?.Contains("svchost.exe", StringComparison.OrdinalIgnoreCase) == true);
+    WeakNetSession.Stop();
+    WeakNetSession.Stop();
+    Assert.False(WeakNetSession.IsActive);
+    Assert.False(SystemTimeShift.IsShifted);
+}
+
+static void ClockRestoreIgnoresExternalChanges()
+{
+    var original = new DateTime(2026, 10, 10, 12, 0, 0);
+    var wallClock = original;
+    var elapsed = TimeSpan.Zero;
+    var writes = 0;
+    DateTime restored = default;
+    SystemTimeShift.UseTestClock(() => wallClock, value =>
+    {
+        if (++writes == 2) throw new InvalidOperationException("temporary failure");
+        restored = value;
+    }, () => elapsed);
+    try
+    {
+        SystemTimeShift.ShiftForwardOnce(TimeSpan.FromHours(1));
+        wallClock = original.AddDays(-1);
+        elapsed = TimeSpan.FromMinutes(3);
+        Assert.Throws<InvalidOperationException>(() => SystemTimeShift.Restore());
+        Assert.True(SystemTimeShift.IsShifted);
+        elapsed = TimeSpan.FromMinutes(4);
+        SystemTimeShift.Restore();
+        Assert.Equal(original.AddMinutes(4), restored);
+        Assert.False(SystemTimeShift.IsShifted);
+    }
+    finally { SystemTimeShift.ResetForTests(); }
+}
+
+static void WeakNetShiftsSystemClockForwardOneHourAndRestoresIt()
+{
+    var applied = new List<DateTime>();
+    var now = new DateTime(2026, 10, 7, 12, 0, 0, DateTimeKind.Local);
+    var elapsed = TimeSpan.Zero;
+    SystemTimeShift.UseTestClock(() => now, applied.Add, () => elapsed);
+    try
+    {
+        SystemTimeShift.ShiftForwardOnce(TimeSpan.Zero);
+        Assert.Empty(applied);
+        SystemTimeShift.ShiftForwardOnce(TimeSpan.FromMinutes(90));
+        SystemTimeShift.ShiftForwardOnce(TimeSpan.FromHours(3));
+        Assert.Equal(1, applied.Count);
+        Assert.Equal(now.AddMinutes(90), applied[0]);
+        now = now.AddMinutes(5);
+        elapsed = TimeSpan.FromMinutes(5);
+        SystemTimeShift.Restore();
+        SystemTimeShift.Restore();
+        Assert.Equal(2, applied.Count);
+        Assert.Equal(now, applied[1]);
+        Assert.False(SystemTimeShift.IsShifted);
+    }
+    finally
+    {
+        SystemTimeShift.ResetForTests();
+    }
+}
+
+static void PlaybackEffectOwnershipIsolatesOtherMacros()
+{
+    using var first = new PlaybackEffectScope();
+    Assert.True(PlaybackEffectScope.TryAcquire("network", out _));
+    using (var second = new PlaybackEffectScope())
+    {
+        Assert.False(PlaybackEffectScope.TryAcquire("network", out var error));
+        Assert.True(!string.IsNullOrWhiteSpace(error));
+        Assert.False(PlaybackEffectScope.CanRelease("network"));
+    }
+    Assert.True(PlaybackEffectScope.CanRelease("network"));
+}
+
+static void FrameLockRetainsBackupAfterFailures()
+{
+    int reads = 0, restores = 0;
+    FrameLockSession.TestReadBackup = _ => { reads++; return new(true, 144, 1, 1, true); };
+    FrameLockSession.TestApplyFps = (_, _) => throw new InvalidOperationException("partial write");
+    FrameLockSession.TestRestore = (_, backup) =>
+    {
+        Assert.Equal((uint)144, backup.Fps);
+        if (++restores == 1) throw new InvalidOperationException("temporarily unavailable");
+    };
+    try
+    {
+        Assert.False(FrameLockSession.TryStart("Game", 30, out _));
+        Assert.Throws<InvalidOperationException>(() => FrameLockSession.EndPlayback());
+        Assert.True(FrameLockSession.TryStop("Game", out _));
+        Assert.Equal(1, reads);
+        Assert.Equal(2, restores);
+    }
+    finally { FrameLockSession.ResetForTests(); }
+}
+
+static void FrameLockBacksUpOnceUpdatesFpsAndRestoresOnStop()
+{
+    var reads = new List<string>();
+    var writes = new List<(string Name, int Fps)>();
+    var restores = new List<(string Name, uint Fps)>();
+    FrameLockSession.TestReadBackup = name =>
+    {
+        reads.Add(name);
+        return new FrameLockProfileBackup(name == "Other.exe", name == "Other.exe" ? 30u : 0u, 0, 1, true);
+    };
+    FrameLockSession.TestApplyFps = (name, fps) => writes.Add((name, fps));
+    FrameLockSession.TestRestore = (name, backup) => restores.Add((name, backup.Fps));
+    try
+    {
+        Assert.True(FrameLockSession.TryStart("YuanShen", 60, out var error));
+        Assert.True(error is null);
+        Assert.True(FrameLockSession.TryStart("YuanShen.exe", 90, out error));
+        Assert.True(error is null);
+        Assert.Equal(1, reads.Count);
+        Assert.Equal("YuanShen.exe", reads[0]);
+        Assert.Equal(2, writes.Count);
+        Assert.Equal(90, writes[1].Fps);
+        Assert.True(FrameLockSession.TryStart("Other.exe", 30, out error));
+        Assert.True(error is null);
+        Assert.Equal("YuanShen.exe", restores[0].Name);
+        Assert.Equal(0u, restores[0].Fps);
+        Assert.True(FrameLockSession.TryStop("Missing.exe", out error));
+        Assert.True(error is null);
+        Assert.True(FrameLockSession.TryStop("Other.exe", out error));
+        Assert.True(error is null);
+        Assert.True(FrameLockSession.TryStop("Other.exe", out error));
+        FrameLockSession.TryStart("YuanShen.exe", 45, out error);
+        FrameLockSession.EndPlayback();
+        Assert.Equal("YuanShen.exe", restores[^1].Name);
+        Assert.True(FrameLockSession.TryStop("YuanShen.exe", out error));
+
+        var document = new MacroDocument(1, "frame-lock",
+        [
+            new FrameLockStep("Game.exe", FrameLockAction.Start, 144),
+            new FrameLockStep("Game.exe", FrameLockAction.Stop, 60)
+        ]);
+        var parsed = McrxParser.Parse(McrxSerializer.Serialize(document));
+        var start = Assert.IsType<FrameLockStep>(parsed.Steps[0]);
+        Assert.Equal(FrameLockAction.Start, start.Action);
+        Assert.Equal(144, start.EffectiveFps);
+        Assert.Equal(FrameLockAction.Stop, Assert.IsType<FrameLockStep>(parsed.Steps[1]).Action);
+
+        var rtss = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "FrameLock", "FrameLockRtss.cs"));
+        Assert.Contains("OriginalBytes", rtss);
+        Assert.False(rtss.Contains("DeleteProfile", StringComparison.Ordinal));
+    }
+    finally
+    {
+        FrameLockSession.ResetForTests();
+    }
+}
+
+static void WeakNetLimitsUploadOnly()
+{
+    var limit = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "WeakNet", "NetLimitSession.cs"));
+    var divert = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "WeakNet", "WinDivertNative.cs"));
+    var throttle = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "WeakNet", "PacketThrottleService.cs"));
+    var hint = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
+    Assert.Contains("RuleDir.Out", limit);
+    Assert.DoesNotContain("RuleDir.Both", limit);
+    Assert.Contains("outbound and !loopback", divert);
+    Assert.Contains("!WinDivertNative.IsOutbound(address)", throttle);
+    Assert.Contains("只限制上传，下载不限", hint);
+}
+
+static void NetLimitKeepsEditedByteRateAndDefaultsTo695()
+{
+    var created = Assert.IsType<NetLimitStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.NetLimitStart));
+    Assert.Equal(NetLimitStep.DefaultBytesPerSecond, created.BytesPerSecond);
+    Assert.Equal(695L, created.EffectiveBytesPerSecond);
+    Assert.Equal(NetLimitEngine.BuiltIn, created.Engine);
+    var limiter = Assert.IsType<NetLimitStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.NetLimiterStart));
+    Assert.Equal(NetLimitEngine.NetLimiter, limiter.Engine);
+    Assert.Equal(695L, limiter.EffectiveBytesPerSecond);
+    var disconnect = Assert.IsType<WeakNetStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.WeakNetStart));
+    Assert.Equal(TimeSpan.FromHours(1), disconnect.EffectiveTimeShift);
+    var shift = Assert.IsType<ClockShiftStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.ClockShift));
+    Assert.Equal(TimeSpan.FromHours(1), shift.EffectiveTimeShift);
+    Assert.Equal(ClockShiftAction.Restore, Assert.IsType<ClockShiftStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.ClockRestore)).Action);
+
+    long nextTick = 0;
+    Assert.Equal(0L, BandwidthPacer.Charge(ref nextTick, 0, 695, 695, 1000));
+    Assert.Equal(1000L, BandwidthPacer.Charge(ref nextTick, 0, 1390, 695, 1000));
+    Assert.Equal(3000L, nextTick);
+
+    var document = new MacroDocument(1, "net-limit",
+    [
+        new NetLimitStep("Game.exe", NetLimitAction.Start, 1200),
+        new NetLimitStep("Game.exe", NetLimitAction.Stop, 50),
+        new NetLimitStep("Game.exe", NetLimitAction.Start, 800, NetLimitEngine.NetLimiter),
+        new ClockShiftStep(ClockShiftAction.Shift, TimeSpan.FromMinutes(90)),
+        new ClockShiftStep(ClockShiftAction.Restore, TimeSpan.Zero)
+    ]);
+    var parsed = McrxParser.Parse(McrxSerializer.Serialize(document));
+    var start = Assert.IsType<NetLimitStep>(parsed.Steps[0]);
+    Assert.Equal(NetLimitAction.Start, start.Action);
+    Assert.Equal(1200L, start.BytesPerSecond);
+    Assert.Equal(1200L, start.EffectiveBytesPerSecond);
+    Assert.Equal(NetLimitAction.Stop, Assert.IsType<NetLimitStep>(parsed.Steps[1]).Action);
+    Assert.Equal(NetLimitEngine.BuiltIn, start.Engine);
+    var external = Assert.IsType<NetLimitStep>(parsed.Steps[2]);
+    Assert.Equal(NetLimitEngine.NetLimiter, external.Engine);
+    Assert.Equal(800L, external.EffectiveBytesPerSecond);
+    Assert.Equal(TimeSpan.FromMinutes(90), Assert.IsType<ClockShiftStep>(parsed.Steps[3]).EffectiveTimeShift);
+    Assert.Equal(ClockShiftAction.Restore, Assert.IsType<ClockShiftStep>(parsed.Steps[4]).Action);
+    Assert.Equal(695L, new NetLimitStep("Game.exe", NetLimitAction.Start, 0).EffectiveBytesPerSecond);
+
+    uint applied = 0;
+    var cleared = 0;
+    NetLimitSession.TestApply = (_, bytes) => applied = bytes;
+    NetLimitSession.TestClear = () => cleared++;
+    try
+    {
+        Assert.False(NetLimitSession.TryStart("svchost.exe", 1200, out var error));
+        Assert.Contains("svchost.exe", error ?? string.Empty);
+        Assert.True(NetLimitSession.TryStart("YuanShen.exe", 1200, out error));
+        Assert.True(error is null);
+        Assert.Equal(1200u, applied);
+        Assert.True(NetLimitSession.TryStart("YuanShen.exe", 800, out error));
+        Assert.Equal(800u, applied);
+        NetLimitSession.Stop();
+        NetLimitSession.EndPlayback();
+        Assert.Equal(2, cleared);
+    }
+    finally
+    {
+        NetLimitSession.ResetForTests();
+    }
+}
+
+static void BackgroundWindowPostsInputAndCapturesThatWindow()
+{
+    Assert.Equal("Game.exe", BackgroundProcessSelection.Resolve("Game", "YuanShen.exe"));
+    Assert.Equal("YuanShen.exe", BackgroundProcessSelection.Resolve("  ", "YuanShen.exe; notepad.exe"));
+    Assert.True(BackgroundProcessSelection.RequiresUserChoice("", databaseIsGlobal: true, ""));
+    Assert.False(BackgroundProcessSelection.RequiresUserChoice("", databaseIsGlobal: false, "YuanShen.exe"));
+    Assert.False(BackgroundProcessSelection.RequiresUserChoice("Game.exe", databaseIsGlobal: true, ""));
+
+    var posts = new List<BackgroundPostedMessage>();
+    var clientCaptures = 0;
+    var graphicsCaptures = 0;
+    BackgroundWindowSession.TestResolve = name => name == "Missing.exe"
+        ? default
+        : name == "Minimized.exe"
+            ? new BackgroundWindowLookup(true, true, 7, 0, 0, 0, 0)
+            : new BackgroundWindowLookup(true, false, 42, 100, 50, 4, 2);
+    BackgroundWindowSession.TestPost = posts.Add;
+    BackgroundWindowSession.TestCaptureClient = _ =>
+    {
+        clientCaptures++;
+        return new BackgroundClientImage(4, 2, new byte[4 * 2 * 4]);
+    };
+    BackgroundWindowSession.TestCaptureGraphics = _ =>
+    {
+        graphicsCaptures++;
+        var pixels = new byte[4 * 2 * 4];
+        pixels[4] = 0;
+        pixels[5] = 255;
+        pixels[6] = 0;
+        pixels[7] = 255;
+        pixels[0] = 0;
+        pixels[1] = 0;
+        pixels[2] = 255;
+        pixels[3] = 255;
+        return new BackgroundClientImage(4, 2, pixels);
+    };
+
+    try
+    {
+        using (BackgroundWindowSession.BeginScope(new PlaybackExecutionOptions(
+            PlaybackMode.FixedCount, 1, PixelEvaluationMode.Skip, true)))
+        {
+            Assert.False(BackgroundWindowSession.IsActive);
+        }
+
+        Assert.False(BackgroundWindowSession.TryBegin("", out var emptyProcess));
+        Assert.Contains("目标进程", emptyProcess ?? "");
+        Assert.False(BackgroundWindowSession.TryBegin("Missing.exe", out var missing));
+        Assert.Contains("目标窗口", missing ?? "");
+        Assert.False(BackgroundWindowSession.TryBegin("Minimized.exe", out var minimized));
+        Assert.Contains("最小化", minimized ?? "");
+
+        Assert.True(BackgroundWindowSession.TryBegin("Game.exe", out var started));
+        Assert.True(started is null);
+        var injected = new List<(int X, int Y)>();
+        BackgroundWindowSession.TestInjectRelative = (x, y) => injected.Add((x, y));
+        BackgroundWindowInput.Submit(
+        [
+            new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None),
+            new MouseMoveInputAction(MouseMoveMode.Absolute, 101, 50),
+            new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Down),
+            new MouseMoveInputAction(MouseMoveMode.Relative, 2, 1),
+            new TextInputAction("中")
+        ]);
+        Assert.Equal(BackgroundMessageKind.Activate, posts[0].Kind);
+        Assert.Equal(BackgroundMessageKind.KeyDown, posts[1].Kind);
+        Assert.Equal(0x41, posts[1].WParam);
+        var moves = posts.Where(message => message.Kind == BackgroundMessageKind.MouseMove).ToArray();
+        Assert.Equal(2, moves.Length);
+        Assert.Equal(1, moves[0].ClientX);
+        Assert.Equal(0, moves[0].ClientY);
+        var click = posts.First(message => message.Kind == BackgroundMessageKind.MouseDown);
+        Assert.Equal(1, click.ClientX);
+        Assert.Equal(MouseButton.Left, click.Button);
+        Assert.Equal(3, moves[1].ClientX);
+        Assert.Equal(1, moves[1].ClientY);
+        Assert.True(posts.Any(message => message.Kind == BackgroundMessageKind.Char && message.WParam == '中'));
+        posts.Clear();
+        injected.Clear();
+        BackgroundWindowInput.Submit([new MouseMoveInputAction(MouseMoveMode.Relative, 2400, 0)]);
+        var longDrag = posts.Where(message => message.Kind == BackgroundMessageKind.MouseMove).ToArray();
+        Assert.True(longDrag.Length > 1);
+        Assert.Equal(3 + 2400, longDrag[^1].ClientX);
+        Assert.Equal(1, longDrag[^1].ClientY);
+        Assert.True(longDrag.Zip(longDrag.Skip(1), (first, second) => second.ClientX - first.ClientX).All(delta => delta > 0 && delta <= MouseMoveSmoothing.MaxDeltaPerSlice));
+        Assert.Equal(2400, injected.Sum(delta => delta.X));
+        Assert.True(injected.Count >= longDrag.Length);
+
+        var first = ScreenCaptureService.CaptureRegion(ScreenRegion.FromRect(101, 50, 102, 51));
+        Assert.True(first is not null);
+        Assert.Equal(0, first![0]);
+        Assert.Equal(255, first[1]);
+        Assert.Equal(0, first[2]);
+        _ = ScreenCaptureService.CaptureRegion(ScreenRegion.FromRect(100, 50, 101, 51));
+        Assert.Equal(1, clientCaptures);
+        Assert.Equal(2, graphicsCaptures);
+        BackgroundWindowSession.EndPlayback();
+
+        var document = new MacroDocument(
+            1,
+            "background",
+            [new KeyStep(KeyActionKind.Down, HidKey.F13, HidModifier.None, TimeSpan.Zero)]);
+        posts.Clear();
+        var executor = new MacroPlaybackExecutor(new SendInputMacroSink());
+        var result = executor.RunAsync(
+            document,
+            new PlaybackExecutionOptions(
+                PlaybackMode.FixedCount,
+                1,
+                PixelEvaluationMode.Skip,
+                NoWait: true,
+                PrecisionMode.UltraLowJitter,
+                BackgroundWindow: true,
+                BackgroundProcess: "Game.exe"),
+            CancellationToken.None).GetAwaiter().GetResult();
+        Assert.Equal(PlaybackRunStatus.Completed, result.Status);
+        Assert.Contains("background window input requires managed playback", result.InputStats?.NativeFallbackReason ?? "");
+        Assert.True(posts.Any(message => message.Kind == BackgroundMessageKind.KeyDown));
+        Assert.False(BackgroundWindowSession.IsActive);
+
+        Assert.Throws<InvalidOperationException>(() => executor.RunAsync(
+            document,
+            new PlaybackExecutionOptions(
+                PlaybackMode.FixedCount,
+                1,
+                PixelEvaluationMode.Skip,
+                NoWait: true,
+                BackgroundWindow: true,
+                BackgroundProcess: "Missing.exe"),
+            CancellationToken.None).GetAwaiter().GetResult());
+        Assert.False(BackgroundWindowSession.IsActive);
+    }
+    finally
+    {
+        BackgroundWindowSession.ResetForTests();
+    }
+
+    var library = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+    var basic = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroBasicControlDialog.xaml.cs"));
+    var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var picker = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ScreenPixelSampler.cs"));
+    Assert.Contains("BackgroundProcessRequired", basic);
+    Assert.Contains("IsGlobal", library);
+    Assert.Contains("BackgroundProcessSelection.Resolve", mainWindow);
+    Assert.Contains("!runtimePrecisionSettings.BackgroundWindow", mainWindow);
+    Assert.Contains("TryCaptureVirtualScreen", picker);
 }
 
 static class Assert
@@ -9337,6 +10299,17 @@ sealed class ControlledPlaybackExecutor : IMacroPlaybackExecutor
     }
 }
 
+sealed class FailingPlaybackExecutor(Exception failure) : IMacroPlaybackExecutor
+{
+    public Task<PlaybackRunResult> RunAsync(
+        MacroDocument document,
+        PlaybackExecutionOptions options,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromException<PlaybackRunResult>(failure);
+    }
+}
+
 sealed class RecordingInputSink : IMacroInputSink
 {
     public bool IsAvailable => true;
@@ -9352,6 +10325,33 @@ sealed class RecordingInputSink : IMacroInputSink
     {
         return null;
     }
+}
+
+sealed class FailOnceInputSink : IMacroInputSink
+{
+    private readonly int failOnAttempt;
+
+    public FailOnceInputSink(int failOnAttempt)
+    {
+        this.failOnAttempt = failOnAttempt;
+    }
+
+    public bool IsAvailable => true;
+    public int Attempts { get; private set; }
+    public List<InputAction> Actions { get; } = [];
+
+    public void Submit(uint sequence, InputAction action)
+    {
+        Attempts++;
+        if (Attempts == failOnAttempt)
+        {
+            throw new InvalidOperationException("Simulated input injection failure between KD and KU.");
+        }
+
+        Actions.Add(action);
+    }
+
+    public InputSubmissionStats? GetStats() => null;
 }
 
 sealed class CancellingInputSink : IMacroInputSink
@@ -9504,6 +10504,28 @@ sealed class FakeHighResolutionClock : IHighResolutionClock
     public long GetTimestamp() => timestamp;
 
     public void Advance(long ticks) => timestamp += ticks;
+}
+
+sealed class RecordingMacroSink : IMacroInputSink
+{
+    private readonly Action<InputAction> onSubmit;
+
+    public RecordingMacroSink(Action<InputAction> onSubmit)
+    {
+        this.onSubmit = onSubmit;
+    }
+
+    public List<InputAction> Actions { get; } = [];
+
+    public bool IsAvailable => true;
+
+    public void Submit(uint sequence, InputAction action)
+    {
+        Actions.Add(action);
+        onSubmit(action);
+    }
+
+    public InputSubmissionStats? GetStats() => null;
 }
 
 sealed class ImmediatePlaybackDelayStrategy : IPlaybackDelayStrategy

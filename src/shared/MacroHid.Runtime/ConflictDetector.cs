@@ -92,6 +92,18 @@ public static class ConflictDetector
                 foreach (var s in pixel.ThenSteps)
                     CollectKeys(s, keys);
                 break;
+            case ParallelStep parallel:
+                foreach (var s in parallel.Branches)
+                    CollectKeys(s, keys);
+                break;
+            case ParallelBranchStep branch:
+                foreach (var s in branch.Steps)
+                    CollectKeys(s, keys);
+                break;
+            case TextWhenStep text:
+                foreach (var s in text.ThenSteps)
+                    CollectKeys(s, keys);
+                break;
         }
     }
 

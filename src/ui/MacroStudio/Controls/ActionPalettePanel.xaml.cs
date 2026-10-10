@@ -25,6 +25,9 @@ public partial class ActionPalettePanel : UserControl
     public void ApplyLocalization()
     {
         AddTitleText.Text = L("Add");
+        BasicActionsSection.Header = L("PaletteBasic");
+        AdvancedActionsSection.Header = L("PaletteAdvanced");
+        LoopActionsSection.Header = L("PaletteLoop");
         AddDelayText.Text = L("AddDelay");
         AddKeyboardText.Text = L("AddKeyboard");
         AddMouseText.Text = L("AddMouseButton");
@@ -36,6 +39,19 @@ public partial class ActionPalettePanel : UserControl
         AddTextActionText.Text = L("AddText");
         AddCommentText.Text = L("AddComment");
         AddMacroText.Text = L("AddMacro");
+        AddPixelText.Text = L("AddPixel");
+        AddTextWhenText.Text = L("AddTextWhen");
+        AddNetLimitStartText.Text = L("AddNetLimitStart");
+        AddNetLimitStopText.Text = L("AddNetLimitStop");
+        AddNetLimiterStartText.Text = L("AddNetLimiterStart");
+        AddNetLimiterStopText.Text = L("AddNetLimiterStop");
+        AddClockShiftText.Text = L("AddClockShift");
+        AddClockRestoreText.Text = L("AddClockRestore");
+        AddWeakNetStartText.Text = L("AddWeakNetStart");
+        AddWeakNetStopText.Text = L("AddWeakNetStop");
+        AddFrameLockStartText.Text = L("AddFrameLockStart");
+        AddFrameLockStopText.Text = L("AddFrameLockStop");
+        AddParallelText.Text = L("AddParallel");
         AddLoopText.Text = L("AddLoop");
         AddStopCurrentText.Text = L("AddStopCurrent");
         AddStopIterationText.Text = L("AddStopIteration");
@@ -51,6 +67,19 @@ public partial class ActionPalettePanel : UserControl
         AddTextHintText.Text = L("AddTextHint");
         AddCommentHintText.Text = L("AddCommentHint");
         AddMacroActionHintText.Text = L("AddMacroActionHint");
+        AddPixelHintText.Text = L("AddPixelHint");
+        AddTextWhenHintText.Text = L("AddTextWhenHint");
+        AddNetLimitStartHintText.Text = L("AddNetLimitStartHint");
+        AddNetLimitStopHintText.Text = L("AddNetLimitStopHint");
+        AddNetLimiterStartHintText.Text = L("AddNetLimiterStartHint");
+        AddNetLimiterStopHintText.Text = L("AddNetLimiterStopHint");
+        AddClockShiftHintText.Text = L("AddClockShiftHint");
+        AddClockRestoreHintText.Text = L("AddClockRestoreHint");
+        AddWeakNetStartHintText.Text = L("AddWeakNetStartHint");
+        AddWeakNetStopHintText.Text = L("AddWeakNetStopHint");
+        AddFrameLockStartHintText.Text = L("AddFrameLockStartHint");
+        AddFrameLockStopHintText.Text = L("AddFrameLockStopHint");
+        AddParallelHintText.Text = L("AddParallelHint");
         AddLoopHintText.Text = L("AddLoopHint");
         AddStopCurrentHintText.Text = L("AddStopCurrentHint");
         AddStopIterationHintText.Text = L("AddStopIterationHint");
@@ -115,7 +144,10 @@ public partial class ActionPalettePanel : UserControl
 
     private void UpdateAdaptiveColumns()
     {
-        ActionCommandGrid.Columns = ActualWidth >= 520 ? 2 : 1;
+        var columns = ActualWidth >= 520 ? 2 : 1;
+        BasicCommandGrid.Columns = columns;
+        AdvancedCommandGrid.Columns = columns;
+        LoopCommandGrid.Columns = columns;
     }
 
     private static bool TryParseKind(string? tag, out MacroActionTemplateKind kind)
@@ -134,7 +166,9 @@ public partial class ActionPalettePanel : UserControl
 
     public void SetReadOnly(bool value)
     {
-        ActionCommandGrid.IsEnabled = !value;
+        BasicCommandGrid.IsEnabled = !value;
+        AdvancedCommandGrid.IsEnabled = !value;
+        LoopCommandGrid.IsEnabled = !value;
         DragHint.Text = value ? L("MacroLockedReadOnly") : L("ActionPaletteDragHint");
     }
 
@@ -168,6 +202,19 @@ public partial class ActionPalettePanel : UserControl
         ApplyButtonAppearance(AddTextButton, MacroActionTemplateKind.Text);
         ApplyButtonAppearance(AddCommentButton, MacroActionTemplateKind.Comment);
         ApplyButtonAppearance(AddMacroButton, MacroActionTemplateKind.Macro);
+        ApplyButtonAppearance(AddPixelButton, MacroActionTemplateKind.Pixel);
+        ApplyButtonAppearance(AddTextWhenButton, MacroActionTemplateKind.TextWhen);
+        ApplyButtonAppearance(AddNetLimitStartButton, MacroActionTemplateKind.NetLimitStart);
+        ApplyButtonAppearance(AddNetLimitStopButton, MacroActionTemplateKind.NetLimitStop);
+        ApplyButtonAppearance(AddNetLimiterStartButton, MacroActionTemplateKind.NetLimiterStart);
+        ApplyButtonAppearance(AddNetLimiterStopButton, MacroActionTemplateKind.NetLimiterStop);
+        ApplyButtonAppearance(AddClockShiftButton, MacroActionTemplateKind.ClockShift);
+        ApplyButtonAppearance(AddClockRestoreButton, MacroActionTemplateKind.ClockRestore);
+        ApplyButtonAppearance(AddWeakNetStartButton, MacroActionTemplateKind.WeakNetStart);
+        ApplyButtonAppearance(AddWeakNetStopButton, MacroActionTemplateKind.WeakNetStop);
+        ApplyButtonAppearance(AddFrameLockStartButton, MacroActionTemplateKind.FrameLockStart);
+        ApplyButtonAppearance(AddFrameLockStopButton, MacroActionTemplateKind.FrameLockStop);
+        ApplyButtonAppearance(AddParallelButton, MacroActionTemplateKind.Parallel);
         ApplyButtonAppearance(AddLoopButton, MacroActionTemplateKind.Loop);
         ApplyButtonAppearance(AddStopCurrentButton, MacroActionTemplateKind.StopCurrent);
         ApplyButtonAppearance(AddStopIterationButton, MacroActionTemplateKind.StopIteration);

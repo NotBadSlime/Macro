@@ -34,6 +34,8 @@ public partial class MainWindow : Window
     private RuntimePrecisionSettings runtimePrecisionSettings = RuntimePrecisionSettingsStore.Load();
 
     private GlobalKeyboardHook? keyboardHook;
+    private bool runNowEmergencyStopArmed;
+    private int runNowGeneration;
     private MacroInputRecorder? macroRecorder;
     private MacroPlaybackController? playbackController;
     private readonly Dictionary<string, MacroPlaybackController> listeningControllers = [];
@@ -129,10 +131,9 @@ public partial class MainWindow : Window
         LibraryPanel.StopListeningGroupsRequested += OnStopListeningGroups;
         LibraryPanel.StopListeningAllRequested += OnStopListeningAll;
         LibraryPanel.PrecisionSettingsEdited += OnPrecisionSettingsEdited;
-        LibraryPanel.ChooseCoresRequested += OnChooseCoresRequested;
+        LibraryPanel.BasicControlRequested += OnBasicControlRequested;
+        LibraryPanel.PrecisionControlRequested += OnPrecisionControlRequested;
         LibraryPanel.LibraryStructureEdited += OnLibraryStructureEdited;
-        LibraryPanel.ColorSampleCaptureStarted += PauseListeningForCapture;
-        LibraryPanel.ColorSampleCaptureFinished += ResumeListeningAfterCapture;
 
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
         SequencePanelControl.RunNowRequested += OnRunNow;
@@ -1223,7 +1224,12 @@ public partial class MainWindow : Window
     {
         var precision = LibraryPanel.GetSelectedPrecisionMode();
         var affinityMask = PlaybackAffinityMask.NormalizeOrThrow(LibraryPanel.AffinityMaskText);
-        return new RuntimePrecisionSettings(precision, affinityMask, LibraryPanel.ColorSampleHotkeyText);
+        return new RuntimePrecisionSettings(
+            precision,
+            affinityMask,
+            LibraryPanel.ColorSampleHotkeyText,
+            LibraryPanel.BackgroundWindowEnabled,
+            LibraryPanel.BackgroundProcessText);
     }
 
     private void WarmUpRuntimePrecision()
@@ -1231,42 +1237,6 @@ public partial class MainWindow : Window
         NativePlaybackWarmup.QueueWarmUpForPrecision(
             runtimePrecisionSettings.Precision,
             runtimePrecisionSettings.AffinityMask);
-    }
-
-    private void OnChooseCoresRequested()
-    {
-        if (IsCoreSelectionBlocked())
-        {
-            SetStatus(L("CoreSelectionBusy"));
-            return;
-        }
-
-        var savedMask = runtimePrecisionSettings.AffinityMask;
-        var dialog = new CorePickerDialog(savedMask, IsCoreSelectionBlocked);
-        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true)
-        {
-            RestoreMaskAfterCancelledTest(savedMask, dialog);
-            return;
-        }
-
-        if (IsCoreSelectionBlocked())
-        {
-            SetStatus(L("CoreSelectionBusy"));
-            RestoreMaskAfterCancelledTest(savedMask, dialog);
-            return;
-        }
-
-        LibraryPanel.ApplyAffinityMask(dialog.SelectedMask);
-        runtimePrecisionSettings = ReadRuntimePrecisionSettingsFromPanel();
-        RuntimePrecisionSettingsStore.Save(runtimePrecisionSettings);
-        var alreadyMeasured = dialog.LastMeasureSucceeded
-            && string.Equals(dialog.LastMeasuredMask, dialog.SelectedMask, StringComparison.OrdinalIgnoreCase);
-        if (!alreadyMeasured)
-        {
-            NativePlaybackWarmup.QueueWarmUpForAffinityMask(runtimePrecisionSettings.AffinityMask, force: true);
-        }
-
-        SetStatus(string.IsNullOrWhiteSpace(dialog.LastResultText) ? L("CoreSelectionStarted") : dialog.LastResultText);
     }
 
     private void RestoreMaskAfterCancelledTest(string savedMask, CorePickerDialog dialog)
@@ -1342,8 +1312,8 @@ public partial class MainWindow : Window
             }
 
             mask = LogicalProcessorInventory.MaskFromProcessors(defaults);
-            LibraryPanel.ApplyAffinityMask(mask);
-            runtimePrecisionSettings = ReadRuntimePrecisionSettingsFromPanel();
+            runtimePrecisionSettings = runtimePrecisionSettings with { AffinityMask = mask };
+            LibraryPanel.SetRuntimePrecisionControls(runtimePrecisionSettings);
             RuntimePrecisionSettingsStore.Save(runtimePrecisionSettings);
         }
 
@@ -2090,13 +2060,22 @@ public partial class MainWindow : Window
         IReadOnlyCollection<string>? preferredIds = null)
     {
         var colorSample = runtimePrecisionSettings.ColorSampleGesture;
-        var skipped = candidates
+        var forceStop = runtimePrecisionSettings.ForceStopGesture;
+        var colorConflicts = candidates
             .Where(candidate => CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
             .Select(candidate => candidate.Document.Name)
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
             .ToList();
+        var stopConflicts = forceStop is null
+            ? []
+            : candidates
+                .Where(candidate => CoreHotkeys.GesturesEqual(candidate.Trigger, forceStop))
+                .Select(candidate => candidate.Document.Name)
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
         var eligible = candidates
-            .Where(candidate => !CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
+            .Where(candidate => !CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample)
+                && (forceStop is null || !CoreHotkeys.GesturesEqual(candidate.Trigger, forceStop)))
             .ToList();
 
         var resolved = ListeningTriggerResolver.Resolve(
@@ -2121,11 +2100,10 @@ public partial class MainWindow : Window
             groupProcessFilters[item.Id] = candidate.GroupProcessFilter;
         }
 
+        var conflictMessage = FormatReservedHotkeyConflict(colorConflicts, stopConflicts);
         if (controllers.Count == 0)
             throw new InvalidOperationException(
-                skipped.Count > 0
-                    ? LocalizationService.Format("ListeningColorSampleConflict", string.Join("、", skipped))
-                    : L("ChooseTriggerBeforeListening"));
+                string.IsNullOrEmpty(conflictMessage) ? L("ChooseTriggerBeforeListening") : conflictMessage);
 
         StopListeningControllers();
         listening = false;
@@ -2149,9 +2127,9 @@ public partial class MainWindow : Window
         listening = true;
         RefreshKeyboardHook();
         RefreshLibraryListeningState();
-        if (skipped.Count > 0)
+        if (!string.IsNullOrEmpty(conflictMessage))
         {
-            SetStatus(LocalizationService.Format("ListeningColorSampleConflict", string.Join("、", skipped)));
+            SetStatus(conflictMessage);
         }
 
         return controllers.Count;
@@ -2201,9 +2179,18 @@ public partial class MainWindow : Window
         keyboardHook = null;
 
         var bindings = new List<HotkeyBinding>();
+        if (runNowEmergencyStopArmed)
+        {
+            bindings.Add(new HotkeyBinding(CoreHotkeys.EmergencyStopId, new HotkeyGesture(HidModifier.None, HidKey.Escape)));
+        }
+
         if (!coreHotkeysSuspended && macroRecorder is null)
         {
             bindings.Add(new HotkeyBinding(CoreHotkeys.ColorSampleId, runtimePrecisionSettings.ColorSampleGesture));
+            if (runtimePrecisionSettings.ForceStopGesture is { } forceStop)
+            {
+                bindings.Add(new HotkeyBinding(CoreHotkeys.ForceStopId, forceStop));
+            }
         }
 
         if (listeningControllers.Count > 0)
@@ -2213,9 +2200,11 @@ public partial class MainWindow : Window
                 .Where(candidate => activeIds.Contains(candidate.Item.Id))
                 .ToList();
             var colorSample = runtimePrecisionSettings.ColorSampleGesture;
+            var forceStop = runtimePrecisionSettings.ForceStopGesture;
             foreach (var candidate in candidates)
             {
-                if (CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
+                if (CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample)
+                    || (forceStop is not null && CoreHotkeys.GesturesEqual(candidate.Trigger, forceStop)))
                 {
                     StopListeningController(candidate.Item.Id);
                     continue;
@@ -2353,9 +2342,11 @@ public partial class MainWindow : Window
         }
 
         var colorSample = runtimePrecisionSettings.ColorSampleGesture;
+        var forceStop = runtimePrecisionSettings.ForceStopGesture;
         foreach (var candidate in candidates)
         {
-            if (CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
+            if (CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample)
+                || (forceStop is not null && CoreHotkeys.GesturesEqual(candidate.Trigger, forceStop)))
             {
                 conflictIds.Add(candidate.Item.Id);
             }
@@ -2416,18 +2407,134 @@ public partial class MainWindow : Window
     private void WarnColorSampleConflicts()
     {
         var colorSample = runtimePrecisionSettings.ColorSampleGesture;
-        var names = BuildListeningCandidates()
+        var forceStop = runtimePrecisionSettings.ForceStopGesture;
+        var candidates = BuildListeningCandidates();
+        var colorNames = candidates
             .Where(candidate => CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample))
             .Select(candidate => candidate.Document.Name)
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
             .ToList();
-        if (names.Count == 0)
+        var stopNames = forceStop is null
+            ? []
+            : candidates
+                .Where(candidate => CoreHotkeys.GesturesEqual(candidate.Trigger, forceStop))
+                .Select(candidate => candidate.Document.Name)
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        if (colorNames.Count == 0 && stopNames.Count == 0)
         {
             return;
         }
 
-        SetStatus(LocalizationService.Format("ListeningColorSampleConflict", string.Join("、", names)));
+        SetStatus(FormatReservedHotkeyConflict(colorNames, stopNames));
         RefreshLibraryListeningState();
+    }
+
+    private static string FormatReservedHotkeyConflict(IReadOnlyList<string> colorNames, IReadOnlyList<string> stopNames)
+    {
+        var message = colorNames.Count > 0
+            ? LocalizationService.Format("ListeningColorSampleConflict", string.Join("、", colorNames))
+            : string.Empty;
+        if (stopNames.Count == 0)
+        {
+            return message;
+        }
+
+        var stopMessage = LocalizationService.Format("ListeningForceStopConflict", string.Join("、", stopNames));
+        return string.IsNullOrEmpty(message) ? stopMessage : message + " " + stopMessage;
+    }
+
+    private void OnBasicControlRequested()
+    {
+        var dialog = new MacroBasicControlDialog(runtimePrecisionSettings, LibraryPanel.BackgroundProcessChoiceRequired);
+        dialog.CaptureStarted += PauseListeningForCapture;
+        dialog.CaptureFinished += ResumeListeningAfterCapture;
+        bool accepted;
+        try
+        {
+            accepted = DialogOwnerService.ShowDialogSafe(dialog, this) == true;
+        }
+        finally
+        {
+            dialog.CaptureStarted -= PauseListeningForCapture;
+            dialog.CaptureFinished -= ResumeListeningAfterCapture;
+        }
+
+        if (!accepted)
+        {
+            return;
+        }
+
+        LibraryPanel.SetRuntimePrecisionControls(dialog.Settings);
+        OnPrecisionSettingsEdited();
+    }
+
+    private void OnPrecisionControlRequested()
+    {
+        string? pickedMask = null;
+        var dialog = new PrecisionControlDialog(runtimePrecisionSettings, currentMask =>
+        {
+            var selected = TryPickAffinityMask(currentMask);
+            if (selected is not null)
+            {
+                pickedMask = selected;
+            }
+
+            return selected;
+        });
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true)
+        {
+            if (pickedMask is not null
+                && !string.Equals(pickedMask, runtimePrecisionSettings.AffinityMask, StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(runtimePrecisionSettings.AffinityMask))
+                {
+                    NativePlaybackWarmup.Shutdown();
+                }
+                else
+                {
+                    NativePlaybackWarmup.QueueWarmUpForAffinityMask(runtimePrecisionSettings.AffinityMask, force: true);
+                }
+            }
+
+            return;
+        }
+
+        LibraryPanel.SetRuntimePrecisionControls(dialog.Settings);
+        OnPrecisionSettingsEdited();
+    }
+
+    private string? TryPickAffinityMask(string currentMask)
+    {
+        if (IsCoreSelectionBlocked())
+        {
+            SetStatus(L("CoreSelectionBusy"));
+            return null;
+        }
+
+        var dialog = new CorePickerDialog(currentMask, IsCoreSelectionBlocked);
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true)
+        {
+            RestoreMaskAfterCancelledTest(currentMask, dialog);
+            return null;
+        }
+
+        if (IsCoreSelectionBlocked())
+        {
+            SetStatus(L("CoreSelectionBusy"));
+            RestoreMaskAfterCancelledTest(currentMask, dialog);
+            return null;
+        }
+
+        var alreadyMeasured = dialog.LastMeasureSucceeded
+            && string.Equals(dialog.LastMeasuredMask, dialog.SelectedMask, StringComparison.OrdinalIgnoreCase);
+        if (!alreadyMeasured)
+        {
+            NativePlaybackWarmup.QueueWarmUpForAffinityMask(dialog.SelectedMask, force: true);
+        }
+
+        SetStatus(string.IsNullOrWhiteSpace(dialog.LastResultText) ? L("CoreSelectionStarted") : dialog.LastResultText);
+        return dialog.SelectedMask;
     }
 
     private void SetLibraryPathForItem(MacroLibraryItem? item, string fallbackName)
@@ -2481,18 +2588,34 @@ public partial class MainWindow : Window
             var document = GetDocumentWithPlayback();
             playbackController?.Dispose();
             var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
-            var options = CreatePlaybackOptions(document);
+            var options = CreatePlaybackOptions(document).ForImmediateRun();
             executor.Prepare(document, options);
+            var generation = ++runNowGeneration;
+            runNowEmergencyStopArmed = true;
+            RefreshKeyboardHook();
             playbackController = new MacroPlaybackController(document, executor, options);
             await playbackController.RunNowAsync();
+            PlaybackPanelControl.SetPlaybackResult(L("RunNowOnceHint"));
             UpdatePlaybackStatus();
-            _ = WatchPlaybackAsync(playbackController);
+            _ = WatchPlaybackAsync(playbackController, generation);
         }
         catch (Exception ex)
         {
+            DisarmRunNowEmergencyStop();
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
         }
+    }
+
+    private void DisarmRunNowEmergencyStop()
+    {
+        if (!runNowEmergencyStopArmed)
+        {
+            return;
+        }
+
+        runNowEmergencyStopArmed = false;
+        RefreshKeyboardHook();
     }
 
     private PlaybackExecutionOptions CreatePlaybackOptions(MacroDocument document)
@@ -2503,16 +2626,43 @@ public partial class MainWindow : Window
             PixelEvaluationMode.Live,
             NoWait: false,
             runtimePrecisionSettings.Precision,
-            runtimePrecisionSettings.AffinityMask);
+            runtimePrecisionSettings.AffinityMask,
+            runtimePrecisionSettings.BackgroundWindow,
+            ResolveBackgroundProcess(document))
+        {
+            PressFloor = runtimePrecisionSettings.PressFloor
+        };
+    }
+
+    private string ResolveBackgroundProcess(MacroDocument document)
+    {
+        var snapshot = libraryStore.Load();
+        var item = !string.IsNullOrWhiteSpace(document.Id)
+            ? snapshot.Items.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, document.Id, StringComparison.OrdinalIgnoreCase))
+            : null;
+        item ??= !string.IsNullOrWhiteSpace(editorState.SelectedMacroId)
+            ? snapshot.Items.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, editorState.SelectedMacroId, StringComparison.OrdinalIgnoreCase))
+            : null;
+        var group = item is null
+            ? null
+            : snapshot.Groups.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, item.GroupId, StringComparison.OrdinalIgnoreCase));
+        var databaseProcess = group is { IsGlobal: false } ? group.ProcessFilter : string.Empty;
+        return BackgroundProcessSelection.Resolve(runtimePrecisionSettings.BackgroundProcess, databaseProcess);
     }
 
     private void OnStopPlayback()
     {
+        DisarmRunNowEmergencyStop();
         playbackController?.Stop();
         foreach (var controller in listeningControllers.Values)
         {
             controller.Stop();
         }
+
+        PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
 
         UpdatePlaybackStatus();
         if (playbackController is not null)
@@ -2590,7 +2740,18 @@ public partial class MainWindow : Window
             SetStatus(L("RecordingStarted"));
             windowStateBeforeRecording = WindowState;
             Dispatcher.BeginInvoke(
-                new Action(() => WindowState = WindowState.Minimized),
+                new Action(() =>
+                {
+                    taskbarMinimizeDepth++;
+                    try
+                    {
+                        WindowState = WindowState.Minimized;
+                    }
+                    finally
+                    {
+                        taskbarMinimizeDepth--;
+                    }
+                }),
                 DispatcherPriority.Background);
         }
         catch (Exception ex)
@@ -2845,6 +3006,15 @@ public partial class MainWindow : Window
     {
         _ = Dispatcher.InvokeAsync(async () =>
         {
+            if (string.Equals(e.Id, CoreHotkeys.EmergencyStopId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(e.Id, CoreHotkeys.ForceStopId, StringComparison.OrdinalIgnoreCase))
+            {
+                OnStopPlayback();
+                PlaybackPanelControl.SetPlaybackResult(L("ForceStopTriggered"));
+                SetStatus(L("ForceStopTriggered"));
+                return;
+            }
+
             if (string.Equals(e.Id, CoreHotkeys.ColorSampleId, StringComparison.OrdinalIgnoreCase))
             {
                 CopyColorSample();
@@ -2856,7 +3026,8 @@ public partial class MainWindow : Window
             var groupProcessFilter = listeningGroupProcessFilters.TryGetValue(e.Id, out var groupFilter)
                 ? groupFilter
                 : string.Empty;
-            if (!MacroLibraryActivationFilter.Matches(groupProcessFilter, foregroundProcess))
+            if (!runtimePrecisionSettings.BackgroundWindow
+                && !MacroLibraryActivationFilter.Matches(groupProcessFilter, foregroundProcess))
             {
                 return;
             }
@@ -2878,6 +3049,8 @@ public partial class MainWindow : Window
     {
         _ = Dispatcher.InvokeAsync(() =>
         {
+            if (string.Equals(e.Id, CoreHotkeys.ForceStopId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(e.Id, CoreHotkeys.EmergencyStopId, StringComparison.OrdinalIgnoreCase)) return;
             if (!listeningControllers.TryGetValue(e.Id, out var controller)) return;
             if (!activeTriggeredControllerIds.Remove(e.Id)) return;
             controller.TriggerReleased();
@@ -2887,13 +3060,31 @@ public partial class MainWindow : Window
         });
     }
 
-    private async Task WatchPlaybackAsync(MacroPlaybackController controller)
+    private async Task WatchPlaybackAsync(MacroPlaybackController controller, int runNowGenerationSnapshot = 0)
     {
         try
         {
             var result = await controller.WhenIdleAsync();
             await Dispatcher.InvokeAsync(() =>
             {
+                if (runNowGenerationSnapshot != 0 && runNowGenerationSnapshot == runNowGeneration)
+                {
+                    DisarmRunNowEmergencyStop();
+                }
+
+                if (result.Status == PlaybackRunStatus.Failed)
+                {
+                    var error = controller.LastError;
+                    if (error is not null)
+                    {
+                        App.Log($"[PLAYBACK ERROR] {error}");
+                    }
+                    PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
+                    PlaybackPanelControl.SetPlaybackResult(error?.Message ?? L("PlaybackError"));
+                    SetStatus(L("PlaybackError"));
+                    return;
+                }
+
                 PlaybackPanelControl.SetPlaybackStatus(listening ? L("PlaybackStatusListening") : L("PlaybackStatusIdle"));
                 PlaybackPanelControl.SetPlaybackResult(LocalizationService.Format("LastResultRunSummary", result.IterationsCompleted, result.ActionsSubmitted, result.Cancelled));
                 SetStatus(listening ? L("Listening") : L("Idle"));
@@ -2901,8 +3092,14 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            App.Log($"[PLAYBACK WATCH ERROR] {ex}");
             await Dispatcher.InvokeAsync(() =>
             {
+                if (runNowGenerationSnapshot != 0 && runNowGenerationSnapshot == runNowGeneration)
+                {
+                    DisarmRunNowEmergencyStop();
+                }
+
                 PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
                 PlaybackPanelControl.SetPlaybackResult(ex.Message);
                 SetStatus(L("PlaybackError"));
@@ -2939,6 +3136,7 @@ public partial class MainWindow : Window
         source.RemoveHook(WindowProcedure);
         source.AddHook(WindowProcedure);
         windowSource = source;
+        lastMonitor = MonitorFromWindow(handle, MONITOR_DEFAULTTONEAREST);
     }
 
     private IntPtr WindowProcedure(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -2948,9 +3146,101 @@ public partial class MainWindow : Window
             ApplyWorkAreaMaximizeBounds(hwnd, lParam);
             handled = true;
         }
+        else if (msg == WM_EXITSIZEMOVE)
+        {
+            NoteDisplayTransition();
+        }
+        else if (msg == WM_DISPLAYCHANGE || msg == WM_DPICHANGED)
+        {
+            NoteDisplayTransition();
+        }
+        else if (msg == WM_WINDOWPOSCHANGING)
+        {
+            NoteMonitorTransition(lParam);
+        }
 
         return IntPtr.Zero;
     }
+
+    private void NoteDisplayTransition() => displayTransitionTick = Environment.TickCount;
+
+    private bool IsDisplayTransitionActive()
+    {
+        var elapsed = unchecked(Environment.TickCount - displayTransitionTick);
+        return (uint)elapsed < DisplayTransitionGraceMs;
+    }
+
+    private void NoteMonitorTransition(IntPtr lParam)
+    {
+        var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+        if ((pos.flags & (SWP_NOMOVE | SWP_NOSIZE)) == (SWP_NOMOVE | SWP_NOSIZE))
+        {
+            return;
+        }
+
+        if (pos.x <= -32000 || pos.y <= -32000 || pos.cx <= 0 || pos.cy <= 0)
+        {
+            return;
+        }
+
+        var rect = new RECT
+        {
+            left = pos.x,
+            top = pos.y,
+            right = pos.x + pos.cx,
+            bottom = pos.y + pos.cy
+        };
+        var monitor = MonitorFromRect(ref rect, MONITOR_DEFAULTTONULL);
+        if (monitor == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (lastMonitor != IntPtr.Zero && monitor != lastMonitor)
+        {
+            NoteDisplayTransition();
+        }
+
+        lastMonitor = monitor;
+    }
+
+    private static bool IsPointerOverTaskbar()
+    {
+        if (!GetCursorPos(out var point))
+        {
+            return false;
+        }
+
+        var monitor = MonitorFromPoint(point, MONITOR_DEFAULTTONULL);
+        if (monitor == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var monitorInfo = new MONITORINFO
+        {
+            cbSize = Marshal.SizeOf<MONITORINFO>()
+        };
+        if (!GetMonitorInfo(monitor, ref monitorInfo))
+        {
+            return false;
+        }
+
+        var onMonitor = point.x >= monitorInfo.rcMonitor.left && point.x < monitorInfo.rcMonitor.right
+            && point.y >= monitorInfo.rcMonitor.top && point.y < monitorInfo.rcMonitor.bottom;
+        var inWorkArea = point.x >= monitorInfo.rcWork.left && point.x < monitorInfo.rcWork.right
+            && point.y >= monitorInfo.rcWork.top && point.y < monitorInfo.rcWork.bottom;
+        return onMonitor && !inWorkArea;
+    }
+
+    private static bool IsKeyDown(int virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+
+    private static bool IsWinKeyDown() => IsKeyDown(VK_LWIN) || IsKeyDown(VK_RWIN);
+
+    private static bool IsWinDownMinimizeChord() => IsWinKeyDown() && IsKeyDown(VK_DOWN);
+
+    private static bool IsMonitorMoveChord() =>
+        IsWinKeyDown() && IsKeyDown(VK_SHIFT) && (IsKeyDown(VK_LEFT) || IsKeyDown(VK_RIGHT));
 
     private static void ApplyWorkAreaMaximizeBounds(IntPtr hwnd, IntPtr lParam)
     {
@@ -3150,6 +3440,9 @@ public partial class MainWindow : Window
     private void ApplyLocalization()
     {
         Title = L("AppTitle");
+        MinimizeWindowButton.ToolTip = L("Minimize");
+        CloseWindowButton.ToolTip = L("CloseWindow");
+        UpdateTrayMenuText();
         LanguageLabelText.Text = L("Language");
         OpenButton.Content = L("OpenMacroFile");
         SaveButton.Content = L("SaveMacroAs");
@@ -3191,6 +3484,7 @@ public partial class MainWindow : Window
         SaveWorkspaceLayout();
         windowSource?.RemoveHook(WindowProcedure);
         windowSource = null;
+        DisposeTrayIcon();
         keyboardHook?.Dispose();
         colorSampleOverlay.Close();
         DisposeMacroRecorder();
@@ -3434,14 +3728,234 @@ public partial class MainWindow : Window
         public WorkspacePanelLayout? SavedLayout { get; set; }
     }
 
+    private System.Windows.Forms.NotifyIcon? trayIcon;
+    private System.Windows.Forms.ContextMenuStrip? trayMenu;
+    private System.Windows.Forms.ToolStripMenuItem? trayShowItem;
+    private System.Windows.Forms.ToolStripMenuItem? trayExitItem;
+    private System.Drawing.Icon? trayIconImage;
+    private bool isInTray;
+    private bool exitConfirmed;
+    private bool closePromptQueued;
+    private int taskbarMinimizeDepth;
+    private int displayTransitionTick = int.MinValue;
+    private IntPtr lastMonitor;
+    private WindowState stateBeforeTray = WindowState.Normal;
+
+    internal void PushTaskbarMinimize() => taskbarMinimizeDepth++;
+
+    internal void PopTaskbarMinimize() => taskbarMinimizeDepth = Math.Max(0, taskbarMinimizeDepth - 1);
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (exitConfirmed)
+        {
+            DisposeTrayIcon();
+            base.OnClosing(e);
+            return;
+        }
+
+        e.Cancel = true;
+        if (closePromptQueued)
+        {
+            return;
+        }
+
+        closePromptQueued = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            closePromptQueued = false;
+            ApplyCloseBehavior();
+        }));
+    }
+
+    private void ApplyCloseBehavior()
+    {
+        var behavior = runtimePrecisionSettings.CloseButton;
+        if (behavior == CloseButtonBehavior.Ask)
+        {
+            var dialog = new CloseWindowPrompt();
+            if (DialogOwnerService.ShowDialogSafe(dialog, this) != true)
+            {
+                return;
+            }
+
+            behavior = dialog.Choice;
+            if (dialog.Remember)
+            {
+                runtimePrecisionSettings = runtimePrecisionSettings with { CloseButton = behavior };
+                RuntimePrecisionSettingsStore.Save(runtimePrecisionSettings);
+                LibraryPanel.SetRuntimePrecisionControls(runtimePrecisionSettings);
+            }
+        }
+
+        if (behavior == CloseButtonBehavior.MinimizeToTray)
+        {
+            MinimizeToTray();
+            return;
+        }
+
+        if (behavior == CloseButtonBehavior.Exit)
+        {
+            exitConfirmed = true;
+            Close();
+        }
+    }
+
+    private void MinimizeToTray()
+    {
+        if (isInTray)
+        {
+            return;
+        }
+
+        stateBeforeTray = WindowState == WindowState.Minimized ? WindowState.Normal : WindowState;
+        EnsureTrayIcon();
+        isInTray = true;
+        ShowInTaskbar = false;
+        Hide();
+        if (trayIcon is not null)
+        {
+            trayIcon.Visible = true;
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        isInTray = false;
+        ShowInTaskbar = true;
+        Show();
+        WindowState = stateBeforeTray == WindowState.Minimized ? WindowState.Normal : stateBeforeTray;
+        Activate();
+        if (trayIcon is not null)
+        {
+            trayIcon.Visible = false;
+        }
+    }
+
+    private void EnsureTrayIcon()
+    {
+        if (trayIcon is not null)
+        {
+            UpdateTrayMenuText();
+            return;
+        }
+
+        trayShowItem = new System.Windows.Forms.ToolStripMenuItem();
+        trayExitItem = new System.Windows.Forms.ToolStripMenuItem();
+        trayShowItem.Click += (_, _) => Dispatcher.BeginInvoke(RestoreFromTray);
+        trayExitItem.Click += (_, _) => Dispatcher.BeginInvoke(new Action(() =>
+        {
+            exitConfirmed = true;
+            Close();
+        }));
+        trayMenu = new System.Windows.Forms.ContextMenuStrip();
+        trayMenu.Items.Add(trayShowItem);
+        trayMenu.Items.Add(trayExitItem);
+
+        trayIconImage = LoadTrayIcon();
+        trayIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Icon = trayIconImage,
+            ContextMenuStrip = trayMenu,
+            Visible = false
+        };
+        trayIcon.MouseClick += (_, args) =>
+        {
+            if (args.Button == System.Windows.Forms.MouseButtons.Left)
+            {
+                Dispatcher.BeginInvoke(RestoreFromTray);
+            }
+        };
+        trayIcon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(RestoreFromTray);
+        UpdateTrayMenuText();
+    }
+
+    private void UpdateTrayMenuText()
+    {
+        if (trayIcon is not null)
+        {
+            var title = L("AppTitle");
+            trayIcon.Text = title.Length <= 63 ? title : title[..63];
+        }
+
+        if (trayShowItem is not null)
+        {
+            trayShowItem.Text = L("TrayShow");
+        }
+
+        if (trayExitItem is not null)
+        {
+            trayExitItem.Text = L("TrayExit");
+        }
+    }
+
+    private static System.Drawing.Icon LoadTrayIcon()
+    {
+        var path = Environment.ProcessPath;
+        if (!string.IsNullOrEmpty(path))
+        {
+            var associated = System.Drawing.Icon.ExtractAssociatedIcon(path);
+            if (associated is not null)
+            {
+                return associated;
+            }
+        }
+
+        return System.Drawing.SystemIcons.Application;
+    }
+
+    private void DisposeTrayIcon()
+    {
+        if (trayIcon is not null)
+        {
+            trayIcon.Visible = false;
+            trayIcon.Dispose();
+            trayIcon = null;
+        }
+
+        trayMenu?.Dispose();
+        trayMenu = null;
+
+        trayShowItem = null;
+        trayExitItem = null;
+        trayIconImage?.Dispose();
+        trayIconImage = null;
+        isInTray = false;
+    }
+
+    private const int WM_SYSCOMMAND = 0x0112;
     private const int WM_GETMINMAXINFO = 0x0024;
+    private const int WM_WINDOWPOSCHANGING = 0x0046;
+    private const int WM_DISPLAYCHANGE = 0x007E;
+    private const int WM_ENTERSIZEMOVE = 0x0231;
+    private const int WM_EXITSIZEMOVE = 0x0232;
+    private const int WM_DPICHANGED = 0x02E0;
+    private const int MONITOR_DEFAULTTONULL = 0;
     private const int MONITOR_DEFAULTTONEAREST = 2;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint DisplayTransitionGraceMs = 800;
+    private const int VK_SHIFT = 0x10;
+    private const int VK_LEFT = 0x25;
+    private const int VK_RIGHT = 0x27;
+    private const int VK_DOWN = 0x28;
+    private const int VK_LWIN = 0x5B;
+    private const int VK_RWIN = 0x5C;
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
 
     [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(POINT pt, int dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromRect(ref RECT lprc, int dwFlags);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -3480,6 +3994,18 @@ public partial class MainWindow : Window
         public RECT rcMonitor;
         public RECT rcWork;
         public int dwFlags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WINDOWPOS
+    {
+        public IntPtr hwnd;
+        public IntPtr hwndInsertAfter;
+        public int x;
+        public int y;
+        public int cx;
+        public int cy;
+        public uint flags;
     }
 
     private const string SampleMacro = """

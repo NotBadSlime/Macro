@@ -9,6 +9,8 @@ public static class ColorSampleText
 public static class CoreHotkeys
 {
     public const string ColorSampleId = "__core.colorSample";
+    public const string EmergencyStopId = "__core.emergencyStop";
+    public const string ForceStopId = "__core.forceStop";
 
     public static HotkeyGesture DefaultColorSample { get; } = new(HidModifier.None, HidKey.UpArrow);
 

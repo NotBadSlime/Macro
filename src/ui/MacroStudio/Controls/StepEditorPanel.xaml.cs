@@ -38,6 +38,8 @@ public partial class StepEditorPanel : UserControl
         OcrExtractRegexBox.IsChecked = true;
         StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
         ApplyStepEditButton.IsEnabled = false;
+        PreviewKeyDown += Editor_PreviewKeyDown;
+        IsVisibleChanged += (_, _) => { if (IsVisible) FocusPrimaryEditor(); };
     }
 
     public void Initialize(MacroEditorState editorState)
@@ -104,13 +106,36 @@ public partial class StepEditorPanel : UserControl
         OcrClickOffsetXLabelText.Text = L("OcrClickOffsetX");
         OcrClickOffsetYLabelText.Text = L("OcrClickOffsetY");
         TestOcrClickButton.Content = L("OcrClickTest");
-        TimingLabelText.Text = L("TimingMs");
+        TimingLabelText.Text = L("MouseMoveDuration");
+        MouseMoveDurationHintText.Text = L("MouseMoveDurationHint");
         DelayModeLabelText.Text = L("DelayMode");
         DelayFixedLabelText.Text = L("TimingMs");
         DelayMinLabelText.Text = L("DelayMinMs");
         DelayMaxLabelText.Text = L("DelayMaxMs");
         TextActionLabelText.Text = L("AddText");
         LoopCountLabelText.Text = L("LoopCount");
+        NetLimitProcessLabelText.Text = L("NetLimitProcess");
+        NetLimitBytesLabelText.Text = L("NetLimitBytes");
+        NetLimitHintText.Text = L("NetLimitHint");
+        NetLimitStopHintText.Text = L("NetLimitStopHint");
+        ClockShiftHoursLabelText.Text = L("WeakNetShiftHours");
+        ClockShiftMinutesLabelText.Text = L("WeakNetShiftMinutes");
+        ClockShiftHintText.Text = L("ClockShiftHint");
+        ClockRestoreHintText.Text = L("ClockRestoreHint");
+        WeakNetProcessLabelText.Text = L("WeakNetProcess");
+        WeakNetDurationLabelText.Text = L("WeakNetDurationMs");
+        WeakNetShiftHoursLabelText.Text = L("WeakNetShiftHours");
+        WeakNetShiftMinutesLabelText.Text = L("WeakNetShiftMinutes");
+        WeakNetShiftHintText.Text = L("WeakNetShiftHint");
+        WeakNetStopHintText.Text = L("WeakNetStopHint");
+        FrameLockProcessLabelText.Text = L("FrameLockProcess");
+        FrameLockFpsLabelText.Text = L("FrameLockFps");
+        FrameLockHintText.Text = L("FrameLockHint");
+        ParallelTimeoutLabelText.Text = L("ParallelTimeoutMs");
+        TextWhenExpectedLabelText.Text = L("TextWhenExpected");
+        TextWhenContainsBox.Content = L("TextWhenContains");
+        TextWhenRegexBox.Content = L("TextWhenUseRegex");
+        TextWhenRegionLabelText.Text = L("TextWhenRegion");
         PixelLabelText.Text = L("PixelIf");
         PickPixelColorButton.Content = L("PickColor");
         RefreshEnumBoxLocalization(ActionKindBox);
@@ -190,7 +215,13 @@ public partial class StepEditorPanel : UserControl
             text: step is TextStep or CommentStep,
             loop: step is RepeatStep,
             macro: step is MacroCallStep,
-            pixel: step is PixelWhenStep);
+            pixel: step is PixelWhenStep,
+            netLimit: step is NetLimitStep,
+            clockShift: step is ClockShiftStep,
+            weakNet: step is WeakNetStep,
+            frameLock: step is FrameLockStep,
+            parallel: step is ParallelStep,
+            textWhen: step is TextWhenStep);
 
         switch (step)
         {
@@ -286,6 +317,44 @@ public partial class StepEditorPanel : UserControl
             case RepeatStep repeat:
                 LoopCountBox.Text = repeat.Count.ToString();
                 break;
+            case NetLimitStep limit:
+                NetLimitProcessBox.Text = limit.ProcessName;
+                NetLimitBytesBox.Text = limit.EffectiveBytesPerSecond.ToString();
+                NetLimitHintText.Text = limit.Engine == NetLimitEngine.NetLimiter ? L("NetLimiterHint") : L("NetLimitHint");
+                NetLimitStopHintText.Text = limit.Engine == NetLimitEngine.NetLimiter ? L("NetLimiterStopHint") : L("NetLimitStopHint");
+                ShowNetLimitFields(limit.Action);
+                break;
+            case ClockShiftStep clock:
+                ClockShiftHoursBox.Text = ((int)clock.EffectiveTimeShift.TotalHours).ToString();
+                ClockShiftMinutesBox.Text = clock.EffectiveTimeShift.Minutes.ToString();
+                ShowClockShiftFields(clock.Action);
+                break;
+            case WeakNetStep weak:
+                WeakNetProcessBox.Text = weak.ProcessName;
+                WeakNetDurationBox.Text = FormatNumber(weak.EffectiveDuration.TotalMilliseconds);
+                WeakNetShiftHoursBox.Text = ((int)weak.EffectiveTimeShift.TotalHours).ToString();
+                WeakNetShiftMinutesBox.Text = weak.EffectiveTimeShift.Minutes.ToString();
+                ShowWeakNetFields(weak.Action);
+                break;
+            case FrameLockStep frame:
+                FrameLockProcessBox.Text = frame.ProcessName;
+                FrameLockFpsBox.Text = frame.EffectiveFps.ToString();
+                ShowFrameLockFields(frame.Action);
+                break;
+            case ParallelStep parallel:
+                ParallelTimeoutBox.Text = parallel.Timeout is { } timeout && timeout > TimeSpan.Zero
+                    ? FormatNumber(timeout.TotalMilliseconds)
+                    : string.Empty;
+                break;
+            case TextWhenStep textWhen:
+                TextWhenExpectedBox.Text = textWhen.ExpectedText;
+                TextWhenContainsBox.IsChecked = textWhen.Contains;
+                TextWhenRegexBox.IsChecked = textWhen.UseRegex;
+                TextWhenLeftBox.Text = textWhen.Region.TopLeft.X.ToString();
+                TextWhenTopBox.Text = textWhen.Region.TopLeft.Y.ToString();
+                TextWhenRightBox.Text = textWhen.Region.BottomRight.X.ToString();
+                TextWhenBottomBox.Text = textWhen.Region.BottomRight.Y.ToString();
+                break;
             case MacroCallStep macro:
                 RefreshMacroTargetBox(macro.Macro);
                 break;
@@ -313,6 +382,7 @@ public partial class StepEditorPanel : UserControl
     {
         Dispatcher.BeginInvoke(() =>
         {
+            if (!IsVisible || !ApplyStepEditButton.IsEnabled) return;
             if (TextEditPanel.Visibility == Visibility.Visible)
             {
                 StepTextBox.Focus();
@@ -320,35 +390,53 @@ public partial class StepEditorPanel : UserControl
                 return;
             }
 
-            if (MacroEditPanel.Visibility == Visibility.Visible)
-            {
-                MacroTargetBox.Focus();
-            }
-        }, DispatcherPriority.Input);
+            var input = FindPrimaryInput(StepEditorFieldsPanel);
+            if (input is TextBox textBox) { textBox.Focus(); textBox.SelectAll(); }
+            else input?.Focus();
+        }, DispatcherPriority.ContextIdle);
     }
 
-    private void StepTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    private static Control? FindPrimaryInput(DependencyObject parent)
     {
-        if (e.Key != Key.Enter)
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
-            return;
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is UIElement element && (!element.IsVisible || !element.IsEnabled)) continue;
+            if (child is ComboBox) continue;
+            if (child is TextBox { IsReadOnly: false }) return (Control)child;
+            var input = FindPrimaryInput(child);
+            if (input is not null) return input;
         }
+        return null;
+    }
 
+    private void Editor_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key != Key.Enter || capturingStepKey || !ApplyStepEditButton.IsEnabled) return;
+        // Let an open dropdown commit its highlighted item before confirming the card.
+        if (Keyboard.FocusedElement is DependencyObject focused)
+        {
+            for (var current = focused; current is not null; current = VisualTreeHelper.GetParent(current))
+                if (current is ComboBox { IsDropDownOpen: true }) return;
+        }
         if (Keyboard.Modifiers == ModifierKeys.Alt)
         {
-            var box = StepTextBox;
-            var caret = box.CaretIndex;
-            box.Text = box.Text.Insert(caret, Environment.NewLine);
-            box.CaretIndex = caret + Environment.NewLine.Length;
+            if (Keyboard.FocusedElement is TextBox { AcceptsReturn: true } box)
+            {
+                var caret = box.SelectionStart;
+                box.SelectedText = Environment.NewLine;
+                box.CaretIndex = caret + Environment.NewLine.Length;
+            }
             e.Handled = true;
             return;
         }
-
         if (Keyboard.Modifiers == ModifierKeys.None)
         {
             ApplyCurrentStepEdit();
             e.Handled = true;
         }
+        else if (Keyboard.FocusedElement is TextBox { AcceptsReturn: true }) e.Handled = true;
     }
 
     private void ApplyCurrentStepEdit()
@@ -359,6 +447,7 @@ public partial class StepEditorPanel : UserControl
 
     public MacroStep BuildEditedStep(MacroStep current)
     {
+        ValidateEffectFields(current);
         return current switch
         {
             KeyStep key => key with
@@ -405,10 +494,99 @@ public partial class StepEditorPanel : UserControl
             TextStep => new TextStep(StepTextBox.Text),
             CommentStep => new CommentStep(StepTextBox.Text),
             RepeatStep repeat => repeat with { Count = Math.Max(1, ReadInt(LoopCountBox.Text, repeat.Count)) },
+            NetLimitStep limit => limit.Action == NetLimitAction.Stop
+                ? limit
+                : limit with
+                {
+                    ProcessName = string.IsNullOrWhiteSpace(NetLimitProcessBox.Text) ? limit.ProcessName : NetLimitProcessBox.Text.Trim(),
+                    BytesPerSecond = ReadNetLimitBytes(limit.EffectiveBytesPerSecond)
+                },
+            ClockShiftStep clock => clock.Action == ClockShiftAction.Restore
+                ? clock
+                : clock with { TimeShift = ReadClockShift(clock.EffectiveTimeShift) },
+            WeakNetStep weak => weak.Action == WeakNetAction.Stop
+                ? weak
+                : weak with
+                {
+                    ProcessName = string.IsNullOrWhiteSpace(WeakNetProcessBox.Text) ? weak.ProcessName : WeakNetProcessBox.Text.Trim(),
+                    Duration = weak.Action == WeakNetAction.Hold
+                        ? TimeSpan.FromMilliseconds(Math.Max(0, ReadDouble(WeakNetDurationBox.Text, weak.EffectiveDuration.TotalMilliseconds)))
+                        : weak.Duration,
+                    TimeShift = ReadWeakNetTimeShift(weak.EffectiveTimeShift)
+                },
+            FrameLockStep frame => frame.Action == FrameLockAction.Stop
+                ? frame with
+                {
+                    ProcessName = string.IsNullOrWhiteSpace(FrameLockProcessBox.Text) ? frame.ProcessName : FrameLockProcessBox.Text.Trim()
+                }
+                : frame with
+                {
+                    ProcessName = string.IsNullOrWhiteSpace(FrameLockProcessBox.Text) ? frame.ProcessName : FrameLockProcessBox.Text.Trim(),
+                    Fps = (int)Math.Clamp(Math.Round(ReadDouble(FrameLockFpsBox.Text, frame.EffectiveFps)), FrameLockStep.MinFps, FrameLockStep.MaxFps)
+                },
+            ParallelStep parallel => parallel with
+            {
+                Timeout = string.IsNullOrWhiteSpace(ParallelTimeoutBox.Text)
+                    ? null
+                    : TimeSpan.FromMilliseconds(Math.Max(0, ReadDouble(ParallelTimeoutBox.Text, 0)))
+            },
+            TextWhenStep textWhen => textWhen with
+            {
+                ExpectedText = TextWhenExpectedBox.Text,
+                Contains = TextWhenContainsBox.IsChecked != false,
+                UseRegex = TextWhenRegexBox.IsChecked == true,
+                Region = ScreenRegion.FromRect(
+                    ReadInt(TextWhenLeftBox.Text, textWhen.Region.TopLeft.X),
+                    ReadInt(TextWhenTopBox.Text, textWhen.Region.TopLeft.Y),
+                    ReadInt(TextWhenRightBox.Text, textWhen.Region.BottomRight.X),
+                    ReadInt(TextWhenBottomBox.Text, textWhen.Region.BottomRight.Y))
+            },
             MacroCallStep => new MacroCallStep(ReadSelectedMacroName()),
             PixelWhenStep pixel => BuildEditedPixelStep(pixel),
             _ => current
         };
+    }
+
+    private void ValidateEffectFields(MacroStep step)
+    {
+        static double Number(string text, string label, double min, double max, bool integer = false)
+        {
+            if (!double.TryParse(text.Trim(), out var value) || !double.IsFinite(value)
+                || value < min || value > max || (integer && value != Math.Truncate(value)))
+                throw new InvalidOperationException($"{label}请输入 {min} 到 {max} 之间的{(integer ? "整数" : "数值")}。");
+            return value;
+        }
+        static void Process(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("请填写目标程序名称，例如 Game.exe。");
+            if (WeakNetSession.IsDeniedProcess(text)) throw new InvalidOperationException("不能对系统关键进程应用此效果。");
+        }
+        void Shift(string hours, string minutes)
+        {
+            var h = Number(hours, "小时", 0, 24, true);
+            var m = Number(minutes, "分钟", 0, 59, true);
+            if (h * 60 + m > WeakNetStep.MaxTimeShiftMinutes)
+                throw new InvalidOperationException("时间偏移不能超过 24 小时。");
+        }
+        switch (step)
+        {
+            case NetLimitStep limit when limit.Action != NetLimitAction.Stop:
+                Process(NetLimitProcessBox.Text);
+                Number(NetLimitBytesBox.Text, "上传限速（字节/秒）", NetLimitStep.MinBytesPerSecond, NetLimitStep.MaxBytesPerSecond, true);
+                break;
+            case WeakNetStep weak when weak.Action != WeakNetAction.Stop:
+                Process(WeakNetProcessBox.Text);
+                Shift(WeakNetShiftHoursBox.Text, WeakNetShiftMinutesBox.Text);
+                if (weak.Action == WeakNetAction.Hold) Number(WeakNetDurationBox.Text, "持续时间（毫秒）", 0, TimeSpan.MaxValue.TotalMilliseconds);
+                break;
+            case ClockShiftStep clock when clock.Action != ClockShiftAction.Restore:
+                Shift(ClockShiftHoursBox.Text, ClockShiftMinutesBox.Text);
+                break;
+            case FrameLockStep frame:
+                Process(FrameLockProcessBox.Text);
+                if (frame.Action != FrameLockAction.Stop) Number(FrameLockFpsBox.Text, "目标帧率", FrameLockStep.MinFps, FrameLockStep.MaxFps, true);
+                break;
+        }
     }
 
     private WindowActivateStep BuildEditedWindowActivateStep(WindowActivateStep current)
@@ -945,7 +1123,7 @@ public partial class StepEditorPanel : UserControl
         }
     }
 
-    private void SetEditorPanels(bool keyboard, bool action, bool mouseButton, bool mouseMove, bool wheel, bool windowActivate, bool ocrExtractText, bool ocrClick, bool timing, bool delay, bool text, bool loop, bool macro, bool pixel)
+    private void SetEditorPanels(bool keyboard, bool action, bool mouseButton, bool mouseMove, bool wheel, bool windowActivate, bool ocrExtractText, bool ocrClick, bool timing, bool delay, bool text, bool loop, bool macro, bool pixel, bool weakNet = false, bool parallel = false, bool textWhen = false, bool frameLock = false, bool netLimit = false, bool clockShift = false)
     {
         KeyboardEditPanel.Visibility = ToVis(keyboard);
         ButtonEditPanel.Visibility = ToVis(action);
@@ -961,6 +1139,83 @@ public partial class StepEditorPanel : UserControl
         LoopEditPanel.Visibility = ToVis(loop);
         MacroEditPanel.Visibility = ToVis(macro);
         PixelEditPanel.Visibility = ToVis(pixel);
+        NetLimitEditPanel.Visibility = ToVis(netLimit);
+        ClockShiftEditPanel.Visibility = ToVis(clockShift);
+        WeakNetEditPanel.Visibility = ToVis(weakNet);
+        FrameLockEditPanel.Visibility = ToVis(frameLock);
+        ParallelEditPanel.Visibility = ToVis(parallel);
+        TextWhenEditPanel.Visibility = ToVis(textWhen);
+    }
+
+    private void ShowClockShiftFields(ClockShiftAction action)
+    {
+        var restore = action == ClockShiftAction.Restore;
+        ClockRestoreHintText.Visibility = restore ? Visibility.Visible : Visibility.Collapsed;
+        ClockShiftRow.Visibility = restore ? Visibility.Collapsed : Visibility.Visible;
+        ClockShiftHintText.Visibility = restore ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private TimeSpan ReadClockShift(TimeSpan fallback)
+    {
+        var hours = (int)Math.Clamp(Math.Round(ReadDouble(ClockShiftHoursBox.Text, fallback.TotalHours)), 0, 24);
+        var minutes = (int)Math.Clamp(Math.Round(ReadDouble(ClockShiftMinutesBox.Text, fallback.Minutes)), 0, 59);
+        var total = hours * 60 + minutes;
+        if (total > WeakNetStep.MaxTimeShiftMinutes)
+        {
+            total = WeakNetStep.MaxTimeShiftMinutes;
+        }
+
+        return TimeSpan.FromMinutes(total);
+    }
+
+    private void ShowNetLimitFields(NetLimitAction action)
+    {
+        var stop = action == NetLimitAction.Stop;
+        NetLimitStopHintText.Visibility = stop ? Visibility.Visible : Visibility.Collapsed;
+        NetLimitProcessLabelText.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+        NetLimitProcessBox.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+        NetLimitBytesLabelText.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+        NetLimitBytesBox.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+        NetLimitHintText.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private long ReadNetLimitBytes(long fallback)
+    {
+        var value = (long)Math.Round(ReadDouble(NetLimitBytesBox.Text, fallback));
+        return NetLimitStep.ClampBytesPerSecond(value);
+    }
+
+    private void ShowWeakNetFields(WeakNetAction action)
+    {
+        var stop = action == WeakNetAction.Stop;
+        var hold = action == WeakNetAction.Hold;
+        WeakNetStopHintText.Visibility = stop ? Visibility.Visible : Visibility.Collapsed;
+        WeakNetProcessLabelText.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+        WeakNetProcessBox.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+        WeakNetDurationLabelText.Visibility = hold ? Visibility.Visible : Visibility.Collapsed;
+        WeakNetDurationBox.Visibility = hold ? Visibility.Visible : Visibility.Collapsed;
+        WeakNetShiftRow.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+        WeakNetShiftHintText.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ShowFrameLockFields(FrameLockAction action)
+    {
+        var stop = action == FrameLockAction.Stop;
+        FrameLockFpsLabelText.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+        FrameLockFpsBox.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private TimeSpan ReadWeakNetTimeShift(TimeSpan fallback)
+    {
+        var hours = (int)Math.Clamp(Math.Round(ReadDouble(WeakNetShiftHoursBox.Text, fallback.TotalHours)), 0, 24);
+        var minutes = (int)Math.Clamp(Math.Round(ReadDouble(WeakNetShiftMinutesBox.Text, fallback.Minutes)), 0, 59);
+        var total = hours * 60 + minutes;
+        if (total > WeakNetStep.MaxTimeShiftMinutes)
+        {
+            total = WeakNetStep.MaxTimeShiftMinutes;
+        }
+
+        return TimeSpan.FromMinutes(total);
     }
 
     private string ReadSelectedMacroName()

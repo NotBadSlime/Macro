@@ -8,6 +8,7 @@ public sealed class CompiledPlaybackPlan
     private readonly Func<PixelCondition, bool>? pixelEvaluator;
     private readonly Func<string, MacroDocument?>? macroResolver;
     private readonly Dictionary<ActionBatchKey, PreparedInputBatch> preparedCache;
+    private readonly InputPressFloor pressFloor;
 
     private CompiledPlaybackPlan(
         MacroDocument document,
@@ -17,12 +18,14 @@ public sealed class CompiledPlaybackPlan
         IReadOnlyList<CompiledInputBatch> batches,
         long durationTicks,
         bool requiresResampling,
-        Dictionary<ActionBatchKey, PreparedInputBatch> preparedCache)
+        Dictionary<ActionBatchKey, PreparedInputBatch> preparedCache,
+        InputPressFloor pressFloor)
     {
         this.document = document;
         this.pixelEvaluator = pixelEvaluator;
         this.macroResolver = macroResolver;
         this.preparedCache = preparedCache;
+        this.pressFloor = pressFloor;
         QpcFrequency = qpcFrequency;
         Batches = batches;
         DurationTicks = durationTicks;
@@ -70,9 +73,10 @@ public sealed class CompiledPlaybackPlan
         long qpcFrequency,
         Func<PixelCondition, bool>? pixelEvaluator = null,
         Func<string, MacroDocument?>? macroResolver = null,
-        Func<WaitStep, TimeSpan>? waitDurationSampler = null)
+        Func<WaitStep, TimeSpan>? waitDurationSampler = null,
+        InputPressFloor? pressFloor = null)
     {
-        return Create(document, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, null);
+        return Create(document, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, null, pressFloor ?? InputPressFloor.Factory);
     }
 
     private static CompiledPlaybackPlan Create(
@@ -81,7 +85,8 @@ public sealed class CompiledPlaybackPlan
         Func<PixelCondition, bool>? pixelEvaluator,
         Func<string, MacroDocument?>? macroResolver,
         Func<WaitStep, TimeSpan>? waitDurationSampler,
-        Dictionary<ActionBatchKey, PreparedInputBatch>? existingCache)
+        Dictionary<ActionBatchKey, PreparedInputBatch>? existingCache,
+        InputPressFloor pressFloor)
     {
         var compiled = InputActionCompiler.CompileWithDuration(
             document,
@@ -89,7 +94,8 @@ public sealed class CompiledPlaybackPlan
             qpcFrequency,
             pixelEvaluator,
             macroResolver,
-            waitDurationSampler);
+            waitDurationSampler,
+            pressFloor);
         var cache = existingCache ?? new Dictionary<ActionBatchKey, PreparedInputBatch>();
         var batches = BuildBatches(compiled.Actions, cache);
         var lastBatchTick = batches.Count == 0 ? 0 : Math.Max(0, batches[^1].DueTick);
@@ -102,12 +108,13 @@ public sealed class CompiledPlaybackPlan
             batches,
             durationTicks,
             ContainsRandomWait(document.Steps) || document.EffectiveConditions.Any(c => ContainsRandomWait(c.ThenSteps)),
-            cache);
+            cache,
+            pressFloor);
     }
 
     public CompiledPlaybackPlan Resample(Func<WaitStep, TimeSpan>? waitDurationSampler = null)
     {
-        return Create(document, QpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, preparedCache);
+        return Create(document, QpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, preparedCache, pressFloor);
     }
 
     private static IReadOnlyList<CompiledInputBatch> BuildBatches(
@@ -144,6 +151,11 @@ public sealed class CompiledPlaybackPlan
 
     private static bool CanBatchWith(IReadOnlyList<InputAction> batchActions, InputAction next)
     {
+        if (next is MouseMoveInputAction && batchActions.Any(action => action is MouseMoveInputAction))
+        {
+            return false;
+        }
+
         if (!PressIdentity.TryGet(next, out var nextIdentity, out var nextIsDown))
         {
             return true;
@@ -176,6 +188,12 @@ public sealed class CompiledPlaybackPlan
                 case RepeatStep repeat when ContainsRandomWait(repeat.Steps):
                     return true;
                 case PixelWhenStep pixel when ContainsRandomWait(pixel.ThenSteps):
+                    return true;
+                case ParallelStep parallel when ContainsRandomWait(parallel.Branches):
+                    return true;
+                case ParallelBranchStep branch when ContainsRandomWait(branch.Steps):
+                    return true;
+                case TextWhenStep text when ContainsRandomWait(text.ThenSteps):
                     return true;
             }
         }

@@ -32,7 +32,8 @@ public sealed record PlaybackSettings(
     int Count,
     string ProcessFilter = "",
     PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback,
-    string AffinityMask = "")
+    string AffinityMask = "",
+    HotkeyGesture? StopTrigger = null)
 {
     public static PlaybackSettings Default { get; } = new(
         null,
@@ -417,6 +418,176 @@ public sealed record WaitStep(TimeSpan Duration, TimeSpan? MaxDuration = null) :
 }
 
 public sealed record RepeatStep(int Count, IReadOnlyList<MacroStep> Steps) : MacroStep;
+
+public enum WeakNetAction
+{
+    Hold,
+    Start,
+    Stop
+}
+
+public sealed record WeakNetStep(
+    string ProcessName,
+    WeakNetAction Action = WeakNetAction.Hold,
+    TimeSpan Duration = default,
+    TimeSpan? TimeShift = null) : MacroStep
+{
+    public const int MaxTimeShiftMinutes = 24 * 60;
+
+    public TimeSpan EffectiveDuration => Duration > TimeSpan.Zero
+        ? Duration
+        : TimeSpan.FromSeconds(3);
+
+    public TimeSpan EffectiveTimeShift
+    {
+        get
+        {
+            if (TimeShift is not { } shift)
+            {
+                return TimeSpan.FromHours(1);
+            }
+
+            var minutes = (int)Math.Round(shift.TotalMinutes);
+            if (minutes < 0)
+            {
+                minutes = 0;
+            }
+            else if (minutes > MaxTimeShiftMinutes)
+            {
+                minutes = MaxTimeShiftMinutes;
+            }
+
+            return TimeSpan.FromMinutes(minutes);
+        }
+    }
+}
+
+public enum NetLimitAction
+{
+    Start,
+    Stop
+}
+
+public enum NetLimitEngine
+{
+    BuiltIn,
+    NetLimiter
+}
+
+public sealed record NetLimitStep(
+    string ProcessName,
+    NetLimitAction Action = NetLimitAction.Start,
+    long BytesPerSecond = 695,
+    NetLimitEngine Engine = NetLimitEngine.BuiltIn) : MacroStep
+{
+    public const long DefaultBytesPerSecond = 695;
+    public const long MinBytesPerSecond = 1;
+    public const long MaxBytesPerSecond = uint.MaxValue;
+
+    public long EffectiveBytesPerSecond => ClampBytesPerSecond(BytesPerSecond);
+
+    public static long ClampBytesPerSecond(long bytesPerSecond)
+    {
+        if (bytesPerSecond < MinBytesPerSecond)
+        {
+            return DefaultBytesPerSecond;
+        }
+
+        if (bytesPerSecond > MaxBytesPerSecond)
+        {
+            return MaxBytesPerSecond;
+        }
+
+        return bytesPerSecond;
+    }
+}
+
+public enum ClockShiftAction
+{
+    Shift,
+    Restore
+}
+
+public sealed record ClockShiftStep(
+    ClockShiftAction Action = ClockShiftAction.Shift,
+    TimeSpan? TimeShift = null) : MacroStep
+{
+    public TimeSpan EffectiveTimeShift
+    {
+        get
+        {
+            if (TimeShift is not { } shift)
+            {
+                return TimeSpan.FromHours(1);
+            }
+
+            var minutes = (int)Math.Round(shift.TotalMinutes);
+            if (minutes < 0)
+            {
+                minutes = 0;
+            }
+            else if (minutes > WeakNetStep.MaxTimeShiftMinutes)
+            {
+                minutes = WeakNetStep.MaxTimeShiftMinutes;
+            }
+
+            return TimeSpan.FromMinutes(minutes);
+        }
+    }
+}
+
+public enum FrameLockAction
+{
+    Start,
+    Stop
+}
+
+public sealed record FrameLockStep(
+    string ProcessName,
+    FrameLockAction Action = FrameLockAction.Start,
+    int Fps = 60) : MacroStep
+{
+    public const int MinFps = 1;
+    public const int MaxFps = 1000;
+
+    public int EffectiveFps
+    {
+        get
+        {
+            var fps = Fps <= 0 ? 60 : Fps;
+            if (fps < MinFps)
+            {
+                return MinFps;
+            }
+
+            return fps > MaxFps ? MaxFps : fps;
+        }
+    }
+}
+
+public sealed record ParallelBranchStep(string Name, IReadOnlyList<MacroStep> Steps) : MacroStep;
+
+public sealed record ParallelStep(
+    ParallelBranchStep Left,
+    ParallelBranchStep Right,
+    TimeSpan? Timeout = null) : MacroStep
+{
+    public IReadOnlyList<MacroStep> Branches => [Left, Right];
+}
+
+public sealed record TextWhenStep(
+    ScreenRegion Region,
+    string ExpectedText,
+    IReadOnlyList<MacroStep> ThenSteps,
+    bool Contains = true,
+    string Language = "ch",
+    bool UseRegex = false,
+    TimeSpan? PollInterval = null) : MacroStep
+{
+    public TimeSpan EffectivePollInterval => PollInterval is { } value && value > TimeSpan.Zero
+        ? value
+        : TimeSpan.FromMilliseconds(25);
+}
 
 public sealed record MacroCallStep(string Macro) : MacroStep;
 

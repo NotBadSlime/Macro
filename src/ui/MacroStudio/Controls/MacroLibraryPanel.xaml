@@ -566,59 +566,16 @@
                                    Text="全局运行"
                                    Style="{StaticResource FieldLabel}"
                                    Margin="0,0,0,8" />
-                        <TextBlock x:Name="PrecisionModeLabelText"
-                                   Text="精度模式"
-                                   Style="{StaticResource FieldLabel}" />
-                        <ComboBox x:Name="PrecisionModeBox"
-                                  Height="30"
-                                  Margin="0,0,0,8"
-                                  SelectionChanged="PrecisionModeBox_SelectionChanged">
-                            <ComboBoxItem Tag="balanced" Content="基础" />
-                            <ComboBoxItem Tag="extremeDuringPlayback" Content="高性能" IsSelected="True" />
-                            <ComboBoxItem Tag="ultraLowJitter" Content="极限" />
-                        </ComboBox>
-                        <TextBlock x:Name="AffinityMaskLabelText"
-                                   Text="极限核心掩码"
-                                   Style="{StaticResource FieldLabel}" />
-                        <TextBox x:Name="AffinityMaskBox"
-                                 Height="30"
-                                 TextChanged="RuntimePrecision_TextChanged"
-                                 ToolTip="仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。" />
-                        <TextBlock x:Name="AffinityMaskHelpText"
-                                   Text="仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。"
-                                   Foreground="{DynamicResource SecondaryText}"
-                                   FontSize="10"
-                                   TextWrapping="Wrap"
-                                   Margin="0,4,0,8" />
-                        <Button x:Name="ChooseCoresButton"
-                                HorizontalAlignment="Left"
-                                MinWidth="96"
-                                Height="30"
+                        <Button x:Name="BasicControlButton"
+                                MinWidth="0"
+                                Margin="0,0,0,8"
+                                Content="宏基础控制"
+                                Click="BasicControlButton_Click" />
+                        <Button x:Name="PrecisionControlButton"
+                                MinWidth="0"
                                 Margin="0,0,0,10"
-                                Content="选择核心"
-                                Click="ChooseCoresButton_Click" />
-                        <TextBlock x:Name="ColorSampleHotkeyLabelText"
-                                   Text="取色快捷键"
-                                   Style="{StaticResource FieldLabel}" />
-                        <DockPanel Margin="0,0,0,4" LastChildFill="True">
-                            <Button x:Name="CaptureColorSampleButton"
-                                    DockPanel.Dock="Right"
-                                    Width="72"
-                                    Height="30"
-                                    Content="捕获"
-                                    Click="CaptureColorSample_Click" />
-                            <TextBox x:Name="ColorSampleHotkeyBox"
-                                     Height="30"
-                                     Margin="0,0,8,0"
-                                     VerticalContentAlignment="Center"
-                                     TextChanged="RuntimePrecision_TextChanged" />
-                        </DockPanel>
-                        <TextBlock x:Name="ColorSampleHotkeyHelpText"
-                                   Text="软件核心全局宏：MacroStudio 运行时始终可用。按下后复制鼠标坐标和像素色号，并短暂显示。与宏触发键冲突时会提示并跳过该宏。"
-                                   Foreground="{DynamicResource SecondaryText}"
-                                   FontSize="10"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,10" />
+                                Content="精度控制"
+                                Click="PrecisionControlButton_Click" />
                         <Border Height="1"
                                 Margin="0,2,0,10"
                                 Background="{DynamicResource PanelBorder}" />

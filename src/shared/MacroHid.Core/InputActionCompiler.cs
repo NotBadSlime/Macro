@@ -38,7 +38,8 @@ public static class InputActionCompiler
         long qpcFrequency,
         Func<PixelCondition, bool>? pixelEvaluator = null,
         Func<string, MacroDocument?>? macroResolver = null,
-        Func<WaitStep, TimeSpan>? waitDurationSampler = null)
+        Func<WaitStep, TimeSpan>? waitDurationSampler = null,
+        InputPressFloor? pressFloor = null)
     {
         return CompileWithDuration(
             document,
@@ -46,7 +47,8 @@ public static class InputActionCompiler
             qpcFrequency,
             pixelEvaluator,
             macroResolver,
-            waitDurationSampler).Actions;
+            waitDurationSampler,
+            pressFloor).Actions;
     }
 
     public static (IReadOnlyList<ScheduledInputAction> Actions, long DurationTicks) CompileWithDuration(
@@ -55,7 +57,8 @@ public static class InputActionCompiler
         long qpcFrequency,
         Func<PixelCondition, bool>? pixelEvaluator = null,
         Func<string, MacroDocument?>? macroResolver = null,
-        Func<WaitStep, TimeSpan>? waitDurationSampler = null)
+        Func<WaitStep, TimeSpan>? waitDurationSampler = null,
+        InputPressFloor? pressFloor = null)
     {
         if (qpcFrequency <= 0)
         {
@@ -64,7 +67,7 @@ public static class InputActionCompiler
 
         var actions = new List<ScheduledInputAction>();
         var elapsedTicks = 0L;
-        var pressGaps = new PressReleaseGapTracker(qpcFrequency);
+        var pressGaps = new PressReleaseGapTracker(qpcFrequency, pressFloor);
         CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, pressGaps, ref elapsedTicks, depth: 0);
         return (actions, Math.Max(0, elapsedTicks));
     }
@@ -146,8 +149,7 @@ public static class InputActionCompiler
                     CompileMouseButton(button, actions, startTick, qpcFrequency, pressGaps, ref elapsedTicks);
                     break;
                 case MouseMoveStep move:
-                    Schedule(pressGaps, actions, new MouseMoveInputAction(move.Mode, move.X, move.Y, move.Buttons), startTick, move, ref elapsedTicks);
-                    elapsedTicks += ToTicks(move.Duration, qpcFrequency);
+                    CompileMouseMove(move, actions, startTick, qpcFrequency, pressGaps, ref elapsedTicks);
                     break;
                 case MouseWheelStep wheel:
                     Schedule(pressGaps, actions, new MouseWheelInputAction(wheel.Vertical, wheel.Horizontal, wheel.Buttons), startTick, wheel, ref elapsedTicks);
@@ -158,6 +160,39 @@ public static class InputActionCompiler
                 default:
                     throw new NotSupportedException($"Unsupported macro step '{step.GetType().Name}'.");
             }
+        }
+    }
+
+    private static void CompileMouseMove(
+        MouseMoveStep step,
+        List<ScheduledInputAction> actions,
+        long startTick,
+        long qpcFrequency,
+        PressReleaseGapTracker pressGaps,
+        ref long elapsedTicks)
+    {
+        var origin = elapsedTicks;
+        foreach (var slice in MouseMoveSmoothing.Split(step.Mode, step.X, step.Y, step.Duration))
+        {
+            var sliceTicks = ToTicks(slice.Offset, qpcFrequency);
+            if (elapsedTicks < origin + sliceTicks)
+            {
+                elapsedTicks = origin + sliceTicks;
+            }
+
+            Schedule(
+                pressGaps,
+                actions,
+                new MouseMoveInputAction(slice.Mode, slice.X, slice.Y, step.Buttons),
+                startTick,
+                step,
+                ref elapsedTicks);
+        }
+
+        var endTicks = origin + ToTicks(step.Duration, qpcFrequency);
+        if (elapsedTicks < endTicks)
+        {
+            elapsedTicks = endTicks;
         }
     }
 

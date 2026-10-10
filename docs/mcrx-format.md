@@ -11,6 +11,7 @@
   "name": "baseline",
   "playback": {
     "trigger": "Ctrl+Alt+F8",
+    "stopTrigger": "Alt+Tab",
     "mode": "fixedCount",
     "count": 1,
     "processFilter": "notepad.exe",
@@ -27,6 +28,7 @@
 ### playback
 
 - `trigger`：可选。支持单键、组合键、Ctrl、Shift、Alt、Win、F1–F24、数字小键盘、OEM 符号键和标准鼠标 1–5 键。
+- `stopTrigger`：可选的强制停止键，例如 `Alt+Tab` 或 `Tab`。它只停止播放，不会启动宏；不能与 `trigger` 相同。
 - `mode`：`fixedCount`、`toggleLoop`、`holdLoop`。
 - `count`：`fixedCount` 的播放次数，最小为 1。
 - `processFilter`：可选。前台进程筛选，支持逗号、分号、竖线或换行分隔。
@@ -237,6 +239,7 @@ OCR 文字点击（区域内识别文字并点击匹配框中心）：
   "name": "baseline",
   "playback": {
     "trigger": "Ctrl+Alt+F8",
+    "stopTrigger": "Alt+Tab",
     "mode": "fixedCount",
     "count": 1,
     "processFilter": "notepad.exe",
@@ -253,6 +256,7 @@ OCR 文字点击（区域内识别文字并点击匹配框中心）：
 ### playback
 
 - `trigger`: optional. Supports single keys, chords, Ctrl, Shift, Alt, Win, F1–F24, numpad keys, OEM symbol keys, and standard mouse buttons 1–5.
+- `stopTrigger`: optional force-stop key, such as `Alt+Tab` or `Tab`. It only stops playback and never starts it; it must differ from `trigger`.
 - `mode`: `fixedCount`, `toggleLoop`, or `holdLoop`.
 - `count`: run count for `fixedCount`, minimum 1.
 - `processFilter`: optional foreground process filter, separated by commas, semicolons, pipes, or new lines.

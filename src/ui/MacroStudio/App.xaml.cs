@@ -19,6 +19,8 @@ public partial class App : Application
         base.OnStartup(e);
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
         Log("=== App Starting ===");
 
@@ -40,6 +42,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Log($"=== App Exiting ({e.ApplicationExitCode}) ===");
+        PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
         NativePlaybackWarmup.Shutdown();
         base.OnExit(e);
     }
@@ -47,6 +51,7 @@ public partial class App : Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         e.Handled = true;
+        PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
         var inner = e.Exception;
         while (inner.InnerException != null) inner = inner.InnerException;
         Log($"[UI ERROR] {inner.GetType().Name}: {inner.Message}\nStack (first 5):\n{string.Join("\n", inner.StackTrace?.Split('\n').Take(5) ?? [])}");
@@ -80,8 +85,21 @@ public partial class App : Application
 
     private static void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
+        PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
         var ex = e.ExceptionObject as Exception;
         Log($"[DOMAIN ERROR] {ex?.GetType().Name}: {ex?.Message}");
+    }
+
+    private static void OnProcessExit(object? sender, EventArgs e)
+    {
+        PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
+    }
+
+    private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
+        Log($"[UNOBSERVED TASK ERROR] {e.Exception}");
+        e.SetObserved();
     }
 
     public static void Log(string msg)

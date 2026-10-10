@@ -29,6 +29,15 @@ public static class MacroCallReferenceCollector
                 case PixelWhenStep pixel:
                     CollectSteps(pixel.ThenSteps, set);
                     break;
+                case ParallelStep parallel:
+                    CollectSteps(parallel.Branches, set);
+                    break;
+                case ParallelBranchStep branch:
+                    CollectSteps(branch.Steps, set);
+                    break;
+                case TextWhenStep text:
+                    CollectSteps(text.ThenSteps, set);
+                    break;
             }
         }
     }

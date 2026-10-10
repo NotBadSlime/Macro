@@ -301,6 +301,7 @@
                Grid.RowSpan="3"
                Placement="Right"
                Closed="InlineStepEditorPopup_Closed"
+               Opened="InlineStepEditorPopup_Opened"
                AllowsTransparency="True"
                StaysOpen="True"
                PopupAnimation="Fade">

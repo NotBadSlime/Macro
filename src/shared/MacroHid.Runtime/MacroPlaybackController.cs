@@ -32,7 +32,21 @@ public sealed record PlaybackExecutionOptions(
     PixelEvaluationMode PixelMode,
     bool NoWait,
     PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback,
-    string AffinityMask = "");
+    string AffinityMask = "",
+    bool BackgroundWindow = false,
+    string BackgroundProcess = "")
+{
+    public InputPressFloor PressFloor { get; init; } = InputPressFloor.Factory;
+    public PlaybackExecutionOptions ForImmediateRun()
+    {
+        if (Mode == PlaybackMode.FixedCount)
+        {
+            return this;
+        }
+
+        return this with { Mode = PlaybackMode.FixedCount, Count = 1 };
+    }
+}
 
 public sealed record PlaybackRunResult(
     PlaybackRunStatus Status,
@@ -75,6 +89,8 @@ public sealed class MacroPlaybackController : IDisposable
     }
 
     public PlaybackStatus Status { get; private set; } = PlaybackStatus.Idle;
+
+    public Exception? LastError { get; private set; }
 
     public Task TriggerPressedAsync()
     {
@@ -135,6 +151,7 @@ public sealed class MacroPlaybackController : IDisposable
     private void StartRunCore()
     {
         activeCancellation = new CancellationTokenSource();
+        LastError = null;
         Status = PlaybackStatus.Running;
 
         activeRun = RunAndResetAsync(executionOptions, activeCancellation);
@@ -157,15 +174,24 @@ public sealed class MacroPlaybackController : IDisposable
 
             return result;
         }
-        catch
+        catch (Exception ex)
         {
             lock (gate)
             {
+                LastError = ex;
                 Status = PlaybackStatus.Error;
                 activeCancellation = null;
             }
 
-            throw;
+            // Playback runs are launched from global hook callbacks and are intentionally
+            // observed in the background. Contain injection/native failures here so a
+            // foreground-window change cannot turn one failed run into a faulted UI task.
+            return new PlaybackRunResult(
+                PlaybackRunStatus.Failed,
+                IterationsCompleted: 0,
+                ActionsSubmitted: 0,
+                Cancelled: cancellation.IsCancellationRequested,
+                InputStats: null);
         }
         finally
         {

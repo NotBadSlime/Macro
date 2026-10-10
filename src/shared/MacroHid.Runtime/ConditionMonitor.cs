@@ -24,6 +24,7 @@ public sealed class ConditionMonitor : IDisposable
     private readonly IReadOnlyList<ConditionTimeInterval> activationIntervals;
     private readonly IHighResolutionClock clock = new QpcHighResolutionClock();
     private readonly IPlaybackDelayStrategy delayStrategy;
+    private readonly InputPressFloor pressFloor;
 
     private CancellationTokenSource cts = new();
     private Thread? monitorThread;
@@ -64,7 +65,8 @@ public sealed class ConditionMonitor : IDisposable
         PlaybackPauseCoordinator? pauseCoordinator = null,
         ConditionTimeline? timeline = null,
         int conditionIndex = -1,
-        IReadOnlyList<ConditionTimeInterval>? activationIntervals = null)
+        IReadOnlyList<ConditionTimeInterval>? activationIntervals = null,
+        InputPressFloor? pressFloor = null)
     {
         this.directive = directive;
         this.evaluator = evaluator;
@@ -78,6 +80,7 @@ public sealed class ConditionMonitor : IDisposable
         this.pauseCoordinator = pauseCoordinator;
         this.timeline = timeline;
         this.conditionIndex = conditionIndex;
+        this.pressFloor = pressFloor ?? InputPressFloor.Factory;
         this.activationIntervals = activationIntervals
             ?? BuildLegacyIntervals(directive);
         delayStrategy = new QpcPlaybackDelayStrategy(clock, precision);
@@ -386,7 +389,11 @@ public sealed class ConditionMonitor : IDisposable
                 delayStrategy,
                 clock,
                 pixelEvaluator: null,
-                macroResolver);
+                macroResolver,
+                textEvaluator: (step, token) => evaluator.Evaluate(
+                    new TextMatcher(step.Region, step.ExpectedText, step.Contains, step.Language, step.UseRegex),
+                    token),
+                pressFloor: pressFloor);
             var flow = runner.Run(
                 document,
                 clock.GetTimestamp(),
@@ -410,7 +417,8 @@ public sealed class ConditionMonitor : IDisposable
             document,
             qpcFrequency,
             pixelEvaluator: null,
-            macroResolver);
+            macroResolver,
+            pressFloor: pressFloor);
 
         if (precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter
             && inputSink is SendInputMacroSink

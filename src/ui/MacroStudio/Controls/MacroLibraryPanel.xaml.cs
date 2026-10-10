@@ -35,8 +35,6 @@ public partial class MacroLibraryPanel : UserControl
 
     private readonly LowLevelMouseProc libraryDragMouseHookProc;
     private readonly DispatcherTimer explorerHorizontalScrollTimer;
-    private readonly DispatcherTimer colorSampleCaptureCommitTimer;
-    private readonly List<HidKey> capturedColorSampleKeys = [];
     private MacroEditorState? state;
     private bool suppressSelection;
     private readonly HashSet<string> expandedGroups = new(StringComparer.OrdinalIgnoreCase);
@@ -53,10 +51,9 @@ public partial class MacroLibraryPanel : UserControl
     private MacroLibraryTreeNode? contextMenuTargetNode;
     private bool renameCommitQueued;
     private bool refreshTreeAfterRename;
-    private bool updatingRuntimePrecisionControls;
+    private RuntimePrecisionSettings runtimeSettings = RuntimePrecisionSettings.Default;
     private bool updatingGroupControls;
     private bool updatingDatabasePath;
-    private bool capturingColorSample;
     private bool libraryDragInProgress;
     private ScrollViewer? macroTreeScrollViewer;
     private ScrollViewer? explorerScrollViewer;
@@ -82,11 +79,12 @@ public partial class MacroLibraryPanel : UserControl
     public event Action<IReadOnlyList<string>>? StartListeningGroupsRequested;
     public event Action<IReadOnlyList<string>>? StopListeningGroupsRequested;
     public event Action? StopListeningAllRequested;
+#pragma warning disable CS0067
     public event Action? PrecisionSettingsEdited;
-    public event Action? ChooseCoresRequested;
+#pragma warning restore CS0067
+    public event Action? BasicControlRequested;
+    public event Action? PrecisionControlRequested;
     public event Action? LibraryStructureEdited;
-    public event Action? ColorSampleCaptureStarted;
-    public event Action? ColorSampleCaptureFinished;
 
     public MacroLibraryPanel()
     {
@@ -97,11 +95,6 @@ public partial class MacroLibraryPanel : UserControl
             Interval = TimeSpan.FromMilliseconds(16)
         };
         explorerHorizontalScrollTimer.Tick += ExplorerHorizontalScrollTimer_Tick;
-        colorSampleCaptureCommitTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(450)
-        };
-        colorSampleCaptureCommitTimer.Tick += (_, _) => CommitColorSampleCapture();
     }
 
     public void Initialize(MacroEditorState editorState)
@@ -126,15 +119,8 @@ public partial class MacroLibraryPanel : UserControl
         SelectProcessFileButton.Content = L("SelectProcessFile");
         ApplyGroupButton.Content = L("Apply");
         GlobalRuntimeTitleText.Text = L("GlobalRuntime");
-        PrecisionModeLabelText.Text = L("PrecisionMode");
-        AffinityMaskLabelText.Text = L("AffinityMask");
-        AffinityMaskHelpText.Text = L("AffinityMaskHelp");
-        AffinityMaskBox.ToolTip = L("AffinityMaskHelp");
-        ChooseCoresButton.Content = L("ChooseCores");
-        ColorSampleHotkeyLabelText.Text = L("ColorSampleHotkey");
-        ColorSampleHotkeyHelpText.Text = L("ColorSampleHotkeyHelp");
-        ColorSampleHotkeyBox.ToolTip = L("ColorSampleHotkeyHelp");
-        CaptureColorSampleButton.Content = capturingColorSample ? L("Cancel") : L("Capture");
+        BasicControlButton.Content = L("MacroBasicControl");
+        PrecisionControlButton.Content = L("PrecisionControl");
         ListeningTitleText.Text = L("Listening");
         StopEveryListeningButton.Content = L("StopListeningAll");
         RenameMenuItem.Header = L("Rename");
@@ -190,23 +176,14 @@ public partial class MacroLibraryPanel : UserControl
             };
         }
 
-        foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
-        {
-            item.Content = item.Tag?.ToString() switch
-            {
-                "balanced" => L("PrecisionBalanced"),
-                "extremeDuringPlayback" => L("PrecisionExtremeDuringPlayback"),
-                "ultraLowJitter" => L("PrecisionUltraLowJitter"),
-                _ => item.Content
-            };
-        }
-
         ApplyProgressiveViewState();
         UpdateManagerListeningButtons();
     }
 
-    public string AffinityMaskText => AffinityMaskBox.Text.Trim();
-    public string ColorSampleHotkeyText => ColorSampleHotkeyBox.Text.Trim();
+    public string AffinityMaskText => runtimeSettings.AffinityMask;
+    public string ColorSampleHotkeyText => runtimeSettings.ColorSampleHotkey;
+    public bool BackgroundWindowEnabled => runtimeSettings.BackgroundWindow;
+    public string BackgroundProcessText => runtimeSettings.BackgroundProcess;
 
     public string CurrentDatabaseGroupId => showingDatabaseContents
         ? activeDatabaseGroupId
@@ -258,40 +235,18 @@ public partial class MacroLibraryPanel : UserControl
             .ToList();
     }
 
-    public PrecisionMode GetSelectedPrecisionMode()
-    {
-        var selected = PrecisionModeBox.SelectedItem as ComboBoxItem;
-        var value = selected?.Tag?.ToString() ?? "extremeDuringPlayback";
-        return value switch
-        {
-            "balanced" => PrecisionMode.Balanced,
-            "ultraLowJitter" => PrecisionMode.UltraLowJitter,
-            _ => PrecisionMode.ExtremeDuringPlayback
-        };
-    }
+    public PrecisionMode GetSelectedPrecisionMode() => runtimeSettings.Precision;
 
     public void SetRuntimePrecisionControls(RuntimePrecisionSettings settings)
     {
-        updatingRuntimePrecisionControls = true;
-        try
-        {
-            AffinityMaskBox.Text = settings.AffinityMask;
-            ColorSampleHotkeyBox.Text = string.IsNullOrWhiteSpace(settings.ColorSampleHotkey)
-                ? CoreHotkeys.DefaultColorSampleText
-                : settings.ColorSampleHotkey;
-            foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
-            {
-                if (string.Equals(item.Tag?.ToString(), ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
-                {
-                    PrecisionModeBox.SelectedItem = item;
-                    break;
-                }
-            }
-        }
-        finally
-        {
-            updatingRuntimePrecisionControls = false;
-        }
+        runtimeSettings = settings;
+    }
+
+    public bool BackgroundProcessChoiceRequired(string processText)
+    {
+        var group = FindContextGroup();
+        return group is { IsGlobal: true }
+            && BackgroundProcessSelection.RequiresUserChoice(processText, true, group.ProcessFilter);
     }
 
     public void RefreshList()
@@ -784,148 +739,32 @@ public partial class MacroLibraryPanel : UserControl
         if (MacroTreeView is not null) RefreshTree();
     }
 
-    private void PrecisionModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        NotifyPrecisionSettingsEdited();
-    }
+    private void BasicControlButton_Click(object sender, RoutedEventArgs e) => BasicControlRequested?.Invoke();
 
-    private void RuntimePrecision_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        NotifyPrecisionSettingsEdited();
-    }
+    private void PrecisionControlButton_Click(object sender, RoutedEventArgs e) => PrecisionControlRequested?.Invoke();
 
-    private void ChooseCoresButton_Click(object sender, RoutedEventArgs e)
+    private MacroLibraryGroup? FindContextGroup()
     {
-        ChooseCoresRequested?.Invoke();
-    }
-
-    public void ApplyAffinityMask(string mask)
-    {
-        updatingRuntimePrecisionControls = true;
-        AffinityMaskBox.Text = mask;
-        updatingRuntimePrecisionControls = false;
-    }
-
-    private void CaptureColorSample_Click(object sender, RoutedEventArgs e)
-    {
-        if (capturingColorSample)
+        if (state is null)
         {
-            StopColorSampleCapture(commit: false);
-            return;
+            return null;
         }
 
-        capturingColorSample = true;
-        capturedColorSampleKeys.Clear();
-        ColorSampleCaptureStarted?.Invoke();
-        updatingRuntimePrecisionControls = true;
-        ColorSampleHotkeyBox.Text = string.Empty;
-        CaptureColorSampleButton.Content = L("Cancel");
-        updatingRuntimePrecisionControls = false;
-        AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureColorSample_KeyDown), true);
-        AddHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureColorSample_KeyUp), true);
-    }
-
-    private void CaptureColorSample_KeyDown(object sender, KeyEventArgs e)
-    {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
+        var snapshot = state.LibraryStore.Load();
+        string? groupId = null;
+        if (state.SelectedMacroId is { } macroId)
         {
-            return;
+            groupId = snapshot.Items.FirstOrDefault(item =>
+                string.Equals(item.Id, macroId, StringComparison.OrdinalIgnoreCase))?.GroupId;
         }
 
-        var virtualKey = KeyInterop.VirtualKeyFromKey(key);
-        if (!GlobalKeyboardHook.TryMapVirtualKeyToHidKey(virtualKey, out var hidKey))
+        if (string.IsNullOrWhiteSpace(groupId))
         {
-            StopColorSampleCapture(commit: false);
-            e.Handled = true;
-            return;
+            groupId = CurrentDatabaseGroupId;
         }
 
-        if (!capturedColorSampleKeys.Contains(hidKey))
-        {
-            capturedColorSampleKeys.Add(hidKey);
-        }
-
-        updatingRuntimePrecisionControls = true;
-        ColorSampleHotkeyBox.Text = new HotkeyGesture(ReadColorSampleModifiers(), capturedColorSampleKeys, []).ToString();
-        updatingRuntimePrecisionControls = false;
-        colorSampleCaptureCommitTimer.Stop();
-        colorSampleCaptureCommitTimer.Start();
-        e.Handled = true;
-    }
-
-    private void CaptureColorSample_KeyUp(object sender, KeyEventArgs e)
-    {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is not (Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin))
-        {
-            return;
-        }
-
-        if (capturedColorSampleKeys.Count == 0)
-        {
-            return;
-        }
-
-        CommitColorSampleCapture();
-        e.Handled = true;
-    }
-
-    private void CommitColorSampleCapture()
-    {
-        if (!capturingColorSample)
-        {
-            colorSampleCaptureCommitTimer.Stop();
-            return;
-        }
-
-        StopColorSampleCapture(commit: true);
-    }
-
-    private void StopColorSampleCapture(bool commit)
-    {
-        if (!capturingColorSample)
-        {
-            return;
-        }
-
-        capturingColorSample = false;
-        colorSampleCaptureCommitTimer.Stop();
-        CaptureColorSampleButton.Content = L("Capture");
-        RemoveHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CaptureColorSample_KeyDown));
-        RemoveHandler(Keyboard.PreviewKeyUpEvent, new KeyEventHandler(CaptureColorSample_KeyUp));
-        ColorSampleCaptureFinished?.Invoke();
-        if (commit)
-        {
-            if (string.IsNullOrWhiteSpace(ColorSampleHotkeyBox.Text))
-            {
-                updatingRuntimePrecisionControls = true;
-                ColorSampleHotkeyBox.Text = CoreHotkeys.DefaultColorSampleText;
-                updatingRuntimePrecisionControls = false;
-            }
-
-            NotifyPrecisionSettingsEdited();
-        }
-    }
-
-    private static HidModifier ReadColorSampleModifiers()
-    {
-        var modifiers = HidModifier.None;
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) modifiers |= HidModifier.LeftCtrl;
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) modifiers |= HidModifier.LeftShift;
-        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0) modifiers |= HidModifier.LeftAlt;
-        if ((Keyboard.Modifiers & ModifierKeys.Windows) != 0) modifiers |= HidModifier.LeftGui;
-        return modifiers;
-    }
-
-    private void NotifyPrecisionSettingsEdited()
-    {
-        if (updatingRuntimePrecisionControls)
-        {
-            return;
-        }
-
-        PrecisionSettingsEdited?.Invoke();
+        return snapshot.Groups.FirstOrDefault(group =>
+            string.Equals(group.Id, groupId, StringComparison.OrdinalIgnoreCase));
     }
 
     private void MacroTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -3824,13 +3663,6 @@ public partial class MacroLibraryPanel : UserControl
 
         return null;
     }
-
-    private static string ToPrecisionModeText(PrecisionMode mode) => mode switch
-    {
-        PrecisionMode.Balanced => "balanced",
-        PrecisionMode.UltraLowJitter => "ultraLowJitter",
-        _ => "extremeDuringPlayback"
-    };
 
     private static string L(string key) => LocalizationService.Get(key);
     private static string LF(string key, params object[] args) => LocalizationService.Format(key, args);

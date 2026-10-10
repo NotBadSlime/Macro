@@ -69,6 +69,11 @@ public static class McrxSerializer
             result["trigger"] = playback.Trigger.ToString();
         }
 
+        if (playback.StopTrigger is not null)
+        {
+            result["stopTrigger"] = playback.StopTrigger.ToString();
+        }
+
         if (!string.IsNullOrWhiteSpace(playback.ProcessFilter))
         {
             result["processFilter"] = playback.ProcessFilter.Trim();
@@ -140,6 +145,13 @@ public static class McrxSerializer
                 ["type"] = "sequence.stop-all"
             },
             PixelWhenStep pixel => SerializePixelWhen(pixel),
+            TextWhenStep textWhen => SerializeTextWhen(textWhen),
+            WeakNetStep weakNet => SerializeWeakNet(weakNet),
+            NetLimitStep netLimit => SerializeNetLimit(netLimit),
+            ClockShiftStep clockShift => SerializeClockShift(clockShift),
+            FrameLockStep frameLock => SerializeFrameLock(frameLock),
+            ParallelStep parallel => SerializeParallel(parallel),
+            ParallelBranchStep branch => SerializeParallelBranch(branch),
             _ => throw new NotSupportedException($"Unsupported macro step '{step.GetType().Name}'.")
         };
     }
@@ -364,6 +376,100 @@ public static class McrxSerializer
         }
 
         return result;
+    }
+
+    private static JsonObject SerializeTextWhen(TextWhenStep step)
+    {
+        var result = new JsonObject
+        {
+            ["type"] = "text.when",
+            ["region"] = SerializeRegion(step.Region),
+            ["expectedText"] = step.ExpectedText,
+            ["contains"] = step.Contains,
+            ["language"] = step.Language,
+            ["useRegex"] = step.UseRegex,
+            ["then"] = SerializeSteps(step.ThenSteps)
+        };
+        if (step.PollInterval is { } pollInterval)
+        {
+            result["pollIntervalMs"] = ToMillisecondsValue(pollInterval);
+        }
+
+        return result;
+    }
+
+    private static JsonObject SerializeWeakNet(WeakNetStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = "weak.net",
+            ["processName"] = step.ProcessName,
+            ["action"] = step.Action.ToString(),
+            ["durationMs"] = ToMillisecondsValue(step.Duration > TimeSpan.Zero ? step.Duration : step.EffectiveDuration),
+            ["timeShiftMinutes"] = (int)step.EffectiveTimeShift.TotalMinutes
+        };
+    }
+
+    private static JsonObject SerializeNetLimit(NetLimitStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = "net.limit",
+            ["processName"] = step.ProcessName,
+            ["action"] = step.Action.ToString(),
+            ["bytesPerSecond"] = step.EffectiveBytesPerSecond,
+            ["engine"] = step.Engine.ToString()
+        };
+    }
+
+    private static JsonObject SerializeClockShift(ClockShiftStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = "clock.shift",
+            ["action"] = step.Action.ToString(),
+            ["timeShiftMinutes"] = (int)step.EffectiveTimeShift.TotalMinutes
+        };
+    }
+
+    private static JsonObject SerializeFrameLock(FrameLockStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = "frame.lock",
+            ["processName"] = step.ProcessName,
+            ["action"] = step.Action.ToString(),
+            ["fps"] = step.EffectiveFps
+        };
+    }
+
+    private static JsonObject SerializeParallel(ParallelStep step)
+    {
+        var result = new JsonObject
+        {
+            ["type"] = "parallel",
+            ["branches"] = new JsonArray
+            {
+                SerializeParallelBranch(step.Left),
+                SerializeParallelBranch(step.Right)
+            }
+        };
+        if (step.Timeout is { } timeout)
+        {
+            result["timeoutMs"] = ToMillisecondsValue(timeout);
+        }
+
+        return result;
+    }
+
+    private static JsonObject SerializeParallelBranch(ParallelBranchStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = "parallel.branch",
+            ["name"] = step.Name,
+            ["steps"] = SerializeSteps(step.Steps)
+        };
     }
 
     private static void AddButtons(JsonObject target, MouseButton buttons)

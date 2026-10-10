@@ -13,12 +13,8 @@ public static class MacroStepTreeEditor
         MacroStep current = currentSteps[CheckedIndex(path[0], currentSteps.Count)];
         for (var i = 1; i < path.Count; i++)
         {
-            currentSteps = current switch
-            {
-                RepeatStep repeat => repeat.Steps,
-                PixelWhenStep pixel => pixel.ThenSteps,
-                _ => throw new InvalidOperationException($"Step '{current.GetType().Name}' cannot contain child steps.")
-            };
+            currentSteps = ChildSteps(current)
+                ?? throw new InvalidOperationException($"Step '{current.GetType().Name}' cannot contain child steps.");
             current = currentSteps[CheckedIndex(path[i], currentSteps.Count)];
         }
 
@@ -49,6 +45,9 @@ public static class MacroStepTreeEditor
         {
             RepeatStep repeat => repeat with { Steps = InsertAtPath(repeat.Steps, [], insertIndex, normalized) },
             PixelWhenStep pixel => pixel with { ThenSteps = InsertAtPath(pixel.ThenSteps, [], insertIndex, normalized) },
+            ParallelBranchStep branch => branch with { Steps = InsertAtPath(branch.Steps, [], insertIndex, normalized) },
+            TextWhenStep text => text with { ThenSteps = InsertAtPath(text.ThenSteps, [], insertIndex, normalized) },
+            ParallelStep => throw new InvalidOperationException("Parallel branches are fixed."),
             _ => throw new InvalidOperationException($"Step '{parent.GetType().Name}' cannot contain child steps.")
         };
 
@@ -60,6 +59,11 @@ public static class MacroStepTreeEditor
         if (path.Count == 0)
         {
             throw new ArgumentException("Step path cannot be empty.", nameof(path));
+        }
+
+        if (GetAtPath(steps, path) is ParallelBranchStep)
+        {
+            return steps.ToList();
         }
 
         if (path.Count == 1)
@@ -76,6 +80,9 @@ public static class MacroStepTreeEditor
         {
             RepeatStep repeat => repeat with { Steps = DeleteAtPath(repeat.Steps, [childIndex]) },
             PixelWhenStep pixel => pixel with { ThenSteps = DeleteAtPath(pixel.ThenSteps, [childIndex]) },
+            ParallelBranchStep branch => branch with { Steps = DeleteAtPath(branch.Steps, [childIndex]) },
+            TextWhenStep text => text with { ThenSteps = DeleteAtPath(text.ThenSteps, [childIndex]) },
+            ParallelStep => throw new InvalidOperationException("Parallel branches are fixed."),
             _ => throw new InvalidOperationException($"Step '{parent.GetType().Name}' cannot contain child steps.")
         };
 
@@ -106,6 +113,11 @@ public static class MacroStepTreeEditor
         {
             RepeatStep repeat => repeat with { Steps = ReplaceAtPath(repeat.Steps, [childIndex], replacement) },
             PixelWhenStep pixel => pixel with { ThenSteps = ReplaceAtPath(pixel.ThenSteps, [childIndex], replacement) },
+            ParallelBranchStep branch => branch with { Steps = ReplaceAtPath(branch.Steps, [childIndex], replacement) },
+            TextWhenStep text => text with { ThenSteps = ReplaceAtPath(text.ThenSteps, [childIndex], replacement) },
+            ParallelStep parallel when childIndex == 0 && replacement is ParallelBranchStep left => parallel with { Left = left },
+            ParallelStep parallel when childIndex == 1 && replacement is ParallelBranchStep right => parallel with { Right = right },
+            ParallelStep => throw new InvalidOperationException("Parallel branches are fixed."),
             _ => throw new InvalidOperationException($"Step '{parent.GetType().Name}' cannot contain child steps.")
         };
 
@@ -140,6 +152,11 @@ public static class MacroStepTreeEditor
         if (sourcePath.Count == 0)
         {
             throw new ArgumentException("Source path cannot be empty.", nameof(sourcePath));
+        }
+
+        if (GetAtPath(steps, sourcePath) is ParallelBranchStep)
+        {
+            return steps.ToList();
         }
 
         if (PathStartsWith(targetParentPath, sourcePath))
@@ -254,12 +271,8 @@ public static class MacroStepTreeEditor
             return steps;
         }
 
-        return GetAtPath(steps, parentPath) switch
-        {
-            RepeatStep repeat => repeat.Steps,
-            PixelWhenStep pixel => pixel.ThenSteps,
-            _ => throw new InvalidOperationException("Step cannot contain child steps.")
-        };
+        return ChildSteps(GetAtPath(steps, parentPath))
+            ?? throw new InvalidOperationException("Step cannot contain child steps.");
     }
 
     private static int? FindPairIndex(IReadOnlyList<MacroStep> siblings, int startIndex, MacroStep current, int direction)
@@ -401,6 +414,19 @@ public static class MacroStepTreeEditor
 
             return x.Count.CompareTo(y.Count);
         }
+    }
+
+    private static IReadOnlyList<MacroStep>? ChildSteps(MacroStep step)
+    {
+        return step switch
+        {
+            RepeatStep repeat => repeat.Steps,
+            PixelWhenStep pixel => pixel.ThenSteps,
+            ParallelStep parallel => parallel.Branches,
+            ParallelBranchStep branch => branch.Steps,
+            TextWhenStep text => text.ThenSteps,
+            _ => null
+        };
     }
 
     private static int CheckedIndex(int index, int count)

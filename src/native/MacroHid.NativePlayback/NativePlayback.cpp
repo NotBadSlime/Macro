@@ -93,9 +93,242 @@ namespace
         return static_cast<int64_t>(std::llround(scaled));
     }
 
+    constexpr int64_t ModifierChordHoldMs = 30;
+
+    int64_t ModifierChordHoldTicks(int64_t frequency)
+    {
+        if (frequency <= 0)
+        {
+            return 1;
+        }
+
+        return std::max<int64_t>(1, frequency * ModifierChordHoldMs / 1000);
+    }
+
+    bool IsModifierVirtualKey(WORD virtualKey)
+    {
+        switch (virtualKey)
+        {
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0xA0:
+        case 0xA1:
+        case 0xA2:
+        case 0xA3:
+        case 0xA4:
+        case 0xA5:
+        case 0x5B:
+        case 0x5C:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    struct ModifierChordEdges
+    {
+        int downs = 0;
+        int ups = 0;
+        bool otherKeyDown = false;
+        bool keyUp = false;
+    };
+
+    ModifierChordEdges InspectModifierChord(const INPUT* inputs, uint32_t count)
+    {
+        ModifierChordEdges edges;
+        if (inputs == nullptr)
+        {
+            return edges;
+        }
+
+        for (uint32_t i = 0; i < count; i++)
+        {
+            if (inputs[i].type != INPUT_KEYBOARD)
+            {
+                continue;
+            }
+
+            const auto& key = inputs[i].ki;
+            if ((key.dwFlags & KEYEVENTF_UNICODE) != 0 || key.wVk == 0)
+            {
+                continue;
+            }
+
+            const bool up = (key.dwFlags & KEYEVENTF_KEYUP) != 0;
+            if (IsModifierVirtualKey(key.wVk))
+            {
+                if (up)
+                {
+                    edges.ups++;
+                }
+                else
+                {
+                    edges.downs++;
+                }
+            }
+            else if (!up)
+            {
+                edges.otherKeyDown = true;
+            }
+
+            if (up)
+            {
+                edges.keyUp = true;
+            }
+        }
+
+        return edges;
+    }
+
+    struct ModifierChordClock
+    {
+        std::atomic<int> held{ 0 };
+        std::atomic<int64_t> anchor{ 0 };
+
+        int64_t AdjustDue(int64_t dueTick, const ModifierChordEdges& edges, int64_t holdTicks) const
+        {
+            const int heldNow = held.load(std::memory_order_acquire);
+            const int64_t anchorNow = anchor.load(std::memory_order_acquire);
+            if (heldNow <= 0 || anchorNow <= 0 || !edges.keyUp)
+            {
+                return dueTick;
+            }
+
+            const int64_t earliest = anchorNow + holdTicks;
+            return dueTick < earliest ? earliest : dueTick;
+        }
+
+        void NoteSent(const ModifierChordEdges& edges, int64_t actualTick)
+        {
+            int heldNow = held.load(std::memory_order_relaxed);
+            if (edges.downs > 0)
+            {
+                heldNow += edges.downs;
+                anchor.store(actualTick, std::memory_order_relaxed);
+            }
+
+            if (edges.otherKeyDown && heldNow > 0)
+            {
+                anchor.store(actualTick, std::memory_order_relaxed);
+            }
+
+            heldNow -= edges.ups;
+            if (heldNow <= 0)
+            {
+                heldNow = 0;
+                anchor.store(0, std::memory_order_relaxed);
+            }
+
+            held.store(heldNow, std::memory_order_release);
+        }
+    };
+
+    void ExtendDueForModifierChord(
+        int64_t& baseDueTick,
+        int64_t& dueTick,
+        const ModifierChordEdges& edges,
+        const ModifierChordClock& clock,
+        int64_t holdTicks,
+        int64_t pausedTicks)
+    {
+        const int64_t chordDue = clock.AdjustDue(dueTick, edges, holdTicks);
+        if (chordDue <= dueTick)
+        {
+            return;
+        }
+
+        dueTick = chordDue;
+        baseDueTick = chordDue - pausedTicks;
+    }
+
     bool IsCancelled(volatile long* cancelFlag)
     {
         return cancelFlag != nullptr && *cancelFlag != 0;
+    }
+
+    bool IsRelativeMouseInput(const INPUT& input)
+    {
+        return input.type == INPUT_MOUSE
+            && (input.mi.dwFlags & MOUSEEVENTF_MOVE) != 0
+            && (input.mi.dwFlags & MOUSEEVENTF_ABSOLUTE) == 0;
+    }
+
+    void RecenterCursorIfNeeded(int dx, int dy)
+    {
+        if (dx == 0 && dy == 0)
+        {
+            return;
+        }
+
+        POINT point{};
+        if (!GetCursorPos(&point))
+        {
+            return;
+        }
+
+        int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        RECT clip{};
+        if (GetClipCursor(&clip))
+        {
+            const int clipWidth = clip.right - clip.left;
+            const int clipHeight = clip.bottom - clip.top;
+            if (clipWidth > 1 && clipHeight > 1)
+            {
+                left = clip.left;
+                top = clip.top;
+                width = clipWidth;
+                height = clipHeight;
+            }
+        }
+
+        if (width <= 1 || height <= 1)
+        {
+            return;
+        }
+
+        constexpr int margin = 16;
+        const int nextX = point.x + dx;
+        const int nextY = point.y + dy;
+        if (nextX >= left + margin
+            && nextX <= left + width - 1 - margin
+            && nextY >= top + margin
+            && nextY <= top + height - 1 - margin)
+        {
+            return;
+        }
+
+        ClipCursor(nullptr);
+        SetCursorPos(left + width / 2, top + height / 2);
+    }
+
+    UINT SubmitPlaybackInput(UINT count, INPUT* inputs)
+    {
+        if (count == 0 || inputs == nullptr)
+        {
+            return 0;
+        }
+
+        UINT sent = 0;
+        for (UINT i = 0; i < count; i++)
+        {
+            if (IsRelativeMouseInput(inputs[i]))
+            {
+                RecenterCursorIfNeeded(inputs[i].mi.dx, inputs[i].mi.dy);
+            }
+
+            const UINT one = SendInput(1, inputs + i, sizeof(INPUT));
+            sent += one;
+            if (one != 1)
+            {
+                break;
+            }
+        }
+
+        return sent;
     }
 
     struct PlaybackControl
@@ -966,7 +1199,7 @@ namespace
         {
             auto* inputPointer = const_cast<INPUT*>(state.plan->inputs.data() + batch->inputOffset);
             const int64_t submitStart = QueryCounter();
-            sent = SendInput(batch->inputCount, inputPointer, sizeof(INPUT));
+            sent = SubmitPlaybackInput(batch->inputCount, inputPointer);
             const int64_t submitEnd = QueryCounter();
             submitDurationUs = ToMicroseconds(submitEnd - submitStart, state.frequency);
             if (sent != batch->inputCount)
@@ -1422,6 +1655,7 @@ namespace
         std::atomic<uint32_t> workerPriorityBoostDisabledCount{ 0 };
         std::atomic<int64_t> firstWorkerStartTick{ 0 };
         std::atomic<int64_t> timelineStartTick{ 0 };
+        ModifierChordClock modifierChord;
 
         StandbyRunContext(
             const NativePlan* plan,
@@ -1718,8 +1952,18 @@ namespace
                 }
 
                 const auto& batch = context.plan->batches[index];
-                const int64_t baseDueTick = timelineStart + batch.dueTicks;
-                int64_t dueTick = baseDueTick;
+                int64_t baseDueTick = timelineStart + batch.dueTicks;
+                int64_t dueTick = baseDueTick + TotalPausedTicks(context.playbackControl);
+                const auto chordEdges = InspectModifierChord(
+                    context.plan->inputs.data() + batch.inputOffset,
+                    batch.inputCount);
+                ExtendDueForModifierChord(
+                    baseDueTick,
+                    dueTick,
+                    chordEdges,
+                    context.modifierChord,
+                    ModifierChordHoldTicks(context.frequency),
+                    TotalPausedTicks(context.playbackControl));
                 const int64_t rescueDelayTicks = workerIndex == 0 ? 0 : context.helperRescueDelayTicks;
                 if (!SpinUntilControlled(
                         baseDueTick,
@@ -1797,7 +2041,7 @@ namespace
             {
                 auto* inputPointer = const_cast<INPUT*>(context.plan->inputs.data() + batch.inputOffset);
                 const int64_t submitStart = QueryCounter();
-                result.sent = SendInput(batch.inputCount, inputPointer, sizeof(INPUT));
+                result.sent = SubmitPlaybackInput(batch.inputCount, inputPointer);
                 const int64_t submitEnd = QueryCounter();
                 result.submitDurationUs = ToMicroseconds(submitEnd - submitStart, context.frequency);
                 if (result.sent != batch.inputCount)
@@ -1809,6 +2053,9 @@ namespace
                 else
                 {
                     result.nativeInputsSubmitted = batch.inputCount;
+                    context.modifierChord.NoteSent(
+                        InspectModifierChord(inputPointer, batch.inputCount),
+                        submitEnd);
                 }
             }
         }
@@ -2329,11 +2576,23 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
         const int64_t afterPlaybackSetup = QueryCounter();
         stats->nativeRunOverheadUs = ToMicroseconds(afterPlaybackSetup - beforeScope, frequency);
         const int64_t startTick = afterPlaybackSetup;
+        ModifierChordClock modifierChord;
+        const int64_t modifierHoldTicks = ModifierChordHoldTicks(frequency);
 
         for (const auto& batch : nativePlan->batches)
         {
-            const int64_t baseDueTick = startTick + batch.dueTicks;
+            int64_t baseDueTick = startTick + batch.dueTicks;
             int64_t dueTick = baseDueTick + TotalPausedTicks(control);
+            const auto chordEdges = InspectModifierChord(
+                nativePlan->inputs.data() + batch.inputOffset,
+                batch.inputCount);
+            ExtendDueForModifierChord(
+                baseDueTick,
+                dueTick,
+                chordEdges,
+                modifierChord,
+                modifierHoldTicks,
+                TotalPausedTicks(control));
             int64_t actualTick = 0;
             int64_t submitDurationUs = 0;
             UINT sent = batch.inputCount;
@@ -2401,7 +2660,7 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
                 {
                     auto* inputPointer = nativePlan->inputs.data() + batch.inputOffset;
                     const int64_t submitStart = QueryCounter();
-                    sent = SendInput(batch.inputCount, inputPointer, sizeof(INPUT));
+                    sent = SubmitPlaybackInput(batch.inputCount, inputPointer);
                     const int64_t submitEnd = QueryCounter();
                     submitDurationUs = ToMicroseconds(submitEnd - submitStart, frequency);
                     if (sent != batch.inputCount)
@@ -2479,6 +2738,7 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
             stats->nativeInputsSubmitted += nativeInputsSubmitted;
             stats->actionsSubmitted += batch.actionCount;
             stats->batchesSubmitted++;
+            modifierChord.NoteSent(chordEdges, QueryCounter());
             batchIndex++;
             previousDueTick = dueTick;
         }

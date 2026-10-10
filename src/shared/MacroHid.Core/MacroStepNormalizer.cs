@@ -48,9 +48,24 @@ public static class MacroStepNormalizer
                 return [repeat with { Steps = NormalizeSteps(repeat.Steps) }];
             case PixelWhenStep pixel:
                 return [pixel with { ThenSteps = NormalizeSteps(pixel.ThenSteps) }];
+            case ParallelStep parallel:
+                return [parallel with
+                {
+                    Left = NormalizeBranch(parallel.Left),
+                    Right = NormalizeBranch(parallel.Right)
+                }];
+            case ParallelBranchStep branch:
+                return [NormalizeBranch(branch)];
+            case TextWhenStep text:
+                return [text with { ThenSteps = NormalizeSteps(text.ThenSteps) }];
             default:
                 return [step];
         }
+    }
+
+    private static ParallelBranchStep NormalizeBranch(ParallelBranchStep branch)
+    {
+        return branch with { Steps = NormalizeSteps(branch.Steps) };
     }
 
     private static IReadOnlyList<MacroStep> SplitKeyTap(KeyStep key)

@@ -61,6 +61,11 @@ public static class ScreenCaptureService
 
     public static byte[]? CaptureRegion(ScreenRegion region)
     {
+        if (BackgroundWindowSession.IsActive)
+        {
+            return BackgroundWindowSession.CopyRegion(region);
+        }
+
         var width = region.Width;
         var height = region.Height;
         if (width <= 0 || height <= 0) return null;

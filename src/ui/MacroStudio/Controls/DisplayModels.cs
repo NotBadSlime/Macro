@@ -313,6 +313,8 @@ public enum StepDisplayKind
     LoopEnd,
     ConditionStart,
     ConditionEnd,
+    GroupStart,
+    GroupEnd,
     Delay
 }
 
@@ -371,7 +373,7 @@ public sealed class StepDisplayItem
     public int Indent { get; }
     public MacroActionTemplateKind AppearanceKind { get; }
     public Thickness LeftMargin { get; }
-    public bool IsStructural => Kind is StepDisplayKind.LoopStart or StepDisplayKind.LoopEnd or StepDisplayKind.ConditionStart or StepDisplayKind.ConditionEnd;
+    public bool IsStructural => Kind is StepDisplayKind.LoopStart or StepDisplayKind.LoopEnd or StepDisplayKind.ConditionStart or StepDisplayKind.ConditionEnd or StepDisplayKind.GroupStart or StepDisplayKind.GroupEnd;
     public bool IsContainerEnd => Kind is StepDisplayKind.LoopEnd or StepDisplayKind.ConditionEnd;
     public bool IsConditionEndpoint { get; set; }
     public List<Brush> ConditionBars { get; set; } = [];
@@ -460,6 +462,28 @@ public sealed class StepDisplayItem
                 result.AddRange(FlattenSteps(pixel.ThenSteps, indent + 1, stepPath, macroNameResolver));
                 result.Add(new StepDisplayItem(i, stepPath, "🎯", "", "结束条件", "", PinkBrush, StepDisplayKind.ConditionEnd, indent, MacroActionTemplateKind.Pixel));
             }
+            else if (step is TextWhenStep textWhen)
+            {
+                var desc = $"文字条件 \"{TrimText(textWhen.ExpectedText)}\"";
+                result.Add(new StepDisplayItem(i, stepPath, "T", "", desc, "", PinkBrush, StepDisplayKind.ConditionStart, indent, MacroActionTemplateKind.TextWhen));
+                result.AddRange(FlattenSteps(textWhen.ThenSteps, indent + 1, stepPath, macroNameResolver));
+                result.Add(new StepDisplayItem(i, stepPath, "T", "", "结束条件", "", PinkBrush, StepDisplayKind.ConditionEnd, indent, MacroActionTemplateKind.TextWhen));
+            }
+            else if (step is ParallelStep parallel)
+            {
+                var timeout = parallel.Timeout is { } value && value > TimeSpan.Zero
+                    ? FormatDuration(value)
+                    : string.Empty;
+                result.Add(new StepDisplayItem(i, stepPath, "⇉", "", LocalizationService.Get("ParallelStart"), timeout, LoopBrush, StepDisplayKind.GroupStart, indent, MacroActionTemplateKind.Parallel));
+                result.AddRange(FlattenSteps(parallel.Branches, indent + 1, stepPath, macroNameResolver));
+                result.Add(new StepDisplayItem(i, stepPath, "⇉", "", LocalizationService.Get("ParallelEnd"), "", LoopBrush, StepDisplayKind.GroupEnd, indent, MacroActionTemplateKind.Parallel));
+            }
+            else if (step is ParallelBranchStep branch)
+            {
+                result.Add(new StepDisplayItem(i, stepPath, "↳", "", branch.Name, "", LoopBrush, StepDisplayKind.LoopStart, indent, MacroActionTemplateKind.Parallel));
+                result.AddRange(FlattenSteps(branch.Steps, indent + 1, stepPath, macroNameResolver));
+                result.Add(new StepDisplayItem(i, stepPath, "↳", "", LocalizationService.Format("ParallelBranchEnd", branch.Name), "", LoopBrush, StepDisplayKind.LoopEnd, indent, MacroActionTemplateKind.Parallel));
+            }
             else
             {
                 result.Add(FromStep(i, step, indent, stepPath, macroNameResolver));
@@ -529,6 +553,68 @@ public sealed class StepDisplayItem
             StopCurrentSequenceStep => new StepDisplayItem(index, path, "■", "", "停止本层宏动作", "外层继续", OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopCurrent),
             StopCurrentIterationStep => new StepDisplayItem(index, path, "■", "", "停止本轮播放", "下一轮", OrangeBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopIteration),
             StopAllSequencesStep => new StepDisplayItem(index, path, "■", "", "停止本次播放", "立即停止", RedBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.StopAll),
+            NetLimitStep limit => new StepDisplayItem(
+                index,
+                path,
+                "☁",
+                "",
+                limit.Action == NetLimitAction.Stop
+                    ? LocalizationService.Get(limit.Engine == NetLimitEngine.NetLimiter ? "AddNetLimiterStop" : "AddNetLimitStop")
+                    : $"{LocalizationService.Get(limit.Engine == NetLimitEngine.NetLimiter ? "AddNetLimiterStart" : "AddNetLimitStart")}: {limit.ProcessName}",
+                limit.Action == NetLimitAction.Stop ? string.Empty : $"{limit.EffectiveBytesPerSecond} B/s",
+                BlueBrush,
+                StepDisplayKind.Normal,
+                indent,
+                limit.Action == NetLimitAction.Stop
+                    ? limit.Engine == NetLimitEngine.NetLimiter ? MacroActionTemplateKind.NetLimiterStop : MacroActionTemplateKind.NetLimitStop
+                    : limit.Engine == NetLimitEngine.NetLimiter ? MacroActionTemplateKind.NetLimiterStart : MacroActionTemplateKind.NetLimitStart),
+            ClockShiftStep clock => new StepDisplayItem(
+                index,
+                path,
+                "⏱",
+                "",
+                clock.Action == ClockShiftAction.Restore
+                    ? LocalizationService.Get("AddClockRestore")
+                    : LocalizationService.Get("AddClockShift"),
+                clock.Action == ClockShiftAction.Restore || clock.EffectiveTimeShift <= TimeSpan.Zero
+                    ? string.Empty
+                    : FormatTimeShift(clock.EffectiveTimeShift),
+                OrangeBrush,
+                StepDisplayKind.Normal,
+                indent,
+                clock.Action == ClockShiftAction.Restore
+                    ? MacroActionTemplateKind.ClockRestore
+                    : MacroActionTemplateKind.ClockShift),
+            WeakNetStep weak => new StepDisplayItem(
+                index,
+                path,
+                "⚡",
+                "",
+                weak.Action == WeakNetAction.Stop
+                    ? LocalizationService.Get("AddWeakNetStop")
+                    : $"{LocalizationService.Get("AddWeakNetStart")}: {weak.ProcessName}",
+                FormatWeakNetDetail(weak),
+                OrangeBrush,
+                StepDisplayKind.Normal,
+                indent,
+                weak.Action == WeakNetAction.Stop
+                    ? MacroActionTemplateKind.WeakNetStop
+                    : MacroActionTemplateKind.WeakNetStart),
+            FrameLockStep frame => new StepDisplayItem(
+                index,
+                path,
+                "▣",
+                "",
+                frame.Action == FrameLockAction.Stop
+                    ? $"{LocalizationService.Get("AddFrameLockStop")}: {frame.ProcessName}"
+                    : $"{LocalizationService.Get("AddFrameLockStart")}: {frame.ProcessName}",
+                frame.Action == FrameLockAction.Stop ? string.Empty : $"{frame.EffectiveFps} FPS",
+                OrangeBrush,
+                StepDisplayKind.Normal,
+                indent,
+                frame.Action == FrameLockAction.Stop
+                    ? MacroActionTemplateKind.FrameLockStop
+                    : MacroActionTemplateKind.FrameLockStart),
             _ => new StepDisplayItem(index, path, "?", "", step.GetType().Name, "", GrayBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Delay)
         };
     }
@@ -640,6 +726,35 @@ public sealed class StepDisplayItem
         return string.IsNullOrWhiteSpace(resolved) ? fallback : resolved;
     }
 
+    private static string FormatWeakNetDetail(WeakNetStep step)
+    {
+        var action = step.Action switch
+        {
+            WeakNetAction.Start => LocalizationService.Get("WeakNetStart"),
+            WeakNetAction.Stop => LocalizationService.Get("WeakNetStop"),
+            _ => FormatDuration(step.EffectiveDuration)
+        };
+        if (step.Action == WeakNetAction.Stop || step.EffectiveTimeShift <= TimeSpan.Zero)
+        {
+            return action;
+        }
+
+        var shift = FormatTimeShift(step.EffectiveTimeShift);
+        return string.IsNullOrEmpty(action) ? shift : $"{action} · {shift}";
+    }
+
+    private static string FormatTimeShift(TimeSpan shift)
+    {
+        var hours = (int)shift.TotalHours;
+        var minutes = shift.Minutes;
+        if (hours > 0 && minutes > 0)
+        {
+            return $"+{hours}h{minutes}m";
+        }
+
+        return hours > 0 ? $"+{hours}h" : $"+{minutes}m";
+    }
+
     private static string FormatDuration(TimeSpan duration)
     {
         if (duration <= TimeSpan.Zero) return "";
@@ -668,6 +783,12 @@ public sealed class StepDisplayItem
         WaitStep wait => wait.MaxDuration ?? wait.Duration,
         RepeatStep repeat => TimeSpan.FromTicks(repeat.Steps.Sum(s => EstimateStepDuration(s).Ticks) * Math.Max(1, repeat.Count)),
         PixelWhenStep pixel => TimeSpan.FromTicks(pixel.ThenSteps.Sum(s => EstimateStepDuration(s).Ticks)),
+        TextWhenStep textWhen => TimeSpan.FromTicks(textWhen.ThenSteps.Sum(s => EstimateStepDuration(s).Ticks)),
+        ParallelBranchStep branch => TimeSpan.FromTicks(branch.Steps.Sum(s => EstimateStepDuration(s).Ticks)),
+        ParallelStep parallel => TimeSpan.FromTicks(Math.Max(
+            parallel.Left.Steps.Sum(s => EstimateStepDuration(s).Ticks),
+            parallel.Right.Steps.Sum(s => EstimateStepDuration(s).Ticks))),
+        WeakNetStep weak when weak.Action == WeakNetAction.Hold => weak.EffectiveDuration,
         _ => TimeSpan.Zero
     };
 }

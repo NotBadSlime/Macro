@@ -369,7 +369,10 @@ public partial class StepSequencePanel : UserControl
     {
         if (isReadOnly) return;
         if (stepPath.Count == 0) return;
-        _ = MacroStepTreeEditor.GetAtPath(steps, stepPath);
+        if (MacroStepTreeEditor.GetAtPath(steps, stepPath) is ParallelBranchStep)
+        {
+            return;
+        }
         var updated = MacroStepTreeEditor.DeleteAtPath(steps, stepPath);
         BeforeStepsChanged?.Invoke();
         steps = updated.ToList();
@@ -388,6 +391,11 @@ public partial class StepSequencePanel : UserControl
         if (isReadOnly) return;
         if (stepPath.Count == 0) return;
         var step = MacroStepTreeEditor.GetAtPath(steps, stepPath);
+        if (step is ParallelBranchStep)
+        {
+            return;
+        }
+
         var parentPath = stepPath.Take(stepPath.Count - 1).ToArray();
         var insertAt = stepPath[^1] + 1;
         var updated = MacroStepTreeEditor.InsertAtPath(steps, parentPath, insertAt, [step]);
@@ -867,6 +875,12 @@ public partial class StepSequencePanel : UserControl
         InlineStepEditor.ShowStep(current);
         InlineStepEditorPopup.PlacementTarget = placementTarget ?? StepList;
         InlineStepEditorPopup.IsOpen = true;
+        InlineStepEditor.FocusPrimaryEditor();
+    }
+
+    private void InlineStepEditorPopup_Opened(object sender, EventArgs e)
+    {
+        InlineStepEditor.FocusPrimaryEditor();
     }
 
     private void OnInlineStepEdited(MacroStep _)
@@ -1694,6 +1708,16 @@ public partial class StepSequencePanel : UserControl
     {
         if (StepList.SelectedItem is StepDisplayItem { StepPath.Count: > 0 } selected)
         {
+            if (selected.Kind is StepDisplayKind.GroupStart)
+            {
+                return CreateTargetBeforeStep(selected);
+            }
+
+            if (selected.Kind is StepDisplayKind.GroupEnd)
+            {
+                return CreateTargetAfterStep(selected);
+            }
+
             if (selected.IsStructural)
             {
                 return CreateTargetInsideStep(selected, append: true);
@@ -1880,6 +1904,9 @@ public partial class StepSequencePanel : UserControl
         {
             RepeatStep repeat => repeat.Steps.Count,
             PixelWhenStep pixel => pixel.ThenSteps.Count,
+            TextWhenStep textWhen => textWhen.ThenSteps.Count,
+            ParallelBranchStep branch => branch.Steps.Count,
+            ParallelStep parallel => parallel.Branches.Count,
             _ => 0
         };
     }

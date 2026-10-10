@@ -50,6 +50,13 @@ public static class MacroCallRewriter
             MacroCallStep call when TryMap(idMap, call.Macro, out var mapped) => call with { Macro = mapped },
             RepeatStep repeat => repeat with { Steps = RemapSteps(repeat.Steps, idMap) },
             PixelWhenStep pixel => pixel with { ThenSteps = RemapSteps(pixel.ThenSteps, idMap) },
+            ParallelStep parallel => parallel with
+            {
+                Left = (ParallelBranchStep)RemapSteps([parallel.Left], idMap)[0],
+                Right = (ParallelBranchStep)RemapSteps([parallel.Right], idMap)[0]
+            },
+            ParallelBranchStep branch => branch with { Steps = RemapSteps(branch.Steps, idMap) },
+            TextWhenStep text => text with { ThenSteps = RemapSteps(text.ThenSteps, idMap) },
             _ => step
         }).ToList();
     }

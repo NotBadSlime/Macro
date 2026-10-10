@@ -14,6 +14,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -76,6 +77,48 @@
                     <Button x:Name="RunNowHeaderButton" MinWidth="86" Content="立即运行" Click="RunNow_Click" />
                     <Button x:Name="StopHeaderButton" MinWidth="70" Content="停止" Style="{StaticResource DangerButton}" Click="Stop_Click" />
                 </WrapPanel>
+                <StackPanel Grid.Row="2"
+                            Grid.ColumnSpan="3"
+                            Orientation="Horizontal"
+                            Margin="0,12,0,0">
+                    <TextBlock x:Name="DelayAdjustLabel"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource SecondaryText}"
+                               Text="延迟增减" />
+                    <TextBox x:Name="DelayAdjustBox"
+                             Width="88"
+                             Height="34"
+                             Margin="8,0,0,0"
+                             VerticalAlignment="Center"
+                             VerticalContentAlignment="Center"
+                             ToolTip="正数加长全部延迟，负数缩短，但不会低于最低值。"
+                             Text="0"
+                             KeyDown="DelayAdjustBox_KeyDown" />
+                    <TextBlock x:Name="DelayFloorLabel"
+                               Margin="16,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource SecondaryText}"
+                               Text="最低" />
+                    <TextBox x:Name="DelayFloorBox"
+                             Width="72"
+                             Height="34"
+                             Margin="8,0,0,0"
+                             VerticalAlignment="Center"
+                             VerticalContentAlignment="Center"
+                             ToolTip="减少时不会低于这个毫秒数。已经等于或低于它的延迟保持不动。"
+                             Text="0"
+                             KeyDown="DelayAdjustBox_KeyDown" />
+                    <Button x:Name="DelayAdjustButton"
+                            MinWidth="124"
+                            Margin="8,0,0,0"
+                            Content="调整全部延迟"
+                            ToolTip="调整当前序列里的全部延迟卡片，包括循环和像素条件中的延迟。已经到达最低值的延迟，再减少时保持不动。可用撤回恢复。"
+                            Click="DelayAdjustButton_Click" />
+                    <TextBlock x:Name="DelayAdjustStatusText"
+                               Margin="10,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource SecondaryText}" />
+                </StackPanel>
             </Grid>
         </Border>
 

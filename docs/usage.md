@@ -2,6 +2,14 @@
 
 面向用户的完整中文使用教程见仓库根目录 [README.md](../README.md)。下文保留开发者启动命令与英文对照。
 
+## 1.6 发布包与编辑操作
+
+GitHub Release `v1.6.0` 提供 Windows x64 安装包和便携 ZIP。便携包须完整解压并保留目录结构；两种发布包均需要 .NET 8 Desktop Runtime x64。
+
+点击卡片打开编辑后，焦点自动进入第一个可编辑文本框，跳过下拉框。Enter 保存；Alt+Enter 在多行文本框中插入换行。下拉列表展开时 Enter 先确认选项。输入不合法时显示错误并保留编辑界面。
+
+关闭主窗口时可选择最小化到托盘（监听继续）或退出程序（停止播放），可记住选择。需要立即停止宏时请配置独立强制停止按键。
+
 ## 中文
 
 ### 1. 启动
@@ -110,6 +118,8 @@
 - 按住后循环：按住触发键时循环，松开停止。
 
 触发键支持单键、组合键、Ctrl、Alt、Shift、Win、F1–F24、完整数字小键盘（`Numpad0`–`Numpad9`、`NumpadDivide/Multiply/Minus/Plus/Decimal/Enter`）、主键盘符号键（`Minus/Equal/LeftBracket/RightBracket/Backslash/Semicolon/Quote/Grave/Comma/Period/Slash`）以及标准鼠标 1–5 键（左、右、中、X1、X2）。数字小键盘在 Num Lock 开启或关闭时都按物理小键盘键识别。进程筛选可指定前台窗口进程名，例如 `YuanShen.exe`；只有当前前台进程匹配时该宏才会触发。标题栏的“暂停监听”会停止宏触发键监听，但不会清除已保存的热键，也不会关掉「全局运行」里的取色快捷键。捕获触发键、步骤按键或取色快捷键时会暂时停掉全部全局热键；点击“恢复监听”后，会恢复到暂停前的监听集合。取色默认 `UpArrow`，会复制坐标和 `#RRGGBB` 并短暂显示；与宏触发键冲突时会提示并跳过该宏。序列顶部的宏路径（`数据库 > 文件夹 > 宏名`）回车后会让宏数据库跳到对应位置。
+
+“强制停止键”与播放触发键独立，可以设成 `Alt+Tab`、`Tab` 或其他组合。它只取消正在运行的播放，不会在空闲时启动宏；触发后立即补发未释放按键的抬起事件。设为 `Alt+Tab` 时仍保留 Windows 原本的切换窗口行为。
 
 Windows 标准鼠标消息只定义到 Mouse1–Mouse5。游戏鼠标的第 6 个及以后按钮通常由厂商驱动映射成键盘键；建议在鼠标软件中映射为 F13–F24，再直接捕获为宏触发键。
 
@@ -240,6 +250,8 @@ Each macro supports three modes:
 
 Triggers support single keys, chords, Ctrl, Alt, Shift, Win, F1–F24, the full numpad (`Numpad0`–`Numpad9`, divide, multiply, minus, plus, decimal, and enter), main-keyboard OEM symbol keys, and standard mouse buttons 1–5 (left, right, middle, X1, and X2). Physical numpad keys are distinguished even when Num Lock is off. The process filter can restrict playback to a foreground process such as `YuanShen.exe`; the macro triggers only when the current foreground process matches. The title-bar **Pause listening** control stops all trigger listening without clearing saved hotkeys. Capturing a trigger or step key auto-pauses listening; **Resume** restores the previous listening set.
 
+The independent **Force stop key** can be `Alt+Tab`, `Tab`, or another chord. It only cancels an active playback and never starts an idle macro. It immediately releases held inputs; `Alt+Tab` still performs the normal Windows window switch.
+
 Standard Windows mouse messages expose Mouse1–Mouse5 only. Mouse buttons 6 and above are normally remapped by vendor software; map them to F13–F24 there and capture that key as the trigger.
 
 Precision mode supports Basic (0.5ms target), High Performance (0.25ms target), and Extreme (0.1ms target). Extreme loads `MacroHid.NativePlayback.dll`, moving the base-sequence hot path into an x64 C++ in-process playback loop; dense 1ms/2ms loops prefer the inline native path in auto mode, while explicit standby mode keeps the warmed low-startup path. Condition then-actions attempt native-inline in High Performance and Extreme. Pause mode freezes the native main plan through a per-run control handle and shifts all remaining deadlines, so resume does not burst missed actions. Recursive/control-flow macros use the cancellable managed path when required. Targets are LatencyProbe thresholds and optimization goals; Windows user mode can still produce preemption tails.
@@ -266,3 +278,12 @@ The local-run package includes LatencyProbe for managed/native comparison:
 .\artifacts\local-run\LatencyProbe\LatencyProbe.exe --backend native --profile extreme --loop-steps 10 --loop-interval-us 1000 --iterations 5000 --trace-outliers artifacts\native-extreme-outliers.csv
 .\artifacts\local-run\LatencyProbe\LatencyProbe.exe --backend native --profile extreme --target-us 100 --warm-native --cpu-scan --loop-steps 10 --loop-interval-us 1000 --iterations 5000
 ```
+# 网络与锁帧效果的安全恢复
+
+时间偏移恢复依据偏移前的时间和单调计时器计算，不受运行期间系统校时影响。恢复失败会报告错误并保留状态以便重试。重复恢复已解除的锁帧是安全的空操作。
+
+断网卡片会等待防火墙设置完成；设置或删除规则失败会明确报告，不再后台静默忽略。异常停止时仍会尝试恢复其余效果。
+
+多个宏同时播放时，断网、弱网限速及时间偏移由一个播放会话独占；锁帧由一个播放会话独占。其他宏尝试控制同类效果会提示冲突，不会覆盖当前设置。普通宏结束不会清除其他宏的效果。
+
+内置弱网关闭时会立即释放等待发送的数据包，避免关闭后继续产生限速延迟。锁帧写入或恢复失败时保留原始备份，可以再次执行恢复卡片重试。

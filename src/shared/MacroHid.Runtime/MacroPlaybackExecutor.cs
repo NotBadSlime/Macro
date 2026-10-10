@@ -230,6 +230,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     private PlaybackExecutionOptions? cachedOptions;
     private CompiledPlaybackPlan? cachedCompiledPlan;
     private NativePlaybackPreparedPlan? cachedNativePlan;
+    private MacroDocument? warmedDocument;
 
     public MacroPlaybackExecutor(
         IMacroInputSink inputSink,
@@ -247,6 +248,17 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     public void Prepare(MacroDocument document, PlaybackExecutionOptions options)
     {
+        if (!ReferenceEquals(warmedDocument, document))
+        {
+            if (warmedDocument is not null)
+            {
+                EffectPathWarmup.Disarm(warmedDocument);
+            }
+
+            EffectPathWarmup.Arm(document, macroResolver);
+            warmedDocument = document;
+        }
+
         if (!CanUseNativePreparedPlan(document, options)
             || RequiresManagedControlFlow(document, options))
         {
@@ -258,7 +270,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             document,
             clock.Frequency,
             GetPixelEvaluator(options.PixelMode),
-            macroResolver);
+            macroResolver,
+            pressFloor: options.PressFloor);
         var nativePlan = TryCreateNativePreparedPlan(document, options, compiledPlan);
         lock (preparedPlanGate)
         {
@@ -272,6 +285,12 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     public void Dispose()
     {
+        if (warmedDocument is not null)
+        {
+            EffectPathWarmup.Disarm(warmedDocument);
+            warmedDocument = null;
+        }
+
         ClearPreparedPlan();
     }
 
@@ -333,12 +352,34 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             return new PlaybackRunResult(PlaybackRunStatus.InputUnavailable, 0, 0, Cancelled: false, InputStats: null);
         }
 
+        if (inputSink is SendInputMacroSink sendInput)
+        {
+            sendInput.ModifierChordHold = options.PressFloor.ModifierChordHold;
+        }
+
+        using var backgroundScope = BackgroundWindowSession.BeginScope(options);
+
         using var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var effectScope = new PlaybackEffectScope();
         cancellationToken = runCancellation.Token;
+        var safetyPlan = PlaybackInputSafetyPlan.Create(document, macroResolver);
+        var completedIterationReleaseActions = options.Mode == PlaybackMode.FixedCount
+            ? Array.Empty<InputAction>()
+            : safetyPlan.IterationBoundaryReleaseActions;
+        using var safetyRegistration = PlaybackInputSafetyRegistry.Register(
+            inputSink,
+            safetyPlan.EmergencyReleaseActions);
 
         if (RequiresManagedControlFlow(document, options))
         {
-            return RunManagedControlFlow(document, options, runCancellation, cancellationToken);
+            return RunManagedControlFlow(
+                    document,
+                    options,
+                    runCancellation,
+                    cancellationToken,
+                    completedIterationReleaseActions,
+                    safetyPlan.IterationBoundaryReleaseActions,
+                    safetyPlan.EmergencyReleaseActions);
         }
 
         var qpcFrequency = clock.Frequency;
@@ -354,7 +395,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 document,
                 qpcFrequency,
                 GetPixelEvaluator(options.PixelMode),
-                macroResolver);
+                macroResolver,
+                pressFloor: options.PressFloor);
         var localPreparedPlan = hasCachedPlan
             ? null
             : TryCreateNativePreparedPlan(document, options, plan);
@@ -382,9 +424,14 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     qpcFrequency,
                     cancellationToken,
                     playbackTriggerTick,
-                    timeline);
+                    timeline,
+                    options.PressFloor);
                 if (gateWait == StartupGateWaitResult.Failed)
                 {
+                    SubmitSafetyReleaseActions(
+                        completedIterationReleaseActions,
+                        ref sequence,
+                        ref actionsSubmitted);
                     ApplyTimingStats(timingRecorder);
                     return new PlaybackRunResult(
                         PlaybackRunStatus.Completed,
@@ -396,6 +443,10 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
                 if (gateWait == StartupGateWaitResult.SkipIteration)
                 {
+                    SubmitSafetyReleaseActions(
+                        completedIterationReleaseActions,
+                        ref sequence,
+                        ref actionsSubmitted);
                     iterationsCompleted++;
                     continue;
                 }
@@ -444,7 +495,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         runCancellation.Cancel,
                         RequestStopIteration,
                         pauseCoordinator: pauseCoordinator,
-                        timeline: timeline);
+                        timeline: timeline,
+                        pressFloor: options.PressFloor);
                     try
                     {
                         ActivateAllMonitors(monitors);
@@ -513,11 +565,19 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
                 if (nativeStopIteration)
                 {
+                    SubmitSafetyReleaseActions(
+                        safetyPlan.IterationBoundaryReleaseActions,
+                        ref sequence,
+                        ref actionsSubmitted);
                     iterationsCompleted++;
                     plannedIterationStartTick = clock.GetTimestamp();
                     continue;
                 }
 
+                SubmitSafetyReleaseActions(
+                    completedIterationReleaseActions,
+                    ref sequence,
+                    ref actionsSubmitted);
                 iterationsCompleted++;
                 plannedIterationStartTick += iterationDurationTicks;
             }
@@ -532,7 +592,10 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         }
         catch (OperationCanceledException)
         {
-            SubmitSafeReleaseActions(ref sequence, ref actionsSubmitted);
+            SubmitSafetyReleaseActions(
+                safetyPlan.EmergencyReleaseActions,
+                ref sequence,
+                ref actionsSubmitted);
             ApplyTimingStats(timingRecorder);
             return new PlaybackRunResult(
                 PlaybackRunStatus.Completed,
@@ -540,6 +603,11 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 actionsSubmitted,
                 Cancelled: true,
                 inputSink.GetStats());
+        }
+        catch
+        {
+            SubmitSafetyReleaseActions(safetyPlan.EmergencyReleaseActions);
+            throw;
         }
         finally
         {
@@ -565,6 +633,17 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         ConditionTimeline? timeline = null)
     {
         stopIterationRequested = false;
+        if (options.BackgroundWindow)
+        {
+            if (inputSink is SendInputMacroSink backgroundSink)
+            {
+                backgroundSink.SetNativePlaybackDiagnostics(
+                    NativePlaybackEngine.CreateFallbackDiagnostics("background window input requires managed playback."));
+            }
+
+            return false;
+        }
+
         if (!CanAttemptNativeIteration(options))
         {
             return false;
@@ -603,7 +682,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 stopAllRequested,
                 RequestStopIteration,
                 pauseCoordinator: pauseCoordinator,
-                timeline: timeline);
+                timeline: timeline,
+                pressFloor: options.PressFloor);
             try
             {
                 ActivateAllMonitors(monitors);
@@ -714,7 +794,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private bool CanAttemptNativeIteration(PlaybackExecutionOptions options)
     {
-        return CanUseNativePrecision(options.Precision)
+        return !options.BackgroundWindow
+            && CanUseNativePrecision(options.Precision)
             && !options.NoWait
             && configuredDelayStrategy is null
             && inputSink is SendInputMacroSink;
@@ -792,7 +873,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private bool CanUseNativePreparedPlan(MacroDocument document, PlaybackExecutionOptions options)
     {
-        return CanUseNativePrecision(options.Precision)
+        return !options.BackgroundWindow
+            && CanUseNativePrecision(options.Precision)
             && !options.NoWait
             && configuredDelayStrategy is null
             && inputSink is SendInputMacroSink
@@ -810,7 +892,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         {
             switch (step)
             {
-                case PixelWhenStep:
+                case PixelWhenStep or WeakNetStep or NetLimitStep or ClockShiftStep or ParallelStep or TextWhenStep or ParallelBranchStep or FrameLockStep:
                     return true;
                 case RepeatStep repeat when ContainsPixelWhen(repeat.Steps):
                     return true;
@@ -830,7 +912,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         Action? stopIterationRequested = null,
         bool applyStepWindows = true,
         PlaybackPauseCoordinator? pauseCoordinator = null,
-        ConditionTimeline? timeline = null)
+        ConditionTimeline? timeline = null,
+        InputPressFloor? pressFloor = null)
     {
         var monitors = new List<ConditionMonitor>();
         var conditionWindows = applyStepWindows
@@ -869,7 +952,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 pauseCoordinator,
                 timeline,
                 index,
-                intervals));
+                intervals,
+                pressFloor));
         }
         return monitors;
     }
@@ -878,7 +962,10 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         MacroDocument document,
         PlaybackExecutionOptions options,
         CancellationTokenSource runCancellation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<InputAction> completedIterationReleaseActions,
+        IReadOnlyList<InputAction> interruptedIterationReleaseActions,
+        IReadOnlyList<InputAction> emergencyReleaseActions)
     {
         var qpcFrequency = clock.Frequency;
         var delayStrategy = configuredDelayStrategy ?? new QpcPlaybackDelayStrategy(clock, options.Precision);
@@ -907,9 +994,14 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     qpcFrequency,
                     cancellationToken,
                     playbackTriggerTick,
-                    timeline);
+                    timeline,
+                    options.PressFloor);
                 if (gateWait == StartupGateWaitResult.Failed)
                 {
+                    SubmitSafetyReleaseActions(
+                        completedIterationReleaseActions,
+                        ref sequence,
+                        ref actionsSubmitted);
                     return new PlaybackRunResult(
                         PlaybackRunStatus.Completed,
                         iterationsCompleted,
@@ -920,6 +1012,10 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
                 if (gateWait == StartupGateWaitResult.SkipIteration)
                 {
+                    SubmitSafetyReleaseActions(
+                        completedIterationReleaseActions,
+                        ref sequence,
+                        ref actionsSubmitted);
                     iterationsCompleted++;
                     continue;
                 }
@@ -944,14 +1040,19 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     runCancellation.Cancel,
                     StopIteration,
                     pauseCoordinator: pauseCoordinator,
-                    timeline: timeline);
+                    timeline: timeline,
+                    pressFloor: options.PressFloor);
                 var runner = new ManagedMacroControlFlowRunner(
                     inputSink,
                     delayStrategy,
                     clock,
                     GetPixelEvaluator(options.PixelMode),
                     macroResolver,
-                    pauseCoordinator);
+                    pauseCoordinator,
+                    textEvaluator: (step, token) => conditionEvaluator.Evaluate(
+                        new TextMatcher(step.Region, step.ExpectedText, step.Contains, step.Language, step.UseRegex),
+                        token),
+                    pressFloor: options.PressFloor);
                 var flow = MacroControlFlowResult.Completed;
                 try
                 {
@@ -987,7 +1088,10 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
                 if (flow == MacroControlFlowResult.StopAll)
                 {
-                    SubmitSafeReleaseActions(ref sequence, ref actionsSubmitted);
+                    SubmitSafetyReleaseActions(
+                        emergencyReleaseActions,
+                        ref sequence,
+                        ref actionsSubmitted);
                     return new PlaybackRunResult(
                         PlaybackRunStatus.Completed,
                         iterationsCompleted,
@@ -998,16 +1102,28 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
                 if (flow == MacroControlFlowResult.StopIteration)
                 {
+                    SubmitSafetyReleaseActions(
+                        interruptedIterationReleaseActions,
+                        ref sequence,
+                        ref actionsSubmitted);
                     iterationsCompleted++;
                     continue;
                 }
 
                 if (flow == MacroControlFlowResult.StopCurrent)
                 {
+                    SubmitSafetyReleaseActions(
+                        interruptedIterationReleaseActions,
+                        ref sequence,
+                        ref actionsSubmitted);
                     iterationsCompleted++;
                     continue;
                 }
 
+                SubmitSafetyReleaseActions(
+                    completedIterationReleaseActions,
+                    ref sequence,
+                    ref actionsSubmitted);
                 iterationsCompleted++;
             }
 
@@ -1020,13 +1136,21 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         }
         catch (OperationCanceledException)
         {
-            SubmitSafeReleaseActions(ref sequence, ref actionsSubmitted);
+            SubmitSafetyReleaseActions(
+                emergencyReleaseActions,
+                ref sequence,
+                ref actionsSubmitted);
             return new PlaybackRunResult(
                 PlaybackRunStatus.Completed,
                 iterationsCompleted,
                 actionsSubmitted,
                 Cancelled: true,
                 inputSink.GetStats());
+        }
+        catch
+        {
+            SubmitSafetyReleaseActions(emergencyReleaseActions);
+            throw;
         }
     }
 
@@ -1252,7 +1376,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         long qpcFrequency,
         CancellationToken cancellationToken,
         long playbackTriggerTick,
-        ConditionTimeline timeline)
+        ConditionTimeline timeline,
+        InputPressFloor pressFloor)
     {
         var gates = document.EffectiveConditions
             .Where(condition => condition.ExecutionMode == ConditionExecutionMode.GateMainSequence)
@@ -1275,7 +1400,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     cancellationToken,
                     gate =>
                     {
-                        var flow = ExecuteStartupGateThenSteps(gate, delayStrategy, precision, cancellationToken);
+                        var flow = ExecuteStartupGateThenSteps(gate, delayStrategy, precision, cancellationToken, pressFloor);
                         if (flow == MacroControlFlowResult.StopAll)
                         {
                             throw new OperationCanceledException();
@@ -1311,7 +1436,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         ConditionalDirective gate,
         IPlaybackDelayStrategy delayStrategy,
         PrecisionMode precision,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        InputPressFloor pressFloor)
     {
         if (gate.ThenSteps.Count == 0)
         {
@@ -1328,7 +1454,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 delayStrategy,
                 clock,
                 pixelEvaluator: null,
-                macroResolver);
+                macroResolver,
+                pressFloor: pressFloor);
             return runner.Run(
                 document,
                 clock.GetTimestamp(),
@@ -1343,7 +1470,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             document,
             clock.Frequency,
             pixelEvaluator: null,
-            macroResolver);
+            macroResolver,
+            pressFloor: pressFloor);
 
         if (CanUseNativePrecision(precision)
             && inputSink is SendInputMacroSink
@@ -1545,6 +1673,12 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             RepeatStep repeat => EstimateStepsDurationTicks(repeat.Steps, qpcFrequency, depth + 1, visiting) * Math.Max(1, repeat.Count),
             MacroCallStep macro => EstimateMacroCallDurationTicks(macro, qpcFrequency, depth, visiting),
             PixelWhenStep pixel => EstimateStepsDurationTicks(pixel.ThenSteps, qpcFrequency, depth + 1, visiting),
+            TextWhenStep text => EstimateStepsDurationTicks(text.ThenSteps, qpcFrequency, depth + 1, visiting),
+            ParallelBranchStep branch => EstimateStepsDurationTicks(branch.Steps, qpcFrequency, depth + 1, visiting),
+            ParallelStep parallel => Math.Max(
+                EstimateStepsDurationTicks(parallel.Left.Steps, qpcFrequency, depth + 1, visiting),
+                EstimateStepsDurationTicks(parallel.Right.Steps, qpcFrequency, depth + 1, visiting)),
+            WeakNetStep weak when weak.Action == WeakNetAction.Hold => ToTicks(weak.EffectiveDuration, qpcFrequency),
             _ => 0L
         };
     }
@@ -1586,36 +1720,29 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         };
     }
 
-    private void SubmitSafeReleaseActions(ref uint sequence, ref int actionsSubmitted)
+    private void SubmitSafetyReleaseActions(
+        IReadOnlyList<InputAction> releases,
+        ref uint sequence,
+        ref int actionsSubmitted)
     {
-        foreach (var action in SafeReleaseActions())
+        foreach (var action in releases)
         {
-            inputSink.Submit(sequence++, action);
-            actionsSubmitted++;
+            try
+            {
+                inputSink.Submit(sequence++, action);
+                actionsSubmitted++;
+            }
+            catch
+            {
+                // A failed SendInput must not prevent the remaining key-up packets
+                // or replace the original playback exception.
+            }
         }
     }
 
-    private static IEnumerable<InputAction> SafeReleaseActions()
+    private void SubmitSafetyReleaseActions(IReadOnlyList<InputAction> releases)
     {
-        yield return new KeyInputAction(
-            KeyActionKind.Up,
-            HidKey.None,
-            HidModifier.LeftCtrl
-                | HidModifier.LeftShift
-                | HidModifier.LeftAlt
-                | HidModifier.LeftGui
-                | HidModifier.RightCtrl
-                | HidModifier.RightShift
-                | HidModifier.RightAlt
-                | HidModifier.RightGui);
-        yield return new MouseButtonInputAction(
-            MouseButton.Left | MouseButton.Right | MouseButton.Middle | MouseButton.X1 | MouseButton.X2,
-            ButtonActionKind.Up);
-
-        foreach (var control in Enum.GetValues<ConsumerControl>())
-        {
-            yield return new ConsumerInputAction(control, ButtonActionKind.Up);
-        }
+        PlaybackInputSafetyRegistry.SubmitBestEffort(inputSink, releases);
     }
 
     private sealed class TimerResolutionScope : IDisposable

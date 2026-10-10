@@ -209,6 +209,9 @@ public partial class ThenActionsEditorWindow : Window
         {
             RepeatStep repeat => repeat.Steps.Count,
             PixelWhenStep pixel => pixel.ThenSteps.Count,
+            TextWhenStep textWhen => textWhen.ThenSteps.Count,
+            ParallelBranchStep branch => branch.Steps.Count,
+            ParallelStep parallel => parallel.Branches.Count,
             _ => 0
         };
     }

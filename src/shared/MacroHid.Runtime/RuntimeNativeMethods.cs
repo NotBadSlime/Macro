@@ -73,6 +73,33 @@ internal static partial class RuntimeNativeMethods
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int index);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(out NativePoint point);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetClipCursor(out NativeRect rect);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ClipCursor(IntPtr rect);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindow(IntPtr hwnd, int command);
+
     [DllImport("winmm.dll")]
     public static extern uint timeBeginPeriod(uint period);
 
@@ -176,6 +203,13 @@ internal struct ProcessPowerThrottlingState
     public uint Version;
     public uint ControlMask;
     public uint StateMask;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativePoint
+{
+    public int X;
+    public int Y;
 }
 
 [StructLayout(LayoutKind.Sequential)]

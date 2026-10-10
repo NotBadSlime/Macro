@@ -93,6 +93,9 @@ public sealed class SendInputMacroSink : IMacroInputSink
     private int workerMmcssAppliedCount;
     private int workerPriorityBoostDisabledCount;
     private string priorityState = string.Empty;
+    private readonly ModifierChordClock modifierChord = new();
+    public TimeSpan ModifierChordHold { get; set; } = InputPressTiming.ModifierChordHold;
+    private bool splittingModifierChord;
 
     public bool IsAvailable => OperatingSystem.IsWindows();
 
@@ -153,6 +156,18 @@ public sealed class SendInputMacroSink : IMacroInputSink
 
     private void SubmitText(string text)
     {
+        if (BackgroundWindowSession.IsActive)
+        {
+            BackgroundWindowInput.Submit([new TextInputAction(text)]);
+            lock (gate)
+            {
+                actionsSubmitted++;
+                lastWin32Error = 0;
+            }
+
+            return;
+        }
+
         if (ClipboardTextSender.TrySend(text, this, CancellationToken.None, out _))
         {
             return;
@@ -168,8 +183,42 @@ public sealed class SendInputMacroSink : IMacroInputSink
             throw new PlatformNotSupportedException("SendInput is only available on Windows.");
         }
 
+        if (!splittingModifierChord && ModifierChordClock.TrySplit(prepared.Actions, out var splitAt))
+        {
+            splittingModifierChord = true;
+            try
+            {
+                SubmitNativeBatch(PreparedInputBatch.FromActions(prepared.Actions.Take(splitAt).ToArray()));
+                SubmitNativeBatch(PreparedInputBatch.FromActions(prepared.Actions.Skip(splitAt).ToArray()));
+            }
+            finally
+            {
+                splittingModifierChord = false;
+            }
+
+            return;
+        }
+
+        if (BackgroundWindowSession.IsActive)
+        {
+            BackgroundWindowInput.Submit(prepared.Actions);
+            lock (gate)
+            {
+                actionsSubmitted += prepared.ActionCount;
+                lastWin32Error = 0;
+            }
+
+            return;
+        }
+
         RuntimeNativeMethods.QueryPerformanceFrequency(out var frequency);
         RuntimeNativeMethods.QueryPerformanceCounter(out var submitQpc);
+        var chordDue = modifierChord.AdjustDueTick(
+            prepared.Actions,
+            submitQpc,
+            InputPressTiming.HoldTicks(ModifierChordHold, frequency));
+        WaitUntilTick(chordDue);
+        RuntimeNativeMethods.QueryPerformanceCounter(out submitQpc);
 
         if (prepared.NativeInputCount == 0)
         {
@@ -184,10 +233,7 @@ public sealed class SendInputMacroSink : IMacroInputSink
             return;
         }
 
-        var sent = RuntimeNativeMethods.SendInput(
-            (uint)prepared.NativeInputCount,
-            prepared.NativeInputs,
-            NativeInputSize.Value);
+        var sent = SubmitNativeInputs(prepared.NativeInputs);
         RuntimeNativeMethods.QueryPerformanceCounter(out var afterSubmit);
         var durationUs = ToMicroseconds(afterSubmit - submitQpc, frequency);
         if (sent != prepared.NativeInputCount)
@@ -211,6 +257,36 @@ public sealed class SendInputMacroSink : IMacroInputSink
             lastWin32Error = 0;
             lastSubmitQpc = submitQpc;
             lastSubmitDurationMicroseconds = durationUs;
+        }
+
+        modifierChord.NoteSent(prepared.Actions, afterSubmit);
+    }
+
+    private static void WaitUntilTick(long dueTick)
+    {
+        RuntimeNativeMethods.QueryPerformanceFrequency(out var frequency);
+        if (frequency <= 0)
+        {
+            return;
+        }
+
+        while (true)
+        {
+            RuntimeNativeMethods.QueryPerformanceCounter(out var now);
+            if (now >= dueTick)
+            {
+                return;
+            }
+
+            var remainingMs = (dueTick - now) * 1000.0 / frequency;
+            if (remainingMs >= 2)
+            {
+                Thread.Sleep(1);
+            }
+            else
+            {
+                Thread.SpinWait(50);
+            }
         }
     }
 
@@ -315,6 +391,37 @@ public sealed class SendInputMacroSink : IMacroInputSink
                 workerPriorityBoostDisabledCount,
                 priorityState);
         }
+    }
+
+    private static uint SubmitNativeInputs(NativeInput[] inputs)
+    {
+        if (inputs.Length == 0)
+        {
+            return 0;
+        }
+
+        if (!inputs.Any(MouseCursorUnclip.IsRelativeMouse))
+        {
+            return RuntimeNativeMethods.SendInput((uint)inputs.Length, inputs, NativeInputSize.Value);
+        }
+
+        uint sent = 0;
+        for (var i = 0; i < inputs.Length; i++)
+        {
+            if (MouseCursorUnclip.IsRelativeMouse(inputs[i]))
+            {
+                MouseCursorUnclip.RecenterIfNeeded(inputs[i].Union.Mouse.Dx, inputs[i].Union.Mouse.Dy);
+            }
+
+            var one = RuntimeNativeMethods.SendInput(1, [inputs[i]], NativeInputSize.Value);
+            sent += one;
+            if (one != 1)
+            {
+                break;
+            }
+        }
+
+        return sent;
     }
 
     private static long ToMicroseconds(long ticks, long frequency)

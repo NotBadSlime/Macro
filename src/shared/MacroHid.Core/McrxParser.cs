@@ -56,6 +56,9 @@ public static class McrxParser
         var trigger = playbackElement.TryGetProperty("trigger", out var triggerElement)
             ? ParseHotkeyGesture(triggerElement.GetString())
             : null;
+        var stopTrigger = playbackElement.TryGetProperty("stopTrigger", out var stopTriggerElement)
+            ? ParseHotkeyGesture(stopTriggerElement.GetString())
+            : null;
         var mode = ParseEnum<PlaybackMode>(GetString(playbackElement, "mode", PlaybackSettings.Default.Mode.ToString()), "playback mode");
         var count = GetInt(playbackElement, "count", PlaybackSettings.Default.Count);
         var processFilter = GetString(playbackElement, "processFilter", PlaybackSettings.Default.ProcessFilter) ?? string.Empty;
@@ -71,7 +74,12 @@ public static class McrxParser
             throw new JsonException("'playback.count' must be at least 1.");
         }
 
-        return new PlaybackSettings(trigger, mode, count, processFilter.Trim(), precision, affinityMask);
+        if (trigger is not null && trigger.Equals(stopTrigger))
+        {
+            throw new JsonException("'playback.stopTrigger' must be different from 'playback.trigger'.");
+        }
+
+        return new PlaybackSettings(trigger, mode, count, processFilter.Trim(), precision, affinityMask, stopTrigger);
     }
 
     public static HotkeyGesture ParseHotkeyGesture(string? value)
@@ -167,6 +175,13 @@ public static class McrxParser
             "sequence.stop-iteration" => new StopCurrentIterationStep(),
             "sequence.stop-all" => new StopAllSequencesStep(),
             "pixel.when" => ParsePixelWhen(stepElement),
+            "text.when" => ParseTextWhen(stepElement),
+            "weak.net" => ParseWeakNet(stepElement),
+            "net.limit" => ParseNetLimit(stepElement),
+            "clock.shift" => ParseClockShift(stepElement),
+            "frame.lock" => ParseFrameLock(stepElement),
+            "parallel" => ParseParallel(stepElement),
+            "parallel.branch" => ParseParallelBranch(stepElement),
             _ => throw new JsonException($"Unsupported macro step type '{type}'.")
         };
     }
@@ -308,6 +323,103 @@ public static class McrxParser
             GetOptionalTimeSpan(stepElement, "windowStartMs"),
             GetOptionalTimeSpan(stepElement, "windowEndMs"),
             GetOptionalTimeSpan(stepElement, "pollIntervalMs"));
+    }
+
+    private static TextWhenStep ParseTextWhen(JsonElement stepElement)
+    {
+        return new TextWhenStep(
+            ParseScreenRegion(stepElement),
+            GetString(stepElement, "expectedText", string.Empty) ?? string.Empty,
+            stepElement.TryGetProperty("then", out var thenElement) ? ParseSteps(thenElement) : [],
+            !stepElement.TryGetProperty("contains", out var containsProperty) || containsProperty.GetBoolean(),
+            GetString(stepElement, "language", "ch") ?? "ch",
+            stepElement.TryGetProperty("useRegex", out var regexProperty) && regexProperty.GetBoolean(),
+            GetOptionalTimeSpan(stepElement, "pollIntervalMs"));
+    }
+
+    private static WeakNetStep ParseWeakNet(JsonElement stepElement)
+    {
+        var action = ParseEnum<WeakNetAction>(GetString(stepElement, "action", "Hold"), "weak net action");
+        TimeSpan? timeShift = null;
+        if (stepElement.TryGetProperty("timeShiftMinutes", out var shiftProperty) && shiftProperty.TryGetDouble(out var shiftMinutes))
+        {
+            timeShift = TimeSpan.FromMinutes(shiftMinutes);
+        }
+
+        return new WeakNetStep(
+            GetString(stepElement, "processName", "YuanShen.exe") ?? "YuanShen.exe",
+            action,
+            TimeSpan.FromMilliseconds(Math.Max(0, GetDouble(stepElement, "durationMs", 3000))),
+            timeShift);
+    }
+
+    private static NetLimitStep ParseNetLimit(JsonElement stepElement)
+    {
+        var action = ParseEnum<NetLimitAction>(GetString(stepElement, "action", "Start"), "net limit action");
+        var bytes = (long)Math.Round(GetDouble(stepElement, "bytesPerSecond", NetLimitStep.DefaultBytesPerSecond));
+        var engine = ParseEnum<NetLimitEngine>(GetString(stepElement, "engine", "BuiltIn"), "net limit engine");
+        return new NetLimitStep(
+            GetString(stepElement, "processName", "YuanShen.exe") ?? "YuanShen.exe",
+            action,
+            bytes,
+            engine);
+    }
+
+    private static ClockShiftStep ParseClockShift(JsonElement stepElement)
+    {
+        var action = ParseEnum<ClockShiftAction>(GetString(stepElement, "action", "Shift"), "clock shift action");
+        TimeSpan? timeShift = null;
+        if (stepElement.TryGetProperty("timeShiftMinutes", out var shiftProperty) && shiftProperty.TryGetDouble(out var shiftMinutes))
+        {
+            timeShift = TimeSpan.FromMinutes(shiftMinutes);
+        }
+
+        return new ClockShiftStep(action, timeShift);
+    }
+
+    private static FrameLockStep ParseFrameLock(JsonElement stepElement)
+    {
+        var action = ParseEnum<FrameLockAction>(GetString(stepElement, "action", "Start"), "frame lock action");
+        return new FrameLockStep(
+            GetString(stepElement, "processName", "YuanShen.exe") ?? "YuanShen.exe",
+            action,
+            GetInt(stepElement, "fps", 60));
+    }
+
+    private static ParallelStep ParseParallel(JsonElement stepElement)
+    {
+        var branches = new List<ParallelBranchStep>();
+        if (stepElement.TryGetProperty("branches", out var branchElement) && branchElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in branchElement.EnumerateArray())
+            {
+                branches.Add(ParseParallelBranch(child));
+                if (branches.Count == 2)
+                {
+                    break;
+                }
+            }
+        }
+
+        while (branches.Count < 2)
+        {
+            branches.Add(new ParallelBranchStep($"分支 {branches.Count + 1}", []));
+        }
+
+        return new ParallelStep(
+            branches[0],
+            branches[1],
+            GetOptionalTimeSpan(stepElement, "timeoutMs"));
+    }
+
+    private static ParallelBranchStep ParseParallelBranch(JsonElement stepElement)
+    {
+        var steps = stepElement.TryGetProperty("steps", out var stepsElement) && stepsElement.ValueKind == JsonValueKind.Array
+            ? ParseSteps(stepsElement)
+            : [];
+        return new ParallelBranchStep(
+            GetString(stepElement, "name", "分支") ?? "分支",
+            steps);
     }
 
     private static WaitStep ParseWait(JsonElement stepElement)

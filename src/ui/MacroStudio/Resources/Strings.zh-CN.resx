@@ -5,6 +5,21 @@
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <data name="AppTitle" xml:space="preserve"><value>MacroHID 工作室</value></data>
+  <data name="Minimize" xml:space="preserve"><value>最小化</value></data>
+  <data name="MinimizeToTray" xml:space="preserve"><value>最小化到托盘</value></data>
+  <data name="CloseWindow" xml:space="preserve"><value>关闭</value></data>
+  <data name="CloseWindowPromptTitle" xml:space="preserve"><value>关闭窗口</value></data>
+  <data name="CloseWindowPromptText" xml:space="preserve"><value>最小化按钮始终缩到任务栏。请选择这次点关闭要做什么。</value></data>
+  <data name="CloseToTray" xml:space="preserve"><value>最小化到托盘</value></data>
+  <data name="CloseToTrayHint" xml:space="preserve"><value>窗口收进托盘，已经在监听的宏会继续运行。</value></data>
+  <data name="CloseAndExit" xml:space="preserve"><value>退出程序</value></data>
+  <data name="CloseAndExitHint" xml:space="preserve"><value>停止播放并退出 MacroHID。</value></data>
+  <data name="RememberCloseChoice" xml:space="preserve"><value>记住我的选择</value></data>
+  <data name="CloseButtonBehavior" xml:space="preserve"><value>关闭按钮</value></data>
+  <data name="CloseButtonAsk" xml:space="preserve"><value>每次询问</value></data>
+  <data name="CloseButtonBehaviorHelp" xml:space="preserve"><value>最小化始终缩到任务栏。关闭按钮可以收进托盘，或退出程序。选「每次询问」时，每次点关闭都会再问一次；勾选「记住我的选择」后，会写到这里。</value></data>
+  <data name="TrayShow" xml:space="preserve"><value>显示主窗口</value></data>
+  <data name="TrayExit" xml:space="preserve"><value>退出</value></data>
   <data name="Language" xml:space="preserve"><value>语言</value></data>
   <data name="English" xml:space="preserve"><value>英文</value></data>
   <data name="SimplifiedChinese" xml:space="preserve"><value>简体中文</value></data>
@@ -18,6 +33,11 @@
   <data name="ScheduledSteps" xml:space="preserve"><value>计划步骤</value></data>
   <data name="Playback" xml:space="preserve"><value>播放</value></data>
   <data name="Trigger" xml:space="preserve"><value>触发键</value></data>
+  <data name="StopTrigger" xml:space="preserve"><value>强制停止键</value></data>
+  <data name="CaptureStopTriggerHint" xml:space="preserve"><value>例如 Alt+Tab 或 Tab</value></data>
+  <data name="StopTriggerHint" xml:space="preserve"><value>按下后停止所有正在播放的宏，并立刻释放还没抬起的按键。不会启动宏。</value></data>
+  <data name="StopTriggerMustDiffer" xml:space="preserve"><value>强制停止键不能与播放触发键相同。</value></data>
+  <data name="ForceStopTriggered" xml:space="preserve"><value>已强制停止播放并释放未抬起的按键。</value></data>
   <data name="Capture" xml:space="preserve"><value>捕获</value></data>
   <data name="CaptureTriggerHint" xml:space="preserve"><value>按下触发键…</value></data>
   <data name="FilterWindowsPlaceholder" xml:space="preserve"><value>筛选进程名或窗口标题</value></data>
@@ -35,6 +55,7 @@
   <data name="StartListeningAll" xml:space="preserve"><value>一键监听</value></data>
   <data name="StopListeningAll" xml:space="preserve"><value>全部停止</value></data>
   <data name="RunNow" xml:space="preserve"><value>立即运行</value></data>
+  <data name="RunNowOnceHint" xml:space="preserve"><value>立即运行只播放一轮，不会启动无限循环。鼠标被带走时按 Esc 停止。</value></data>
   <data name="Stop" xml:space="preserve"><value>停止</value></data>
   <data name="PlaybackStatusIdle" xml:space="preserve"><value>播放：空闲</value></data>
   <data name="PlaybackStatusListening" xml:space="preserve"><value>播放：监听中</value></data>
@@ -94,6 +115,17 @@
   <data name="PlaybackCountWholeNumber" xml:space="preserve"><value>播放次数必须是整数。</value></data>
   <data name="PlaybackCountAtLeastOne" xml:space="preserve"><value>播放次数至少为 1。</value></data>
   <data name="Sequence" xml:space="preserve"><value>序列</value></data>
+  <data name="DelayAdjustLabel" xml:space="preserve"><value>延迟增减</value></data>
+  <data name="DelayAdjustHelp" xml:space="preserve"><value>正数加长全部延迟，负数缩短，但不会低于最低值。</value></data>
+  <data name="DelayAdjustButton" xml:space="preserve"><value>调整全部延迟</value></data>
+  <data name="DelayAdjustButtonHelp" xml:space="preserve"><value>调整当前序列里的全部延迟卡片，包括循环和像素条件中的延迟。已经到达最低值的延迟，再减少时保持不动。可用撤回恢复。</value></data>
+  <data name="DelayFloorLabel" xml:space="preserve"><value>最低</value></data>
+  <data name="DelayFloorHelp" xml:space="preserve"><value>减少时不会低于这个毫秒数。已经等于或低于它的延迟保持不动。</value></data>
+  <data name="DelayFloorInvalid" xml:space="preserve"><value>最低值请填写不小于 0 的毫秒数。</value></data>
+  <data name="DelayAdjustInvalid" xml:space="preserve"><value>请输入毫秒数，例如 10 或 -5。</value></data>
+  <data name="DelayAdjustNone" xml:space="preserve"><value>当前序列没有延迟卡片。</value></data>
+  <data name="DelayAdjustUnchanged" xml:space="preserve"><value>延迟没有变化。</value></data>
+  <data name="DelayAdjustApplied" xml:space="preserve"><value>已调整 {0} 个延迟。</value></data>
   <data name="MacroValid" xml:space="preserve"><value>宏有效</value></data>
   <data name="MacroInvalid" xml:space="preserve"><value>宏无效</value></data>
   <data name="PlaybackError" xml:space="preserve"><value>播放错误</value></data>
@@ -190,6 +222,78 @@
   <data name="AddTextHint" xml:space="preserve"><value>粘贴文本到当前输入框（Ctrl+V）</value></data>
   <data name="AddMacroActionHint" xml:space="preserve"><value>调用宏数据库条目</value></data>
   <data name="AddLoopHint" xml:space="preserve"><value>重复一组步骤</value></data>
+  <data name="AddPixelHint" xml:space="preserve"><value>匹配屏幕上的一个像素</value></data>
+  <data name="AddTextWhen" xml:space="preserve"><value>文字条件</value></data>
+  <data name="AddTextWhenHint" xml:space="preserve"><value>识别到文字后再执行后续动作</value></data>
+  <data name="AddWeakNet" xml:space="preserve"><value>断网</value></data>
+  <data name="AddWeakNetHint" xml:space="preserve"><value>丢弃指定程序的外网数据包。拨快多久在卡片里设置，宏结束改回</value></data>
+  <data name="AddWeakNetStart" xml:space="preserve"><value>开启断网</value></data>
+  <data name="AddWeakNetStartHint" xml:space="preserve"><value>丢弃外网数据包，拨快时间在卡片里设置</value></data>
+  <data name="AddWeakNetStop" xml:space="preserve"><value>关闭断网</value></data>
+  <data name="AddWeakNetStopHint" xml:space="preserve"><value>恢复网络。系统时间在宏结束时改回</value></data>
+  <data name="AddNetLimitStart" xml:space="preserve"><value>开启弱网</value></data>
+  <data name="AddNetLimitStartHint" xml:space="preserve"><value>内置限速，不用另外安装。默认 695 B/s，可在卡片里改</value></data>
+  <data name="AddNetLimitStop" xml:space="preserve"><value>关闭弱网</value></data>
+  <data name="AddNetLimitStopHint" xml:space="preserve"><value>取消限速，恢复原来的网速</value></data>
+  <data name="AddNetLimiterStart" xml:space="preserve"><value>NetLimiter 限速</value></data>
+  <data name="AddNetLimiterStartHint" xml:space="preserve"><value>使用本机已安装的 NetLimiter，默认 695 B/s，可改</value></data>
+  <data name="AddNetLimiterStop" xml:space="preserve"><value>关闭 NetLimiter</value></data>
+  <data name="AddNetLimiterStopHint" xml:space="preserve"><value>取消 NetLimiter 里的限速。没安装时不会生效</value></data>
+  <data name="AddClockShift" xml:space="preserve"><value>切换系统时间</value></data>
+  <data name="AddClockShiftHint" xml:space="preserve"><value>把系统时间拨快，时长在卡片里设置</value></data>
+  <data name="AddClockRestore" xml:space="preserve"><value>恢复系统时间</value></data>
+  <data name="AddClockRestoreHint" xml:space="preserve"><value>立刻把系统时间改回。播放结束也会改回</value></data>
+  <data name="AddParallel" xml:space="preserve"><value>并行</value></data>
+  <data name="AddParallelHint" xml:space="preserve"><value>两条分支同时检测，都完成后再继续</value></data>
+  <data name="TemplateTextWhen" xml:space="preserve"><value>文字条件</value></data>
+  <data name="TemplateWeakNet" xml:space="preserve"><value>断网</value></data>
+  <data name="TemplateWeakNetStart" xml:space="preserve"><value>开启断网</value></data>
+  <data name="TemplateWeakNetStop" xml:space="preserve"><value>关闭断网</value></data>
+  <data name="TemplateNetLimitStart" xml:space="preserve"><value>开启弱网</value></data>
+  <data name="TemplateNetLimitStop" xml:space="preserve"><value>关闭弱网</value></data>
+  <data name="TemplateNetLimiterStart" xml:space="preserve"><value>NetLimiter 限速</value></data>
+  <data name="TemplateNetLimiterStop" xml:space="preserve"><value>关闭 NetLimiter</value></data>
+  <data name="TemplateClockShift" xml:space="preserve"><value>切换系统时间</value></data>
+  <data name="TemplateClockRestore" xml:space="preserve"><value>恢复系统时间</value></data>
+  <data name="TemplateParallel" xml:space="preserve"><value>并行</value></data>
+  <data name="WeakNetProcess" xml:space="preserve"><value>进程名</value></data>
+  <data name="WeakNetAction" xml:space="preserve"><value>动作</value></data>
+  <data name="WeakNetDurationMs" xml:space="preserve"><value>持续毫秒</value></data>
+  <data name="WeakNetHold" xml:space="preserve"><value>持续</value></data>
+  <data name="WeakNetStart" xml:space="preserve"><value>开启</value></data>
+  <data name="WeakNetStop" xml:space="preserve"><value>关闭</value></data>
+  <data name="WeakNetShiftHours" xml:space="preserve"><value>拨快小时</value></data>
+  <data name="WeakNetShiftMinutes" xml:space="preserve"><value>拨快分钟</value></data>
+  <data name="WeakNetShiftHint" xml:space="preserve"><value>填 0 小时 0 分钟则不改系统时间。同一次播放只按第一次拨快，宏结束时改回。最长 24 小时。</value></data>
+  <data name="WeakNetStopHint" xml:space="preserve"><value>恢复网络。系统时间仍在宏结束时改回。</value></data>
+  <data name="NetLimitProcess" xml:space="preserve"><value>进程名</value></data>
+  <data name="NetLimitBytes" xml:space="preserve"><value>限速 (B/s)</value></data>
+  <data name="NetLimitHint" xml:space="preserve"><value>新建时默认 695。只限制上传，下载不限，单位是字节/秒。播放结束会取消限速。</value></data>
+  <data name="NetLimitStopHint" xml:space="preserve"><value>取消限速，恢复原来的网速。</value></data>
+  <data name="NetLimiterHint" xml:space="preserve"><value>使用本机已安装的 NetLimiter。新建时默认 695，只限制上传，下载不限，单位是字节/秒。</value></data>
+  <data name="NetLimiterStopHint" xml:space="preserve"><value>取消 NetLimiter 里的限速。本机没安装 NetLimiter 时，这张卡片不会改网络。</value></data>
+  <data name="ClockShiftHint" xml:space="preserve"><value>填 0 小时 0 分钟则不改系统时间。同一次播放只按第一次拨快。断网卡片仍会默认拨快。</value></data>
+  <data name="ClockRestoreHint" xml:space="preserve"><value>立刻把系统时间改回。播放结束时如果还没改回，也会自动改回。</value></data>
+  <data name="AddFrameLockStart" xml:space="preserve"><value>开启锁帧</value></data>
+  <data name="AddFrameLockStartHint" xml:space="preserve"><value>把指定程序限到设定帧数</value></data>
+  <data name="AddFrameLockStop" xml:space="preserve"><value>关闭锁帧</value></data>
+  <data name="AddFrameLockStopHint" xml:space="preserve"><value>恢复这个程序原来的帧数上限</value></data>
+  <data name="TemplateFrameLockStart" xml:space="preserve"><value>开启锁帧</value></data>
+  <data name="TemplateFrameLockStop" xml:space="preserve"><value>关闭锁帧</value></data>
+  <data name="FrameLockProcess" xml:space="preserve"><value>进程名</value></data>
+  <data name="FrameLockFps" xml:space="preserve"><value>锁定帧数</value></data>
+  <data name="FrameLockHint" xml:space="preserve"><value>帧数 1 到 1000。关闭时恢复原来的上限。播放结束也会恢复。</value></data>
+  <data name="PaletteBasic" xml:space="preserve"><value>基础功能</value></data>
+  <data name="PaletteAdvanced" xml:space="preserve"><value>高级功能</value></data>
+  <data name="PaletteLoop" xml:space="preserve"><value>循环控制</value></data>
+  <data name="ParallelTimeoutMs" xml:space="preserve"><value>超时（毫秒，留空直到成立或播放停止）</value></data>
+  <data name="ParallelStart" xml:space="preserve"><value>并行</value></data>
+  <data name="ParallelEnd" xml:space="preserve"><value>结束并行</value></data>
+  <data name="ParallelBranchEnd" xml:space="preserve"><value>结束{0}</value></data>
+  <data name="TextWhenExpected" xml:space="preserve"><value>期望文字</value></data>
+  <data name="TextWhenContains" xml:space="preserve"><value>包含匹配</value></data>
+  <data name="TextWhenUseRegex" xml:space="preserve"><value>正则</value></data>
+  <data name="TextWhenRegion" xml:space="preserve"><value>区域（左 上 右 下）</value></data>
   <data name="AddStopCurrentHint" xml:space="preserve"><value>退出当前宏调用，外层继续执行</value></data>
   <data name="AddStopIterationHint" xml:space="preserve"><value>跳过本轮剩余步骤；按下/按住循环会进入下一轮（含启动门闩）</value></data>
   <data name="AddStopAllHint" xml:space="preserve"><value>立即终止整次宏播放</value></data>
@@ -201,6 +305,8 @@
   <data name="Action" xml:space="preserve"><value>动作</value></data>
   <data name="MoveMode" xml:space="preserve"><value>移动模式</value></data>
   <data name="TimingMs" xml:space="preserve"><value>时间（毫秒）</value></data>
+  <data name="MouseMoveDuration" xml:space="preserve"><value>平滑时间（毫秒）</value></data>
+  <data name="MouseMoveDurationHint" xml:space="preserve"><value>相对移动会先快后慢地滑过去。超过屏幕的长距离会在边缘回中后继续。填 0 仍会分段发出，看起来像一帧拉枪。绝对坐标仍然瞬间到达。</value></data>
   <data name="LoopCount" xml:space="preserve"><value>循环次数</value></data>
   <data name="PixelIf" xml:space="preserve"><value>像素 IF 条件</value></data>
   <data name="PickColor" xml:space="preserve"><value>取色</value></data>
@@ -227,6 +333,12 @@
   <data name="StopSelectedDatabasesListening" xml:space="preserve"><value>停止选中 {0} 个</value></data>
   <data name="GroupProcessFilter" xml:space="preserve"><value>启用进程</value></data>
   <data name="GroupProcessFilterHelp" xml:space="preserve"><value>仅当前进程在最前面时启用该分组，例如 chrome.exe 或 notepad; chrome。</value></data>
+  <data name="BackgroundWindow" xml:space="preserve"><value>后台执行</value></data>
+  <data name="BackgroundProcess" xml:space="preserve"><value>目标进程</value></data>
+  <data name="BackgroundSelectProcess" xml:space="preserve"><value>选择</value></data>
+  <data name="BackgroundProcessPlaceholder" xml:space="preserve"><value>与数据库启用进程一致</value></data>
+  <data name="BackgroundWindowHelp" xml:space="preserve"><value>留空时使用这个宏所在数据库的启用进程。按键、点击和滚轮投到该窗口，像素和文字也从该窗口截取。窗口可以被挡住，但不能最小化。</value></data>
+  <data name="BackgroundProcessRequired" xml:space="preserve"><value>这个宏在全局数据库里，没有启用进程。请设置后台执行的目标进程。</value></data>
   <data name="ProcessGroupDatabaseSummary" xml:space="preserve"><value>进程组宏库 · {0}</value></data>
   <data name="SelectProcess" xml:space="preserve"><value>进程</value></data>
   <data name="SelectProcessFile" xml:space="preserve"><value>文件</value></data>
@@ -275,6 +387,17 @@
   <data name="DelayMinMs" xml:space="preserve"><value>最小 ms</value></data>
   <data name="DelayMaxMs" xml:space="preserve"><value>最大 ms</value></data>
   <data name="GlobalRuntime" xml:space="preserve"><value>全局运行</value></data>
+  <data name="MacroBasicControl" xml:space="preserve"><value>宏基础控制</value></data>
+  <data name="PrecisionControl" xml:space="preserve"><value>精度控制</value></data>
+  <data name="ZeroGapHold" xml:space="preserve"><value>默认间隔</value></data>
+  <data name="ZeroGapHoldHelp" xml:space="preserve"><value>同一按键的按下和抬起之间没有写延迟时，用这段时间把抬起推后，避免目标把这一下吞掉。单位是微秒。填 0 表示按下和抬起同一时刻发出。默认 10000，也就是 10 毫秒。</value></data>
+  <data name="ModifierChordHold" xml:space="preserve"><value>组合键间隔</value></data>
+  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>Ctrl、Shift、Alt、Win 和字母组成快捷键时，按下到抬起若短于这段时间，会被拉到这段时间。组合键太短时，前台经常还没读到修饰键就已经抬起，快捷键不会生效。默认 30000 微秒，也就是 30 毫秒。宏里写得更长时，仍按写下的时间播放。</value></data>
+  <data name="Microseconds" xml:space="preserve"><value>微秒</value></data>
+  <data name="HoldMicrosecondsInvalid" xml:space="preserve"><value>默认间隔和组合键间隔请填写 0 到 60000000 的整数微秒。</value></data>
+  <data name="ClearHotkey" xml:space="preserve"><value>清除</value></data>
+  <data name="ForceStopConflictsWithColorSample" xml:space="preserve"><value>强制停止键不能和取色快捷键相同。</value></data>
+  <data name="ListeningForceStopConflict" xml:space="preserve"><value>以下宏与强制停止键冲突，未启动监听：{0}</value></data>
   <data name="PrecisionMode" xml:space="preserve"><value>精度模式</value></data>
   <data name="PrecisionBalanced" xml:space="preserve"><value>基础</value></data>
   <data name="PrecisionExtremeDuringPlayback" xml:space="preserve"><value>高性能</value></data>
