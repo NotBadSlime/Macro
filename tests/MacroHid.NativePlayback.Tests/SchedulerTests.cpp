@@ -61,6 +61,32 @@ int main(int argc, char** argv)
         g_testSubmit = FakeInput;
         MhpRunOptions options{}; options.precisionMode = MhpUltraLowJitter; options.qpcFrequency = QueryFrequency();
         options.outlierThresholdUs = 100;
+        if (argc == 2 && std::string(argv[1]) == "--batch-trace")
+        {
+            // BatchTraceEnabled() latches on first use, so this mode runs in its own process.
+            SetEnvironmentVariableW(L"MACROHID_BATCH_TRACE", L"1");
+            auto ms = [&](int value) { return options.qpcFrequency * value / 1000; };
+            Check(MhpWarmEngine(&options, nullptr) == MhpOk, "trace warm");
+            Run traced({{0,0,1,1},{ms(5),0,1,1},{ms(10),0,1,1}}, options);
+            Check(traced.Wait().batchesSubmitted == 3, "trace run");
+            MhpBatchTrace records[3]{}; uint32_t written = 0;
+            Check(MhpGetBatchTrace(traced.handle, records, 3, &written) == MhpOk && written == 3, "trace count");
+            for (uint32_t i = 0; i < 3; i++)
+            {
+                const auto& r = records[i];
+                Check(r.batchIndex == i && r.inputCount == 1 && r.sent == 1 && r.error == 0, "trace identity");
+                Check(r.nominalDue == r.effectiveDue, "no pause or dependency: effective due equals nominal");
+                Check(r.submitBegin >= r.effectiveDue - ms(1) && r.submitEnd >= r.submitBegin, "trace timestamps");
+                if (i) Check(r.nominalDue - records[i - 1].nominalDue == ms(5), "trace due spacing");
+            }
+            MhpBatchTrace two[2]{}; uint32_t total = 0;
+            Check(MhpGetBatchTrace(traced.handle, two, 2, &total) == MhpOk && total == 3 && two[1].batchIndex == 1, "capacity-limited copy reports full count");
+            Check(MhpGetBatchTrace(traced.handle, nullptr, 0, &total) == MhpOk && total == 3, "size query");
+            Check(MhpGetBatchTrace(traced.handle, nullptr, 1, &total) == MhpInvalidArgument, "null buffer rejected");
+            MhpShutdownEngine();
+            std::cout << "PASS: batch trace\n";
+            return 0;
+        }
         if (argc == 6 && std::string(argv[1]) == "--receiver-benchmark")
         {
             options.precisionMode = std::stoi(argv[2]);
@@ -261,6 +287,23 @@ int main(int argc, char** argv)
             std::thread shutdown([] { MhpShutdownEngine(); });
             pending.Wait(MhpCancelled); shutdown.join();
             Check(MhpWarmEngine(&options, nullptr) == MhpOk, "restart");
+        }
+        {
+            // Tracing is off by default: no records may be kept.
+            Run plain({{0,0,1,1}}, options);
+            plain.Wait();
+            uint32_t written = 99;
+            Check(MhpGetBatchTrace(plain.handle, nullptr, 0, &written) == MhpOk && written == 0, "batch trace must be empty when disabled");
+        }
+        {
+            wchar_t self[MAX_PATH]; GetModuleFileNameW(nullptr, self, MAX_PATH);
+            std::wstring command = L"\"" + std::wstring(self) + L"\" --batch-trace";
+            STARTUPINFOW si{sizeof(si)}; PROCESS_INFORMATION pi{};
+            Check(CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi), "launch batch trace mode");
+            WaitForSingleObject(pi.hProcess, 30000);
+            DWORD code = 1; GetExitCodeProcess(pi.hProcess, &code);
+            CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+            Check(code == 0, "batch trace mode failed");
         }
         MhpShutdownEngine();
         std::cout << "PASS: shared scheduler concurrency, pause, cancellation, retention, duplicate prevention, partial failure, shutdown\n";

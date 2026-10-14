@@ -162,6 +162,16 @@ extern "C"
     __declspec(dllexport) void __cdecl MhpDestroyPlan(void* plan);
 
     struct MhpRunTrace { int64_t queued, firstSubmit, lastSubmit, completed; };
+    // Per-batch record (QPC ticks). Collected only when MACROHID_BATCH_TRACE=1 is set before the
+    // first run; nominalDue excludes pause/dependency/chord shifts, effectiveDue includes them.
+    struct MhpBatchTrace
+    {
+        uint32_t batchIndex, inputCount, sent, cpu;
+        int32_t worker, error;
+        int64_t nominalDue, effectiveDue, submitBegin, submitEnd;
+    };
+    // Completed runs only. 'written' receives the total record count so callers can resize and retry.
+    __declspec(dllexport) MhpStatus __cdecl MhpGetBatchTrace(void* run, MhpBatchTrace* records, uint32_t capacity, uint32_t* written);
     __declspec(dllexport) MhpStatus __cdecl MhpPrepareEngine(const MhpRunOptions* options, uint64_t allowedMask, MhpRunStats* stats);
     __declspec(dllexport) MhpStatus __cdecl MhpScanCoresOnMask(uint64_t mask, MhpCoreSample* samples, uint32_t capacity, uint32_t* written, MhpCoreProgressFn progress);
     __declspec(dllexport) MhpStatus __cdecl MhpSubmitPlanAt(void* plan, const MhpRunOptions* options, void* control, int64_t timelineStart, void** run, HANDLE* completion);

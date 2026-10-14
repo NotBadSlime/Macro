@@ -1,5 +1,10 @@
 // Included inside NativePlayback.cpp's anonymous namespace.
 // One next batch per run; no lock is held while waiting or submitting input.
+inline bool BatchTraceEnabled()
+{
+    static const bool enabled = []{ wchar_t v[4]{}; return GetEnvironmentVariableW(L"MACROHID_BATCH_TRACE", v, 4) == 1 && v[0] == L'1'; }();
+    return enabled;
+}
 struct ScheduledRun
 {
     NativePlan* plan;
@@ -11,6 +16,7 @@ struct ScheduledRun
     std::array<CoreChoice, 2> cores{};
     MhpRunStats stats{};
     MhpRunTrace trace{};
+    std::vector<MhpBatchTrace> batchTrace; // reserved up front when tracing; empty otherwise
     MhpStatus status = MhpOk;
     int64_t start;
     int64_t frequency;
@@ -46,6 +52,7 @@ struct ScheduledRun
             late.clear(); loopLate.clear();
         }
         catch (...) { CloseHandle(completed); completed = nullptr; throw; }
+        if (BatchTraceEnabled()) try { batchTrace.reserve(p->batches.size()); } catch (...) { CloseHandle(completed); completed = nullptr; throw; }
         p->references.fetch_add(1);
         stats.selectedCpuSet = UINT32_MAX;
         stats.maxLateBatchIndex = UINT32_MAX;
@@ -121,7 +128,7 @@ class SharedPlaybackScheduler
     }
     // The caller owns inFlight. With exclusive ownership, other workers skip this
     // run and results remain private until its completion event is signalled.
-    void SubmitClaimedBatch(ScheduledRun& run, int worker, bool priorityApplied, bool mmcss, bool exclusive)
+    void SubmitClaimedBatch(ScheduledRun& run, int worker, bool priorityApplied, bool mmcss, bool exclusive, int64_t effectiveDue)
     {
         const size_t index = run.next;
         const auto& batch = run.plan->batches[index];
@@ -148,6 +155,8 @@ class SharedPlaybackScheduler
             run.trace.lastSubmit = actual;
             run.submittedAt[index] = submitted;
             run.late.push_back(lateUs);
+            if (run.batchTrace.capacity() && run.batchTrace.size() < run.batchTrace.capacity())
+                run.batchTrace.push_back({static_cast<uint32_t>(index), batch.inputCount, sent, cpu, worker, static_cast<int32_t>(error), nominalDue, effectiveDue, actual, submitted});
             stats.batchesSubmitted++;
             stats.nativeInputsSubmitted += sent;
             if (sent == batch.inputCount) stats.actionsSubmitted += batch.actionCount;
@@ -207,7 +216,7 @@ class SharedPlaybackScheduler
             }
             while (QueryCounter() < target && generation.load(std::memory_order_acquire) == seen && !run.IsStopped()) PauseProcessor();
             if (generation.load(std::memory_order_acquire) != seen || run.IsStopped() || IsPaused(run.control)) break;
-            SubmitClaimedBatch(run, worker, priorityApplied, mmcss, true);
+            SubmitClaimedBatch(run, worker, priorityApplied, mmcss, true, target);
         }
         {
             std::lock_guard<std::mutex> lock(gate);
@@ -328,7 +337,7 @@ class SharedPlaybackScheduler
                 if (QueryCounter() < claimDue) continue;
                 picked->inFlight = true;
             }
-            SubmitClaimedBatch(*picked, worker, priorityApplied, mmcss != nullptr, false);
+            SubmitClaimedBatch(*picked, worker, priorityApplied, mmcss != nullptr, false, due);
             Notify();
         }
         if (mmcss) AvRevertMmThreadCharacteristics(mmcss);

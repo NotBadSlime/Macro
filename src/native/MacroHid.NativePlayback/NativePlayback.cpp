@@ -3007,6 +3007,16 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpGetRunTrace(void* handle, 
     return MhpOk;
 }
 
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpGetBatchTrace(void* handle, MhpBatchTrace* records, uint32_t capacity, uint32_t* written)
+{
+    auto* owned = static_cast<AsyncPlaybackRun*>(handle);
+    if (!owned || !written || (capacity && !records) || WaitForSingleObject(owned->run->completed, 0) != WAIT_OBJECT_0) return MhpInvalidArgument;
+    const auto& trace = owned->run->batchTrace;
+    *written = static_cast<uint32_t>(trace.size());
+    for (uint32_t i = 0; i < capacity && i < trace.size(); i++) records[i] = trace[i];
+    return MhpOk;
+}
+
 extern "C" __declspec(dllexport) const wchar_t* __cdecl MhpGetLastErrorText()
 {
     return g_lastError.c_str();
