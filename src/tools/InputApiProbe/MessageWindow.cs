@@ -35,15 +35,18 @@ internal sealed class MessageWindow : IDisposable
 
     public IntPtr Handle { get; private set; }
 
+    /// <summary>First exception thrown by the handler on the window thread, if any.</summary>
+    public Exception? HandlerFailure { get; private set; }
+
     /// <param name="onCreated">Runs on the window thread right after creation (RegisterHotKey and raw-input registration must happen there).</param>
     /// <param name="messageOnly">For hidden windows: parent them to HWND_MESSAGE. Set false to get a hidden top-level window.</param>
     public MessageWindow(Func<uint, IntPtr, IntPtr, bool> handler, bool visible, string title,
-        Action<IntPtr>? onCreated = null, bool messageOnly = true)
+        Action<IntPtr>? onCreated = null, bool messageOnly = true, ThreadPriority priority = ThreadPriority.AboveNormal)
     {
         this.handler = handler; this.visible = visible; this.title = title;
         this.onCreated = onCreated; this.messageOnly = messageOnly;
         proc = Proc;
-        thread = new Thread(Run) { IsBackground = true, Name = "ApiProbe-" + title, Priority = ThreadPriority.AboveNormal };
+        thread = new Thread(Run) { IsBackground = true, Name = "ApiProbe-" + title, Priority = priority };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         ready.Wait();
@@ -52,21 +55,31 @@ internal sealed class MessageWindow : IDisposable
 
     private IntPtr Proc(IntPtr hwnd, uint message, IntPtr w, IntPtr l)
     {
-        if (handler(message, w, l)) return IntPtr.Zero;
-        if (message == WmDestroy) PostQuitMessage(0);
+        // Shutdown messages are handled first so a handler that swallows everything cannot block exit.
+        if (message == WmClose) { DestroyWindow(hwnd); return IntPtr.Zero; }
+        if (message == WmDestroy) { PostQuitMessage(0); return IntPtr.Zero; }
+        try
+        {
+            if (handler(message, w, l)) return IntPtr.Zero;
+        }
+        catch (Exception ex)
+        {
+            HandlerFailure ??= ex;
+        }
         return DefWindowProc(hwnd, message, w, l);
     }
 
     private void Run()
     {
-        IntPtr instance = GetModuleHandle(null);
-        var cls = new WindowClass
-        {
-            Size = (uint)Marshal.SizeOf<WindowClass>(), Proc = Marshal.GetFunctionPointerForDelegate(proc), Instance = instance,
-            Cursor = LoadCursor(IntPtr.Zero, new IntPtr(32512)), Background = new IntPtr(6), Name = className
-        };
+        IntPtr instance = IntPtr.Zero;
         try
         {
+            instance = GetModuleHandle(null);
+            var cls = new WindowClass
+            {
+                Size = (uint)Marshal.SizeOf<WindowClass>(), Proc = Marshal.GetFunctionPointerForDelegate(proc), Instance = instance,
+                Cursor = LoadCursor(IntPtr.Zero, new IntPtr(32512)), Background = new IntPtr(6), Name = className
+            };
             if (RegisterClassEx(ref cls) == 0) throw new InvalidOperationException($"RegisterClassEx failed, error={Marshal.GetLastWin32Error()}");
             // 0x10CF0000 = WS_VISIBLE | WS_OVERLAPPEDWINDOW, ex style 8 = WS_EX_TOPMOST (same as the existing receiver).
             Handle = visible
@@ -78,7 +91,7 @@ internal sealed class MessageWindow : IDisposable
         catch (Exception ex)
         {
             failure = ex;
-            if (Handle != IntPtr.Zero) DestroyWindow(Handle);
+            if (Handle != IntPtr.Zero) { DestroyWindow(Handle); Handle = IntPtr.Zero; }
             UnregisterClass(className, instance);
             ready.Set();
             return;
@@ -92,8 +105,9 @@ internal sealed class MessageWindow : IDisposable
     public void Dispose()
     {
         if (Handle != IntPtr.Zero) Native.PostMessage(Handle, WmClose, UIntPtr.Zero, IntPtr.Zero);
-        thread.Join(2000);
+        bool exited = thread.Join(2000);
         GC.KeepAlive(proc);
+        if (!exited) throw new InvalidOperationException($"{title}: window thread did not exit within 2s");
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr GetModuleHandle(string? name);
