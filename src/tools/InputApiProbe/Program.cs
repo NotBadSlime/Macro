@@ -20,6 +20,9 @@ internal static class Program
                     case "capture":
                         return CaptureExperiment.Run(int.Parse(Option("--rounds", "5")), int.Parse(Option("--per-round", "2000")),
                             Option("--output", "tmp/input-api"), args);
+                    case "--receiver":
+                        ReceiverProcess.Run(args[1]);
+                        return 0;
                     default:
                         Console.Error.WriteLine("Usage: InputApiProbe capture|capture-paired|inject|--receiver <name> [options]");
                         return 2;
