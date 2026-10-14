@@ -13,7 +13,13 @@ internal static class ReceiverProcess
 
     public static long RowOffset(int row) => Header + (long)row * Stride;
 
-    public static void Run(string name)
+    private static bool ParentExited(int pid)
+    {
+        try { using var parent = Process.GetProcessById(pid); return parent.HasExited; }
+        catch (ArgumentException) { return true; }
+    }
+
+    public static void Run(string name, int parentPid)
     {
         using var memory = MemoryMappedFile.OpenExisting(name);
         using var view = memory.CreateViewAccessor();
@@ -41,6 +47,6 @@ internal static class ReceiverProcess
             view.Write(Ready, 1);
             Native.SetForegroundWindow(hwnd);
         }, priority: ThreadPriority.Normal);
-        while (view.ReadInt32(Done) == 0) Thread.Sleep(100);
+        while (view.ReadInt32(Done) == 0 && !ParentExited(parentPid)) Thread.Sleep(100);
     }
 }

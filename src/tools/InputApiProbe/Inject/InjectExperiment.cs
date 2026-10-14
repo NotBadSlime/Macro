@@ -30,6 +30,7 @@ internal static class InjectExperiment
 
         var info = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
         info.ArgumentList.Add("--receiver"); info.ArgumentList.Add(name);
+        info.ArgumentList.Add(Environment.ProcessId.ToString());
         using var receiver = Process.Start(info) ?? throw new InvalidOperationException("Cannot start receiver");
         using var csv = new StreamWriter(Path.Combine(output, "inject-samples.csv"), false, new UTF8Encoding(false));
         csv.WriteLine("round,variant,hook,sample,send_down_qpc,send_up_qpc,recv_down_qpc,recv_up_qpc,down_count,up_count,vk,frequency");
@@ -52,10 +53,10 @@ internal static class InjectExperiment
                     var (id, variant, hook) = conditions[(k + round - 1) % conditions.Length];
                     using var hookScope = hook ? new EmptyHook() : null;
                     Thread.Sleep(100);
-                    for (int i = 0; i < Warmup; i++) Sample(view, target, variant, -1);
+                    for (int i = 0; i < Warmup; i++) Sample(view, target, variant, hook ? "ll-empty" : "none", -1);
                     for (int i = 0; i < perBlock; i++)
                     {
-                        var s = Sample(view, target, variant, row);
+                        var s = Sample(view, target, variant, hook ? "ll-empty" : "none", row);
                         long at = ReceiverProcess.RowOffset(row);
                         csv.WriteLine($"{round},{id},{(hook ? "ll-empty" : "none")},{i},{s.SendDown},{s.SendUp}," +
                             $"{view.ReadInt64(at + ReceiverProcess.DownQpc)},{view.ReadInt64(at + ReceiverProcess.UpQpc)}," +
@@ -76,25 +77,29 @@ internal static class InjectExperiment
     }
 
     /// <summary>Sends F24 down, waits for the receiver, sends F24 up, waits for the receiver. row -1 = warm-up (receiver ignores it).</summary>
-    private static (long SendDown, long SendUp) Sample(MemoryMappedViewAccessor view, IntPtr target, InjectVariant variant, int row)
+    private static (long SendDown, long SendUp) Sample(MemoryMappedViewAccessor view, IntPtr target, InjectVariant variant, string hookLabel, int row)
     {
         if (Native.GetForegroundWindow() != target) throw new InvalidOperationException("Receiver lost foreground focus; stopped before further injection.");
         long at = row >= 0 ? ReceiverProcess.RowOffset(row) : 0;
         view.Write(ReceiverProcess.CurrentRow, row);
         long sendDown = Stopwatch.GetTimestamp();
         Native.KeyDown(variant);
-        if (row >= 0) WaitFor(view, at + ReceiverProcess.DownCount); else Thread.Sleep(5);
+        bool downSeen = true, upSeen = true;
+        if (row >= 0) downSeen = WaitFor(view, at + ReceiverProcess.DownCount); else Thread.Sleep(5);
         long sendUp = variant == InjectVariant.MergedPair ? sendDown : Stopwatch.GetTimestamp();
         Native.KeyUp(variant);
-        if (row >= 0) WaitFor(view, at + ReceiverProcess.UpCount); else Thread.Sleep(5);
+        if (row >= 0) upSeen = WaitFor(view, at + ReceiverProcess.UpCount); else Thread.Sleep(5);
         Thread.Sleep(10);
         view.Write(ReceiverProcess.CurrentRow, -1);
+        if (!downSeen || !upSeen)
+            throw new InvalidOperationException($"missing receipt: variant={variant} hook={hookLabel} row={row} ({(downSeen ? "up" : "down")} not received within 100 ms)");
         return (sendDown, sendUp);
     }
 
-    private static void WaitFor(MemoryMappedViewAccessor view, long countAt)
+    private static bool WaitFor(MemoryMappedViewAccessor view, long countAt)
     {
         var wait = Stopwatch.StartNew();
         while (view.ReadInt32(countAt) == 0 && wait.ElapsedMilliseconds < 100) Thread.Yield();
+        return view.ReadInt32(countAt) != 0;
     }
 }

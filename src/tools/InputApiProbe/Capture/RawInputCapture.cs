@@ -33,7 +33,8 @@ internal sealed class RawInputCapture(ushort vk) : ICaptureStrategy
         if (message != WmInput) return false;
         long tick = Stopwatch.GetTimestamp();
         uint size = (uint)buffer.Length;
-        if (GetRawInputData(l, RidInput, buffer, ref size, (uint)HeaderSize) > 0)
+        uint r = GetRawInputData(l, RidInput, buffer, ref size, (uint)HeaderSize);
+        if (r != uint.MaxValue && r >= HeaderSize + 8)
         {
             ushort flags = BitConverter.ToUInt16(buffer, HeaderSize + 2);  // RAWKEYBOARD.Flags, bit 0 = RI_KEY_BREAK
             ushort key = BitConverter.ToUInt16(buffer, HeaderSize + 6);    // RAWKEYBOARD.VKey

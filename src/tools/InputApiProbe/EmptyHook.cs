@@ -35,7 +35,7 @@ internal sealed class EmptyHook : IDisposable
     public void Dispose()
     {
         Native.PostThreadMessage(threadId, 0x12, UIntPtr.Zero, IntPtr.Zero); // WM_QUIT
-        thread.Join(2000);
+        if (!thread.Join(2000)) throw new InvalidOperationException("Empty hook thread did not stop");
         GC.KeepAlive(proc);
     }
 

@@ -36,6 +36,12 @@ internal static class CapturePairedExperiment
             }
             catch (Exception ex) { Console.Error.WriteLine($"{strategy.Id}: not armed ({ex.Message})"); strategy.Dispose(); }
         }
+        if (!ticks.ContainsKey("ll-hook"))
+        {
+            foreach (var strategy in armed) strategy.Dispose();
+            Console.Error.WriteLine("baseline ll-hook not armed");
+            return 1;
+        }
         try
         {
             Thread.Sleep(300);
@@ -43,9 +49,9 @@ internal static class CapturePairedExperiment
             var wait = Stopwatch.StartNew();
             while (wait.Elapsed.TotalSeconds < 300)
             {
-                int first = 0;
-                if (ticks.TryGetValue("ll-hook", out var llList)) lock (llList) first = llList.Count;
-                if (first >= samples) break;
+                int most = 0;
+                foreach (var list in ticks.Values) lock (list) most = Math.Max(most, list.Count);
+                if (most >= samples) break;
                 Thread.Sleep(50);
             }
             Thread.Sleep(500);

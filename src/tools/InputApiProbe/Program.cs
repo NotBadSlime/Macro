@@ -24,10 +24,10 @@ internal static class Program
                         return InjectExperiment.Run(int.Parse(Option("--rounds", "5")), int.Parse(Option("--per-block", "2000")),
                             Option("--output", "tmp/input-api"), args);
                     case "--receiver":
-                        ReceiverProcess.Run(args[1]);
+                        ReceiverProcess.Run(args[1], int.Parse(args[2]));
                         return 0;
                     default:
-                        Console.Error.WriteLine("Usage: InputApiProbe capture|capture-paired|inject|--receiver <name> [options]");
+                        Console.Error.WriteLine("Usage: InputApiProbe capture|capture-paired|inject|--receiver <name> <parentPid> [options]");
                         return 2;
                 }
             }

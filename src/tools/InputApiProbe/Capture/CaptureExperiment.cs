@@ -80,7 +80,7 @@ internal static class CaptureExperiment
             for (int i = 0; i < perRound; i++)
             {
                 var (send, capture, count) = probe.Fire();
-                if (count == 0) lost++;
+                if (count == 0 || capture == 0) lost++;
                 samples.WriteLine($"{round},{id},{i},{send},{capture},{count},{Stopwatch.Frequency}");
                 done++;
             }
