@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using MacroHid.Core;
+using MacroHid.Runtime;
 
 namespace MacroStudio;
 
@@ -24,6 +25,12 @@ public sealed class HotkeyTriggeredEventArgs : EventArgs
 public sealed class GlobalKeyboardHook : IDisposable
 {
     private long callbackQpc;
+
+    /// <summary>Hook-callback self time (entry to just before CallNextHookEx). Off unless MACROHID_HOOK_SELFTIME=1.</summary>
+    public HookSelfTimeRecorder SelfTime { get; } = new()
+    {
+        Enabled = Environment.GetEnvironmentVariable("MACROHID_HOOK_SELFTIME") == "1"
+    };
 #if MACROHID_HOTKEY_PROBE
     // Only compiled into the standalone measurement tool. Production continues
     // to reject injected input, including this tag.
@@ -158,6 +165,7 @@ public sealed class GlobalKeyboardHook : IDisposable
     public void Dispose()
     {
         Stop();
+        if (SelfTime.Enabled) AppLog.Info("HookSelfTime", SelfTime.Snapshot(System.Diagnostics.Stopwatch.Frequency).ToString());
         hookDispatcher?.BeginInvokeShutdown(System.Windows.Threading.DispatcherPriority.Send);
     }
 
@@ -336,11 +344,13 @@ public sealed class GlobalKeyboardHook : IDisposable
 
                 if (ShouldSwallowColorSampleKey(data.VirtualKeyCode, data.ScanCode, (data.Flags & LlkHfExtended) != 0))
                 {
+                    SelfTime.Record(callbackQpc, System.Diagnostics.Stopwatch.GetTimestamp());
                     return new IntPtr(1);
                 }
             }
         }
 
+        SelfTime.Record(callbackQpc, System.Diagnostics.Stopwatch.GetTimestamp());
 #if MACROHID_HOTKEY_PROBE
         var result = CallNextHookEx(hookHandle, nCode, wParam, lParam);
         if (observeOutputReturn) ProbeOutputForwarded?.Invoke(System.Diagnostics.Stopwatch.GetTimestamp());
@@ -375,6 +385,7 @@ public sealed class GlobalKeyboardHook : IDisposable
             }
         }
 
+        SelfTime.Record(callbackQpc, System.Diagnostics.Stopwatch.GetTimestamp());
         return CallNextHookEx(mouseHookHandle, nCode, wParam, lParam);
     }
 

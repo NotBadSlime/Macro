@@ -86,6 +86,25 @@ internal static class PerformanceProfileTests
             && (int)values[1]! == (int)PlaybackTraceStage.Hotkey && (long)values[2]! == now
             && (long)values[3]! == Stopwatch.Frequency, "trace lost raw QPC or run identity");
     }
+    internal static void HookSelfTime()
+    {
+        var recorder = new HookSelfTimeRecorder(100);
+        recorder.Record(0, 5);
+        Check(recorder.TotalRecorded == 0, "disabled recorder must not record");
+        recorder.Enabled = true;
+        // 1 tick == 1us at a 1 MHz frequency. Record 1..150: the ring keeps the newest 100 (51..150).
+        for (int i = 1; i <= 150; i++) recorder.Record(0, i);
+        var stats = recorder.Snapshot(1_000_000);
+        Check(stats.Count == 100 && stats.MaxUs == 150 && stats.P50Us == 100 && stats.P99Us == 149 && stats.P999Us == 150, "ring or nearest-rank percentiles: " + stats);
+        recorder.Reset();
+        Check(recorder.Snapshot(1_000_000).Count == 0, "reset");
+        recorder.Record(10, 4);
+        Check(recorder.Snapshot(1_000_000).MaxUs == 0, "negative span must clamp to zero");
+        recorder.Record(0, 1); recorder.Record(0, 1);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 10_000; i++) recorder.Record(0, i);
+        Check(GC.GetAllocatedBytesForCurrentThread() - before == 0, "Record must not allocate");
+    }
     private sealed class TraceListener : System.Diagnostics.Tracing.EventListener
     {
         internal readonly System.Collections.Concurrent.ConcurrentQueue<object?[]> Values = new();

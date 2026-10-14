@@ -44,6 +44,7 @@ var tests = new (string Name, Action Body)[]
     ("Compact BGRA frames retain leases and reduce conversion allocation", PerformanceProfileTests.CompactPixels),
     ("Integral NCC preserves threshold decisions and winning coordinates", PerformanceProfileTests.MatchingBoundaries),
     ("Playback trace retains raw QPC timestamps and run identity", PerformanceProfileTests.TraceEvents),
+    ("Hook self-time ring is allocation-free and reports nearest-rank percentiles", PerformanceProfileTests.HookSelfTime),
     ("Scheduling lifecycle preserves running definitions and awaits disposal", SchedulingOptimizationTests.Lifecycle),
     ("Scheduling workers isolate contexts and cancellation wakes waits", SchedulingOptimizationTests.CancellationAndWorkers),
     ("Editor counting and log backpressure remain bounded", SchedulingOptimizationTests.CountingAndLogBackpressure),
