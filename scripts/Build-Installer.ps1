@@ -72,6 +72,19 @@ function Publish-Checked([string]$Project, [string]$Destination, [bool]$SelfCont
     if ($LASTEXITCODE -ne 0) { throw "Publish failed for $Project (exit $LASTEXITCODE)." }
 }
 
+function Copy-PublicDocumentation([string]$Source, [string]$Destination) {
+    Assert-ArtifactPath $Destination
+    $sourcePrefix = [IO.Path]::GetFullPath($Source).TrimEnd('\') + '\'
+    foreach ($file in Get-ChildItem -LiteralPath $Source -Recurse -File) {
+        $relative = $file.FullName.Substring($sourcePrefix.Length).Replace('\', '/')
+        if ($relative -in @('unlocker-target-cards.md', 'fufu-target-analysis.md') -or
+            $relative.StartsWith('research/evidence-', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $target = Join-Path $Destination $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+    }
+}
+
 function Copy-NativePlaybackDll([string]$DllPath, [string]$DestinationRoot) {
     foreach ($component in @("MacroStudio", "MacroRunner", "LatencyProbe")) {
         $destination = Join-Path $DestinationRoot $component
@@ -190,7 +203,7 @@ try {
 
     Copy-DirectoryIfExists (Join-Path $repoRoot "scripts") (Join-Path $inputRoot "scripts")
     Copy-DirectoryIfExists (Join-Path $repoRoot "samples") (Join-Path $inputRoot "samples")
-    Copy-DirectoryIfExists (Join-Path $repoRoot "docs") (Join-Path $inputRoot "docs")
+    Copy-PublicDocumentation (Join-Path $repoRoot "docs") (Join-Path $inputRoot "docs")
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $inputRoot -Force
     Remove-InstallerDebugArtifacts $inputRoot
 

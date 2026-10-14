@@ -22,3 +22,6 @@ TestResults/
 /build/
 /.workbuddy-ai/
 /docs/research/evidence-*/
+/docs/unlocker-target-cards.md
+/docs/fufu-target-analysis.md
+!src/shared/MacroHid.Runtime/WeakNet/Native/WinDivert64.sys
