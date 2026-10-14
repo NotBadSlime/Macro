@@ -247,6 +247,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     private MacroDocument? cachedDocument;
     private PlaybackExecutionOptions? cachedOptions;
     private CompiledPlaybackPlan? cachedCompiledPlan;
+    // Derived from the same document and resolver as the compiled plan, so it shares that cache's lifetime.
+    private PlaybackInputSafetyPlan? cachedSafetyPlan;
     private NativePlaybackPreparedPlan? cachedNativePlan;
     private MacroDocument? warmedDocument;
     private bool nativePreparationAvailable;
@@ -303,12 +305,14 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             waitDurationSampler: wait => wait.Duration, // Prepare a skeleton; never consume random samples here.
             pressFloor: options.PressFloor);
         var nativePlan = TryCreateNativePreparedPlan(document, options, compiledPlan);
+        var safetyPlan = PlaybackInputSafetyPlan.Create(document, macroResolver);
         lock (preparedPlanGate)
         {
             cachedNativePlan?.Dispose();
             cachedDocument = document;
             cachedOptions = options;
             cachedCompiledPlan = compiledPlan;
+            cachedSafetyPlan = safetyPlan;
             cachedNativePlan = nativePlan;
         }
     }
@@ -379,7 +383,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         using var callScope = new ConditionalMacroCallScope(document);
         using var conditionPlans = new ConditionActionPlanCache(ReferenceEquals(conditionPreparedDocument, document) && conditionPreparedOptions == options ? preparedConditions : null);
         cancellationToken = runCancellation.Token;
-        var safetyPlan = PlaybackInputSafetyPlan.Create(document, macroResolver);
+        var hasCachedPlan = TryGetPreparedPlan(document, options, out var cachedPlan, out var cachedPreparedPlan, out var cachedSafetyPlan);
+        var safetyPlan = cachedSafetyPlan ?? PlaybackInputSafetyPlan.Create(document, macroResolver);
         var completedIterationReleaseActions = options.Mode == PlaybackMode.FixedCount
             ? Array.Empty<InputAction>()
             : safetyPlan.IterationBoundaryReleaseActions;
@@ -407,7 +412,6 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         var sequence = 1u;
         using var conditionEvaluator = new CompositeConditionEvaluator(livePixelEvaluator);
         var timingRecorder = new PlaybackTimingRecorder();
-        var hasCachedPlan = TryGetPreparedPlan(document, options, out var cachedPlan, out var cachedPreparedPlan);
         var plan = cachedPlan ?? CompiledPlaybackPlan.Create(
                 document,
                 qpcFrequency,
@@ -862,7 +866,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         MacroDocument document,
         PlaybackExecutionOptions options,
         out CompiledPlaybackPlan? compiledPlan,
-        out NativePlaybackPreparedPlan? nativePlan)
+        out NativePlaybackPreparedPlan? nativePlan,
+        out PlaybackInputSafetyPlan? safetyPlan)
     {
         lock (preparedPlanGate)
         {
@@ -872,12 +877,14 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             {
                 compiledPlan = cachedCompiledPlan;
                 nativePlan = cachedNativePlan;
+                safetyPlan = cachedSafetyPlan;
                 return true;
             }
         }
 
         compiledPlan = null;
         nativePlan = null;
+        safetyPlan = null;
         return false;
     }
 
@@ -888,6 +895,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             cachedNativePlan?.Dispose();
             cachedNativePlan = null;
             cachedCompiledPlan = null;
+            cachedSafetyPlan = null;
             cachedDocument = null;
             cachedOptions = null;
         }

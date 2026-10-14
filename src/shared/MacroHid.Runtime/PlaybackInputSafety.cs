@@ -6,10 +6,15 @@ internal sealed record PlaybackInputSafetyPlan(
     IReadOnlyList<InputAction> EmergencyReleaseActions,
     IReadOnlyList<InputAction> IterationBoundaryReleaseActions)
 {
+    private static long createdCount;
+    // Test seam: lets tests prove a prepared executor derives the plan once instead of per run.
+    internal static long CreatedCount => Interlocked.Read(ref createdCount);
+
     public static PlaybackInputSafetyPlan Create(
         MacroDocument document,
         Func<string, MacroDocument?>? macroResolver)
     {
+        Interlocked.Increment(ref createdCount);
         var emergency = new ReleaseAccumulator();
         var visiting = new HashSet<MacroDocument>(ReferenceEqualityComparer.Instance);
         CollectEmergency(document, macroResolver, emergency, visiting, depth: 0);

@@ -158,6 +158,51 @@ internal static class PerformanceProfileTests
         public void Submit(uint sequence, InputAction action) { }
         public InputSubmissionStats? GetStats() => null;
     }
+    internal static void PreparedSafetyPlanIsReused()
+    {
+        var document = new MacroDocument(1, "safety-cache", [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromMilliseconds(1)),
+            new KeyStep(KeyActionKind.Up, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+        var options = new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Skip, false, PrecisionMode.Balanced);
+
+        using var unprepared = new MacroPlaybackExecutor(new RecordingSink());
+        long before = PlaybackInputSafetyPlan.CreatedCount;
+        for (int i = 0; i < 3; i++) unprepared.RunAsync(document, options, CancellationToken.None).GetAwaiter().GetResult();
+        Check(PlaybackInputSafetyPlan.CreatedCount - before == 3, "an unprepared executor derives the safety plan per run (counter sanity)");
+
+        using var prepared = new MacroPlaybackExecutor(new RecordingSink());
+        prepared.Prepare(document, options);
+        before = PlaybackInputSafetyPlan.CreatedCount;
+        for (int i = 0; i < 3; i++) prepared.RunAsync(document, options, CancellationToken.None).GetAwaiter().GetResult();
+        Check(PlaybackInputSafetyPlan.CreatedCount == before, "a prepared executor must reuse the safety plan: " + (PlaybackInputSafetyPlan.CreatedCount - before));
+
+        // Reuse must not weaken the guarantee: cancelling while a key is held still releases it.
+        var held = new MacroDocument(2, "held", [
+            new KeyStep(KeyActionKind.Down, HidKey.A, HidModifier.None, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromSeconds(30)),
+            new KeyStep(KeyActionKind.Up, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+        var sink = new RecordingSink();
+        using var cancelling = new MacroPlaybackExecutor(sink);
+        cancelling.Prepare(held, options);
+        using var cancellation = new CancellationTokenSource();
+        var run = cancelling.RunAsync(held, options, cancellation.Token);
+        Check(sink.FirstAction.Wait(5000), "key down was never submitted");
+        cancellation.Cancel();
+        try { run.GetAwaiter().GetResult(); } catch (OperationCanceledException) { }
+        var actions = sink.Snapshot();
+        Check(actions.Count >= 2 && actions[0] is KeyInputAction { Kind: KeyActionKind.Down, Key: HidKey.A }
+            && actions[^1] is KeyInputAction { Kind: KeyActionKind.Up, Key: HidKey.A }, "held key must be released after cancel");
+    }
+    private sealed class RecordingSink : IMacroInputSink
+    {
+        private readonly List<InputAction> actions = [];
+        public readonly ManualResetEventSlim FirstAction = new();
+        public bool IsAvailable => true;
+        public void Submit(uint sequence, InputAction action) { lock (actions) actions.Add(action); FirstAction.Set(); }
+        public InputSubmissionStats? GetStats() => null;
+        public List<InputAction> Snapshot() { lock (actions) return [.. actions]; }
+    }
     internal static void HookSelfTime()
     {
         var recorder = new HookSelfTimeRecorder(100);

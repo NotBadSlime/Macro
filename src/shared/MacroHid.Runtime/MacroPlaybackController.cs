@@ -151,7 +151,6 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
         Interlocked.Exchange(ref runId, Interlocked.Increment(ref nextRunId));
         var completion = new TaskCompletionSource<PlaybackRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         activeRun = completion.Task;
-        AppLog.Info("Playback", $"Start run={RunId}; macro={currentDocument.Name}; mode={options.Mode}");
         long previousTrace = PlaybackTrace.Run.Value;
         PlaybackTrace.Run.Value = RunId;
         try
@@ -159,6 +158,8 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
             PlaybackTrace.Mark(PlaybackTraceStage.Hotkey, callbackQpc);
             PlaybackTrace.Mark(PlaybackTraceStage.Dispatch);
             _ = RunAndResetAsync(currentExecutor, currentDocument, options, cancellation, completion);
+            // After the hand-off: the worker is already starting, so logging no longer sits on the trigger path.
+            AppLog.Info("Playback", $"Start run={RunId}; macro={currentDocument.Name}; mode={options.Mode}");
         }
         finally { PlaybackTrace.Run.Value = previousTrace; }
     }
