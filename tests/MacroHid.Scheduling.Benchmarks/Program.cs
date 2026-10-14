@@ -38,11 +38,15 @@ for(int i=0;i<rounds;i++) {
 }
 process.Refresh();
 foreach(var pair in new[]{("startup",startup),("parallelSkew",skew),("stop",stops),("3msIntervalAbsoluteError",jitter)}) {
- var values=pair.Item2.Order().ToArray(); Console.WriteLine($"{pair.Item1}: p50={values[(int)Math.Ceiling(values.Length*.5)-1]:F4}ms p95={values[(int)Math.Ceiling(values.Length*.95)-1]:F4}ms p99={values[(int)Math.Ceiling(values.Length*.99)-1]:F4}ms");
+ var values=pair.Item2.Order().ToArray();
+ Console.WriteLine($"{pair.Item1}: n={values.Length} p50={Rank(values,.5):F4}ms p95={Rank(values,.95):F4}ms p99={Rank(values,.99):F4}ms p99.9={Rank(values,.999):F4}ms max={values[^1]:F4}ms >0.1ms={Over(values,.1):P2} >0.25ms={Over(values,.25):P2} >1ms={Over(values,1):P2}");
 }
 GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); process.Refresh();
 Console.WriteLine($"handles before={handlesBefore} after={process.HandleCount}; threads={process.Threads.Count}; privateMiB={process.PrivateMemorySize64/1048576.0:F2}");
 static double Ms(long ticks)=>ticks*1000.0/Stopwatch.Frequency;
+// nearest-rank on an ascending array; p99.9 equals max until n >= 1000.
+static double Rank(double[] sorted,double p)=>sorted[Math.Max(1,(int)Math.Ceiling(sorted.Length*p))-1];
+static double Over(double[] sorted,double thresholdMs)=>sorted.Count(v=>v>thresholdMs)/(double)sorted.Length;
 sealed class Probe : IMacroInputSink {
  public readonly System.Collections.Concurrent.ConcurrentQueue<long> Times=new();
  public readonly ManualResetEventSlim Started=new();
