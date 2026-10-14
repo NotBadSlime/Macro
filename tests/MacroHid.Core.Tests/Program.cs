@@ -45,6 +45,8 @@ var tests = new (string Name, Action Body)[]
     ("Integral NCC preserves threshold decisions and winning coordinates", PerformanceProfileTests.MatchingBoundaries),
     ("Playback trace retains raw QPC timestamps and run identity", PerformanceProfileTests.TraceEvents),
     ("Foreground process name is cached per window and process id and never serves failures", PerformanceProfileTests.ForegroundNameCache),
+    ("Precision warm lease keeps shared scopes across runs without touching thread state", PerformanceProfileTests.PrecisionWarmLease),
+    ("Controller exposes the precision of its current definition", PerformanceProfileTests.ControllerExposesPrecision),
     ("Hook self-time ring is allocation-free and reports nearest-rank percentiles", PerformanceProfileTests.HookSelfTime),
     ("Scheduling lifecycle preserves running definitions and awaits disposal", SchedulingOptimizationTests.Lifecycle),
     ("Scheduling workers isolate contexts and cancellation wakes waits", SchedulingOptimizationTests.CancellationAndWorkers),

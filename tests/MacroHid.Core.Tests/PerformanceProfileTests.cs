@@ -105,6 +105,59 @@ internal static class PerformanceProfileTests
         var throwing = new MacroStudio.Services.ForegroundProcessNameCache(() => throw new InvalidOperationException(), _ => "x");
         Check(throwing.Get() == null, "query failure returns null");
     }
+    internal static void PrecisionWarmLease()
+    {
+        Check(PrecisionPlaybackContext.ActiveUsers == 0, "no users at start");
+        using (var lease = PrecisionPlaybackContext.AcquireWarmLease())
+        {
+            Check(PrecisionPlaybackContext.ActiveUsers == 1, "lease counts as a user");
+            var run = PrecisionPlaybackContext.Enter(PrecisionMode.UltraLowJitter);
+            Check(PrecisionPlaybackContext.ActiveUsers == 2, "run adds a user");
+            run.Dispose();
+            Check(PrecisionPlaybackContext.ActiveUsers == 1, "a finished run must leave the lease holding the shared scopes");
+        }
+        Check(PrecisionPlaybackContext.ActiveUsers == 0, "lease release");
+        var second = PrecisionPlaybackContext.AcquireWarmLease();
+        var overlapping = PrecisionPlaybackContext.Enter(PrecisionMode.ExtremeDuringPlayback);
+        second.Dispose(); second.Dispose();
+        Check(PrecisionPlaybackContext.ActiveUsers == 1, "double dispose must release once and the run keeps the scopes");
+        overlapping.Dispose();
+        Check(PrecisionPlaybackContext.ActiveUsers == 0, "all released");
+        // Per-thread and per-process state (priority, affinity, GC mode) is a run concern, not a lease concern.
+        var before = System.Threading.Thread.CurrentThread.Priority;
+        using (PrecisionPlaybackContext.AcquireWarmLease())
+            Check(System.Threading.Thread.CurrentThread.Priority == before, "lease must not change thread priority");
+        using (PrecisionPlaybackContext.AcquireWarmLease())
+        {
+            var enter = new double[200];
+            for (int i = 0; i < enter.Length; i++)
+            {
+                long start = Stopwatch.GetTimestamp();
+                var context = PrecisionPlaybackContext.Enter(PrecisionMode.UltraLowJitter);
+                enter[i] = (Stopwatch.GetTimestamp() - start) * 1e6 / Stopwatch.Frequency;
+                context.Dispose();
+            }
+            Array.Sort(enter);
+            Console.WriteLine($"METRIC Enter with warm lease p50={enter[100]:F1} us p99={enter[198]:F1} us");
+        }
+    }
+    internal static void ControllerExposesPrecision()
+    {
+        var document = McrxParser.Parse("{\"steps\":[{\"type\":\"wait\",\"ms\":1}]}");
+        var options = new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Skip, false, PrecisionMode.UltraLowJitter);
+        using var executor = new MacroPlaybackExecutor(new NullSink());
+        using var controller = new MacroPlaybackController(document, executor, options);
+        Check(controller.Precision == PrecisionMode.UltraLowJitter, "initial precision");
+        using var next = new MacroPlaybackExecutor(new NullSink());
+        controller.UpdateDefinition(document, next, options with { Precision = PrecisionMode.Balanced });
+        Check(controller.Precision == PrecisionMode.Balanced, "precision follows UpdateDefinition");
+    }
+    private sealed class NullSink : IMacroInputSink
+    {
+        public bool IsAvailable => true;
+        public void Submit(uint sequence, InputAction action) { }
+        public InputSubmissionStats? GetStats() => null;
+    }
     internal static void HookSelfTime()
     {
         var recorder = new HookSelfTimeRecorder(100);

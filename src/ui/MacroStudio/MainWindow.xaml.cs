@@ -2214,6 +2214,7 @@ public partial class MainWindow : Window
             pair => new HotkeyRoute(pair.Value, listeningGroupProcessFilters.GetValueOrDefault(pair.Key, ""),
                 listeningMacroNames.GetValueOrDefault(pair.Key, ""), runtimePrecisionSettings.BackgroundWindow)));
         listening = listeningControllers.Count > 0;
+        UpdatePrecisionWarmLease();
         if (bindings.Count == 0) { keyboardHook?.Stop(); return; }
         if (keyboardHook is null)
         {

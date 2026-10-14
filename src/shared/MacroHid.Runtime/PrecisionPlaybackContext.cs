@@ -70,6 +70,53 @@ public sealed class PrecisionPlaybackContext : IDisposable
         this.mmcssScope = mmcssScope;
     }
 
+    internal static int ActiveUsers { get { lock (ProcessStateGate) return allUsers; } }
+
+    /// <summary>
+    /// Keeps only the process-wide timer resolution and power-throttling opt-out alive while no run is active.
+    /// An isolated hotkey run otherwise pays for switching both on (measured 20-130us) before its first input.
+    /// Thread priority, affinity and GC mode stay per-run. Costs power while held, so callers should hold it only
+    /// while a low-jitter macro can actually be triggered.
+    /// </summary>
+    public static IDisposable AcquireWarmLease()
+    {
+        lock (ProcessStateGate)
+        {
+            BeginSharedScopesIfIdle();
+            allUsers++;
+            return new WarmLease();
+        }
+    }
+
+    private static void BeginSharedScopesIfIdle()
+    {
+        if (OperatingSystem.IsWindows() && allUsers == 0)
+        {
+            sharedTimerScope = TimerResolutionScope.TryBeginHighResolution();
+            sharedPowerScope = ProcessPowerThrottlingScope.TryBegin();
+        }
+    }
+
+    private static void EndSharedScopes()
+    {
+        sharedPowerScope?.Dispose(); sharedPowerScope = null;
+        sharedTimerScope?.Dispose(); sharedTimerScope = null;
+    }
+
+    private sealed class WarmLease : IDisposable
+    {
+        private int released;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref released, 1) != 0) return;
+            lock (ProcessStateGate)
+            {
+                if (--allUsers == 0) EndSharedScopes();
+            }
+        }
+    }
+
     public static PrecisionPlaybackContext Enter(PrecisionMode mode)
     {
         lock (ProcessStateGate) return EnterCore(mode);
@@ -93,14 +140,7 @@ public sealed class PrecisionPlaybackContext : IDisposable
         var processPriorityBoostCaptured = false;
         var previousProcessPriorityBoostDisabled = false;
 
-        if (OperatingSystem.IsWindows())
-        {
-            if (allUsers == 0)
-            {
-                sharedTimerScope = TimerResolutionScope.TryBeginHighResolution();
-                sharedPowerScope = ProcessPowerThrottlingScope.TryBegin();
-            }
-        }
+        BeginSharedScopesIfIdle();
 
         if (mode is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter)
         {
@@ -234,11 +274,7 @@ public sealed class PrecisionPlaybackContext : IDisposable
         }
 
         mmcssScope?.Dispose();
-        if (--allUsers == 0)
-        {
-            sharedPowerScope?.Dispose(); sharedPowerScope = null;
-            sharedTimerScope?.Dispose(); sharedTimerScope = null;
-        }
+        if (--allUsers == 0) EndSharedScopes();
         timerScope?.Dispose();
 
         if (owner?.previousProcessPriority is { } processPriority)

@@ -78,6 +78,7 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
     private volatile PlaybackStatus status;
     public PlaybackStatus Status => status;
     public long RunId => Interlocked.Read(ref runId);
+    public PrecisionMode Precision { get { lock (gate) return executionOptions.Precision; } }
     public Exception? LastError { get; private set; }
     private PlaybackMode activeMode;
 

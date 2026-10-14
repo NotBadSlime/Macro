@@ -39,6 +39,18 @@ public partial class MainWindow
         public void Dispose() => Interlocked.Exchange(ref completion, null)?.Invoke();
     }
     private sealed record HotkeyRoute(MacroPlaybackController Controller, string Filter, string Name, bool Background);
+
+    // Held only while a low-jitter hotkey macro can fire, so its first run skips switching timer resolution and
+    // power throttling on. UI thread only. MACROHID_NO_PRECISION_WARM=1 disables it (power-sensitive setups).
+    private IDisposable? precisionWarmLease;
+    private static readonly bool PrecisionWarmDisabled = Environment.GetEnvironmentVariable("MACROHID_NO_PRECISION_WARM") == "1";
+    private void UpdatePrecisionWarmLease()
+    {
+        var needed = !PrecisionWarmDisabled && !shutdownStarted && Volatile.Read(ref hotkeyRoutes).Values
+            .Any(route => route.Controller.Precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter);
+        if (needed && precisionWarmLease is null) precisionWarmLease = PrecisionPlaybackContext.AcquireWarmLease();
+        else if (!needed && precisionWarmLease is not null) { precisionWarmLease.Dispose(); precisionWarmLease = null; }
+    }
     private sealed record PreparedDefinition(string Fingerprint, MacroPlaybackExecutor Executor);
 
     private (Func<string, MacroDocument?> Resolver, string Fingerprint) CaptureResolver(MacroDocument root, string? rootId)
@@ -130,6 +142,7 @@ public partial class MainWindow
         if (shutdownStarted) return;
         if (autoSaveTimer.IsEnabled && jsonValid) PerformDebouncedAutoSave();
         shutdownStarted = true;
+        UpdatePrecisionWarmLease();
         listeningUpdateGeneration++;
         RequestAllStops();
         autoSaveTimer.Stop();
