@@ -203,6 +203,30 @@ internal static class PerformanceProfileTests
         public InputSubmissionStats? GetStats() => null;
         public List<InputAction> Snapshot() { lock (actions) return [.. actions]; }
     }
+    internal static void PathWarmupLeavesRuntimeStatusAlone()
+    {
+        var document = new MacroDocument(3, "after-warmup", [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+        var options = new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Skip, false, PrecisionMode.Balanced);
+        using (var seed = new MacroPlaybackExecutor(new RecordingSink()))
+            seed.RunAsync(document, options, CancellationToken.None).GetAwaiter().GetResult();
+        var backend = PlaybackRuntimeStatus.ActualBackend;
+        var reason = PlaybackRuntimeStatus.FallbackReason;
+        Check(backend == "managed", "seed run reports its backend: " + backend);
+        PlaybackRuntimeStatus.ReportBackend("native-shared", "sentinel");
+
+        Check(PlaybackPathWarmup.Run(rounds: 2) == 2, "both warm-up rounds must complete");
+        Check(PlaybackRuntimeStatus.ActiveRuns == 0, "warm-up must not leave an active run");
+        Check(PlaybackRuntimeStatus.ActualBackend == "native-shared" && PlaybackRuntimeStatus.FallbackReason == "sentinel",
+            "warm-up must not overwrite the reported backend: " + PlaybackRuntimeStatus.ActualBackend);
+
+        // The suppression is scoped to the warm-up, not sticky: a real run afterwards reports normally.
+        using (var real = new MacroPlaybackExecutor(new RecordingSink()))
+            real.RunAsync(document, options, CancellationToken.None).GetAwaiter().GetResult();
+        Check(PlaybackRuntimeStatus.ActualBackend == "managed", "real runs after warm-up must report: " + PlaybackRuntimeStatus.ActualBackend);
+        PlaybackRuntimeStatus.ReportBackend(backend, reason);
+        // Queueing is idempotent and never throws.
+        PlaybackPathWarmup.QueueRun(); PlaybackPathWarmup.QueueRun();
+    }
     internal static void HookSelfTime()
     {
         var recorder = new HookSelfTimeRecorder(100);

@@ -48,6 +48,7 @@ var tests = new (string Name, Action Body)[]
     ("Precision warm lease keeps shared scopes across runs without touching thread state", PerformanceProfileTests.PrecisionWarmLease),
     ("Controller exposes the precision of its current definition", PerformanceProfileTests.ControllerExposesPrecision),
     ("Prepared executors reuse the safety plan and still release held keys on cancel", PerformanceProfileTests.PreparedSafetyPlanIsReused),
+    ("Path warm-up completes without touching reported runtime status", PerformanceProfileTests.PathWarmupLeavesRuntimeStatusAlone),
     ("Hook self-time ring is allocation-free and reports nearest-rank percentiles", PerformanceProfileTests.HookSelfTime),
     ("Scheduling lifecycle preserves running definitions and awaits disposal", SchedulingOptimizationTests.Lifecycle),
     ("Scheduling workers isolate contexts and cancellation wakes waits", SchedulingOptimizationTests.CancellationAndWorkers),

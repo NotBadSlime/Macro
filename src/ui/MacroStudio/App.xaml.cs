@@ -33,6 +33,7 @@ public partial class App : Application
             NativePlaybackWarmup.QueueWarmUpForPrecision(
                 runtimePrecision.Precision,
                 runtimePrecision.AffinityMask);
+            PlaybackPathWarmup.QueueRun();
         }
         catch (Exception ex)
         {
