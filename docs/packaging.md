@@ -18,4 +18,6 @@
 
 可选参数：`-Version 2.0.0`、`-Configuration Release`、`-Launch`、`-InstallInno`。`-OutputRoot` 可指定项目 `artifacts` 下的固定发行包目录；`-ShortcutDirectory` 可指定快捷方式目录。本地运行版始终位于 `artifacts/local-run`。
 
+无桌面的 CI 环境使用 `-SkipShortcut` 跳过桌面快捷方式创建，发行包及本地运行版仍正常生成；本机默认保留快捷方式行为。
+
 日志目录为 `%APPDATA%\MacroHID\log`；点击软件顶部“打开日志”查看。

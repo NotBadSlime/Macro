@@ -10,6 +10,8 @@ param(
 
     [switch]$Launch,
 
+    [switch]$SkipShortcut,
+
     [string]$ShortcutDirectory = "D:\360MoveData\Users\12849\Desktop\Start Item"
 )
 
@@ -273,15 +275,17 @@ try {
     $portableZip = $fixedZip
     $localStudio = Join-Path $fixedLocalRoot "MacroStudio"
     $localExe = Join-Path $localStudio "MacroStudio.exe"
-    New-Item -ItemType Directory -Path $ShortcutDirectory -Force | Out-Null
-    $shortcutName = "MacroHID " + [char]0x672C + [char]0x5730 + [char]0x7248 + ".lnk"
-    $desktopShortcut = Join-Path $ShortcutDirectory $shortcutName
-    New-PortableRootShortcut -ShortcutPath $desktopShortcut -TargetPath $localExe `
-        -WorkingDirectory $localStudio -Description "MacroHID $Version local standalone build"
+    if (-not $SkipShortcut) {
+        New-Item -ItemType Directory -Path $ShortcutDirectory -Force | Out-Null
+        $shortcutName = "MacroHID " + [char]0x672C + [char]0x5730 + [char]0x7248 + ".lnk"
+        $desktopShortcut = Join-Path $ShortcutDirectory $shortcutName
+        New-PortableRootShortcut -ShortcutPath $desktopShortcut -TargetPath $localExe `
+            -WorkingDirectory $localStudio -Description "MacroHID $Version local standalone build"
+        Write-Host "Shortcut: $desktopShortcut"
+    }
     Write-Host "Installer created: $installer"
     Write-Host "Portable zip created: $portableZip"
     Write-Host "Standalone executable: $localExe"
-    Write-Host "Shortcut: $desktopShortcut"
     Write-Host "Previous outputs and build staging retained at: $outputRoot"
     if ($Launch) { Start-Process -FilePath $localExe -WorkingDirectory $localStudio -WindowStyle Hidden }
 }

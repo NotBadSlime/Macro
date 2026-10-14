@@ -131,7 +131,7 @@ jobs:
 
       - name: Build installer
         shell: pwsh
-        run: .\scripts\Build-Installer.ps1 -Configuration Release
+        run: .\scripts\Build-Installer.ps1 -Configuration Release -SkipShortcut
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
