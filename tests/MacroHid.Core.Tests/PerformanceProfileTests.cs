@@ -86,6 +86,25 @@ internal static class PerformanceProfileTests
             && (int)values[1]! == (int)PlaybackTraceStage.Hotkey && (long)values[2]! == now
             && (long)values[3]! == Stopwatch.Frequency, "trace lost raw QPC or run identity");
     }
+    internal static void ForegroundNameCache()
+    {
+        var foreground = (Window: (IntPtr)10, ProcessId: 100u);
+        var lookups = new List<uint>();
+        string? answer = "game";
+        var cache = new MacroStudio.Services.ForegroundProcessNameCache(() => foreground, id => { lookups.Add(id); return answer; });
+        for (int i = 0; i < 1000; i++) Check(cache.Get() == "game", "cached name");
+        Check(lookups.Count == 1, "unchanged foreground must resolve once, got " + lookups.Count);
+        foreground = ((IntPtr)11, 100u); answer = "other";
+        Check(cache.Get() == "other" && lookups.Count == 2, "new window handle must re-resolve");
+        foreground = ((IntPtr)11, 101u); answer = "third";
+        Check(cache.Get() == "third" && lookups.Count == 3, "new process id must re-resolve");
+        answer = null; foreground = ((IntPtr)12, 102u);
+        Check(cache.Get() == null && cache.Get() == null && lookups.Count == 5, "failed lookups must not be cached");
+        foreground = (IntPtr.Zero, 0);
+        Check(cache.Get() == null && lookups.Count == 5, "no foreground window must not query a process");
+        var throwing = new MacroStudio.Services.ForegroundProcessNameCache(() => throw new InvalidOperationException(), _ => "x");
+        Check(throwing.Get() == null, "query failure returns null");
+    }
     internal static void HookSelfTime()
     {
         var recorder = new HookSelfTimeRecorder(100);
