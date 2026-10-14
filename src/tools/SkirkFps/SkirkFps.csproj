@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <AssemblyName>YSRExtend</AssemblyName><Product>YSRExtend</Product><Version>1.0.0</Version>
+    <ApplicationIcon>Assets\skirk.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup><Resource Include="Assets\*.png" /><Resource Include="Assets\skirk.ico" /></ItemGroup>
+</Project>

@@ -5,6 +5,8 @@ namespace MacroHid.Runtime;
 internal sealed class NativePlaybackPreparedPlan : IDisposable
 {
     private IntPtr handle;
+    private readonly object bufferGate = new();
+    private readonly Stack<NativeOutlierEvent[]> buffers = new();
 
     private NativePlaybackPreparedPlan(
         IntPtr handle,
@@ -16,6 +18,9 @@ internal sealed class NativePlaybackPreparedPlan : IDisposable
         Timeline = timeline;
         QpcFrequency = qpcFrequency;
         PlanCreateMicroseconds = planCreateMicroseconds;
+        int capacity = Math.Min(timeline.Batches.Length, 65_536);
+        if (capacity > 0)
+            for (int i = 0; i < 2; i++) buffers.Push(System.Buffers.ArrayPool<NativeOutlierEvent>.Shared.Rent(capacity));
     }
 
     public NativePlaybackTimeline Timeline { get; }
@@ -40,6 +45,23 @@ internal sealed class NativePlaybackPreparedPlan : IDisposable
         {
             NativePlaybackInterop.MhpDestroyPlan(plan);
         }
+        lock (bufferGate)
+            while (buffers.TryPop(out var buffer)) System.Buffers.ArrayPool<NativeOutlierEvent>.Shared.Return(buffer);
+    }
+
+    internal NativeOutlierEvent[] RentOutliers(int capacity)
+    {
+        lock (bufferGate)
+            if (buffers.TryPop(out var buffer)) return buffer;
+        return System.Buffers.ArrayPool<NativeOutlierEvent>.Shared.Rent(capacity);
+    }
+    internal void ReturnOutliers(NativeOutlierEvent[] buffer)
+    {
+        lock (bufferGate)
+        {
+            if (handle != IntPtr.Zero && buffers.Count < 2) { buffers.Push(buffer); return; }
+        }
+        System.Buffers.ArrayPool<NativeOutlierEvent>.Shared.Return(buffer);
     }
 
     internal static bool TryCreate(

@@ -1,4 +1,4 @@
-<UserControl x:Class="MacroStudio.Controls.ActionPalettePanel"
+﻿<UserControl x:Class="MacroStudio.Controls.ActionPalettePanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
@@ -576,58 +576,6 @@
                 </Grid>
             </Button>
 
-            <Button x:Name="AddFrameLockStartButton"
-                    Tag="FrameLockStart"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
-                    Click="ActionPalette_Click"
-                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
-                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#DDECE2">
-                        <TextBlock Text="&#xE7F4;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddFrameLockStartText" Text="开启锁帧" FontWeight="SemiBold" />
-                        <TextBlock x:Name="AddFrameLockStartHintText" Text="把指定程序限到设定帧数" Style="{StaticResource ActionPaletteDescriptionStyle}" />
-                    </StackPanel>
-                </Grid>
-            </Button>
-
-            <Button x:Name="AddFrameLockStopButton"
-                    Tag="FrameLockStop"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
-                    Click="ActionPalette_Click"
-                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
-                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#DDECE2">
-                        <TextBlock Text="&#xE711;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddFrameLockStopText" Text="关闭锁帧" FontWeight="SemiBold" />
-                        <TextBlock x:Name="AddFrameLockStopHintText" Text="恢复这个程序原来的帧数上限" Style="{StaticResource ActionPaletteDescriptionStyle}" />
-                    </StackPanel>
-                </Grid>
-            </Button>
-
             <Button x:Name="AddParallelButton"
                     Tag="Parallel"
                     Style="{StaticResource ActionPaletteCommandStyle}"
@@ -653,7 +601,175 @@
                     </StackPanel>
                 </Grid>
             </Button>
+        </primitives:UniformGrid>
+        </controls:CollapsibleSection>
 
+        <!-- YSR 解帧分组 -->
+        <controls:CollapsibleSection x:Name="YsrUnlockerSection" Header="锁帧模块" IsExpanded="True">
+        <primitives:UniformGrid x:Name="YsrCommandGrid" Columns="1">
+            <!-- YSR 切帧按钮 -->
+            <Button x:Name="AddYsrFpsToggleButton"
+                    Tag="YsrFpsStart"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#DDECE2">
+                        <TextBlock Text="&#xE7F4;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddYsrFpsToggleText" Text="YSR 开启锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddYsrFpsToggleHintText" Text="目标 117 FPS，可在卡片中修改" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <!-- RTSS 锁帧 按钮 -->
+            <Button x:Name="AddYsrFpsStopButton" Tag="YsrFpsStop"
+                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddYsrFpsStopText" Text="YSR 关闭锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddYsrFpsStopHintText" Text="恢复开启前的帧率" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddKy3FpsStartButton" Tag="Ky3FpsStart"
+                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddKy3FpsStartText" Text="KY3 开启锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddKy3FpsStartHintText" Text="目标 117 FPS，可在卡片中修改" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddKy3FpsStopButton" Tag="Ky3FpsStop"
+                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddKy3FpsStopText" Text="KY3 恢复帧率" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddKy3FpsStopHintText" Text="恢复开启前的帧率" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button x:Name="AddFufuFpsStartButton" Tag="FufuFpsStart"
+                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddFufuFpsStartText" Text="Fufu 开启锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddFufuFpsStartHintText" Text="目标 117 FPS，可在卡片中修改" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddFufuFpsStopButton" Tag="FufuFpsStop"
+                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddFufuFpsStopText" Text="Fufu 恢复帧率" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddFufuFpsStopHintText" Text="恢复开启前的帧率" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddFrameLockStartButton"
+                    Tag="FrameLockStart"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#DDECE2">
+                        <TextBlock Text="&#xE7F4;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddFrameLockStartText" Text="RTSS 开启锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddFrameLockStartHintText" Text="把指定程序限到设定帧数" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Button x:Name="AddFrameLockStopButton"
+                    Tag="FrameLockStop"
+                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Click="ActionPalette_Click"
+                    PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ActionPalette_PreviewMouseMove">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="#DDECE2">
+                        <TextBlock Text="&#xE711;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                   Foreground="{DynamicResource Accent}"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="AddFrameLockStopText" Text="RTSS 关闭锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddFrameLockStopHintText" Text="恢复这个程序原来的帧数上限" Style="{StaticResource ActionPaletteDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
         </primitives:UniformGrid>
         </controls:CollapsibleSection>
 

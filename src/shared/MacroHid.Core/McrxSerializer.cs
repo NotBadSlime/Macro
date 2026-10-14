@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 
@@ -150,6 +150,7 @@ public static class McrxSerializer
             NetLimitStep netLimit => SerializeNetLimit(netLimit),
             ClockShiftStep clockShift => SerializeClockShift(clockShift),
             FrameLockStep frameLock => SerializeFrameLock(frameLock),
+            YsrFpsToggleStep ysr => SerializeYsrFpsToggle(ysr),
             ParallelStep parallel => SerializeParallel(parallel),
             ParallelBranchStep branch => SerializeParallelBranch(branch),
             _ => throw new NotSupportedException($"Unsupported macro step '{step.GetType().Name}'.")
@@ -440,6 +441,15 @@ public static class McrxSerializer
             ["processName"] = step.ProcessName,
             ["action"] = step.Action.ToString(),
             ["fps"] = step.EffectiveFps
+        };
+    }
+
+    private static JsonObject SerializeYsrFpsToggle(YsrFpsToggleStep step)
+    {
+        return new JsonObject
+        {
+            ["type"] = (step.Backend switch { FpsBackend.Ky3 => "ky3", FpsBackend.Fufu => "fufu", _ => "ysr" }) + (step.Action switch { YsrFpsAction.Start => ".fps.start", YsrFpsAction.Stop => ".fps.stop", _ => ".fps.toggle" }),
+            ["toggleFps"] = step.ToggleFps
         };
     }
 

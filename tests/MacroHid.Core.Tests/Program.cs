@@ -9,6 +9,13 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
+if (Environment.GetEnvironmentVariable("MACROHID_FPS_LOCATOR_FILE") is { Length: > 0 } fpsFile)
+{
+    var location = GameFpsLocator.Locate(fpsFile);
+    Console.WriteLine($"FPS variable RVA=0x{location.FpsRva:X}; setter body RVA=0x{location.SetterBodyRva:X}; image size=0x{location.ImageSize:X}");
+    return 0;
+}
+
 if (Environment.GetEnvironmentVariable("MACROHID_JSON_REFLECTION_DISABLED_PROBE") == "1")
 {
     AppContext.SetSwitch("System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault", false);
@@ -21,8 +28,58 @@ if (Environment.GetEnvironmentVariable("MACROHID_JSON_REFLECTION_DISABLED_PROBE"
     return 0;
 }
 
+if (Environment.GetEnvironmentVariable("MACROHID_UI_SCHEDULING_AUDIT") == "1")
+{
+    SchedulingUiTests.Run();
+    return 0;
+}
+
+// Copy once before any P/Invoke can load the DLL; every native probe uses this instance.
+var nativeSource = Path.GetFullPath("src/native/MacroHid.NativePlayback/x64/Release/MacroHid.NativePlayback.dll");
+if (File.Exists(nativeSource)) File.Copy(nativeSource, Path.Combine(AppContext.BaseDirectory, "MacroHid.NativePlayback.dll"), true);
+
 var tests = new (string Name, Action Body)[]
 {
+    ("Unlocker config formatting, conflicts, leases, crash recovery and KY3 patch", UnlockerConfigTests.Run),
+    ("Compact BGRA frames retain leases and reduce conversion allocation", PerformanceProfileTests.CompactPixels),
+    ("Integral NCC preserves threshold decisions and winning coordinates", PerformanceProfileTests.MatchingBoundaries),
+    ("Playback trace retains raw QPC timestamps and run identity", PerformanceProfileTests.TraceEvents),
+    ("Scheduling lifecycle preserves running definitions and awaits disposal", SchedulingOptimizationTests.Lifecycle),
+    ("Scheduling workers isolate contexts and cancellation wakes waits", SchedulingOptimizationTests.CancellationAndWorkers),
+    ("Editor counting and log backpressure remain bounded", SchedulingOptimizationTests.CountingAndLogBackpressure),
+    ("Application logs rotate, preserve concurrent records, and tolerate write failures", ApplicationLogsAreResilient),
+    ("FPS errors preserve the failing operation and native error code", FpsErrorsPreserveContext),
+    ("FPS process access scopes restore privileges on failure and concurrent opens", FpsProcessAccessTests.PrivilegeLifetime),
+    ("Unlocker target channels preserve adjacent data and restore config", UnlockerChannels),
+    ("Fufu cards restore on playback completion", FufuCardsCleanup),
+    ("Memory FPS cards round trip and preserve YSR defaults", Ky3CardsRoundTrip),
+    ("Memory FPS session restores on completion and rejects conflicting ownership", Ky3SessionCleanup),
+    ("Memory FPS uses process read/write and restores only four bytes", MemoryFpsReadWrite),
+    ("Memory FPS locator validates setter/getter agreement", MemoryFpsLocator),
+    ("YSR cards default to 117 and round trip all actions", YsrCardsRoundTrip),
+    ("YSR restores the original FPS after repeated starts", YsrRestoresOriginalFps),
+    ("YSR shared memory uses byte 8 and refreshes the target", YsrSharedMemoryProtocol),
+    ("YSR playback executes cards and restores on completion", YsrPlaybackRestoresOnCompletion),
+    ("YSR missing connection reports actionable failure", YsrMissingConnectionFails),
+    ("YSR ownership isolates simultaneous macros", YsrOwnershipIsolatesMacros),
+    ("YSR restore failure retains its backup for retry", YsrRestoreFailureCanRetry),
+    ("YSR cancellation restores the FPS", YsrCancellationRestoresFps),
+    ("Calling a condition-only macro runs its conditions", CallingConditionOnlyMacroRunsConditions),
+    ("Nested condition stop current only stops the child", NestedConditionStopCurrentOnlyStopsChild),
+    ("Nested condition stop iteration propagates to the parent", NestedConditionStopIterationPropagates),
+    ("Nested condition stop all propagates to the parent", NestedConditionStopAllPropagates),
+    ("PNG templates decode actual colors and match their pixels", PngTemplatesDecodeAndMatchActualPixels),
+    ("Nested condition startup gates run before the child body", NestedConditionGatesRunBeforeBody),
+    ("Playback dependency snapshots resolve once and stay stable", PlaybackDependencySnapshotsStayStable),
+    ("Recent recognition cache coalesces concurrent work", RecentRecognitionCacheCoalescesWork),
+    ("Parallel worker limits reject overload and release leases", ParallelWorkerLimitsReleaseLeases),
+    ("Condition action plans cache static steps but not random waits", ConditionActionPlansCacheOnlyStaticSteps),
+    ("Condition-only calls remain cancellable while waiting", ConditionOnlyCallsRemainCancellable),
+    ("Image searches honour cancellation before expensive matching", ImageSearchesHonourCancellation),
+    ("Condition worker failures are reported without escaping threads", ConditionWorkerFailuresAreReported),
+    ("Condition disposal waits for the evaluator to finish", ConditionDisposalWaitsForEvaluator),
+    ("Process precision state restores after the final lease", ProcessPrecisionRestoresAfterFinalLease),
+    ("MCRX parser skips comments without changing string contents", McrxParserSkipsComments),
     ("MCRX parser covers keyboard, mouse, wait, repeat, and pixel steps", McrxParserCoversBaselineSteps),
     ("MCRX round trips weak net, parallel, and text conditions", McrxRoundTripsWeakNetParallelAndTextConditions),
     ("Parallel branches accept inserts and reject deleting the branch header", ParallelBranchesAcceptInsertsAndRejectDeletingBranchHeader),
@@ -153,7 +210,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 1.6.0", MacroHidReleaseVersionIsOneFiveZero),
+    ("MacroHID release version is 2.0.0", MacroHidReleaseVersionIsTwoZeroZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -398,6 +455,42 @@ if (failed > 0)
 Console.WriteLine($"{tests.Length} test(s) passed.");
 return 0;
 
+static void McrxParserSkipsComments()
+{
+    const string json = """
+    // 宏说明
+    {
+      "name": "https://example.com/\"//宏", // 行尾说明
+      "steps": [
+        // { "type": "unknown.disabled.action" },
+        { "type": "wait", "ms": 12 }, // 保留这个动作
+        {
+          "type": "repeat", "count": 2,
+          "steps": [
+            // 缩进的注释同样跳过
+            { "type": "wait", "ms": 3 }
+          ]
+        }
+      ]
+    }
+    // 文件末尾注释
+    """;
+
+    foreach (var newline in new[] { "\n", "\r\n" })
+    {
+        var document = McrxParser.Parse(json.ReplaceLineEndings(newline));
+        Assert.Equal("https://example.com/\"//宏", document.Name);
+        Assert.Equal(2, document.Steps.Count);
+        Assert.Equal(TimeSpan.FromMilliseconds(12), Assert.IsType<WaitStep>(document.Steps[0]).Duration);
+        var repeat = Assert.IsType<RepeatStep>(document.Steps[1]);
+        Assert.Equal(2, repeat.Count);
+        Assert.Equal(TimeSpan.FromMilliseconds(3), Assert.IsType<WaitStep>(repeat.Steps.Single()).Duration);
+    }
+
+    // Comments must not hide malformed, uncommented JSON.
+    Assert.Throws<JsonException>(() => McrxParser.Parse("{\"steps\": [ // 注释\n invalid ]}"));
+}
+
 static void McrxParserCoversBaselineSteps()
 {
     const string json = """
@@ -492,7 +585,7 @@ static void PlaybackDelayStrategyUsesHighPrecisionShortWaitPath()
     Assert.Contains("PrecisionMode.UltraLowJitter", playbackCode);
     Assert.Contains("NoSleepForSubTwoMillisecond", playbackCode);
     Assert.Contains("Thread.SpinWait(calibratedSpinIterations * 4)", playbackCode);
-    Assert.Contains("ThreadPriority.Highest", playbackCode);
+    Assert.Contains("ThreadPriority.Highest", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "PrecisionPlaybackContext.cs")));
 }
 
 static void PlaybackDelayStrategySupportsPrecisionProfiles()
@@ -539,16 +632,16 @@ static void PlaybackRuntimeExposesPrecisionContextCompiledPlansAndJitterStats()
     Assert.Contains("RequiresResampling", planCode);
     Assert.Contains("Resample", planCode);
 
-    Assert.Contains("ThreadPriorityTimeCritical", precisionCode);
+    Assert.DoesNotContain("ThreadPriorityTimeCritical", precisionCode);
     Assert.Contains("SetThreadPriority", precisionCode);
     Assert.Contains("SetThreadPriorityBoost", nativeCode);
     Assert.Contains("GetThreadPriorityBoost", nativeCode);
     Assert.Contains("SetThreadPriorityBoost(RuntimeNativeMethods.GetCurrentThread(), true)", precisionCode);
     Assert.Contains("previousThreadPriorityBoostDisabled", precisionCode);
-    Assert.Contains("ProcessPriorityClass.High", precisionCode);
-    Assert.Contains("mode == PrecisionMode.UltraLowJitter", precisionCode);
-    Assert.Contains("ProcessPriorityClass.RealTime", precisionCode);
-    Assert.Contains("GC.TryStartNoGCRegion", precisionCode);
+    Assert.DoesNotContain("ProcessPriorityClass.High", precisionCode);
+    Assert.Contains("PrecisionMode.UltraLowJitter", precisionCode);
+    Assert.DoesNotContain("ProcessPriorityClass.RealTime", precisionCode);
+    Assert.DoesNotContain("GC.TryStartNoGCRegion", precisionCode);
     Assert.Contains("SelectLowestJitterProcessorMask", precisionCode);
     Assert.DoesNotContain("new UIntPtr(2)", precisionCode);
     Assert.Contains("ProcessPowerThrottling", precisionCode);
@@ -3732,22 +3825,22 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsOneFiveZero()
+static void MacroHidReleaseVersionIsTwoZeroZero()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "1.6.0.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.0.md"));
 
-    Assert.Contains("<Version>1.6.0</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>1.6.0.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>1.6.0.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>2.0.0</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>2.0.0.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>2.0.0.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"1.6.0\"", installer);
-    Assert.Contains("[string]$Version = \"1.6.0\"", installerBuild);
-    Assert.Contains("当前正式版是 **1.6.0**", readme);
-    Assert.Contains("MacroHID 1.6.0", releaseNotes);
+    Assert.Contains("#define AppVersion \"2.0.0\"", installer);
+    Assert.Contains("[string]$Version = \"2.0.0\"", installerBuild);
+    Assert.Contains("当前正式版是 **2.0.0**", readme);
+    Assert.Contains("MacroHID 2.0.0", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -3788,6 +3881,11 @@ static void MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea()
     Assert.Contains("source.RemoveHook(WindowProcedure)", codeBehind);
     Assert.Contains("WindowState = WindowState.Minimized", codeBehind);
     Assert.Contains("ApplyCloseBehavior", codeBehind);
+    Assert.Contains("msg == WM_CLOSE", codeBehind);
+    Assert.Contains("== SC_CLOSE", codeBehind);
+    Assert.Contains("QueueClosePrompt();", codeBehind);
+    Assert.Contains("if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;", codeBehind);
+    Assert.Contains("dialog.ContentRendered += (_, _) => dialog.Activate();", codeBehind);
     Assert.Contains("CloseButtonBehavior", codeBehind);
     Assert.DoesNotContain("ShouldHideMinimizedWindowInTray()", codeBehind);
     Assert.DoesNotContain("SC_MINIMIZE && taskbarMinimizeDepth == 0", codeBehind);
@@ -3852,7 +3950,7 @@ static void MacroStudioUsesLauncherStyleSoftWorkbenchShell()
     Assert.Contains("x:Name=\"CenterDockContent\"", mainWindowXaml);
     Assert.Contains("x:Name=\"RightDockContent\"", mainWindowXaml);
     Assert.Contains("x:Name=\"BottomDockContent\"", mainWindowXaml);
-    Assert.Contains("Height=\"600\"", mainWindowXaml);
+    Assert.Contains("Height=\"820\"", mainWindowXaml);
     Assert.Contains("MinHeight=\"560\"", mainWindowXaml);
     Assert.Contains("Width=\"1120\"", mainWindowXaml);
     Assert.Contains("MinWidth=\"1040\"", mainWindowXaml);
@@ -4089,11 +4187,9 @@ static void MacroStudioPackagesWindowsOcrFallbackForTextConditions()
     Assert.Contains("OcrStatusText", conditionXaml);
     Assert.Contains("PaddleOcrBridge.DefaultStatusText", conditionCode);
 
-    Assert.Contains("WindowsOcrServer\\WindowsOcrServer.csproj", localRun);
-    Assert.Contains("Copy-WindowsOcrServer", localRun);
+    Assert.Contains("Build-Installer.ps1", localRun);
     Assert.Contains("WindowsOcrServer\\WindowsOcrServer.csproj", installer);
     Assert.Contains("Copy-WindowsOcrServer", installer);
-    Assert.Contains("Assert-WindowsOcrServerCopied", localRun);
     Assert.Contains("Assert-WindowsOcrServerCopied", installer);
 }
 
@@ -4581,14 +4677,14 @@ static void MacroStudioExposesGlobalPrecisionSelectorInMacroLibrary()
     Assert.Contains("name=\"GlobalRuntime\"", english);
     Assert.Contains("name=\"PrecisionMode\"", english);
     Assert.Contains("name=\"PrecisionUltraLowJitter\"", english);
-    Assert.Contains("<value>Basic</value>", english);
-    Assert.Contains("<value>High performance</value>", english);
+    Assert.Contains("<value>Low overhead</value>", english);
+    Assert.Contains("<value>Balanced (recommended)</value>", english);
     Assert.Contains("<value>Extreme</value>", english);
-    Assert.Contains("<value>基础</value>", simplified);
-    Assert.Contains("<value>高性能</value>", simplified);
+    Assert.Contains("<value>低占用</value>", simplified);
+    Assert.Contains("<value>均衡（推荐）</value>", simplified);
     Assert.Contains("<value>极限</value>", simplified);
-    Assert.Contains("<value>基礎</value>", traditional);
-    Assert.Contains("<value>高效能</value>", traditional);
+    Assert.Contains("<value>低占用</value>", traditional);
+    Assert.Contains("<value>均衡（建議）</value>", traditional);
     Assert.Contains("<value>極限</value>", traditional);
     Assert.DoesNotContain("0.5 ms", english);
     Assert.DoesNotContain("0.25 ms", english);
@@ -4711,7 +4807,7 @@ static void CoreSelectionSkipsScanningWhilePlaybackIsActive()
     Assert.Contains("selectedCore = shouldPinToCore ? SelectLowestJitterCore(false)", native);
     Assert.Contains("if (enableCpuScan && PlaybackIsActive())", native);
     Assert.DoesNotContain("SelectLowestJitterCore(true)", native);
-    Assert.Contains("TryWarmUp(scanCpu: false)", warmup);
+    Assert.Contains("TryWarmUp(false)", warmup);
     Assert.Contains("PlaybackStatus.Running or PlaybackStatus.Stopping", mainWindow);
     Assert.Contains("CoreSelectionBusy", mainWindow);
     Assert.Contains("QueueWarmUpForAffinityMask(runtimePrecisionSettings.AffinityMask, force: true)", mainWindow);
@@ -5424,7 +5520,7 @@ static void MacroStudioDetachesMcrxJsonIntoToolPanel()
     Assert.Contains("EditorTextChanged", jsonPanelCode);
     Assert.Contains("ApplyJsonRequested", jsonPanelCode);
     Assert.Contains("TryApplyJsonTextToEditor", mainWindowCode);
-    Assert.Contains("TryApplyJsonTextToEditor(text, showStatus: false)", mainWindowCode);
+    Assert.Contains("QueueJsonValidation(text)", mainWindowCode);
     Assert.Contains("TryApplyJsonTextToEditor(JsonPanel.EditorText, showStatus: true)", mainWindowCode);
 
     Assert.True(File.Exists(panelWindowPath));
@@ -6325,7 +6421,7 @@ static void ConditionMonitorUsesPrecisionThreadAndPreparedThenActions()
     var conditionCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ConditionMonitor.cs"));
 
     Assert.Contains("new Thread(() => PollLoop", conditionCode);
-    Assert.Contains("Priority = ThreadPriority.Highest", conditionCode);
+    Assert.Contains("Priority = ThreadPriority.AboveNormal", conditionCode);
     Assert.Contains("PrecisionPlaybackContext.Enter(precision)", conditionCode);
     Assert.Contains("CompiledPlaybackPlan.Create", conditionCode);
     Assert.Contains("NativePlaybackEngine.TryRun", conditionCode);
@@ -6431,7 +6527,7 @@ static void NativePlaybackProjectExposesStableCAbi()
     Assert.Contains("ResolveCpuSetIdForLogicalProcessor", implementation);
     Assert.Contains("SetThreadSelectedCpuSets(thread, &cpuSetId, 1)", implementation);
     Assert.DoesNotContain("SetThreadSelectedCpuSets(thread, &cpuSetIndex", implementation);
-    Assert.Contains("REALTIME_PRIORITY_CLASS", implementation);
+    Assert.DoesNotContain("REALTIME_PRIORITY_CLASS", implementation);
     Assert.Contains("THREAD_PRIORITY_TIME_CRITICAL", implementation);
     Assert.Contains("AvSetMmThreadCharacteristicsW", implementation);
     Assert.Contains("_mm_pause", implementation);
@@ -6711,7 +6807,7 @@ static void RuntimeUsesWarmedStandbyNativeEngineByDefaultAndKeepsInlineFallback(
     Assert.Contains("NativePlaybackEngineMode.Standby => new[] { NativeEngineMode.Standby, NativeEngineMode.Inline }", engine);
     Assert.Contains("NativePlaybackEngineMode.Inline => new[] { NativeEngineMode.Inline }", engine);
     Assert.Contains("enableCpuScan: NativePlaybackWarmup.CpuScanReady", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs")));
-    Assert.Contains("MhpWarmEngine", warmup);
+    Assert.Contains("MhpPrepareEngine", warmup);
     Assert.Contains("MhpShutdownEngine", warmup);
     Assert.Contains("standby unavailable", engine);
     Assert.Contains("native-standby", engine);
@@ -6749,9 +6845,9 @@ static void MacroStudioWarmsNativePlaybackBeforeFirstTrigger()
 
     Assert.Contains("NativePlaybackWarmup", warmupCode);
     Assert.Contains("CpuScanReady", warmupCode);
-    Assert.Contains("MhpWarmEngine", warmupCode);
-    Assert.Contains("TryWarmUp(scanCpu: false)", warmupCode);
-    Assert.Contains("TryWarmUp(scanCpu: true)", warmupCode);
+    Assert.Contains("MhpPrepareEngine", warmupCode);
+    Assert.Contains("TryWarmUp(false)", warmupCode);
+    Assert.Contains("Prepare(true,", warmupCode);
     Assert.Contains("QueueWarmUpForPrecision", warmupCode);
     Assert.Contains("RuntimePrecisionSettingsStore.Load", appCode);
     Assert.Contains("QueueWarmUpForPrecision", appCode);
@@ -6766,10 +6862,10 @@ static void PlaybackControllerUsesSuppliedExecutionOptions()
 
     Assert.Contains("PlaybackExecutionOptions executionOptions", controller);
     Assert.Contains("this.executionOptions = executionOptions", controller);
-    Assert.Contains("activeRun = RunAndResetAsync(executionOptions", controller);
+    Assert.Contains("RunAndResetAsync(currentExecutor, currentDocument, options", controller);
     Assert.DoesNotContain("document.Playback.Precision)", controller);
     Assert.Contains("var options = CreatePlaybackOptions(document)", mainWindow);
-    Assert.Contains("new MacroPlaybackController(document, executor, options)", mainWindow);
+    Assert.Contains("new(document, prepared, options)", mainWindow);
 }
 
 static void RunNowPlaysLoopModesOnceAndEscCanStopIt()
@@ -6812,9 +6908,9 @@ static void NativeWarmupKeepsTheFirstTriggerFast()
     Assert.Contains("constexpr int StandbyWorkerCount = 2;", nativeCode);
     Assert.DoesNotContain("constexpr int StandbyWorkerCount = 4;", nativeCode);
     Assert.Contains("public static void TryWarmUp()", warmupCode);
-    Assert.Contains("TryWarmUp(scanCpu: false)", warmupCode);
+    Assert.Contains("TryWarmUp(false)", warmupCode);
     Assert.Contains("TryWarmUpForAffinityMask", warmupCode);
-    Assert.Contains("TryWarmUp(scanCpu: true)", warmupCode);
+    Assert.Contains("Prepare(true,", warmupCode);
     Assert.Contains("AutoTuneAffinity", precisionScript);
     Assert.Contains("Tune-LatencyAffinity.ps1", precisionScript);
     Assert.Contains("$tuneParameters = @", precisionScript);
@@ -6870,7 +6966,9 @@ static void RuntimeAppliesConfiguredUltraAffinityMask()
     Assert.Contains("PlaybackAffinityMask", coreModel);
     Assert.Contains("string AffinityMask", controller);
     Assert.Contains("runtimePrecisionSettings.AffinityMask", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
-    Assert.Contains("ProcessAffinityScope.TryEnter(options.AffinityMask)", executor);
+    Assert.DoesNotContain("ProcessAffinityScope.TryEnter(options.AffinityMask)", executor);
+    Assert.DoesNotContain("ProcessAffinityScope.TryEnter", warmup);
+    Assert.Contains("MhpPrepareEngine(ref options, mask", warmup);
     Assert.Contains("PlaybackAffinityMask.TryParse", affinityScope);
     Assert.Contains("ProcessorAffinity", affinityScope);
     Assert.Contains("previousAffinity", affinityScope);
@@ -6995,9 +7093,17 @@ static void BuildScriptsPackageNativePlaybackEngine()
     var workflow = File.ReadAllText(Path.Combine(".github", "workflows", "ci.yml"));
     var iss = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
 
-    Assert.Contains("Build-NativePlayback.ps1", localRun);
-    Assert.Contains("MacroHid.NativePlayback.dll", localRun);
+    Assert.Contains("Build-Installer.ps1", localRun);
     Assert.Contains("Build-NativePlayback.ps1", installer);
+    Assert.Contains("Publish-Checked", installer);
+    Assert.Contains("$localStudio $true", installer);
+    Assert.Contains("(Join-Path $localStudio \"ocr\") $true", installer);
+    Assert.Contains("Start Item", installer);
+    Assert.Contains("$desktopShortcut -TargetPath $localExe", installer);
+    Assert.Contains("Confirm-StopBuildProcesses", installer);
+    Assert.Contains("Build-Installer.ps1", localRun);
+    Assert.Contains("Publish-StagedOutputs", installer);
+    Assert.True(File.Exists("打包.cmd"));
     Assert.Contains("MacroHid.NativePlayback.dll", installer);
     Assert.Contains("MacroHid.NativePlayback.vcxproj", workflow);
     Assert.Contains("setup-msbuild", workflow);
@@ -7110,8 +7216,7 @@ static void HardwareEventProbeCapturesRawInputStartupAndCadenceMetrics()
     Assert.Contains("--csv", program);
     Assert.Contains("droppedOrExtraEvents", program);
 
-    Assert.Contains("HardwareEventProbe.csproj", localRun);
-    Assert.Contains("HardwareEventProbe.exe", localRun);
+    Assert.Contains("Build-Installer.ps1", localRun);
 }
 
 static void EmbeddedConverterImportsMacroConverterFormats()
@@ -7352,7 +7457,7 @@ static void NativePlaybackPauseControlShiftsRunningTimeline()
         "MacroHid.NativePlayback.dll"));
     Assert.True(File.Exists(dllPath));
 
-    var library = NativeLibrary.Load(dllPath);
+    var library = NativeLibrary.Load(Path.Combine(AppContext.BaseDirectory, "MacroHid.NativePlayback.dll"));
     IntPtr plan = IntPtr.Zero;
     IntPtr control = IntPtr.Zero;
     IntPtr stats = IntPtr.Zero;
@@ -7394,6 +7499,7 @@ static void NativePlaybackPauseControlShiftsRunningTimeline()
             NativeEngineMode = 2,
             OutlierThresholdUs = 250
         };
+        NativePlaybackWarmup.TryWarmUp();
         var cancelFlag = 0;
         var started = Stopwatch.GetTimestamp();
         var run = Task.Run(() => runControlled(plan, ref options, ref cancelFlag, control, stats));
@@ -7445,7 +7551,7 @@ static void PauseConditionKeepsMainTimelineOnNativePlayback()
         "Release",
         "MacroHid.NativePlayback.dll"));
     var runtimeDll = Path.Combine(AppContext.BaseDirectory, "MacroHid.NativePlayback.dll");
-    File.Copy(sourceDll, runtimeDll, overwrite: true);
+    Assert.True(File.Exists(runtimeDll));
 
     var sink = new SendInputMacroSink();
     var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
@@ -7463,6 +7569,7 @@ static void PauseConditionKeepsMainTimelineOnNativePlayback()
             [new WaitStep(TimeSpan.FromMilliseconds(60)), new TextStep(string.Empty)],
             ExecutionMode: ConditionExecutionMode.PauseMainTimeline)]);
     var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+    executor.Prepare(document, new(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, false, PrecisionMode.UltraLowJitter));
     var started = Stopwatch.GetTimestamp();
 
     var result = executor.RunAsync(
@@ -9758,6 +9865,203 @@ static void WeakNetRejectsSystemProcessesAndStopIsIdempotent()
     Assert.False(SystemTimeShift.IsShifted);
 }
 
+static IReadOnlyList<InputAction> RunNestedConditionProbe(MacroStep? stop = null, bool gate = false)
+{
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    IReadOnlyList<MacroStep> actions = stop is null
+        ? [new KeyStep(KeyActionKind.Tap, HidKey.B, HidModifier.None, TimeSpan.Zero)]
+        : [new KeyStep(KeyActionKind.Tap, HidKey.B, HidModifier.None, TimeSpan.Zero), stop];
+    var child = new MacroDocument(1, "child", PlaybackSettings.Default,
+        gate ? [new KeyStep(KeyActionKind.Tap, HidKey.C, HidModifier.None, TimeSpan.Zero)] : [],
+        [new ConditionalDirective("child-condition", "child-condition", -1, -1, matcher, actions,
+            WindowStart: TimeSpan.Zero, ExecutionMode: gate ? ConditionExecutionMode.GateMainSequence : ConditionExecutionMode.Parallel)],
+        Kind: gate ? MacroKind.Normal : MacroKind.Condition);
+    var parent = new MacroDocument(1, "parent",
+        [new MacroCallStep("child"), new KeyStep(KeyActionKind.Tap, HidKey.A, HidModifier.None, TimeSpan.Zero)]);
+    var sink = new RecordingInputSink();
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true, macroResolver: name => name == "child" ? child : null);
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+    executor.RunAsync(parent, new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live,
+        NoWait: false, PrecisionMode.Balanced), cancellation.Token).GetAwaiter().GetResult();
+    return sink.Actions;
+}
+
+static void CallingConditionOnlyMacroRunsConditions()
+{
+    var actions = RunNestedConditionProbe();
+    Assert.True(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+    Assert.True(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+static void ConditionOnlyCallsRemainCancellable()
+{
+    var matcher = new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0);
+    var child = new MacroDocument(1, "waiting-child", PlaybackSettings.Default, [],
+        [new ConditionalDirective("wait", "wait", -1, -1, matcher, [], WindowStart: TimeSpan.Zero)], Kind: MacroKind.Condition);
+    var parent = new MacroDocument(1, "parent", [new MacroCallStep("waiting-child")]);
+    var sink = new RecordingInputSink();
+    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => false, macroResolver: _ => child);
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(60));
+    var result = executor.RunAsync(parent, new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live,
+        NoWait: false, PrecisionMode.Balanced), cancellation.Token).GetAwaiter().GetResult();
+    Assert.True(result.Cancelled);
+}
+static void ImageSearchesHonourCancellation()
+{
+    using var cancellation = new CancellationTokenSource();
+    cancellation.Cancel();
+    Assert.Throws<OperationCanceledException>(() => TemplateMatchEngine.Match(ScreenRegion.FromRect(0, 0, 8, 8), [], cancellationToken: cancellation.Token));
+    Assert.Throws<OperationCanceledException>(() => PixelHashEngine.ComputeHash(ScreenRegion.FromRect(0, 0, 8, 8), cancellationToken: cancellation.Token));
+}
+static void NestedConditionStopCurrentOnlyStopsChild()
+{
+    var actions = RunNestedConditionProbe(new StopCurrentSequenceStep());
+    Assert.True(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+    Assert.True(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+static void NestedConditionStopIterationPropagates()
+{
+    var actions = RunNestedConditionProbe(new StopCurrentIterationStep());
+    Assert.True(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+    Assert.False(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+static void NestedConditionStopAllPropagates()
+{
+    var actions = RunNestedConditionProbe(new StopAllSequencesStep());
+    Assert.True(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.B, HidModifier.None)));
+    Assert.False(actions.Contains(new KeyInputAction(KeyActionKind.Down, HidKey.A, HidModifier.None)));
+}
+static void PngTemplatesDecodeAndMatchActualPixels()
+{
+    var pixels = new byte[] { 0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 255, 255, 255, 255 };
+    var bitmap = System.Windows.Media.Imaging.BitmapSource.Create(2, 2, 96, 96,
+        System.Windows.Media.PixelFormats.Bgra32, null, pixels, 8);
+    var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+    encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+    using var stream = new MemoryStream();
+    encoder.Save(stream);
+    var data = stream.ToArray();
+    var decoded = WindowsPngDecoder.Decode(data);
+    Assert.Equal(2, decoded.Width);
+    Assert.Equal(2, decoded.Height);
+    Assert.Equal(new RgbColor(255, 0, 0), decoded.Pixels[0]);
+    Assert.Equal(new RgbColor(0, 255, 0), decoded.Pixels[1]);
+    var match = TemplateMatchEngine.Match(ScreenRegion.FromRect(0, 0, 2, 2), data, 0.99, _ => decoded.Pixels);
+    Assert.Equal(0, match.x);
+    Assert.True(match.score > 0.99);
+}
+static void NestedConditionGatesRunBeforeBody()
+{
+    var actions = RunNestedConditionProbe(gate: true).OfType<KeyInputAction>().Where(a => a.Kind == KeyActionKind.Down).Select(a => a.Key).ToArray();
+    Assert.Equal(HidKey.B, actions[0]);
+    Assert.Equal(HidKey.C, actions[1]);
+    Assert.Equal(HidKey.A, actions[2]);
+}
+static void PlaybackDependencySnapshotsStayStable()
+{
+    var calls = 0;
+    var child = new MacroDocument(1, "child", []);
+    var parent = new MacroDocument(1, "parent", [new MacroCallStep("child"), new MacroCallStep("child")]);
+    using var snapshot = new PlaybackMacroSnapshot(parent, _ => { calls++; return child; });
+    var original = PlaybackMacroSnapshot.Resolver!("child");
+    child = child with { Steps = [new WaitStep(TimeSpan.FromSeconds(1))] };
+    Assert.True(ReferenceEquals(original, PlaybackMacroSnapshot.Resolver!("child")));
+    Assert.Equal(1, calls);
+}
+static void RecentRecognitionCacheCoalescesWork()
+{
+    var cache = new RecentEvaluationCache<string, int>(TimeSpan.FromSeconds(1));
+    var computations = 0;
+    var tasks = Enumerable.Range(0, 8).Select(_ => Task.Run(() => cache.Get("region-language", () =>
+    {
+        Interlocked.Increment(ref computations);
+        Thread.Sleep(20);
+        return 42;
+    }))).ToArray();
+    Task.WaitAll(tasks);
+    Assert.Equal(1, computations);
+    Assert.True(tasks.All(task => task.Result == 42));
+}
+static void ParallelWorkerLimitsReleaseLeases()
+{
+    using (var full = ParallelWorkerLease.Acquire(32))
+        Assert.Throws<InvalidOperationException>(() => ParallelWorkerLease.Acquire(2));
+    using var next = ParallelWorkerLease.Acquire(2);
+}
+static void ConditionActionPlansCacheOnlyStaticSteps()
+{
+    using var cache = new ConditionActionPlanCache();
+    IReadOnlyList<MacroStep> steps = [new WaitStep(TimeSpan.FromMilliseconds(1))];
+    var count = 0;
+    CompiledPlaybackPlan Compile()
+    {
+        count++;
+        return CompiledPlaybackPlan.Create(new MacroDocument(1, "static", steps), 1_000_000);
+    }
+    var first = ConditionActionPlanCache.Get(steps, Compile);
+    Assert.True(ReferenceEquals(first, ConditionActionPlanCache.Get(steps, Compile)));
+    Assert.Equal(1, count);
+    Assert.False(ConditionActionPlanCache.CanCache([new WaitStep(TimeSpan.Zero, TimeSpan.FromMilliseconds(10))]));
+    Assert.False(ConditionActionPlanCache.CanCache([new MacroCallStep("dynamic")]));
+}
+
+static void ConditionDisposalWaitsForEvaluator()
+{
+    using var entered = new ManualResetEventSlim();
+    using var release = new ManualResetEventSlim();
+    using var evaluator = new CompositeConditionEvaluator(pixelEvaluator: _ =>
+    {
+        entered.Set();
+        release.Wait();
+        return false;
+    });
+    var clock = new QpcHighResolutionClock();
+    var directive = new ConditionalDirective("slow", "slow", 0, 1,
+        new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(0, 0, 0), 0), [],
+        WindowStart: TimeSpan.Zero, WindowEnd: TimeSpan.FromSeconds(5));
+    var monitor = new ConditionMonitor(directive, evaluator, new RecordingInputSink(), null,
+        clock.GetTimestamp(), clock.Frequency, PrecisionMode.Balanced);
+    monitor.Activate();
+    Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+    var disposal = Task.Run(() => monitor.Dispose());
+    try { Assert.False(disposal.Wait(300)); }
+    finally { release.Set(); }
+    Assert.True(disposal.Wait(TimeSpan.FromSeconds(2)));
+    monitor.Dispose();
+}
+
+static void ConditionWorkerFailuresAreReported()
+{
+    using var evaluated = new ManualResetEventSlim();
+    using var evaluator = new CompositeConditionEvaluator(pixelEvaluator: _ =>
+    {
+        evaluated.Set();
+        throw new InvalidOperationException("condition test failure");
+    });
+    var clock = new QpcHighResolutionClock();
+    var directive = new ConditionalDirective("error", "error", 0, 1,
+        new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(0, 0, 0), 0), [],
+        WindowStart: TimeSpan.Zero, WindowEnd: TimeSpan.FromSeconds(5));
+    var monitor = new ConditionMonitor(directive, evaluator, new RecordingInputSink(), null,
+        clock.GetTimestamp(), clock.Frequency, PrecisionMode.Balanced);
+    monitor.Activate();
+    Assert.True(evaluated.Wait(TimeSpan.FromSeconds(2)));
+    Assert.Throws<InvalidOperationException>(() => monitor.Dispose());
+    Assert.True(monitor.LastError is InvalidOperationException);
+}
+
+static void ProcessPrecisionRestoresAfterFinalLease()
+{
+    using var process = Process.GetCurrentProcess();
+    var original = process.PriorityClass;
+    var first = PrecisionPlaybackContext.Enter(PrecisionMode.ExtremeDuringPlayback);
+    var second = PrecisionPlaybackContext.Enter(PrecisionMode.ExtremeDuringPlayback);
+    var during = process.PriorityClass;
+    first.Dispose();
+    Assert.Equal(during, process.PriorityClass);
+    second.Dispose();
+    Assert.Equal(original, process.PriorityClass);
+}
+
 static void ClockRestoreIgnoresExternalChanges()
 {
     var original = new DateTime(2026, 10, 10, 12, 0, 0);
@@ -9847,6 +10151,278 @@ static void FrameLockRetainsBackupAfterFailures()
     finally { FrameLockSession.ResetForTests(); }
 }
 
+static void Ky3CardsRoundTrip()
+{
+    var start = Assert.IsType<YsrFpsToggleStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.Ky3FpsStart));
+    var stop = Assert.IsType<YsrFpsToggleStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.Ky3FpsStop));
+    Assert.Equal(FpsBackend.Ky3, start.Backend);
+    Assert.Equal(YsrFpsAction.Stop, stop.Action);
+    var doc = new MacroDocument(1, "ky3", [start, stop, new YsrFpsToggleStep(0, YsrFpsAction.Start, FpsBackend.Ky3)]);
+    var restored = McrxParser.Parse(McrxSerializer.Serialize(doc));
+    Assert.Equal(start, restored.Steps[0]);
+    Assert.Equal(stop, restored.Steps[1]);
+    Assert.Equal(doc.Steps[2], restored.Steps[2]);
+    Assert.Equal(FpsBackend.Ysr, new YsrFpsToggleStep().Backend);
+    Assert.Contains("ky3.fps.start", McrxSerializer.Serialize(doc));
+    var legacy = McrxParser.Parse(McrxSerializer.Serialize(doc).Replace("ky3.fps.", "memory.fps."));
+    Assert.Equal(start, legacy.Steps[0]);
+}
+
+static void Ky3SessionCleanup()
+{
+    GameMemoryFpsSession.ResetForTests();
+    var fake = new FakeYsrChannel(151);
+    GameMemoryFpsSession.TestOpenChannel = () => fake;
+    try
+    {
+        using (var owner = new PlaybackEffectScope())
+        {
+            Assert.True(YsrFpsSession.TryApply(new(117, YsrFpsAction.Start, FpsBackend.Ky3), out _));
+            Assert.True(YsrFpsSession.TryApply(new(0, YsrFpsAction.Start, FpsBackend.Ky3), out _));
+            using (var other = new PlaybackEffectScope())
+                Assert.False(GameMemoryFpsSession.TryStop(out _));
+        }
+        Assert.Equal(151, fake.Read());
+        Assert.True(GameMemoryFpsSession.TryStop(out _));
+    }
+    finally { GameMemoryFpsSession.ResetForTests(); }
+}
+
+static void MemoryFpsReadWrite()
+{
+    nint buffer = Marshal.AllocHGlobal(16);
+    try
+    {
+        Marshal.WriteInt32(buffer, 0, 1234); Marshal.WriteInt32(buffer, 4, 151); Marshal.WriteInt32(buffer, 8, 5678);
+        using var memory = new WindowsGameFpsMemory(Environment.ProcessId);
+        Assert.True(memory.IsAlive);
+        using var channel = new GameMemoryFpsChannel(memory, buffer + 4);
+        Assert.Equal(151, channel.Read());
+        channel.Write(117); Assert.Equal(117, Marshal.ReadInt32(buffer, 4));
+        channel.Write(0); Assert.Equal(999, channel.Read());
+        ((IYsrFpsChannel)channel).Restore(151); Assert.Equal(151, channel.Read());
+        Assert.Equal(1234, Marshal.ReadInt32(buffer, 0)); Assert.Equal(5678, Marshal.ReadInt32(buffer, 8));
+        bool rejected = false;
+        try { channel.Write(-1); } catch (ArgumentOutOfRangeException) { rejected = true; }
+        Assert.True(rejected); Assert.Equal(151, channel.Read());
+    }
+    finally { Marshal.FreeHGlobal(buffer); }
+}
+
+static void MemoryFpsLocator()
+{
+    var bytes = new byte[0x900];
+    void U16(int offset, ushort value) => BitConverter.GetBytes(value).CopyTo(bytes, offset);
+    void U32(int offset, uint value) => BitConverter.GetBytes(value).CopyTo(bytes, offset);
+    void Rel(int fileOffset, uint instructionRva, int instructionSize, uint targetRva)
+        => BitConverter.GetBytes(checked((int)((long)targetRva - instructionRva - instructionSize))).CopyTo(bytes, fileOffset);
+    U16(0, 0x5A4D); U32(0x3C, 0x80); U32(0x80, 0x4550); U16(0x84, 0x8664); U16(0x86, 2);
+    U16(0x94, 240); U16(0x98, 0x20B); U32(0x98 + 56, 0x4000);
+    int table = 0x188;
+    U32(table + 8, 0x400); U32(table + 12, 0x1000); U32(table + 16, 0x400); U32(table + 20, 0x400); U32(table + 36, 0x60000020);
+    table += 40;
+    U32(table + 8, 0x100); U32(table + 12, 0x3000); U32(table + 16, 0x100); U32(table + 20, 0x800); U32(table + 36, 0xC0000040);
+    byte[] set = [0xE8,0,0,0,0,0xE8,0,0,0,0,0x83,0xF8,0x1F,0x0F,0x9C,0x05,0,0,0,0,0x48,0x8B,0x05,0,0,0,0];
+    byte[] get = [0xE8,0,0,0,0,0x85,0xC0,0x7E,0x0E,0xE8,0,0,0,0,0x0F,0x57,0xC0,0xF3,0x0F,0x2A,0xC0,0xEB,0x08];
+    set.CopyTo(bytes, 0x420); Rel(0x421, 0x1020, 5, 0x1080);
+    get.CopyTo(bytes, 0x460); Rel(0x461, 0x1060, 5, 0x1090);
+    bytes[0x480] = 0xE9; Rel(0x481, 0x1080, 5, 0x1100);
+    bytes[0x490] = 0xE9; Rel(0x491, 0x1090, 5, 0x1120);
+    bytes[0x500] = 0x89; bytes[0x501] = 0x0D; Rel(0x502, 0x1100, 6, 0x3000); bytes[0x506] = 0xC3;
+    bytes[0x520] = 0x8B; bytes[0x521] = 0x05; Rel(0x522, 0x1120, 6, 0x3000); bytes[0x526] = 0xC3;
+    string good = Path.GetTempFileName(), bad = Path.GetTempFileName(), duplicate = Path.GetTempFileName();
+    try
+    {
+        File.WriteAllBytes(good, bytes);
+        var location = GameFpsLocator.Locate(good);
+        Assert.Equal(0x3000u, location.FpsRva); Assert.Equal(0x1100u, location.SetterBodyRva);
+        using var runtime = new FakeFpsProcessMemory();
+        Array.Copy(bytes, 0x400, runtime.Bytes, 0x1000, 0x400);
+        GameMemoryFpsChannel.ValidateRuntime(runtime, runtime.Base, location);
+        // KY3-style relative setter detour and absolute getter detour.
+        runtime.Bytes[0x1100] = 0xE9;
+        BitConverter.GetBytes(0x8000 - 0x1100 - 5).CopyTo(runtime.Bytes, 0x1101);
+        runtime.Bytes[0x1120] = 0xFF; runtime.Bytes[0x1121] = 0x25;
+        BitConverter.GetBytes(0x1130 - 0x1120 - 6).CopyTo(runtime.Bytes, 0x1122);
+        BitConverter.GetBytes((long)runtime.Base + 0x8010).CopyTo(runtime.Bytes, 0x1130);
+        GameMemoryFpsChannel.ValidateRuntime(runtime, runtime.Base, location);
+        bool unknownRejected = false;
+        runtime.Bytes[0x1100] = 0xCC;
+        try { GameMemoryFpsChannel.ValidateRuntime(runtime, runtime.Base, location); }
+        catch (InvalidOperationException) { unknownRejected = true; }
+        Assert.True(unknownRejected);
+        runtime.Bytes[0x1100] = 0xE9;
+        BitConverter.GetBytes(0x3000 - 0x1100 - 5).CopyTo(runtime.Bytes, 0x1101);
+        unknownRejected = false;
+        try { GameMemoryFpsChannel.ValidateRuntime(runtime, runtime.Base, location); }
+        catch (InvalidOperationException) { unknownRejected = true; }
+        Assert.True(unknownRejected); // A jump into writable data is not a valid hook.
+        BitConverter.GetBytes(0x8000 - 0x1100 - 5).CopyTo(runtime.Bytes, 0x1101);
+        runtime.Bytes[0x1020] = 0x90;
+        unknownRejected = false;
+        try { GameMemoryFpsChannel.ValidateRuntime(runtime, runtime.Base, location); }
+        catch (InvalidOperationException) { unknownRejected = true; }
+        Assert.True(unknownRejected); // Hook compatibility must not skip call-site validation.
+
+        Rel(0x522, 0x1120, 6, 0x3004); File.WriteAllBytes(bad, bytes);
+        bool rejected = false;
+        try { GameFpsLocator.Locate(bad); } catch (InvalidOperationException) { rejected = true; }
+        Assert.True(rejected);
+        Rel(0x522, 0x1120, 6, 0x3000);
+        set.CopyTo(bytes, 0x600); File.WriteAllBytes(duplicate, bytes);
+        rejected = false;
+        try { GameFpsLocator.Locate(duplicate); } catch (InvalidOperationException) { rejected = true; }
+        Assert.True(rejected);
+    }
+    finally { File.Delete(good); File.Delete(bad); File.Delete(duplicate); }
+}
+
+static void YsrCardsRoundTrip()
+{
+    var start = Assert.IsType<YsrFpsToggleStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.YsrFpsStart));
+    var stop = Assert.IsType<YsrFpsToggleStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.YsrFpsStop));
+    Assert.Equal(117, start.ToggleFps);
+    Assert.Equal(YsrFpsAction.Start, start.Action);
+    Assert.Equal(YsrFpsAction.Stop, stop.Action);
+    var doc = new MacroDocument(1, "ysr", [start, stop, new YsrFpsToggleStep(90)]);
+    var parsed = McrxParser.Parse(McrxSerializer.Serialize(doc));
+    for (var i = 0; i < 3; i++) Assert.Equal(doc.Steps[i], parsed.Steps[i]);
+}
+
+static void YsrRestoresOriginalFps()
+{
+    YsrFpsSession.ResetForTests();
+    var fake = new FakeYsrChannel(151);
+    YsrFpsSession.TestOpenChannel = () => fake;
+    try
+    {
+        Assert.True(YsrFpsSession.TryApply(new(117, YsrFpsAction.Start), out _));
+        Assert.True(YsrFpsSession.TryApply(new(90, YsrFpsAction.Start), out _));
+        Assert.Equal(90, fake.Fps);
+        Assert.True(YsrFpsSession.TryStop(out _));
+        Assert.Equal(151, fake.Fps);
+        Assert.True(fake.Disposed);
+        Assert.True(YsrFpsSession.TryStop(out _));
+    }
+    finally { YsrFpsSession.ResetForTests(); }
+}
+
+static void YsrSharedMemoryProtocol()
+{
+    YsrFpsSession.ResetForTests();
+    var name = "MacroHID-Test-" + Guid.NewGuid();
+    using var mapping = System.IO.MemoryMappedFiles.MemoryMappedFile.CreateNew(name, 32);
+    using var view = mapping.CreateViewAccessor();
+    view.Write(0, 987654);
+    view.Write(8, 151);
+    YsrFpsSession.TestOpenChannel = () => YsrFpsSession.OpenTestMapping(name);
+    try
+    {
+        Assert.True(YsrFpsSession.TryReadCurrent(out var current));
+        Assert.Equal(151, current);
+        Assert.True(YsrFpsSession.TryApply(new(117, YsrFpsAction.Start), out _));
+        Assert.Equal(117, view.ReadInt32(8));
+        view.Write(8, 151);
+        Assert.True(SpinWait.SpinUntil(() => view.ReadInt32(8) == 117, 2000));
+        Assert.True(YsrFpsSession.TryApply(new(117, YsrFpsAction.Stop), out _));
+        Assert.Equal(151, view.ReadInt32(8));
+        Assert.Equal(987654, view.ReadInt32(0));
+    }
+    finally { YsrFpsSession.ResetForTests(); }
+}
+
+static void YsrPlaybackRestoresOnCompletion()
+{
+    YsrFpsSession.ResetForTests();
+    var fake = new FakeYsrChannel(151);
+    YsrFpsSession.TestOpenChannel = () => fake;
+    try
+    {
+        var executor = new MacroPlaybackExecutor(new RecordingInputSink());
+        var doc = new MacroDocument(1, "ysr", [new YsrFpsToggleStep(117, YsrFpsAction.Start)]);
+        var result = executor.RunAsync(doc, new PlaybackExecutionOptions(PlaybackMode.FixedCount, Count: 1, PixelEvaluationMode.MatchAll, NoWait: true), CancellationToken.None).GetAwaiter().GetResult();
+        Assert.False(result.Cancelled);
+        Assert.Equal(151, fake.Fps);
+        Assert.True(fake.Disposed);
+    }
+    finally { YsrFpsSession.ResetForTests(); }
+}
+
+static void YsrOwnershipIsolatesMacros()
+{
+    YsrFpsSession.ResetForTests();
+    var fake = new FakeYsrChannel(151);
+    YsrFpsSession.TestOpenChannel = () => fake;
+    try
+    {
+        using (var outer = new PlaybackEffectScope())
+        {
+            Assert.True(YsrFpsSession.TryApply(new(117, YsrFpsAction.Start), out _));
+            using (var other = new PlaybackEffectScope())
+            {
+                Assert.False(YsrFpsSession.TryStop(out _));
+                Assert.False(YsrFpsSession.TryApply(new(90, YsrFpsAction.Start), out _));
+            }
+            Assert.Equal(117, fake.Fps);
+        }
+        Assert.Equal(151, fake.Fps);
+    }
+    finally { YsrFpsSession.ResetForTests(); }
+}
+
+static void YsrRestoreFailureCanRetry()
+{
+    YsrFpsSession.ResetForTests();
+    var fake = new FakeYsrChannel(151);
+    YsrFpsSession.TestOpenChannel = () => fake;
+    try
+    {
+        Assert.True(YsrFpsSession.TryApply(new(117, YsrFpsAction.Start), out _));
+        fake.FailFps = 151;
+        Assert.False(YsrFpsSession.TryStop(out _));
+        Assert.False(fake.Disposed);
+        fake.FailFps = null;
+        Assert.True(YsrFpsSession.TryStop(out _));
+        Assert.Equal(151, fake.Fps);
+    }
+    finally { YsrFpsSession.ResetForTests(); }
+}
+
+static void YsrCancellationRestoresFps()
+{
+    YsrFpsSession.ResetForTests();
+    var fake = new FakeYsrChannel(151);
+    YsrFpsSession.TestOpenChannel = () => fake;
+    using var cancellation = new CancellationTokenSource();
+    try
+    {
+        var executor = new MacroPlaybackExecutor(new RecordingInputSink());
+        var doc = new MacroDocument(1, "ysr", [new YsrFpsToggleStep(117, YsrFpsAction.Start), new WaitStep(TimeSpan.FromSeconds(5))]);
+        var task = executor.RunAsync(doc, new PlaybackExecutionOptions(PlaybackMode.FixedCount, Count: 1, PixelEvaluationMode.MatchAll, NoWait: false), cancellation.Token);
+        var started = SpinWait.SpinUntil(() => Volatile.Read(ref fake.Fps) == 117, 2000);
+        cancellation.Cancel();
+        var result = task.GetAwaiter().GetResult();
+        Assert.True(started);
+        Assert.True(result.Cancelled);
+        Assert.Equal(151, fake.Fps);
+    }
+    finally { cancellation.Cancel(); YsrFpsSession.ResetForTests(); }
+}
+
+static void YsrMissingConnectionFails()
+{
+    YsrFpsSession.ResetForTests();
+    YsrFpsSession.TestOpenChannel = () => throw new FileNotFoundException();
+    try
+    {
+        Assert.False(YsrFpsSession.TryApply(new(117, YsrFpsAction.Start), out var error));
+        Assert.Contains("先通过解帧器启动游戏", error!);
+        Assert.False(YsrFpsSession.TryApply(new(0, YsrFpsAction.Start), out _));
+        Assert.False(YsrFpsSession.TryReadCurrent(out _));
+    }
+    finally { YsrFpsSession.ResetForTests(); }
+}
+
 static void FrameLockBacksUpOnceUpdatesFpsAndRestoresOnStop()
 {
     var reads = new List<string>();
@@ -9927,7 +10503,8 @@ static void NetLimitKeepsEditedByteRateAndDefaultsTo695()
     Assert.Equal(NetLimitEngine.NetLimiter, limiter.Engine);
     Assert.Equal(695L, limiter.EffectiveBytesPerSecond);
     var disconnect = Assert.IsType<WeakNetStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.WeakNetStart));
-    Assert.Equal(TimeSpan.FromHours(1), disconnect.EffectiveTimeShift);
+    // New disconnect cards deliberately leave the clock alone; clock shifting is a separate card.
+    Assert.Equal(TimeSpan.Zero, disconnect.EffectiveTimeShift);
     var shift = Assert.IsType<ClockShiftStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.ClockShift));
     Assert.Equal(TimeSpan.FromHours(1), shift.EffectiveTimeShift);
     Assert.Equal(ClockShiftAction.Restore, Assert.IsType<ClockShiftStep>(MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.ClockRestore)).Action);
@@ -10126,8 +10703,135 @@ static void BackgroundWindowPostsInputAndCapturesThatWindow()
     Assert.Contains("BackgroundProcessRequired", basic);
     Assert.Contains("IsGlobal", library);
     Assert.Contains("BackgroundProcessSelection.Resolve", mainWindow);
-    Assert.Contains("!runtimePrecisionSettings.BackgroundWindow", mainWindow);
+    Assert.Contains("!route.Background", mainWindow);
     Assert.Contains("TryCaptureVirtualScreen", picker);
+}
+
+
+static void ApplicationLogsAreResilient()
+{
+    string directory = Path.Combine(Path.GetTempPath(), "MacroHid-log-test-" + Guid.NewGuid());
+    try
+    {
+        var writer = new RollingLogFile(directory, "concurrent");
+        Parallel.For(0, 100, i => writer.Write("INFO", "Test", $"record-{i}"));
+        var lines = File.ReadAllLines(Path.Combine(directory, "concurrent.log"));
+        Assert.Equal(100, lines.Length);
+        Assert.Equal(100, lines.Select(line => line[(line.LastIndexOf("record-", StringComparison.Ordinal))..]).Distinct().Count());
+
+        var rotating = new RollingLogFile(directory, "rotating", 256);
+        for (int i = 0; i < 20; i++) rotating.Write("ERROR", "Test", $"error-{i}: " + new string('x', 120));
+        Assert.Equal(3, Directory.GetFiles(directory, "rotating.log*").Length);
+        Assert.Contains("error-19", File.ReadAllText(Path.Combine(directory, "rotating.log")));
+        Assert.Contains("error-18", File.ReadAllText(Path.Combine(directory, "rotating.log.1")));
+
+        string blocked = Path.Combine(directory, "blocked");
+        File.WriteAllText(blocked, "This file prevents directory creation.");
+        new RollingLogFile(blocked, "cannot-write").Write("ERROR", "Test", "Must not throw");
+        Assert.Equal("This file prevents directory creation.", File.ReadAllText(blocked));
+    }
+    finally
+    {
+        if (Directory.Exists(directory)) Directory.Delete(directory, true);
+    }
+}
+
+static void FpsErrorsPreserveContext()
+{
+    foreach (bool fufu in new[] { false, true })
+    {
+        foreach (Exception failure in new Exception[]
+        {
+            new UnauthorizedAccessException("无法读取 DLL 文件：example.dll"),
+            new System.ComponentModel.Win32Exception(5, "OpenProcess 被拒绝"),
+            new System.ComponentModel.Win32Exception(299, "读取内存不完整")
+        })
+        {
+            GameMemoryFpsSession.ResetForTests();
+            FufuFpsSession.ResetForTests();
+            try
+            {
+                using var owner = new PlaybackEffectScope();
+                if (fufu) FufuFpsSession.TestOpenChannel = () => throw failure;
+                else GameMemoryFpsSession.TestOpenChannel = () => throw failure;
+                var step = new YsrFpsToggleStep(117, YsrFpsAction.Start, fufu ? FpsBackend.Fufu : FpsBackend.Ky3);
+                string? error;
+                bool applied = fufu ? FufuFpsSession.TryApply(step, out error) : GameMemoryFpsSession.TryApply(step, out error);
+                Assert.False(applied);
+                Assert.Contains(failure.Message, error!);
+                if (failure is System.ComponentModel.Win32Exception native)
+                    Assert.Contains($"Windows 错误码：{native.NativeErrorCode}", error!);
+            }
+            finally
+            {
+                GameMemoryFpsSession.ResetForTests();
+                FufuFpsSession.ResetForTests();
+            }
+        }
+    }
+}
+
+static void UnlockerChannels()
+{
+    nint buffer = Marshal.AllocHGlobal(16);
+    try
+    {
+        Marshal.WriteInt32(buffer, 0, 1234); Marshal.WriteInt32(buffer, 4, 151); Marshal.WriteInt32(buffer, 8, 5678);
+        using var memory = new WindowsGameFpsMemory(Environment.ProcessId);
+        using var channel = new Ky3TargetChannel(memory, buffer + 4);
+        channel.Write(117); Assert.Equal(117, channel.Read());
+        ((IYsrFpsChannel)channel).Restore(151); Assert.Equal(151, channel.Read());
+        Assert.Equal(1234, Marshal.ReadInt32(buffer, 0)); Assert.Equal(5678, Marshal.ReadInt32(buffer, 8));
+        using var fufuMemory = new WindowsGameFpsMemory(Environment.ProcessId);
+        using var fufu = new FufuMemoryTargetChannel(fufuMemory, buffer + 4);
+        fufu.Write(117); Assert.Equal(117, fufu.Read());
+        fufu.Write(0); Assert.Equal(999, fufu.Read());
+        fufu.Restore(178); Assert.Equal(178, fufu.Read());
+        fufu.Restore(10000); Assert.Equal(10000, fufu.Read());
+        Assert.Equal(1234, Marshal.ReadInt32(buffer, 0)); Assert.Equal(5678, Marshal.ReadInt32(buffer, 8));
+    }
+    finally { Marshal.FreeHGlobal(buffer); }
+    string file = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".ini");
+    try
+    {
+        File.WriteAllText(file, "[FpsUnlock]\nValue=1\n[TargetFps]\nValue=151\n[Other]\nValue=42\n");
+        using var channel = new FufuConfigTargetChannel(file);
+        channel.Write(117); Assert.Equal(117, channel.Read());
+        ((IYsrFpsChannel)channel).Restore(151); Assert.Equal(151, channel.Read());
+        Assert.Contains("Value=42", File.ReadAllText(file));
+    }
+    finally { File.Delete(file); }
+}
+static void FufuCardsCleanup()
+{
+    var start = MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.FufuFpsStart);
+    var stop = MacroActionTemplateFactory.CreateStep(MacroActionTemplateKind.FufuFpsStop);
+    var doc = new MacroDocument(1, "fufu", [start, stop]);
+    Assert.Equal(start, McrxParser.Parse(McrxSerializer.Serialize(doc)).Steps[0]);
+    Assert.Contains("fufu.fps.start", McrxSerializer.Serialize(doc));
+    FufuFpsSession.ResetForTests();
+    var fake = new FakeYsrChannel(151); FufuFpsSession.TestOpenChannel = () => fake;
+    try
+    {
+        using (var owner = new PlaybackEffectScope())
+            Assert.True(YsrFpsSession.TryApply(new(117, YsrFpsAction.Start, FpsBackend.Fufu), out _));
+        Assert.Equal(151, fake.Read());
+    }
+    finally { FufuFpsSession.ResetForTests(); }
+}
+
+sealed class FakeYsrChannel(int fps) : IYsrFpsChannel
+{
+    public int Fps = fps;
+    public bool Disposed;
+    public int? FailFps;
+    public int Read() => Volatile.Read(ref Fps);
+    public void Write(int value)
+    {
+        if (FailFps == value) throw new IOException("test write failed");
+        Volatile.Write(ref Fps, value);
+    }
+    public void Dispose() => Disposed = true;
 }
 
 static class Assert
@@ -10544,4 +11248,17 @@ sealed class ImmediatePlaybackDelayStrategy : IPlaybackDelayStrategy
             clock.Advance(dueTick - clock.GetTimestamp());
         }
     }
+}
+
+sealed class FakeFpsProcessMemory : IGameFpsMemory
+{
+    public readonly byte[] Bytes = new byte[0x10000];
+    public nint Base => 0x100000;
+    public bool IsAlive => true;
+    public byte[] Read(nint address, int size) => Bytes.AsSpan(checked((int)(address - Base)), size).ToArray();
+    public void Write(nint address, byte[] data) => data.CopyTo(Bytes, checked((int)(address - Base)));
+    public bool IsWritable(nint address, int size) => address - Base >= 0x3000 && address - Base + size <= 0x3100;
+    public bool IsExecutable(nint address) => address - Base >= 0x1000 && address - Base < 0x2000 ||
+        address - Base >= 0x8000 && address - Base < 0x8100;
+    public void Dispose() { }
 }

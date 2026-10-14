@@ -28,6 +28,11 @@ public partial class StepSequencePanel : UserControl
     private readonly HashSet<string> boxSelectionBasePaths = [];
     private List<ConditionRangeHighlight> conditionRanges = [];
     private IReadOnlyList<MacroStep> steps = [];
+    private readonly System.Collections.ObjectModel.ObservableCollection<StepDisplayItem> displayRows = [];
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<MacroStep, RowIdentity> identities = new();
+    private long nextIdentity;
+    private sealed record RowIdentity(long Value);
+
     private IReadOnlyList<string> dragSelectionSnapshot = [];
     private MacroEditorState? state;
     private Func<string, string>? macroNameResolver;
@@ -55,6 +60,7 @@ public partial class StepSequencePanel : UserControl
     public StepSequencePanel()
     {
         InitializeComponent();
+        StepList.ItemsSource = displayRows;
         stepDragMouseHookProc = StepDragMouseHookCallback;
         Loaded += StepSequencePanel_Loaded;
         Unloaded += StepSequencePanel_Unloaded;
@@ -68,6 +74,26 @@ public partial class StepSequencePanel : UserControl
     }
 
     public event Action? Activated;
+
+    private void ZoomOut_Click(object sender, RoutedEventArgs e) => SetSequenceZoom(SequenceScale.ScaleX - 0.1);
+    private void ZoomIn_Click(object sender, RoutedEventArgs e) => SetSequenceZoom(SequenceScale.ScaleX + 0.1);
+    private void ResetZoom_Click(object sender, RoutedEventArgs e) => SetSequenceZoom(1);
+
+    private void SequenceViewport_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0 || stepListDragInProgress || boxSelectionActive) return;
+        SetSequenceZoom(SequenceScale.ScaleX + (e.Delta > 0 ? 0.1 : -0.1));
+        e.Handled = true;
+    }
+
+    private void SetSequenceZoom(double value)
+    {
+        var zoom = Math.Round(Math.Clamp(value, 0.6, 1.5), 1);
+        SequenceScale.ScaleX = SequenceScale.ScaleY = zoom;
+        SequenceZoomButton.Content = $"{zoom * 100:0}%";
+        ZoomOutButton.IsEnabled = zoom > 0.6;
+        ZoomInButton.IsEnabled = zoom < 1.5;
+    }
     public event Action? BeforeStepsChanged;
     public event Action? StepsChanged;
     public event Action? UndoRequested;
@@ -193,6 +219,16 @@ public partial class StepSequencePanel : UserControl
         var selectedPath = SelectedStepPath.ToArray();
         steps = newSteps.ToList();
         RefreshList(selectedPath);
+    }
+
+    public sealed record ViewState(string[] Paths, double Offset);
+    public ViewState CaptureViewState() => new(StepList.SelectedItems.OfType<StepDisplayItem>().Select(i => i.StepPathText).ToArray(), GetStepScrollViewer()?.VerticalOffset ?? 0);
+    public void RestoreViewState(ViewState state)
+    {
+        StepList.SelectedItems.Clear();
+        var paths = state.Paths.ToHashSet();
+        foreach (var row in displayRows) if (paths.Contains(row.StepPathText)) StepList.SelectedItems.Add(row);
+        GetStepScrollViewer()?.ScrollToVerticalOffset(state.Offset);
     }
 
     public IReadOnlyList<StepChoice> GetStepChoices()
@@ -447,17 +483,32 @@ public partial class StepSequencePanel : UserControl
 
     private void RefreshList(IReadOnlyList<int>? selectPath = null)
     {
-        StepList.Items.Clear();
+        var selected = StepList.SelectedItems.OfType<StepDisplayItem>().ToArray();
+        var scroll = GetStepScrollViewer();
+        double offset = scroll?.VerticalOffset ?? 0;
+        var available = displayRows.GroupBy(item => (item.Identity, item.Kind)).ToDictionary(g => g.Key, g => new Queue<StepDisplayItem>(g));
+        var desired = new List<StepDisplayItem>();
         foreach (var item in StepDisplayItem.FlattenWithExecutionOrdinals(steps, macroNameResolver: ResolveMacroDisplayName))
         {
-            StepList.Items.Add(item);
+            var model = MacroStepTreeEditor.GetAtPath(steps, item.StepPath);
+            item.Identity = identities.GetValue(model, _ => new(++nextIdentity)).Value;
+            if (available.TryGetValue((item.Identity, item.Kind), out var matches) && matches.TryDequeue(out var existing))
+            { existing.UpdateFrom(item); desired.Add(existing); }
+            else desired.Add(item);
         }
-
-        ApplyConditionBarsToItems();
-        if (selectPath is { Count: > 0 })
+        var keep = desired.ToHashSet();
+        for (int i = displayRows.Count - 1; i >= 0; i--) if (!keep.Contains(displayRows[i])) displayRows.RemoveAt(i);
+        for (int i = 0; i < desired.Count; i++)
         {
-            SelectStepPath(selectPath);
+            if (i < displayRows.Count && ReferenceEquals(displayRows[i], desired[i])) continue;
+            int oldIndex = displayRows.IndexOf(desired[i]);
+            if (oldIndex >= 0) displayRows.Move(oldIndex, i); else displayRows.Insert(i, desired[i]);
         }
+        ApplyConditionBarsToItems();
+        var retained = selected.Where(keep.Contains).ToArray();
+        foreach (var item in retained) if (!StepList.SelectedItems.Contains(item)) StepList.SelectedItems.Add(item);
+        if (retained.Length == 0 && selectPath is { Count: > 0 }) SelectStepPath(selectPath);
+        scroll?.ScrollToVerticalOffset(offset);
 
         RefreshSelectedStepText();
         var empty = StepList.Items.Count == 0;
@@ -1836,7 +1887,7 @@ public partial class StepSequencePanel : UserControl
                 }
             }
         }
-        StepList.Items.Refresh();
+        foreach (var item in displayItems) item.NotifyAppearanceChanged();
     }
 
     private static string GetStepPathFromSource(DependencyObject? source)

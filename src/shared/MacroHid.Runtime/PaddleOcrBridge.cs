@@ -91,8 +91,9 @@ public sealed class PaddleOcrBridge : IDisposable
                 "backend missing: WindowsOcrServer.exe or paddleocr\\ppocr_server.exe was not found"));
         }
 
-        var pixels = ScreenCaptureService.CaptureRegion(region);
-        if (pixels == null || pixels.Length == 0)
+        using var frame = ScreenCaptureService.CaptureFrame(region);
+        var pixels = frame.Bytes;
+        if (frame.Count == 0)
         {
             return PublishRecognition(new OcrRecognitionResult(
                 true,
@@ -144,7 +145,7 @@ public sealed class PaddleOcrBridge : IDisposable
         {
             Width = region.Width,
             Height = region.Height,
-            Pixels = Convert.ToBase64String(pixels),
+            Pixels = Convert.ToBase64String(pixels, 0, checked(frame.Count * 4)),
             Language = language
         };
 

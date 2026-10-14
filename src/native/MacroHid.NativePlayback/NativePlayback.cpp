@@ -24,6 +24,10 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unordered_map>
+#include <stdexcept>
+#include <condition_variable>
+#include <chrono>
 
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
 #define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
@@ -46,11 +50,87 @@ namespace
         ULONG StateMask;
     };
 
+    struct CoreChoice
+    {
+        DWORD_PTR mask = 0;
+        uint32_t index = std::numeric_limits<uint32_t>::max();
+        uint32_t processorNumber = std::numeric_limits<uint32_t>::max();
+        int64_t maxLateUs = std::numeric_limits<int64_t>::max();
+        int64_t p99LateUs = std::numeric_limits<int64_t>::max();
+        int64_t p999LateUs = std::numeric_limits<int64_t>::max();
+        int64_t meanLateUs = std::numeric_limits<int64_t>::max();
+        int64_t score = std::numeric_limits<int64_t>::max();
+        uint32_t physicalCoreId = std::numeric_limits<uint32_t>::max();
+        uint32_t efficiencyClass = 0;
+    };
+
+    struct ModifierChordEdges
+    {
+        int downs = 0;
+        int ups = 0;
+        bool otherKeyDown = false;
+        bool keyUp = false;
+    };
+
     struct NativePlan
     {
+        struct Scratch { std::vector<int64_t> late, loopLate, submitted; bool available = true; };
+        std::mutex scratchGate;
+        std::array<Scratch, 2> scratch;
+        std::atomic<int> references{1};
+        std::array<CoreChoice, 2> configuredCores{};
         std::vector<INPUT> inputs;
         std::vector<MhpBatch> batches;
+        std::vector<ModifierChordEdges> chordEdges;
+        std::vector<std::vector<std::pair<size_t, int64_t>>> releaseDependencies;
     };
+
+    void CompileReleaseDependencies(NativePlan& plan)
+    {
+        for (auto& slot : plan.scratch)
+        {
+            slot.late.reserve(plan.batches.size());
+            slot.loopLate.reserve(plan.batches.size());
+            slot.submitted.resize(plan.batches.size());
+        }
+        std::unordered_map<uint64_t, size_t> held;
+        plan.releaseDependencies.resize(plan.batches.size());
+        for (size_t index = 0; index < plan.batches.size(); index++)
+        {
+            const auto& batch = plan.batches[index];
+            auto transition = [&](uint64_t key, bool up)
+            {
+                auto found = held.find(key);
+                if (up)
+                {
+                    if (found != held.end())
+                    {
+                        const auto down = found->second;
+                        if (down != index) plan.releaseDependencies[index].push_back({down, std::max<int64_t>(0, batch.dueTicks - plan.batches[down].dueTicks)});
+                        held.erase(found);
+                    }
+                }
+                else if (found == held.end()) held.emplace(key, index);
+            };
+            for (uint32_t i = 0; i < batch.inputCount; i++)
+            {
+                const auto& input = plan.inputs[batch.inputOffset + i];
+                if (input.type == INPUT_KEYBOARD)
+                    transition((static_cast<uint64_t>(input.ki.wVk) << 32) | (static_cast<uint64_t>(input.ki.wScan) << 8) | (input.ki.dwFlags & ~KEYEVENTF_KEYUP), (input.ki.dwFlags & KEYEVENTF_KEYUP) != 0);
+                if (input.type == INPUT_MOUSE)
+                {
+                    const DWORD downs[]{MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_XDOWN};
+                    const DWORD ups[]{MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_XUP};
+                    for (int button = 0; button < 4; button++)
+                    {
+                        uint64_t key = (1ULL << 63) | button | (button == 3 ? static_cast<uint64_t>(input.mi.mouseData) << 8 : 0);
+                        if (input.mi.dwFlags & downs[button]) transition(key, false);
+                        if (input.mi.dwFlags & ups[button]) transition(key, true);
+                    }
+                }
+            }
+        }
+    }
 
     thread_local std::wstring g_lastError;
 
@@ -125,14 +205,6 @@ namespace
             return false;
         }
     }
-
-    struct ModifierChordEdges
-    {
-        int downs = 0;
-        int ups = 0;
-        bool otherKeyDown = false;
-        bool keyUp = false;
-    };
 
     ModifierChordEdges InspectModifierChord(const INPUT* inputs, uint32_t count)
     {
@@ -305,12 +377,21 @@ namespace
         SetCursorPos(left + width / 2, top + height / 2);
     }
 
+    #ifdef MACROHID_PLAYBACK_TEST
+    UINT (*g_testSubmit)(UINT, INPUT*) = nullptr;
+    #endif
     UINT SubmitPlaybackInput(UINT count, INPUT* inputs)
     {
+        #ifdef MACROHID_PLAYBACK_TEST
+        return g_testSubmit(count, inputs);
+        #endif
         if (count == 0 || inputs == nullptr)
         {
             return 0;
         }
+
+        if (std::none_of(inputs, inputs + count, IsRelativeMouseInput))
+            return SendInput(count, inputs, sizeof(INPUT));
 
         UINT sent = 0;
         for (UINT i = 0; i < count; i++)
@@ -333,6 +414,7 @@ namespace
 
     struct PlaybackControl
     {
+        std::atomic<int> references{1};
         volatile long pauseCount = 0;
         volatile long pauseFlag = 0;
         volatile long long pauseStartedTick = 0;
@@ -495,20 +577,6 @@ namespace
 
     private:
         HANDLE handle;
-    };
-
-    struct CoreChoice
-    {
-        DWORD_PTR mask = 0;
-        uint32_t index = std::numeric_limits<uint32_t>::max();
-        uint32_t processorNumber = std::numeric_limits<uint32_t>::max();
-        int64_t maxLateUs = std::numeric_limits<int64_t>::max();
-        int64_t p99LateUs = std::numeric_limits<int64_t>::max();
-        int64_t p999LateUs = std::numeric_limits<int64_t>::max();
-        int64_t meanLateUs = std::numeric_limits<int64_t>::max();
-        int64_t score = std::numeric_limits<int64_t>::max();
-        uint32_t physicalCoreId = std::numeric_limits<uint32_t>::max();
-        uint32_t efficiencyClass = 0;
     };
 
     std::atomic<int> g_playbackActive{ 0 };
@@ -859,7 +927,7 @@ namespace
         return choice;
     }
 
-    std::vector<CoreChoice> ScanEligibleCores(bool enableCpuScan, MhpCoreProgressFn progress = nullptr, bool force = false)
+    std::vector<CoreChoice> ScanEligibleCores(bool enableCpuScan, MhpCoreProgressFn progress = nullptr, bool force = false, DWORD_PTR allowedMask = 0)
     {
         static std::mutex cacheMutex;
         static std::vector<CoreChoice> cachedChoices;
@@ -876,6 +944,8 @@ namespace
             return {};
         }
 
+        if (allowedMask) processMask &= allowedMask;
+        if (!processMask) return {};
         std::vector<CoreChoice> cachedSnapshot;
         bool useCache = false;
         {
@@ -991,7 +1061,7 @@ namespace
         return choices.empty() ? CoreChoice{} : choices.front();
     }
 
-    std::vector<CoreChoice> SelectLowestJitterCores(int requestedCount, bool enableCpuScan)
+    std::vector<CoreChoice> SelectLowestJitterCores(int requestedCount, bool enableCpuScan, DWORD_PTR allowedMask = 0)
     {
         std::vector<CoreChoice> selected;
         if (requestedCount <= 0)
@@ -999,7 +1069,7 @@ namespace
             return selected;
         }
 
-        const auto choices = ScanEligibleCores(enableCpuScan);
+        const auto choices = ScanEligibleCores(enableCpuScan, nullptr, false, allowedMask);
         selected.reserve(std::min<int>(requestedCount, static_cast<int>(choices.size())));
         std::vector<uint32_t> usedPhysicalCores;
         for (const auto& choice : choices)
@@ -1324,7 +1394,7 @@ namespace
 
             if (options.precisionMode == MhpUltraLowJitter)
             {
-                if (SetPriorityClass(process, REALTIME_PRIORITY_CLASS) != FALSE)
+                if (SetPriorityClass(process, HIGH_PRIORITY_CLASS) != FALSE)
                 {
                     stats.processPriorityApplied++;
                 }
@@ -2383,6 +2453,10 @@ namespace
         output.actualTick = actualTick;
         output.lateUs = lateUs;
     }
+#ifndef MACROHID_SCHEDULER_SOURCE
+#define MACROHID_SCHEDULER_SOURCE "SharedPlaybackScheduler.inl"
+#endif
+#include MACROHID_SCHEDULER_SOURCE
 }
 
 extern "C" __declspec(dllexport) MhpStatus __cdecl MhpWarmEngine(
@@ -2401,7 +2475,12 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpWarmEngine(
         ? effectiveOptions.qpcFrequency
         : QueryFrequency();
     effectiveOptions.nativeEngineMode = MhpNativeEngineStandby;
-    return g_standbyEngine.Warm(&effectiveOptions, stats);
+    return LegacyPlaybackEnabled() ? g_standbyEngine.Warm(&effectiveOptions, stats) : g_sharedScheduler.Warm(&effectiveOptions, stats);
+}
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpPrepareEngine(const MhpRunOptions* options, uint64_t allowedMask, MhpRunStats* stats)
+{
+    return LegacyPlaybackEnabled() ? MhpWarmEngine(options, stats) : g_sharedScheduler.Warm(options, stats, static_cast<DWORD_PTR>(allowedMask));
 }
 
 extern "C" __declspec(dllexport) MhpStatus __cdecl MhpScanCores(
@@ -2410,7 +2489,12 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpScanCores(
     uint32_t* written,
     MhpCoreProgressFn progress)
 {
-    const auto choices = ScanEligibleCores(true, progress, true);
+    return MhpScanCoresOnMask(0, samples, capacity, written, progress);
+}
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpScanCoresOnMask(uint64_t mask, MhpCoreSample* samples, uint32_t capacity, uint32_t* written, MhpCoreProgressFn progress)
+{
+    const auto choices = ScanEligibleCores(true, progress, false, static_cast<DWORD_PTR>(mask));
     uint32_t count = 0;
     if (samples != nullptr)
     {
@@ -2437,6 +2521,7 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpScanCores(
 
 extern "C" __declspec(dllexport) void __cdecl MhpShutdownEngine()
 {
+    g_sharedScheduler.Shutdown();
     g_standbyEngine.Shutdown();
 }
 
@@ -2460,21 +2545,19 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpCreatePlan(
         return MhpInvalidArgument;
     }
 
-    if (inputCount > 0)
+    try
     {
-        nativePlan->inputs.assign(inputs, inputs + inputCount);
+        if (inputCount > 0) nativePlan->inputs.assign(inputs, inputs + inputCount);
+        if (batchCount > 0) nativePlan->batches.assign(batches, batches + batchCount);
+        if (!ValidatePlan(*nativePlan)) throw std::invalid_argument("batch input range");
+        CompileReleaseDependencies(*nativePlan);
+        nativePlan->chordEdges.reserve(nativePlan->batches.size());
+        for (const auto& batch : nativePlan->batches)
+            nativePlan->chordEdges.push_back(InspectModifierChord(
+                batch.inputCount ? nativePlan->inputs.data() + batch.inputOffset : nullptr, batch.inputCount));
+        nativePlan->configuredCores = g_sharedScheduler.PreparedCores();
     }
-
-    if (batchCount > 0)
-    {
-        nativePlan->batches.assign(batches, batches + batchCount);
-    }
-    if (!ValidatePlan(*nativePlan))
-    {
-        delete nativePlan;
-        SetLastErrorText(L"batch input range is outside the native input array");
-        return MhpInvalidArgument;
-    }
+    catch (...) { delete nativePlan; *plan = nullptr; SetLastErrorText(L"invalid plan or allocation failed"); return MhpInvalidArgument; }
 
     *plan = nativePlan;
     SetLastErrorText(L"");
@@ -2501,6 +2584,12 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
     {
         SetLastErrorText(L"invalid null argument");
         return MhpInvalidArgument;
+    }
+
+    if (!LegacyPlaybackEnabled())
+    {
+        *stats = {};
+        return g_sharedScheduler.Run(static_cast<NativePlan*>(plan), *options, static_cast<PlaybackControl*>(playbackControl), cancelFlag, *stats);
     }
 
     PlaybackActivityScope playbackActivity;
@@ -2790,6 +2879,7 @@ extern "C" __declspec(dllexport) void __cdecl MhpPausePlayback(void* playbackCon
     {
         InterlockedExchange64(&control->pauseStartedTick, QueryCounter());
         InterlockedExchange(&control->pauseFlag, 1);
+        g_sharedScheduler.Notify();
     }
 }
 
@@ -2819,24 +2909,102 @@ extern "C" __declspec(dllexport) void __cdecl MhpResumePlayback(void* playbackCo
     }
     InterlockedExchange(&control->pauseFlag, 0);
     WakeByAddressAll(const_cast<long*>(&control->pauseFlag));
+    g_sharedScheduler.Notify();
 }
 
 extern "C" __declspec(dllexport) void __cdecl MhpDestroyPlaybackControl(void* playbackControl)
 {
-    delete static_cast<PlaybackControl*>(playbackControl);
+    auto* control = static_cast<PlaybackControl*>(playbackControl);
+    if (control && control->references.fetch_sub(1) == 1) delete control;
 }
 
 extern "C" __declspec(dllexport) void __cdecl MhpCancel(volatile long* cancelFlag)
 {
+    g_sharedScheduler.Notify();
     if (cancelFlag != nullptr)
     {
-        *cancelFlag = 1;
+        InterlockedExchange(cancelFlag, 1);
+        g_sharedScheduler.Notify();
     }
 }
 
 extern "C" __declspec(dllexport) void __cdecl MhpDestroyPlan(void* plan)
 {
-    delete static_cast<NativePlan*>(plan);
+    auto* nativePlan = static_cast<NativePlan*>(plan);
+    if (nativePlan && nativePlan->references.fetch_sub(1) == 1) delete nativePlan;
+}
+
+struct AsyncPlaybackRun
+{
+    std::shared_ptr<ScheduledRun> run;
+    NativePlan* plan;
+    PlaybackControl* control;
+};
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpSubmitPlan(void* plan, const MhpRunOptions* options, void* playbackControl, void** runHandle, HANDLE* completion)
+{
+    return MhpSubmitPlanAt(plan, options, playbackControl, 0, runHandle, completion);
+}
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpSubmitPlanAt(void* plan, const MhpRunOptions* options, void* playbackControl, int64_t timelineStart, void** runHandle, HANDLE* completion)
+{
+    if (!plan || !options || !runHandle || !completion) return MhpInvalidArgument;
+    *runHandle = nullptr; *completion = nullptr;
+    auto* p = static_cast<NativePlan*>(plan);
+    auto* c = static_cast<PlaybackControl*>(playbackControl);
+    p->references.fetch_add(1);
+    if (c) c->references.fetch_add(1);
+    try
+    {
+        // Allocate the public owner before publishing to the workers.
+        auto owned = std::make_unique<AsyncPlaybackRun>();
+        owned->plan = p; owned->control = c;
+        owned->run = g_sharedScheduler.Submit(p, *options, c, nullptr, timelineStart);
+        if (owned->run)
+        {
+            *completion = owned->run->completed;
+            *runHandle = owned.release();
+            return MhpOk;
+        }
+        SetLastErrorText(L"shared scheduler unavailable");
+    }
+    catch (...) { SetLastErrorText(L"shared scheduler allocation failed before submission"); }
+    MhpDestroyPlan(p); MhpDestroyPlaybackControl(c);
+    return MhpWin32Error;
+}
+
+extern "C" __declspec(dllexport) void __cdecl MhpCancelRun(void* handle)
+{
+    if (auto* owned = static_cast<AsyncPlaybackRun*>(handle)) owned->run->cancelled.store(true, std::memory_order_release);
+    g_sharedScheduler.Notify();
+}
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpGetRunResult(void* handle, MhpRunStats* stats)
+{
+    auto* owned = static_cast<AsyncPlaybackRun*>(handle);
+    if (!owned || !stats || WaitForSingleObject(owned->run->completed, 0) != WAIT_OBJECT_0) return MhpInvalidArgument;
+    *stats = owned->run->stats;
+    stats->p999LateUs = Percentile(owned->run->late, .999);
+    stats->p999LoopEndLateUs = Percentile(owned->run->loopLate, .999);
+    return owned->run->status;
+}
+
+extern "C" __declspec(dllexport) void __cdecl MhpReleaseRun(void* handle)
+{
+    auto* owned = static_cast<AsyncPlaybackRun*>(handle);
+    if (!owned) return;
+    MhpCancelRun(handle);
+    WaitForSingleObject(owned->run->completed, INFINITE);
+    MhpDestroyPlan(owned->plan); MhpDestroyPlaybackControl(owned->control);
+    delete owned;
+}
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpGetRunTrace(void* handle, MhpRunTrace* trace)
+{
+    auto* owned = static_cast<AsyncPlaybackRun*>(handle);
+    if (!owned || !trace || WaitForSingleObject(owned->run->completed, 0) != WAIT_OBJECT_0) return MhpInvalidArgument;
+    *trace = owned->run->trace;
+    return MhpOk;
 }
 
 extern "C" __declspec(dllexport) const wchar_t* __cdecl MhpGetLastErrorText()

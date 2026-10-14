@@ -272,19 +272,26 @@
   <data name="NetLimitStopHint" xml:space="preserve"><value>取消限速，恢复原来的网速。</value></data>
   <data name="NetLimiterHint" xml:space="preserve"><value>使用本机已安装的 NetLimiter。新建时默认 695，只限制上传，下载不限，单位是字节/秒。</value></data>
   <data name="NetLimiterStopHint" xml:space="preserve"><value>取消 NetLimiter 里的限速。本机没安装 NetLimiter 时，这张卡片不会改网络。</value></data>
-  <data name="ClockShiftHint" xml:space="preserve"><value>填 0 小时 0 分钟则不改系统时间。同一次播放只按第一次拨快。断网卡片仍会默认拨快。</value></data>
+  <data name="ClockShiftHint" xml:space="preserve"><value>填 0 小时 0 分钟则不改系统时间。同一次播放只按第一次拨快。</value></data>
   <data name="ClockRestoreHint" xml:space="preserve"><value>立刻把系统时间改回。播放结束时如果还没改回，也会自动改回。</value></data>
-  <data name="AddFrameLockStart" xml:space="preserve"><value>开启锁帧</value></data>
+  <data name="AddFrameLockStart" xml:space="preserve"><value>RTSS 开启锁帧</value></data>
   <data name="AddFrameLockStartHint" xml:space="preserve"><value>把指定程序限到设定帧数</value></data>
-  <data name="AddFrameLockStop" xml:space="preserve"><value>关闭锁帧</value></data>
+  <data name="AddFrameLockStop" xml:space="preserve"><value>RTSS 关闭锁帧</value></data>
   <data name="AddFrameLockStopHint" xml:space="preserve"><value>恢复这个程序原来的帧数上限</value></data>
-  <data name="TemplateFrameLockStart" xml:space="preserve"><value>开启锁帧</value></data>
-  <data name="TemplateFrameLockStop" xml:space="preserve"><value>关闭锁帧</value></data>
+  <data name="AddYsrFpsToggle" xml:space="preserve"><value>YSR 切帧</value></data>
+  <data name="AddYsrFpsToggleHint" xml:space="preserve"><value>切换到设定 FPS 再按一次恢复</value></data>
+  <data name="TemplateFrameLockStart" xml:space="preserve"><value>RTSS 开启锁帧</value></data>
+  <data name="TemplateFrameLockStop" xml:space="preserve"><value>RTSS 关闭锁帧</value></data>
   <data name="FrameLockProcess" xml:space="preserve"><value>进程名</value></data>
   <data name="FrameLockFps" xml:space="preserve"><value>锁定帧数</value></data>
   <data name="FrameLockHint" xml:space="preserve"><value>帧数 1 到 1000。关闭时恢复原来的上限。播放结束也会恢复。</value></data>
   <data name="PaletteBasic" xml:space="preserve"><value>基础功能</value></data>
   <data name="PaletteAdvanced" xml:space="preserve"><value>高级功能</value></data>
+  <data name="PaletteYsrUnlocker" xml:space="preserve"><value>锁帧模块</value></data>
+  <data name="AddYsrFpsStart" xml:space="preserve"><value>YSR 开启锁帧</value></data>
+  <data name="AddYsrFpsStop" xml:space="preserve"><value>YSR 关闭锁帧</value></data>
+  <data name="AddYsrFpsStartHint" xml:space="preserve"><value>修改已有 KY3 解帧器目标值</value></data>
+  <data name="AddYsrFpsStopHint" xml:space="preserve"><value>恢复解帧器原目标值</value></data>
   <data name="PaletteLoop" xml:space="preserve"><value>循环控制</value></data>
   <data name="ParallelTimeoutMs" xml:space="preserve"><value>超时（毫秒，留空直到成立或播放停止）</value></data>
   <data name="ParallelStart" xml:space="preserve"><value>并行</value></data>
@@ -399,8 +406,8 @@
   <data name="ForceStopConflictsWithColorSample" xml:space="preserve"><value>强制停止键不能和取色快捷键相同。</value></data>
   <data name="ListeningForceStopConflict" xml:space="preserve"><value>以下宏与强制停止键冲突，未启动监听：{0}</value></data>
   <data name="PrecisionMode" xml:space="preserve"><value>精度模式</value></data>
-  <data name="PrecisionBalanced" xml:space="preserve"><value>基础</value></data>
-  <data name="PrecisionExtremeDuringPlayback" xml:space="preserve"><value>高性能</value></data>
+  <data name="PrecisionBalanced" xml:space="preserve"><value>低占用</value></data>
+  <data name="PrecisionExtremeDuringPlayback" xml:space="preserve"><value>均衡（推荐）</value></data>
   <data name="PrecisionUltraLowJitter" xml:space="preserve"><value>极限</value></data>
   <data name="WorkspaceWindowMenu" xml:space="preserve"><value>窗口</value></data>
   <data name="WorkspaceShow" xml:space="preserve"><value>显示</value></data>
@@ -605,4 +612,13 @@
   <data name="LibraryPathHelp" xml:space="preserve"><value>数据库 &gt; 文件夹 &gt; 宏名。回车后宏数据库会跳到对应文件或文件夹。</value></data>
   <data name="LibraryPathNotFound" xml:space="preserve"><value>找不到这条宏路径。</value></data>
   <data name="ListeningColorSampleConflict" xml:space="preserve"><value>以下宏与取色快捷键冲突，未启动监听：{0}</value></data>
+  <data name="AddKy3FpsStart" xml:space="preserve"><value>KY3 开启锁帧</value></data>
+  <data name="AddKy3FpsStop" xml:space="preserve"><value>KY3 恢复帧率</value></data>
+  <data name="AddKy3FpsStartHint" xml:space="preserve"><value>修改已有 KY3 解帧器目标值</value></data>
+  <data name="AddKy3FpsStopHint" xml:space="preserve"><value>恢复解帧器原目标值</value></data>
+  <data name="AddFufuFpsStart" xml:space="preserve"><value>Fufu 开启锁帧</value></data>
+  <data name="AddFufuFpsStop" xml:space="preserve"><value>Fufu 恢复帧率</value></data>
+  <data name="AddFufuFpsStartHint" xml:space="preserve"><value>进入游戏后修改 Fufu 解帧器目标值</value></data>
+  <data name="AddFufuFpsStopHint" xml:space="preserve"><value>恢复解帧器原目标值</value></data>
+  <data name="OpenLogs" xml:space="preserve"><value>打开日志</value></data>
 </root>

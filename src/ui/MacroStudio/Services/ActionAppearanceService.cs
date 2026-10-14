@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -172,7 +172,7 @@ public static class ActionAppearanceService
             MacroActionTemplateKind.Pixel or MacroActionTemplateKind.TextWhen => isDark ? "#3A2D39" : "#EDE0EA",
             MacroActionTemplateKind.NetLimitStart or MacroActionTemplateKind.NetLimitStop or MacroActionTemplateKind.NetLimiterStart or MacroActionTemplateKind.NetLimiterStop => isDark ? "#293847" : "#DCEAF5",
             MacroActionTemplateKind.WeakNetStart or MacroActionTemplateKind.WeakNetStop or MacroActionTemplateKind.ClockShift or MacroActionTemplateKind.ClockRestore => isDark ? "#3A342B" : "#F2E8D8",
-            MacroActionTemplateKind.FrameLockStart or MacroActionTemplateKind.FrameLockStop => isDark ? "#293A32" : "#DDECE2",
+            MacroActionTemplateKind.FrameLockStart or MacroActionTemplateKind.FrameLockStop or MacroActionTemplateKind.YsrFpsStart or MacroActionTemplateKind.YsrFpsStop or MacroActionTemplateKind.YsrFpsToggle or MacroActionTemplateKind.Ky3FpsStart or MacroActionTemplateKind.Ky3FpsStop or MacroActionTemplateKind.FufuFpsStart or MacroActionTemplateKind.FufuFpsStop => isDark ? "#293A32" : "#DDECE2",
             MacroActionTemplateKind.Parallel => isDark ? "#3C2D31" : "#F0E0E3",
             MacroActionTemplateKind.StopCurrent => isDark ? "#3A332A" : "#F2E6D7",
             MacroActionTemplateKind.StopIteration => isDark ? "#3E302A" : "#F3E2D8",

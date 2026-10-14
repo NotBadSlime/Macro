@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\shared\MacroHid.Converter\MacroHid.Converter.csproj" />
@@ -9,6 +9,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <UseWPF>true</UseWPF>
     <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

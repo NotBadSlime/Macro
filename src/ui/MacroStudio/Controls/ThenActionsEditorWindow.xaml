@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:MacroStudio.Controls"
         Title="编辑触发动作"
         Width="760"
-        Height="560"
+        Height="720"
         MinWidth="680"
         MinHeight="500"
         WindowStartupLocation="CenterOwner"
@@ -69,7 +69,10 @@
                 </Grid.RowDefinitions>
 
                 <DockPanel Margin="4,0,4,10">
-                    <TextBlock Text="触发后执行" Style="{StaticResource PanelTitle}" />
+                    <WrapPanel>
+                        <TextBlock Text="触发后执行" Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <local:ListZoomControl TargetElement="{Binding ElementName=ThenListViewport}" />
+                    </WrapPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button x:Name="MoveUpButton" MinWidth="52" Content="上移" Click="MoveUp_Click" />
                         <Button x:Name="MoveDownButton" MinWidth="52" Content="下移" Click="MoveDown_Click" />
@@ -78,7 +81,7 @@
                     </StackPanel>
                 </DockPanel>
 
-                <Grid Grid.Row="1">
+                <Grid x:Name="ThenListViewport" Grid.Row="1">
                     <ListBox x:Name="ThenStepList"
                              SelectionMode="Single"
                              ItemTemplate="{StaticResource ThenActionStepTemplate}"

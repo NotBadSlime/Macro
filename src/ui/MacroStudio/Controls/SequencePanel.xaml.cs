@@ -19,8 +19,12 @@ public partial class SequencePanel : UserControl
     private bool isReadOnly;
     private bool isRecording;
     private string editorText = string.Empty;
+    private MacroDocument? parsedDocument;
+    private Dictionary<string, MacroDocument?> estimateCache = new(StringComparer.OrdinalIgnoreCase);
+    private MacroLibrarySnapshot? estimateLibrary;
     private readonly List<string> undoStack = [];
     private readonly List<string> redoStack = [];
+    private readonly Dictionary<string, StepSequencePanel.ViewState> historyViews = [];
 
     private bool updatingLibraryPath;
     private string committedLibraryPath = string.Empty;
@@ -60,6 +64,7 @@ public partial class SequencePanel : UserControl
             }
 
             editorText = normalized;
+            parsedDocument = null;
             EditorTextChanged?.Invoke(editorText);
         }
     }
@@ -196,8 +201,16 @@ public partial class SequencePanel : UserControl
     public void SetEditorDocument(MacroDocument document)
     {
         EditorText = McrxSerializer.Serialize(document);
+        parsedDocument = document;
         ValidateCurrentMacro();
         UpdateUndoButtonState();
+    }
+
+    public void SetParsedDocument(string text, MacroDocument document)
+    {
+        EditorText = text;
+        parsedDocument = document;
+        ValidateCurrentMacro();
     }
 
     public void CaptureUndoSnapshot()
@@ -214,7 +227,9 @@ public partial class SequencePanel : UserControl
             return;
         }
 
+        historyViews[current] = StepSequenceControl.CaptureViewState();
         PushSnapshot(undoStack, current);
+        foreach (var key in historyViews.Keys.Where(key => !undoStack.Contains(key) && !redoStack.Contains(key)).ToArray()) historyViews.Remove(key);
         redoStack.Clear();
 
         UpdateUndoButtonState();
@@ -224,6 +239,7 @@ public partial class SequencePanel : UserControl
     {
         undoStack.Clear();
         redoStack.Clear();
+        historyViews.Clear();
         UpdateUndoButtonState();
     }
 
@@ -237,9 +253,11 @@ public partial class SequencePanel : UserControl
 
         var previous = undoStack[^1];
         undoStack.RemoveAt(undoStack.Count - 1);
+        historyViews[EditorText] = StepSequenceControl.CaptureViewState();
         PushSnapshot(redoStack, EditorText);
         EditorText = previous;
         ValidateCurrentMacro();
+        if (historyViews.TryGetValue(previous, out var view)) StepSequenceControl.RestoreViewState(view);
         UpdateUndoButtonState();
         UndoApplied?.Invoke();
     }
@@ -254,9 +272,11 @@ public partial class SequencePanel : UserControl
 
         var next = redoStack[^1];
         redoStack.RemoveAt(redoStack.Count - 1);
+        historyViews[EditorText] = StepSequenceControl.CaptureViewState();
         PushSnapshot(undoStack, EditorText);
         EditorText = next;
         ValidateCurrentMacro();
+        if (historyViews.TryGetValue(next, out var view)) StepSequenceControl.RestoreViewState(view);
         UpdateUndoButtonState();
         RedoApplied?.Invoke();
     }
@@ -265,14 +285,16 @@ public partial class SequencePanel : UserControl
     {
         try
         {
-            var document = McrxParser.Parse(EditorText);
-            var scheduled = MacroScheduler.Compile(document, Stopwatch.GetTimestamp(), Stopwatch.Frequency);
+            var document = GetCurrentDocument();
+            estimateCache.Clear();
+            estimateLibrary = state?.LibrarySnapshot;
+            var scheduledCount = MacroScheduler.CountScheduledSteps(document.Steps);
 
             MacroNameText.Text = document.Name;
             updatingMacroName = true;
             MacroNameBox.Text = document.Name;
             updatingMacroName = false;
-            StepCountText.Text = scheduled.Count.ToString();
+            StepCountText.Text = scheduledCount.ToString();
             DurationText.Text = FormatDurationRange(MacroDurationEstimator.EstimateSteps(document.Steps, ResolveMacroForEstimate));
             StepSequenceControl.SetSteps(document.Steps);
         }
@@ -284,13 +306,13 @@ public partial class SequencePanel : UserControl
             updatingMacroName = false;
             StepCountText.Text = "0";
             DurationText.Text = "0 ms";
-            StepSequenceControl.SetSteps([]);
+            // Preserve the last valid sequence during incomplete edits.
             // Keep the JSON text as the source of truth and surface parse errors in the status row.
             StepSequenceControl.SetTitle(ex.Message);
         }
     }
 
-    public MacroDocument GetCurrentDocument() => McrxParser.Parse(EditorText);
+    public MacroDocument GetCurrentDocument() => parsedDocument ??= McrxParser.Parse(EditorText);
 
     public IReadOnlyList<StepChoice> GetStepChoices() => StepSequenceControl.GetStepChoices();
 
@@ -318,7 +340,7 @@ public partial class SequencePanel : UserControl
     public void ClearAllSteps()
     {
         if (isReadOnly) return;
-        var document = McrxParser.Parse(EditorText);
+        var document = GetCurrentDocument();
         if (document.Steps.Count == 0 && document.EffectiveConditions.Count == 0)
         {
             return;
@@ -347,7 +369,7 @@ public partial class SequencePanel : UserControl
     public void ApplyMacroName(string name)
     {
         if (isReadOnly) return;
-        var document = McrxParser.Parse(EditorText);
+        var document = GetCurrentDocument();
         if (string.Equals(document.Name, name, StringComparison.Ordinal)) return;
         CaptureUndoSnapshot();
         SetEditorDocument(document with { Name = name });
@@ -357,8 +379,10 @@ public partial class SequencePanel : UserControl
     private void OnStepSequenceStepsChanged()
     {
         if (isReadOnly) return;
-        var document = McrxParser.Parse(EditorText);
-        EditorText = McrxSerializer.Serialize(document with { Steps = StepSequenceControl.Steps });
+        var document = GetCurrentDocument();
+        var edited = document with { Steps = StepSequenceControl.Steps };
+        EditorText = McrxSerializer.Serialize(edited);
+        parsedDocument = edited;
         ValidateCurrentMacro();
         RaiseDocumentEdited();
     }
@@ -377,7 +401,7 @@ public partial class SequencePanel : UserControl
 
         try
         {
-            var current = McrxParser.Parse(EditorText);
+            var current = GetCurrentDocument();
             if (string.Equals(current.Name, reference, StringComparison.CurrentCultureIgnoreCase))
             {
                 return current;
@@ -388,8 +412,9 @@ public partial class SequencePanel : UserControl
             // Keep estimating from library references when the editor text is invalid.
         }
 
+        if (estimateCache.TryGetValue(reference, out var cached)) return cached;
         var item = ResolveLibraryItem(reference);
-        return item is null ? null : state?.LibraryStore.ReadMacro(item.Id);
+        return estimateCache[reference] = item is null ? null : state?.LibraryStore.ReadMacro(item.Id);
     }
 
     private MacroLibraryItem? ResolveLibraryItem(string? reference)
@@ -399,7 +424,7 @@ public partial class SequencePanel : UserControl
             return null;
         }
 
-        var snapshot = state.LibraryStore.Load();
+        var snapshot = estimateLibrary ?? state.LibrarySnapshot;
         var preferredGroupId = snapshot.Items.FirstOrDefault(item =>
             string.Equals(item.Id, state.SelectedMacroId, StringComparison.OrdinalIgnoreCase))?.GroupId;
         return MacroLibraryResolver.Resolve(snapshot.Items, reference, preferredGroupId);

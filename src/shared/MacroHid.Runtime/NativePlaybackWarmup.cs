@@ -31,201 +31,78 @@ public readonly record struct CoreMeasureResult(
 
 public static class NativePlaybackWarmup
 {
+    private static readonly object Gate = new();
     private static int cpuScanReady;
-    private static string warmedAffinityMask = string.Empty;
-
     public static bool CpuScanReady => Volatile.Read(ref cpuScanReady) != 0;
-
-    public static void TryWarmUp()
-    {
-        TryWarmUp(scanCpu: false);
-    }
-
+    public static void TryWarmUp() => TryWarmUp(false);
+    public static void TryWarmUp(bool scanCpu) => Prepare(scanCpu, "", out _);
     public static void QueueWarmUpForPrecision(PrecisionMode precision, string? affinityMask)
-    {
-        _ = Task.Run(() => TryWarmUpForPrecision(precision, affinityMask));
-    }
-
+        => _ = Task.Run(() => TryWarmUpForPrecision(precision, affinityMask));
     public static void TryWarmUpForPrecision(PrecisionMode precision, string? affinityMask)
+        => PrepareForPrecision(precision, affinityMask);
+    public static bool PrepareForPrecision(PrecisionMode precision, string? affinityMask)
     {
-        if (precision != PrecisionMode.UltraLowJitter)
+        QpcPlaybackDelayStrategy.Prepare(precision);
+        if (!PlaybackPerformancePolicy.For(precision).PreferNative)
         {
-            TryWarmUp(scanCpu: false);
-            return;
+            PlaybackRuntimeStatus.SetPreparation(new(false, true, "managed", ""));
+            return false;
         }
-
-        var normalizedMask = PlaybackAffinityMask.NormalizeOrThrow(affinityMask);
-        if (!string.IsNullOrWhiteSpace(normalizedMask))
-        {
-            TryWarmUpForAffinityMask(normalizedMask);
-            return;
-        }
-
-        if (CpuScanReady)
-        {
-            return;
-        }
-
-        TryWarmUp(scanCpu: false);
+        return Prepare(precision == PrecisionMode.UltraLowJitter, affinityMask, out _);
     }
-
-    public static void TryWarmUp(bool scanCpu)
+    private static bool Prepare(bool scan, string? maskText, out MhpRunStats stats)
     {
-        TryWarmUp(scanCpu, out _);
+        lock (Gate)
+        {
+            stats = default;
+            PlaybackRuntimeStatus.SetPreparation(new(true, false, "managed", "原生初始化 / 核心准备"));
+            try
+            {
+                PlaybackAffinityMask.TryParse(PlaybackAffinityMask.NormalizeOrThrow(maskText), out var mask);
+                var options = new MhpRunOptions { PrecisionMode = 2, EnableCpuScan = scan ? 1 : 0,
+                    QpcFrequency = System.Diagnostics.Stopwatch.Frequency, NativeEngineMode = (int)NativeEngineMode.Standby };
+                var status = NativePlaybackInterop.MhpPrepareEngine(ref options, mask, out stats);
+                bool measured = CoreMeasureResult.From(stats, status == MhpStatus.Ok).Measured;
+                Volatile.Write(ref cpuScanReady, measured ? 1 : 0);
+                string reason = status != MhpStatus.Ok ? NativePlaybackInterop.GetLastErrorText()
+                    : scan && !measured ? "测核尚未完成；正在运行的宏不受影响" : "";
+                PlaybackRuntimeStatus.SetPreparation(new(false, status == MhpStatus.Ok, status == MhpStatus.Ok ? "native-shared" : "managed", reason));
+                return status == MhpStatus.Ok;
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or FormatException)
+            {
+                PlaybackRuntimeStatus.SetPreparation(new(false, true, "managed", ex.Message));
+                return false;
+            }
+        }
     }
-
-    public static CoreMeasureResult MeasureCheckedCores(string? affinityMask)
-    {
-        return MeasureCheckedCores(affinityMask, null);
-    }
-
+    public static CoreMeasureResult MeasureCheckedCores(string? affinityMask) => MeasureCheckedCores(affinityMask, null);
     public static CoreMeasureResult MeasureCheckedCores(string? affinityMask, Action<int, int, int, long>? progress)
     {
-        var normalizedMask = PlaybackAffinityMask.NormalizeOrThrow(affinityMask);
-        if (string.IsNullOrWhiteSpace(normalizedMask) || !OperatingSystem.IsWindows())
+        var ok = Prepare(true, affinityMask, out var stats);
+        var result = CoreMeasureResult.From(stats, ok);
+        var samples = new List<CoreSample>();
+        if (result.Measured)
         {
-            return default;
+            PlaybackAffinityMask.TryParse(affinityMask, out var mask);
+            var buffer = new MhpCoreSample[64];
+            NativePlaybackInterop.CoreProgressCallback? callback = progress is null ? null
+                : (processor, completed, total, late) => progress((int)processor, completed, total, late);
+            NativePlaybackInterop.MhpScanCoresOnMask(mask, buffer, (uint)buffer.Length, out var written, callback);
+            for (int i = 0; i < Math.Min(written, (uint)buffer.Length); i++) samples.Add(new((int)buffer[i].ProcessorNumber, buffer[i].MaxLateUs));
         }
-
-        try
-        {
-            using var affinityScope = ProcessAffinityScope.TryEnter(normalizedMask);
-            Shutdown();
-            var samples = ScanCores(progress);
-            var measured = TryWarmUp(scanCpu: true, out var stats);
-            if (measured)
-            {
-                warmedAffinityMask = normalizedMask;
-            }
-
-            return CoreMeasureResult.From(stats, measured) with
-            {
-                Samples = samples
-            };
-        }
-        catch
-        {
-            return default;
-        }
+        return result with { Samples = samples };
     }
-
-    private static IReadOnlyList<CoreSample> ScanCores(Action<int, int, int, long>? progress)
-    {
-        NativePlaybackInterop.CoreProgressCallback? callback = progress is null
-            ? null
-            : (processor, completed, total, maxLate) => progress(unchecked((int)processor), completed, total, maxLate);
-        var buffer = new MhpCoreSample[64];
-        NativePlaybackInterop.MhpScanCores(buffer, (uint)buffer.Length, out var written, callback);
-        var count = Math.Min(written, (uint)buffer.Length);
-        var samples = new List<CoreSample>((int)count);
-        for (var index = 0; index < count; index++)
-        {
-            samples.Add(new CoreSample(unchecked((int)buffer[index].ProcessorNumber), buffer[index].MaxLateUs));
-        }
-
-        return samples;
-    }
-
-    private static bool TryWarmUp(bool scanCpu, out MhpRunStats stats)
-    {
-        stats = default;
-        if (!OperatingSystem.IsWindows())
-        {
-            return false;
-        }
-
-        try
-        {
-            var options = new MhpRunOptions
-            {
-                PrecisionMode = 2,
-                EnableCpuScan = scanCpu ? 1 : 0,
-                OutlierThresholdUs = 250,
-                LoopStepCount = 0,
-                QpcFrequency = System.Diagnostics.Stopwatch.Frequency,
-                NativeEngineMode = (int)NativeEngineMode.Standby
-            };
-
-            var status = NativePlaybackInterop.MhpWarmEngine(ref options, out stats);
-            if (scanCpu && status == MhpStatus.Ok)
-            {
-                Volatile.Write(ref cpuScanReady, 1);
-            }
-
-            return scanCpu && status == MhpStatus.Ok;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public static void QueueWarmUpForAffinityMask(string? affinityMask)
-    {
-        QueueWarmUpForAffinityMask(affinityMask, force: false);
-    }
-
-    public static void QueueWarmUpForAffinityMask(string? affinityMask, bool force)
-    {
-        var normalizedMask = PlaybackAffinityMask.NormalizeOrThrow(affinityMask);
-        if (!force && string.Equals(normalizedMask, warmedAffinityMask, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        if (force)
-        {
-            warmedAffinityMask = string.Empty;
-        }
-
-        _ = Task.Run(() => TryWarmUpForAffinityMask(normalizedMask));
-    }
-
-    public static void TryWarmUpForAffinityMask(string? affinityMask)
-    {
-        var normalizedMask = PlaybackAffinityMask.NormalizeOrThrow(affinityMask);
-        if (string.Equals(normalizedMask, warmedAffinityMask, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        if (!OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        try
-        {
-            using var affinityScope = ProcessAffinityScope.TryEnter(normalizedMask);
-            Shutdown();
-            TryWarmUp(scanCpu: true);
-            if (CpuScanReady)
-            {
-                warmedAffinityMask = normalizedMask;
-            }
-        }
-        catch
-        {
-            // Affinity-specific warm-up is opportunistic. Playback can still use the generic standby engine or managed fallback.
-        }
-    }
-
+    public static void QueueWarmUpForAffinityMask(string? mask) => QueueWarmUpForAffinityMask(mask, false);
+    public static void QueueWarmUpForAffinityMask(string? mask, bool force) => _ = Task.Run(() => TryWarmUpForAffinityMask(mask));
+    public static void TryWarmUpForAffinityMask(string? mask) => Prepare(true, mask, out _);
     public static void Shutdown()
     {
-        if (!OperatingSystem.IsWindows())
+        lock (Gate)
         {
-            return;
-        }
-
-        try
-        {
-            NativePlaybackInterop.MhpShutdownEngine();
+            try { NativePlaybackInterop.MhpShutdownEngine(); }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException) { }
             Volatile.Write(ref cpuScanReady, 0);
-            warmedAffinityMask = string.Empty;
-        }
-        catch
-        {
-            // Shutdown is best effort; process teardown will release the DLL resources.
         }
     }
 }

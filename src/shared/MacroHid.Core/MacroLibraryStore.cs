@@ -98,6 +98,7 @@ public sealed record MacroLibrarySnapshot(
 
 public sealed class MacroLibraryStore
 {
+    public object SyncRoot { get; } = new();
     public const string GlobalGroupId = "global";
 
     private const string GlobalGroupName = "全局";
@@ -128,272 +129,317 @@ public sealed class MacroLibraryStore
 
     public MacroLibrarySnapshot Load()
     {
-        var index = LoadIndex();
-        return new MacroLibrarySnapshot(
-            index.Items.AsReadOnly(),
-            index.SelectedMacroId,
-            index.Folders.AsReadOnly(),
-            index.Groups.AsReadOnly(),
-            index.GroupFolders.AsReadOnly());
+        lock (SyncRoot)
+        {
+            var index = LoadIndex();
+            return new MacroLibrarySnapshot(
+                index.Items.AsReadOnly(),
+                index.SelectedMacroId,
+                index.Folders.AsReadOnly(),
+                index.Groups.AsReadOnly(),
+                index.GroupFolders.AsReadOnly());
+        }
     }
 
     public MacroLibraryItem CreateMacro(string name, string? folder = null, IReadOnlyList<MacroStep>? steps = null, string? groupId = null, MacroKind kind = MacroKind.Normal)
     {
-        var document = new MacroDocument(
-            1,
-            NormalizeName(name),
-            PlaybackSettings.Default,
-            steps ?? [],
-            Conditions: kind == MacroKind.Condition ? [] : null,
-            Kind: kind);
-        return CreateMacro(document, folder, groupId: groupId);
+        lock (SyncRoot)
+        {
+            var document = new MacroDocument(
+                1,
+                NormalizeName(name),
+                PlaybackSettings.Default,
+                steps ?? [],
+                Conditions: kind == MacroKind.Condition ? [] : null,
+                Kind: kind);
+            return CreateMacro(document, folder, groupId: groupId);
+        }
     }
 
     public MacroLibraryItem CreateMacro(MacroDocument document, string? folder = null, IReadOnlyList<string>? aliases = null, string? groupId = null)
     {
-        Directory.CreateDirectory(rootDirectory);
+        lock (SyncRoot)
+        {
+            Directory.CreateDirectory(rootDirectory);
 
-        var index = LoadIndex();
-        var id = Guid.NewGuid().ToString("N");
-        var normalizedGroupId = NormalizeGroupId(groupId);
-        EnsureGroupExists(index, normalizedGroupId);
-        var kind = document.Kind;
-        var item = new MacroLibraryItem(
-            id,
-            NormalizeName(document.Name),
-            NormalizeFolder(folder),
-            CreateFileName(document.Name, id),
-            DateTimeOffset.UtcNow,
-            MergeAliases(aliases, document.Id),
-            normalizedGroupId,
-            IsLocked: false,
-            Kind: kind);
+            var index = LoadIndex();
+            var id = Guid.NewGuid().ToString("N");
+            var normalizedGroupId = NormalizeGroupId(groupId);
+            EnsureGroupExists(index, normalizedGroupId);
+            var kind = document.Kind;
+            var item = new MacroLibraryItem(
+                id,
+                NormalizeName(document.Name),
+                NormalizeFolder(folder),
+                CreateFileName(document.Name, id),
+                DateTimeOffset.UtcNow,
+                MergeAliases(aliases, document.Id),
+                normalizedGroupId,
+                IsLocked: false,
+                Kind: kind);
 
-        EnsureGroupFolder(index, item.GroupId, item.Folder);
-        index.Items.Add(item);
-        index.SelectedMacroId = item.Id;
-        SaveDocumentFile(item, document with { Name = item.Name, Kind = kind });
-        SaveIndex(index);
-        return item;
+            EnsureGroupFolder(index, item.GroupId, item.Folder);
+            index.Items.Add(item);
+            index.SelectedMacroId = item.Id;
+            SaveDocumentFile(item, document with { Name = item.Name, Kind = kind });
+            SaveIndex(index);
+            return item;
+        }
     }
 
     public MacroLibraryGroup CreateGroup(string name, string? processFilter = null)
     {
-        var index = LoadIndex();
-        var group = new MacroLibraryGroup(
-            Guid.NewGuid().ToString("N"),
-            NormalizeName(name),
-            NormalizeProcessFilter(processFilter));
-        index.Groups.Add(group);
-        SaveIndex(index);
-        return group;
+        lock (SyncRoot)
+        {
+            var index = LoadIndex();
+            var group = new MacroLibraryGroup(
+                Guid.NewGuid().ToString("N"),
+                NormalizeName(name),
+                NormalizeProcessFilter(processFilter));
+            index.Groups.Add(group);
+            SaveIndex(index);
+            return group;
+        }
     }
 
     public MacroLibraryGroup UpdateGroup(string id, string name, string? processFilter = null)
     {
-        var index = LoadIndex();
-        var groupIndex = index.Groups.FindIndex(group => string.Equals(group.Id, id, StringComparison.OrdinalIgnoreCase));
-        if (groupIndex < 0)
+        lock (SyncRoot)
         {
-            throw new KeyNotFoundException($"Macro group '{id}' was not found.");
-        }
+            var index = LoadIndex();
+            var groupIndex = index.Groups.FindIndex(group => string.Equals(group.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (groupIndex < 0)
+            {
+                throw new KeyNotFoundException($"Macro group '{id}' was not found.");
+            }
 
-        var previous = index.Groups[groupIndex];
-        var updated = previous with
-        {
-            Name = NormalizeName(name),
-            ProcessFilter = previous.IsGlobal ? string.Empty : NormalizeProcessFilter(processFilter)
-        };
-        index.Groups[groupIndex] = updated;
-        SaveIndex(index);
-        return updated;
+            var previous = index.Groups[groupIndex];
+            var updated = previous with
+            {
+                Name = NormalizeName(name),
+                ProcessFilter = previous.IsGlobal ? string.Empty : NormalizeProcessFilter(processFilter)
+            };
+            index.Groups[groupIndex] = updated;
+            SaveIndex(index);
+            return updated;
+        }
     }
 
     public void DeleteGroup(string id)
     {
-        var index = LoadIndex();
-        var group = FindGroup(index, id);
-        if (group.IsGlobal)
+        lock (SyncRoot)
         {
-            return;
-        }
-
-        index.Groups.RemoveAll(candidate => string.Equals(candidate.Id, group.Id, StringComparison.OrdinalIgnoreCase));
-        index.GroupFolders.RemoveAll(folder => string.Equals(folder.GroupId, group.Id, StringComparison.OrdinalIgnoreCase));
-        for (var i = 0; i < index.Items.Count; i++)
-        {
-            if (!string.Equals(index.Items[i].GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+            var index = LoadIndex();
+            var group = FindGroup(index, id);
+            if (group.IsGlobal)
             {
-                continue;
+                return;
             }
 
-            index.Items[i] = index.Items[i] with
+            index.Groups.RemoveAll(candidate => string.Equals(candidate.Id, group.Id, StringComparison.OrdinalIgnoreCase));
+            index.GroupFolders.RemoveAll(folder => string.Equals(folder.GroupId, group.Id, StringComparison.OrdinalIgnoreCase));
+            for (var i = 0; i < index.Items.Count; i++)
             {
-                GroupId = GlobalGroupId,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-            EnsureGroupFolder(index, GlobalGroupId, index.Items[i].Folder);
-        }
+                if (!string.Equals(index.Items[i].GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
 
-        SaveIndex(index);
+                index.Items[i] = index.Items[i] with
+                {
+                    GroupId = GlobalGroupId,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+                EnsureGroupFolder(index, GlobalGroupId, index.Items[i].Folder);
+            }
+
+            SaveIndex(index);
+        }
     }
 
     public void CreateFolder(string folder, string? groupId = null)
     {
-        var normalized = NormalizeFolder(folder);
-        if (string.IsNullOrWhiteSpace(normalized))
+        lock (SyncRoot)
         {
-            return;
-        }
+            var normalized = NormalizeFolder(folder);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return;
+            }
 
-        var index = LoadIndex();
-        EnsureGroupFolder(index, NormalizeGroupId(groupId), normalized);
-        SaveIndex(index);
+            var index = LoadIndex();
+            EnsureGroupFolder(index, NormalizeGroupId(groupId), normalized);
+            SaveIndex(index);
+        }
     }
 
     public MacroLibraryItem? TryGetItem(string id)
     {
-        var index = LoadIndex();
-        return index.Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+        lock (SyncRoot)
+        {
+            var index = LoadIndex();
+            return index.Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     public MacroDocument ReadMacro(string id)
     {
-        var item = FindItem(LoadIndex(), id);
-        var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(item)));
-        // Prefer index kind when older .mcrx files omit kind.
-        return document.Kind == item.Kind
-            ? document
-            : document with { Kind = item.Kind != MacroKind.Normal ? item.Kind : document.Kind };
+        lock (SyncRoot)
+        {
+            var item = FindItem(LoadIndex(), id);
+            var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(item)));
+            // Prefer index kind when older .mcrx files omit kind.
+            return document.Kind == item.Kind
+                ? document
+                : document with { Kind = item.Kind != MacroKind.Normal ? item.Kind : document.Kind };
+        }
     }
 
     public MacroLibraryItem SaveMacro(string id, MacroDocument document)
     {
-        var index = LoadIndex();
-        var itemIndex = index.Items.FindIndex(item => item.Id == id);
-        if (itemIndex < 0)
+        lock (SyncRoot)
         {
-            throw new KeyNotFoundException($"Macro '{id}' was not found.");
-        }
+            var index = LoadIndex();
+            var itemIndex = index.Items.FindIndex(item => item.Id == id);
+            if (itemIndex < 0)
+            {
+                throw new KeyNotFoundException($"Macro '{id}' was not found.");
+            }
 
-        var previous = index.Items[itemIndex];
-        EnsureMacroIsEditable(previous);
-        var updated = previous with
-        {
-            Name = NormalizeName(document.Name),
-            Kind = document.Kind,
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
-        index.Items[itemIndex] = updated;
-        index.SelectedMacroId = updated.Id;
-        SaveDocumentFile(updated, document with { Name = updated.Name, Kind = updated.Kind });
-        SaveIndex(index);
-        return updated;
+            var previous = index.Items[itemIndex];
+            EnsureMacroIsEditable(previous);
+            var updated = previous with
+            {
+                Name = NormalizeName(document.Name),
+                Kind = document.Kind,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            index.Items[itemIndex] = updated;
+            index.SelectedMacroId = updated.Id;
+            SaveDocumentFile(updated, document with { Name = updated.Name, Kind = updated.Kind });
+            SaveIndex(index);
+            return updated;
+        }
     }
 
     public MacroLibraryItem RenameMacro(string id, string newName)
     {
-        var index = LoadIndex();
-        var itemIndex = index.Items.FindIndex(item => item.Id == id);
-        if (itemIndex < 0)
+        lock (SyncRoot)
         {
-            throw new KeyNotFoundException($"Macro '{id}' was not found.");
+            var index = LoadIndex();
+            var itemIndex = index.Items.FindIndex(item => item.Id == id);
+            if (itemIndex < 0)
+            {
+                throw new KeyNotFoundException($"Macro '{id}' was not found.");
+            }
+
+            var previous = index.Items[itemIndex];
+            EnsureMacroIsEditable(previous);
+            var updated = previous with
+            {
+                Name = NormalizeName(newName),
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            index.Items[itemIndex] = updated;
+            index.SelectedMacroId = updated.Id;
+
+            var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(updated)));
+            SaveDocumentFile(updated, document with { Name = updated.Name });
+            SaveIndex(index);
+            return updated;
         }
-
-        var previous = index.Items[itemIndex];
-        EnsureMacroIsEditable(previous);
-        var updated = previous with
-        {
-            Name = NormalizeName(newName),
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
-        index.Items[itemIndex] = updated;
-        index.SelectedMacroId = updated.Id;
-
-        var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(updated)));
-        SaveDocumentFile(updated, document with { Name = updated.Name });
-        SaveIndex(index);
-        return updated;
     }
 
     public MacroLibraryItem SetMacroLocked(string id, bool isLocked)
     {
-        var index = LoadIndex();
-        var itemIndex = index.Items.FindIndex(item => item.Id == id);
-        if (itemIndex < 0)
+        lock (SyncRoot)
         {
-            throw new KeyNotFoundException($"Macro '{id}' was not found.");
-        }
+            var index = LoadIndex();
+            var itemIndex = index.Items.FindIndex(item => item.Id == id);
+            if (itemIndex < 0)
+            {
+                throw new KeyNotFoundException($"Macro '{id}' was not found.");
+            }
 
-        var previous = index.Items[itemIndex];
-        if (previous.IsLocked == isLocked)
-        {
-            return previous;
-        }
+            var previous = index.Items[itemIndex];
+            if (previous.IsLocked == isLocked)
+            {
+                return previous;
+            }
 
-        var updated = previous with
-        {
-            IsLocked = isLocked,
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
-        index.Items[itemIndex] = updated;
-        SaveIndex(index);
-        return updated;
+            var updated = previous with
+            {
+                IsLocked = isLocked,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            index.Items[itemIndex] = updated;
+            SaveIndex(index);
+            return updated;
+        }
     }
 
     public MacroLibraryItem DuplicateMacro(string id, string newName)
     {
-        var index = LoadIndex();
-        var source = FindItem(index, id);
-        var document = ReadMacro(id);
-        return CreateMacro(
-            document with { Name = NormalizeName(newName), Kind = source.Kind },
-            source.Folder,
-            aliases: source.Aliases,
-            groupId: source.GroupId);
+        lock (SyncRoot)
+        {
+            var index = LoadIndex();
+            var source = FindItem(index, id);
+            var document = ReadMacro(id);
+            return CreateMacro(
+                document with { Name = NormalizeName(newName), Kind = source.Kind },
+                source.Folder,
+                aliases: source.Aliases,
+                groupId: source.GroupId);
+        }
     }
 
     public void DeleteMacro(string id)
     {
-        var index = LoadIndex();
-        var item = FindItem(index, id);
-        EnsureMacroIsEditable(item);
-        index.Items.RemoveAll(candidate => candidate.Id == id);
-
-        var path = GetMacroPath(item);
-        if (File.Exists(path))
+        lock (SyncRoot)
         {
-            File.Delete(path);
-        }
+            var index = LoadIndex();
+            var item = FindItem(index, id);
+            EnsureMacroIsEditable(item);
+            index.Items.RemoveAll(candidate => candidate.Id == id);
 
-        index.SelectedMacroId = index.Items.FirstOrDefault()?.Id;
-        SaveIndex(index);
+            var path = GetMacroPath(item);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            index.SelectedMacroId = index.Items.FirstOrDefault()?.Id;
+            SaveIndex(index);
+        }
     }
 
     public MacroLibraryItem MoveMacro(string id, string? folder, string? beforeMacroId = null, string? groupId = null)
     {
-        var index = LoadIndex();
-        var itemIndex = index.Items.FindIndex(item => item.Id == id);
-        if (itemIndex < 0)
+        lock (SyncRoot)
         {
-            throw new KeyNotFoundException($"Macro '{id}' was not found.");
-        }
+            var index = LoadIndex();
+            var itemIndex = index.Items.FindIndex(item => item.Id == id);
+            if (itemIndex < 0)
+            {
+                throw new KeyNotFoundException($"Macro '{id}' was not found.");
+            }
 
-        var previous = index.Items[itemIndex];
-        index.Items.RemoveAt(itemIndex);
-        var normalizedGroupId = NormalizeGroupId(groupId ?? previous.GroupId);
-        EnsureGroupExists(index, normalizedGroupId);
-        var normalizedFolder = NormalizeFolder(folder);
-        EnsureGroupFolder(index, normalizedGroupId, normalizedFolder);
-        var updated = previous with
-        {
-            Folder = normalizedFolder,
-            GroupId = normalizedGroupId,
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
-        index.Items.Insert(GetMoveInsertIndex(index, normalizedGroupId, normalizedFolder, beforeMacroId), updated);
-        SaveIndex(index);
-        return updated;
+            var previous = index.Items[itemIndex];
+            index.Items.RemoveAt(itemIndex);
+            var normalizedGroupId = NormalizeGroupId(groupId ?? previous.GroupId);
+            EnsureGroupExists(index, normalizedGroupId);
+            var normalizedFolder = NormalizeFolder(folder);
+            EnsureGroupFolder(index, normalizedGroupId, normalizedFolder);
+            var updated = previous with
+            {
+                Folder = normalizedFolder,
+                GroupId = normalizedGroupId,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            index.Items.Insert(GetMoveInsertIndex(index, normalizedGroupId, normalizedFolder, beforeMacroId), updated);
+            SaveIndex(index);
+            return updated;
+        }
     }
 
     public IReadOnlyList<MacroLibraryItem> ImportMacros(
@@ -402,201 +448,216 @@ public sealed class MacroLibraryStore
         string? groupId = null,
         IReadOnlyDictionary<string, string>? extraReferenceMap = null)
     {
-        var created = new List<MacroLibraryItem>();
-        var idMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var document in documents)
+        lock (SyncRoot)
         {
-            var item = CreateMacro(document, folder, groupId: groupId);
-            if (!string.IsNullOrWhiteSpace(document.Id))
+            var created = new List<MacroLibraryItem>();
+            var idMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var document in documents)
             {
-                idMap[document.Id] = item.Id;
+                var item = CreateMacro(document, folder, groupId: groupId);
+                if (!string.IsNullOrWhiteSpace(document.Id))
+                {
+                    idMap[document.Id] = item.Id;
+                }
+
+                if (!string.IsNullOrWhiteSpace(document.Name))
+                {
+                    idMap.TryAdd(document.Name.Trim(), item.Id);
+                }
+
+                created.Add(item);
             }
 
-            if (!string.IsNullOrWhiteSpace(document.Name))
+            var snapshot = Load();
+            var targetGroupId = NormalizeGroupId(groupId);
+            var createdIds = created.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in snapshot.Items
+                .Where(item => !createdIds.Contains(item.Id))
+                .OrderBy(item => string.Equals(item.GroupId, targetGroupId, StringComparison.OrdinalIgnoreCase) ? 0 : 1))
             {
-                idMap.TryAdd(document.Name.Trim(), item.Id);
-            }
-
-            created.Add(item);
-        }
-
-        var snapshot = Load();
-        var targetGroupId = NormalizeGroupId(groupId);
-        var createdIds = created.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in snapshot.Items
-            .Where(item => !createdIds.Contains(item.Id))
-            .OrderBy(item => string.Equals(item.GroupId, targetGroupId, StringComparison.OrdinalIgnoreCase) ? 0 : 1))
-        {
-            idMap.TryAdd(item.Id, item.Id);
-            foreach (var key in ExpandReferenceKeys(item.Id))
-            {
-                idMap.TryAdd(key, item.Id);
-            }
-            foreach (var alias in item.Aliases ?? [])
-            {
-                foreach (var key in ExpandReferenceKeys(alias))
+                idMap.TryAdd(item.Id, item.Id);
+                foreach (var key in ExpandReferenceKeys(item.Id))
                 {
                     idMap.TryAdd(key, item.Id);
                 }
-            }
-        }
-
-        if (extraReferenceMap is not null)
-        {
-            foreach (var pair in extraReferenceMap)
-            {
-                if (string.IsNullOrWhiteSpace(pair.Key) || idMap.ContainsKey(pair.Key))
+                foreach (var alias in item.Aliases ?? [])
                 {
-                    continue;
-                }
-
-                var local = MacroLibraryResolver.Resolve(snapshot.Items, pair.Value, targetGroupId)
-                    ?? MacroLibraryResolver.Resolve(snapshot.Items, pair.Key, targetGroupId);
-                var destination = local?.Id ?? pair.Value;
-                foreach (var key in ExpandReferenceKeys(pair.Key))
-                {
-                    idMap.TryAdd(key, destination);
+                    foreach (var key in ExpandReferenceKeys(alias))
+                    {
+                        idMap.TryAdd(key, item.Id);
+                    }
                 }
             }
-        }
 
-        foreach (var item in created)
-        {
-            var stored = ReadMacro(item.Id);
-            var remapped = MacroCallRewriter.RemapReferences(stored, idMap);
-            if (!ReferenceEquals(stored, remapped)
-                && !string.Equals(McrxSerializer.Serialize(stored), McrxSerializer.Serialize(remapped), StringComparison.Ordinal))
+            if (extraReferenceMap is not null)
             {
-                SaveMacro(item.Id, remapped);
-            }
-        }
+                foreach (var pair in extraReferenceMap)
+                {
+                    if (string.IsNullOrWhiteSpace(pair.Key) || idMap.ContainsKey(pair.Key))
+                    {
+                        continue;
+                    }
 
-        return created;
+                    var local = MacroLibraryResolver.Resolve(snapshot.Items, pair.Value, targetGroupId)
+                        ?? MacroLibraryResolver.Resolve(snapshot.Items, pair.Key, targetGroupId);
+                    var destination = local?.Id ?? pair.Value;
+                    foreach (var key in ExpandReferenceKeys(pair.Key))
+                    {
+                        idMap.TryAdd(key, destination);
+                    }
+                }
+            }
+
+            foreach (var item in created)
+            {
+                var stored = ReadMacro(item.Id);
+                var remapped = MacroCallRewriter.RemapReferences(stored, idMap);
+                if (!ReferenceEquals(stored, remapped)
+                    && !string.Equals(McrxSerializer.Serialize(stored), McrxSerializer.Serialize(remapped), StringComparison.Ordinal))
+                {
+                    SaveMacro(item.Id, remapped);
+                }
+            }
+
+            return created;
+        }
     }
 
     public MacroLibraryItem AddAliasesToMacro(string id, IReadOnlyList<string> aliases)
     {
-        var normalizedAliases = NormalizeAliases(aliases);
-        if (normalizedAliases.Count == 0)
+        lock (SyncRoot)
         {
-            return FindItem(LoadIndex(), id);
-        }
+            var normalizedAliases = NormalizeAliases(aliases);
+            if (normalizedAliases.Count == 0)
+            {
+                return FindItem(LoadIndex(), id);
+            }
 
-        var index = LoadIndex();
-        var itemIndex = index.Items.FindIndex(item => item.Id == id);
-        if (itemIndex < 0)
-        {
-            throw new KeyNotFoundException($"Macro '{id}' was not found.");
-        }
+            var index = LoadIndex();
+            var itemIndex = index.Items.FindIndex(item => item.Id == id);
+            if (itemIndex < 0)
+            {
+                throw new KeyNotFoundException($"Macro '{id}' was not found.");
+            }
 
-        var existing = index.Items[itemIndex];
-        var existingAliases = existing.Aliases ?? [];
-        var updated = existing with
-        {
-            Aliases = NormalizeAliases([.. existingAliases, .. normalizedAliases]),
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
-        index.Items[itemIndex] = updated;
-        SaveIndex(index);
-        return updated;
+            var existing = index.Items[itemIndex];
+            var existingAliases = existing.Aliases ?? [];
+            var updated = existing with
+            {
+                Aliases = NormalizeAliases([.. existingAliases, .. normalizedAliases]),
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            index.Items[itemIndex] = updated;
+            SaveIndex(index);
+            return updated;
+        }
     }
 
     public void DeleteFolder(string folder, bool deleteMacros, string? groupId = null)
     {
-        var normalized = NormalizeFolder(folder);
-        if (string.IsNullOrWhiteSpace(normalized))
+        lock (SyncRoot)
         {
-            return;
-        }
-
-        var index = LoadIndex();
-        var normalizedGroupId = NormalizeGroupId(groupId);
-        index.GroupFolders.RemoveAll(candidate =>
-            string.Equals(candidate.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(candidate.Name, normalized, StringComparison.Ordinal));
-
-        if (deleteMacros)
-        {
-            var removed = index.Items
-                .Where(item => string.Equals(item.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(item.Folder, normalized, StringComparison.Ordinal))
-                .ToList();
-            foreach (var item in removed)
+            var normalized = NormalizeFolder(folder);
+            if (string.IsNullOrWhiteSpace(normalized))
             {
-                var path = GetMacroPath(item);
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
+                return;
             }
 
-            index.Items.RemoveAll(item => string.Equals(item.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(item.Folder, normalized, StringComparison.Ordinal));
-            if (index.SelectedMacroId is not null && removed.Any(item => item.Id == index.SelectedMacroId))
+            var index = LoadIndex();
+            var normalizedGroupId = NormalizeGroupId(groupId);
+            index.GroupFolders.RemoveAll(candidate =>
+                string.Equals(candidate.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(candidate.Name, normalized, StringComparison.Ordinal));
+
+            if (deleteMacros)
             {
-                index.SelectedMacroId = index.Items.FirstOrDefault()?.Id;
-            }
-        }
-        else
-        {
-            for (var i = 0; i < index.Items.Count; i++)
-            {
-                if (string.Equals(index.Items[i].GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(index.Items[i].Folder, normalized, StringComparison.Ordinal))
+                var removed = index.Items
+                    .Where(item => string.Equals(item.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(item.Folder, normalized, StringComparison.Ordinal))
+                    .ToList();
+                foreach (var item in removed)
                 {
-                    index.Items[i] = index.Items[i] with
+                    var path = GetMacroPath(item);
+                    if (File.Exists(path))
                     {
-                        Folder = string.Empty,
-                        UpdatedAt = DateTimeOffset.UtcNow
-                    };
+                        File.Delete(path);
+                    }
+                }
+
+                index.Items.RemoveAll(item => string.Equals(item.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(item.Folder, normalized, StringComparison.Ordinal));
+                if (index.SelectedMacroId is not null && removed.Any(item => item.Id == index.SelectedMacroId))
+                {
+                    index.SelectedMacroId = index.Items.FirstOrDefault()?.Id;
                 }
             }
-        }
+            else
+            {
+                for (var i = 0; i < index.Items.Count; i++)
+                {
+                    if (string.Equals(index.Items[i].GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(index.Items[i].Folder, normalized, StringComparison.Ordinal))
+                    {
+                        index.Items[i] = index.Items[i] with
+                        {
+                            Folder = string.Empty,
+                            UpdatedAt = DateTimeOffset.UtcNow
+                        };
+                    }
+                }
+            }
 
-        SaveIndex(index);
+            SaveIndex(index);
+        }
     }
 
     public void RenameFolder(string oldFolder, string newFolder, string? groupId = null)
     {
-        var oldName = NormalizeFolder(oldFolder);
-        var newName = NormalizeFolder(newFolder);
-        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || string.Equals(oldName, newName, StringComparison.Ordinal))
+        lock (SyncRoot)
         {
-            return;
-        }
-
-        var index = LoadIndex();
-        var normalizedGroupId = NormalizeGroupId(groupId);
-        index.GroupFolders.RemoveAll(folder =>
-            string.Equals(folder.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(folder.Name, oldName, StringComparison.Ordinal));
-        EnsureGroupFolder(index, normalizedGroupId, newName);
-        for (var i = 0; i < index.Items.Count; i++)
-        {
-            if (string.Equals(index.Items[i].GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(index.Items[i].Folder, oldName, StringComparison.Ordinal))
+            var oldName = NormalizeFolder(oldFolder);
+            var newName = NormalizeFolder(newFolder);
+            if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || string.Equals(oldName, newName, StringComparison.Ordinal))
             {
-                index.Items[i] = index.Items[i] with
-                {
-                    Folder = newName,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                };
+                return;
             }
-        }
 
-        SaveIndex(index);
+            var index = LoadIndex();
+            var normalizedGroupId = NormalizeGroupId(groupId);
+            index.GroupFolders.RemoveAll(folder =>
+                string.Equals(folder.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(folder.Name, oldName, StringComparison.Ordinal));
+            EnsureGroupFolder(index, normalizedGroupId, newName);
+            for (var i = 0; i < index.Items.Count; i++)
+            {
+                if (string.Equals(index.Items[i].GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(index.Items[i].Folder, oldName, StringComparison.Ordinal))
+                {
+                    index.Items[i] = index.Items[i] with
+                    {
+                        Folder = newName,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    };
+                }
+            }
+
+            SaveIndex(index);
+        }
     }
 
     public void SetSelected(string? id)
     {
-        var index = LoadIndex();
-        if (id is not null)
+        lock (SyncRoot)
         {
-            _ = FindItem(index, id);
-        }
+            var index = LoadIndex();
+            if (id is not null)
+            {
+                _ = FindItem(index, id);
+            }
 
-        index.SelectedMacroId = id;
-        SaveIndex(index);
+            index.SelectedMacroId = id;
+            SaveIndex(index);
+        }
     }
 
     private MacroLibraryIndex LoadIndex()

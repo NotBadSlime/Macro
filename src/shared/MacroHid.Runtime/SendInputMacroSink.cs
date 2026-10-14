@@ -402,7 +402,10 @@ public sealed class SendInputMacroSink : IMacroInputSink
 
         if (!inputs.Any(MouseCursorUnclip.IsRelativeMouse))
         {
-            return RuntimeNativeMethods.SendInput((uint)inputs.Length, inputs, NativeInputSize.Value);
+            PlaybackTrace.Mark(PlaybackTraceStage.SubmitStart);
+            var sentBatch = RuntimeNativeMethods.SendInput((uint)inputs.Length, inputs, NativeInputSize.Value);
+            PlaybackTrace.Mark(PlaybackTraceStage.SubmitEnd);
+            return sentBatch;
         }
 
         uint sent = 0;
@@ -413,7 +416,9 @@ public sealed class SendInputMacroSink : IMacroInputSink
                 MouseCursorUnclip.RecenterIfNeeded(inputs[i].Union.Mouse.Dx, inputs[i].Union.Mouse.Dy);
             }
 
+            PlaybackTrace.Mark(PlaybackTraceStage.SubmitStart);
             var one = RuntimeNativeMethods.SendInput(1, [inputs[i]], NativeInputSize.Value);
+            PlaybackTrace.Mark(PlaybackTraceStage.SubmitEnd);
             sent += one;
             if (one != 1)
             {

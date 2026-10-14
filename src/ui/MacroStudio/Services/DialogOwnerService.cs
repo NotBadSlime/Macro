@@ -50,6 +50,8 @@ public static class DialogOwnerService
         MessageBoxButton button,
         MessageBoxImage icon)
     {
+        if (icon == MessageBoxImage.Error || icon == MessageBoxImage.Warning)
+            MacroHid.Runtime.AppLog.Error("Dialog", $"{caption}: {messageBoxText}");
         var owner = TryGetShownOwner(source);
         return owner is null
             ? MessageBox.Show(messageBoxText, caption, button, icon)

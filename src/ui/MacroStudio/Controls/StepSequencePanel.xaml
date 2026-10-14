@@ -215,7 +215,12 @@
                 </StackPanel>
             </Border>
             <Grid>
-                <TextBlock x:Name="SequenceTitleText" Text="序列" Style="{StaticResource PanelTitle}" />
+                <WrapPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="SequenceTitleText" Text="序列" Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Button x:Name="ZoomOutButton" Style="{StaticResource StepRowActionButton}" Content="−" ToolTip="缩小序列（Ctrl + 滚轮）" Click="ZoomOut_Click" />
+                    <Button x:Name="SequenceZoomButton" Style="{StaticResource StepRowActionButton}" Width="48" FontSize="12" Content="100%" ToolTip="恢复原始大小" Click="ResetZoom_Click" />
+                    <Button x:Name="ZoomInButton" Style="{StaticResource StepRowActionButton}" Content="+" ToolTip="放大序列（Ctrl + 滚轮）" Click="ZoomIn_Click" />
+                </WrapPanel>
                 <TextBlock x:Name="ReturnPreviousMacroText" Text="返回上一宏" Visibility="Collapsed" />
                 <TextBlock x:Name="StepUndoText" Text="撤回" Visibility="Collapsed" />
                 <TextBlock x:Name="StepRedoText" Text="还原" Visibility="Collapsed" />
@@ -226,8 +231,15 @@
             </Grid>
         </DockPanel>
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" PreviewMouseWheel="SequenceViewport_PreviewMouseWheel">
+            <Grid.LayoutTransform>
+                <ScaleTransform x:Name="SequenceScale" ScaleX="1" ScaleY="1" />
+            </Grid.LayoutTransform>
             <ListBox x:Name="StepList"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingPanel.ScrollUnit="Pixel"
                      AllowDrop="True"
                      SelectionMode="Extended"
                      ItemTemplate="{StaticResource StepTemplate}"

@@ -1,4 +1,4 @@
-namespace MacroHid.Core;
+﻿namespace MacroHid.Core;
 
 public enum MacroActionTemplateKind
 {
@@ -26,10 +26,17 @@ public enum MacroActionTemplateKind
     ClockRestore,
     FrameLockStart,
     FrameLockStop,
+    YsrFpsToggle,
     Parallel,
     StopCurrent,
     StopIteration,
-    StopAll
+    StopAll,
+    YsrFpsStart,
+    YsrFpsStop,
+    Ky3FpsStart,
+    Ky3FpsStop,
+    FufuFpsStart,
+    FufuFpsStop
 }
 
 public static class MacroActionTemplateFactory
@@ -80,7 +87,7 @@ public static class MacroActionTemplateFactory
                 "YuanShen.exe",
                 WeakNetAction.Start,
                 TimeSpan.Zero,
-                TimeSpan.FromHours(1))],
+                TimeSpan.Zero)],
             MacroActionTemplateKind.WeakNetStop => [new WeakNetStep(
                 string.Empty,
                 WeakNetAction.Stop,
@@ -112,6 +119,13 @@ public static class MacroActionTemplateFactory
                 TimeSpan.Zero)],
             MacroActionTemplateKind.FrameLockStart => [new FrameLockStep("YuanShen.exe", FrameLockAction.Start, 60)],
             MacroActionTemplateKind.FrameLockStop => [new FrameLockStep("YuanShen.exe", FrameLockAction.Stop, 60)],
+            MacroActionTemplateKind.FufuFpsStart => [new YsrFpsToggleStep(117, YsrFpsAction.Start, FpsBackend.Fufu)],
+            MacroActionTemplateKind.FufuFpsStop => [new YsrFpsToggleStep(117, YsrFpsAction.Stop, FpsBackend.Fufu)],
+            MacroActionTemplateKind.Ky3FpsStart => [new YsrFpsToggleStep(117, YsrFpsAction.Start, FpsBackend.Ky3)],
+            MacroActionTemplateKind.Ky3FpsStop => [new YsrFpsToggleStep(117, YsrFpsAction.Stop, FpsBackend.Ky3)],
+            MacroActionTemplateKind.YsrFpsToggle => [new YsrFpsToggleStep()],
+            MacroActionTemplateKind.YsrFpsStart => [new YsrFpsToggleStep(117, YsrFpsAction.Start)],
+            MacroActionTemplateKind.YsrFpsStop => [new YsrFpsToggleStep(117, YsrFpsAction.Stop)],
             MacroActionTemplateKind.Parallel => [new ParallelStep(
                 new ParallelBranchStep("分支 1", []),
                 new ParallelBranchStep("分支 2", []))],

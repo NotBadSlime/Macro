@@ -8,6 +8,12 @@ namespace MacroHid.Runtime;
 public sealed class PrecisionPlaybackContext : IDisposable
 {
     private static readonly object ProcessorSelectionGate = new();
+    private static readonly object ProcessStateGate = new();
+    private static int preciseUsers;
+    private static int allUsers;
+    private static PrecisionPlaybackContext? processOwner;
+    private static IDisposable? sharedPowerScope;
+    private static IDisposable? sharedTimerScope;
     private static UIntPtr cachedProcessorMask;
 
     private readonly PrecisionMode mode;
@@ -66,6 +72,11 @@ public sealed class PrecisionPlaybackContext : IDisposable
 
     public static PrecisionPlaybackContext Enter(PrecisionMode mode)
     {
+        lock (ProcessStateGate) return EnterCore(mode);
+    }
+
+    private static PrecisionPlaybackContext EnterCore(PrecisionMode mode)
+    {
         var thread = Thread.CurrentThread;
         var previousThreadPriority = thread.Priority;
         ProcessPriorityClass? previousProcessPriority = null;
@@ -84,8 +95,11 @@ public sealed class PrecisionPlaybackContext : IDisposable
 
         if (OperatingSystem.IsWindows())
         {
-            timerScope = TimerResolutionScope.TryBeginHighResolution();
-            powerThrottlingScope = ProcessPowerThrottlingScope.TryBegin();
+            if (allUsers == 0)
+            {
+                sharedTimerScope = TimerResolutionScope.TryBeginHighResolution();
+                sharedPowerScope = ProcessPowerThrottlingScope.TryBegin();
+            }
         }
 
         if (mode is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter)
@@ -105,26 +119,8 @@ public sealed class PrecisionPlaybackContext : IDisposable
                     RuntimeNativeMethods.SetThreadPriorityBoost(RuntimeNativeMethods.GetCurrentThread(), true);
                     RuntimeNativeMethods.SetThreadPriority(
                         RuntimeNativeMethods.GetCurrentThread(),
-                        RuntimeNativeMethods.ThreadPriorityTimeCritical);
+                        2); // THREAD_PRIORITY_HIGHEST; never time critical
                 }
-            }
-            catch { }
-
-            try
-            {
-                using var process = Process.GetCurrentProcess();
-                previousProcessPriority = process.PriorityClass;
-                process.PriorityClass = mode == PrecisionMode.UltraLowJitter
-                    ? ProcessPriorityClass.RealTime
-                    : ProcessPriorityClass.High;
-                if (RuntimeNativeMethods.GetProcessPriorityBoost(
-                    RuntimeNativeMethods.GetCurrentProcess(),
-                    out previousProcessPriorityBoostDisabled))
-                {
-                    processPriorityBoostCaptured = true;
-                }
-
-                RuntimeNativeMethods.SetProcessPriorityBoost(RuntimeNativeMethods.GetCurrentProcess(), true);
             }
             catch { }
 
@@ -150,30 +146,12 @@ public sealed class PrecisionPlaybackContext : IDisposable
                 }
             }
 
-            if (OperatingSystem.IsWindows())
-            {
-                var threadHandle = RuntimeNativeMethods.GetCurrentThread();
-                mmcssScope = MmcssScope.TryBegin();
+            // MMCSS and core binding belong exclusively to the two native timing workers.
 
-                if (mode == PrecisionMode.UltraLowJitter)
-                {
-                    var selectedProcessorMask = SelectLowestJitterProcessorMask();
-                    if (selectedProcessorMask != UIntPtr.Zero)
-                    {
-                        previousAffinity = RuntimeNativeMethods.SetThreadAffinityMask(threadHandle, selectedProcessorMask);
-                        var idealProcessor = GetFirstProcessorIndex(selectedProcessorMask);
-                        if (idealProcessor >= 0)
-                        {
-                            RuntimeNativeMethods.SetThreadIdealProcessor(threadHandle, (uint)idealProcessor);
-                        }
-                    }
-                }
-            }
-
-            try
+            if (preciseUsers == 0) try
             {
                 GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
-                noGcRegionActive = GC.TryStartNoGCRegion(4 * 1024 * 1024, disallowFullBlockingGC: false);
+                // Do not induce a full collection to enter NoGCRegion.
             }
             catch
             {
@@ -181,7 +159,7 @@ public sealed class PrecisionPlaybackContext : IDisposable
             }
         }
 
-        return new PrecisionPlaybackContext(
+        var result = new PrecisionPlaybackContext(
             mode,
             thread,
             previousThreadPriority,
@@ -198,9 +176,20 @@ public sealed class PrecisionPlaybackContext : IDisposable
             timerScope,
             powerThrottlingScope,
             mmcssScope);
+        allUsers++;
+        if (mode is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter)
+        {
+            if (preciseUsers++ == 0) processOwner = result;
+        }
+        return result;
     }
 
     public void Dispose()
+    {
+        lock (ProcessStateGate) DisposeCore();
+    }
+
+    private void DisposeCore()
     {
         if (disposed)
         {
@@ -209,12 +198,14 @@ public sealed class PrecisionPlaybackContext : IDisposable
 
         disposed = true;
 
-        if (noGcRegionActive)
+        var owner = mode is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter
+            && --preciseUsers == 0 ? processOwner : null;
+        if (owner?.noGcRegionActive == true)
         {
             try { GC.EndNoGCRegion(); } catch { }
         }
 
-        try { GCSettings.LatencyMode = previousLatencyMode; } catch { }
+        if (owner is not null) try { GCSettings.LatencyMode = owner.previousLatencyMode; } catch { }
 
         if ((mode is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter) && OperatingSystem.IsWindows())
         {
@@ -232,21 +223,25 @@ public sealed class PrecisionPlaybackContext : IDisposable
                         previousThreadPriorityBoostDisabled);
                 }
 
-                if (processPriorityBoostCaptured)
+                if (owner?.processPriorityBoostCaptured == true)
                 {
                     RuntimeNativeMethods.SetProcessPriorityBoost(
                         RuntimeNativeMethods.GetCurrentProcess(),
-                        previousProcessPriorityBoostDisabled);
+                        owner.previousProcessPriorityBoostDisabled);
                 }
             }
             catch { }
         }
 
         mmcssScope?.Dispose();
-        powerThrottlingScope?.Dispose();
+        if (--allUsers == 0)
+        {
+            sharedPowerScope?.Dispose(); sharedPowerScope = null;
+            sharedTimerScope?.Dispose(); sharedTimerScope = null;
+        }
         timerScope?.Dispose();
 
-        if (previousProcessPriority is { } processPriority)
+        if (owner?.previousProcessPriority is { } processPriority)
         {
             try
             {
@@ -267,6 +262,11 @@ public sealed class PrecisionPlaybackContext : IDisposable
         {
             try { Thread.EndThreadAffinity(); } catch { }
         }
+    }
+
+    public static void Prepare(PrecisionMode mode)
+    {
+        if (mode == PrecisionMode.UltraLowJitter) SelectLowestJitterProcessorMask();
     }
 
     private static UIntPtr SelectLowestJitterProcessorMask()

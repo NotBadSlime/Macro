@@ -23,6 +23,8 @@ internal sealed class ManagedMacroControlFlowRunner
     private readonly object inputGate;
     private readonly int parallelDepth;
     private readonly InputPressFloor pressFloor;
+    private static readonly AsyncLocal<int> ConditionalCallDepth = new();
+    private readonly PrecisionMode precision;
 
     public ManagedMacroControlFlowRunner(
         IMacroInputSink inputSink,
@@ -35,7 +37,8 @@ internal sealed class ManagedMacroControlFlowRunner
         bool pollConditions = false,
         object? inputGate = null,
         int parallelDepth = 0,
-        InputPressFloor? pressFloor = null)
+        InputPressFloor? pressFloor = null,
+        PrecisionMode precision = PrecisionMode.Balanced)
     {
         this.inputSink = inputSink;
         this.delayStrategy = delayStrategy;
@@ -48,6 +51,7 @@ internal sealed class ManagedMacroControlFlowRunner
         this.inputGate = inputGate ?? new object();
         this.parallelDepth = parallelDepth;
         this.pressFloor = pressFloor ?? InputPressFloor.Factory;
+        this.precision = precision;
     }
 
     public MacroControlFlowResult Run(
@@ -117,6 +121,15 @@ internal sealed class ManagedMacroControlFlowRunner
 
                     var target = macroResolver(macro.Macro)
                         ?? throw new InvalidOperationException($"Macro call target '{macro.Macro}' was not found.");
+
+                    if (target.EffectiveConditions.Count > 0 && !ConditionalMacroCallScope.Contains(target))
+                    {
+                        WaitToCurrentTick();
+                        var nested = RunConditionalMacro(target, qpcFrequency, cancellationToken, noWait, ref nextSequence, ref submittedActions);
+                        elapsedTicks = Math.Max(elapsedTicks, clock.GetTimestamp() - startTick);
+                        if (nested is MacroControlFlowResult.StopAll or MacroControlFlowResult.StopIteration) return nested;
+                        break;
+                    }
 
                     // Tail calls, including direct self-calls, reuse the current frame so an intentional
                     // recursive loop remains cancellable without growing the managed call stack.
@@ -191,6 +204,12 @@ internal sealed class ManagedMacroControlFlowRunner
                 case FrameLockStep frameLock:
                     WaitToCurrentTick();
                     ExecuteFrameLock(frameLock);
+                    elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
+                    break;
+
+                case YsrFpsToggleStep ysr:
+                    WaitToCurrentTick();
+                    if (!YsrFpsSession.TryApply(ysr, out var ysrError)) throw new InvalidOperationException(ysrError);
                     elapsedTicks = Math.Max(elapsedTicks, Math.Max(0, clock.GetTimestamp() - startTick));
                     break;
 
@@ -380,11 +399,8 @@ internal sealed class ManagedMacroControlFlowRunner
                 }
             }
 
-            if (pollConditions)
-            {
-                WaitToCurrentTick();
-            }
-
+            // A trailing delay is part of the sequence, including effect-only macros.
+            WaitToCurrentTick();
             return MacroControlFlowResult.Completed;
         }
         finally
@@ -544,6 +560,83 @@ internal sealed class ManagedMacroControlFlowRunner
         }
     }
 
+    private MacroControlFlowResult RunConditionalMacro(MacroDocument target, long frequency,
+        CancellationToken token, bool noWait, ref uint sequence, ref int submitted)
+    {
+        if (ConditionalCallDepth.Value >= 64) throw new InvalidOperationException("条件宏嵌套超过 64 层安全上限。");
+        using var callScope = new ConditionalMacroCallScope(target);
+        ConditionalCallDepth.Value++;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+        using var evaluator = new CompositeConditionEvaluator(pixelEvaluator: pixelEvaluator,
+            textEvaluator: textEvaluator is null ? null : matcher => textEvaluator(
+                new TextWhenStep(matcher.Region, matcher.ExpectedText, [], matcher.Contains, matcher.Language, matcher.UseRegex), cancellation.Token));
+        var monitors = new List<ConditionMonitor>();
+        var outcome = 0;
+        var started = clock.GetTimestamp();
+        var timeline = new ConditionTimeline(target.EffectiveConditions.Count, started, started);
+        var localPause = new PlaybackPauseCoordinator(clock);
+        void Stop(int value)
+        {
+            int old;
+            do { old = Volatile.Read(ref outcome); if (old >= value) break; }
+            while (Interlocked.CompareExchange(ref outcome, value, old) != old);
+            cancellation.Cancel();
+        }
+        ConditionMonitor Create(ConditionalDirective condition, int index, IReadOnlyList<ConditionTimeInterval> intervals)
+            => new(condition, evaluator, inputSink, macroResolver, started, frequency,
+                precision, () => Stop(3), () => Stop(2), localPause, timeline, index, intervals, pressFloor,
+                stopCurrentRequested: () => Stop(1));
+        try
+        {
+            // Gates belong to this call, not to the parent macro's time origin.
+            for (var i = 0; i < target.EffectiveConditions.Count; i++)
+            {
+                var condition = target.EffectiveConditions[i];
+                if (condition.ExecutionMode != ConditionExecutionMode.GateMainSequence) continue;
+                var gate = Create(condition, i, ConditionActivationSchedule.ResolveStartupGate());
+                monitors.Add(gate);
+                gate.Activate();
+                gate.WaitForTriggeredCompletion(cancellation.Token);
+            }
+            var mainStart = clock.GetTimestamp();
+            timeline.SetMainIterationTick(mainStart);
+            var windows = new MacroPlaybackExecutor(inputSink, macroResolver: macroResolver)
+                .CreateConditionTimeWindows(target, frequency);
+            for (var i = 0; i < target.EffectiveConditions.Count; i++)
+            {
+                var condition = target.EffectiveConditions[i];
+                if (condition.ExecutionMode == ConditionExecutionMode.GateMainSequence) continue;
+                var intervals = ConditionActivationSchedule.Resolve(condition, windows, frequency);
+                if (intervals.Count == 0 && !condition.HasActivationConstraint)
+                    intervals = ConditionActivationSchedule.ResolveStartupGate();
+                if (intervals.Count == 0) continue;
+                var monitor = Create(condition, i, intervals);
+                monitors.Add(monitor);
+                monitor.Activate();
+            }
+            var runner = new ManagedMacroControlFlowRunner(inputSink, delayStrategy, clock, pixelEvaluator,
+                macroResolver, localPause, textEvaluator, true, inputGate, parallelDepth, pressFloor, precision);
+            var flow = runner.Run(target, mainStart, frequency, cancellation.Token, noWait, ref sequence, ref submitted);
+            if (!target.IsConditionMacro && target.Steps.Count > 0)
+                foreach (var monitor in monitors) monitor.CompleteAfterCurrentEvaluation();
+            foreach (var monitor in monitors) monitor.WaitForTriggeredCompletion(cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            return flow;
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested && Volatile.Read(ref outcome) != 0)
+        {
+            return outcome switch { 3 => MacroControlFlowResult.StopAll, 2 => MacroControlFlowResult.StopIteration, _ => MacroControlFlowResult.StopCurrent };
+        }
+        finally
+        {
+            foreach (var monitor in monitors) monitor.Deactivate();
+            var errors = new List<Exception>();
+            foreach (var monitor in monitors) try { monitor.Dispose(); } catch (Exception ex) { errors.Add(ex); }
+            ConditionalCallDepth.Value--;
+            if (errors.Count > 0) throw new AggregateException("子宏条件执行失败", errors);
+        }
+    }
+
     private (MacroControlFlowResult Result, int Actions) ExecuteParallel(
         ParallelStep parallel,
         long qpcFrequency,
@@ -556,6 +649,9 @@ internal sealed class ManagedMacroControlFlowRunner
         }
 
         using var branchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var workers = ParallelWorkerLease.Acquire(2);
+        long commonStart = 0;
+        using var startBarrier = new Barrier(3, _ => commonStart = clock.GetTimestamp());
         if (!noWait && parallel.Timeout is { } timeout && timeout > TimeSpan.Zero)
         {
             branchCancellation.CancelAfter(timeout);
@@ -570,10 +666,11 @@ internal sealed class ManagedMacroControlFlowRunner
         {
             var branchIndex = index;
             var branchSteps = branches[index];
-            tasks[index] = Task.Run(() =>
+            tasks[index] = PlaybackWorkers.Parallel.Run(() =>
             {
                 try
                 {
+                    using var precisionScope = PrecisionPlaybackContext.Enter(precision);
                     var branchRunner = new ManagedMacroControlFlowRunner(
                         inputSink,
                         delayStrategy,
@@ -585,13 +682,14 @@ internal sealed class ManagedMacroControlFlowRunner
                         pollConditions: true,
                         inputGate,
                         parallelDepth + 1,
-                        pressFloor);
+                        pressFloor, precision);
                     uint sequence = 1;
                     var submitted = 0;
                     var document = new MacroDocument(1, "_parallel_branch", PlaybackSettings.Default, branchSteps);
+                    startBarrier.SignalAndWait(branchCancellation.Token);
                     var flow = branchRunner.Run(
                         document,
-                        clock.GetTimestamp(),
+                        commonStart,
                         qpcFrequency,
                         branchCancellation.Token,
                         noWait,
@@ -609,9 +707,12 @@ internal sealed class ManagedMacroControlFlowRunner
                     errors[branchIndex] = ex;
                     branchCancellation.Cancel();
                 }
-            }, branchCancellation.Token);
+                return true;
+            });
         }
 
+        try { startBarrier.SignalAndWait(branchCancellation.Token); }
+        catch (OperationCanceledException) { branchCancellation.Cancel(); }
         try
         {
             Task.WaitAll(tasks);
@@ -880,7 +981,7 @@ internal static class MacroControlFlowInspector
         {
             switch (step)
             {
-                case StopCurrentSequenceStep or StopCurrentIterationStep or StopAllSequencesStep or WindowActivateStep or OcrExtractTextStep or OcrClickStep or WeakNetStep or NetLimitStep or ClockShiftStep or ParallelStep or TextWhenStep or FrameLockStep:
+                case StopCurrentSequenceStep or StopCurrentIterationStep or StopAllSequencesStep or WindowActivateStep or OcrExtractTextStep or OcrClickStep or WeakNetStep or NetLimitStep or ClockShiftStep or ParallelStep or TextWhenStep or FrameLockStep or YsrFpsToggleStep:
                     return true;
                 case TextStep text when !string.IsNullOrEmpty(text.Text):
                     return true;
@@ -893,6 +994,7 @@ internal static class MacroControlFlowInspector
                 case MacroCallStep macro when macroResolver is not null:
                 {
                     var target = macroResolver(macro.Macro);
+                    if (target?.EffectiveConditions.Count > 0) return true;
                     if (target is null)
                     {
                         break;

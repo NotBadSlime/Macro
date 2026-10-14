@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using MacroHid.Runtime;
@@ -10,19 +9,21 @@ public partial class App : Application
 {
     private bool dispatcherErrorDialogPending;
 
-    private static readonly string LogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MacroHID", "crash.log");
-
     protected override void OnStartup(StartupEventArgs e)
     {
-        base.OnStartup(e);
+        AppLog.Initialize();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        base.OnStartup(e);
 
         Log("=== App Starting ===");
+        UnlockerConfiguration.Faulted += (_, message) => Dispatcher.BeginInvoke(new Action(() =>
+            DialogOwnerService.MessageBoxSafe(MainWindow, message, "解帧器配置控制已停止", MessageBoxButton.OK, MessageBoxImage.Warning)));
+        var recovered = UnlockerConfiguration.RecoverPending();
+        if (recovered.Count > 0) Dispatcher.BeginInvoke(new Action(() =>
+            DialogOwnerService.MessageBoxSafe(MainWindow, string.Join("\n", recovered), "解帧器配置恢复", MessageBoxButton.OK, MessageBoxImage.Information)));
 
         try
         {
@@ -35,7 +36,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Log($"ThemeService FAILED: {ex.Message}");
+            AppLog.Error("Startup", "ThemeService failed", ex);
             DialogOwnerService.MessageBoxSafe(null, $"Theme init failed:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -43,8 +44,10 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         Log($"=== App Exiting ({e.ApplicationExitCode}) ===");
+        RestoreUnlockerTargets();
         PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
         NativePlaybackWarmup.Shutdown();
+        AppLog.Flush(TimeSpan.FromSeconds(2));
         base.OnExit(e);
     }
 
@@ -54,7 +57,7 @@ public partial class App : Application
         PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
         var inner = e.Exception;
         while (inner.InnerException != null) inner = inner.InnerException;
-        Log($"[UI ERROR] {inner.GetType().Name}: {inner.Message}\nStack (first 5):\n{string.Join("\n", inner.StackTrace?.Split('\n').Take(5) ?? [])}");
+        AppLog.Error("UI", "Unhandled dispatcher exception", e.Exception);
         if (dispatcherErrorDialogPending) return;
 
         dispatcherErrorDialogPending = true;
@@ -87,29 +90,35 @@ public partial class App : Application
     {
         PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
         var ex = e.ExceptionObject as Exception;
-        Log($"[DOMAIN ERROR] {ex?.GetType().Name}: {ex?.Message}");
+        AppLog.Error("App", $"Unhandled exception; terminating={e.IsTerminating}", ex);
     }
 
     private static void OnProcessExit(object? sender, EventArgs e)
     {
+        RestoreUnlockerTargets();
         PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
+    }
+
+    private static void RestoreUnlockerTargets()
+    {
+        try { if (!FufuFpsSession.RestoreOnShutdown(out var fufuError)) AppLog.Error("FPS", "EXIT RESTORE " + fufuError); }
+        catch (Exception ex) { AppLog.Error("FPS", "EXIT RESTORE Fufu", ex); }
+        try { if (!GameMemoryFpsSession.RestoreOnShutdown(out var ky3Error)) AppLog.Error("FPS", "EXIT RESTORE " + ky3Error); }
+        catch (Exception ex) { AppLog.Error("FPS", "EXIT RESTORE KY3", ex); }
     }
 
     private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
         PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
-        Log($"[UNOBSERVED TASK ERROR] {e.Exception}");
+        AppLog.Error("Task", "Unobserved task exception", e.Exception);
         e.SetObserved();
     }
 
     public static void Log(string msg)
     {
-        try
-        {
-            var dir = Path.GetDirectoryName(LogPath)!;
-            Directory.CreateDirectory(dir);
-            File.AppendAllText(LogPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
-        }
-        catch { }
+        if (msg.Contains("ERROR", StringComparison.OrdinalIgnoreCase) || msg.Contains("FAILED", StringComparison.OrdinalIgnoreCase))
+            AppLog.Error("App", msg);
+        else
+            AppLog.Info("App", msg);
     }
 }

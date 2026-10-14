@@ -1,4 +1,4 @@
-namespace MacroHid.Runtime;
+﻿namespace MacroHid.Runtime;
 
 // AsyncLocal flows into condition workers and parallel branches of the same playback.
 internal sealed class PlaybackEffectScope : IDisposable
@@ -49,6 +49,9 @@ internal sealed class PlaybackEffectScope : IDisposable
                 Cleanup(NetLimitSession.EndPlayback, failures);
             }
             if (Owns("frames")) Cleanup(FrameLockSession.EndPlayback, failures);
+            if (Owns("ysr-frames")) Cleanup(YsrFpsSession.EndPlayback, failures);
+            if (Owns("fufu-frames")) Cleanup(FufuFpsSession.EndPlayback, failures);
+            if (Owns("game-memory-frames")) Cleanup(GameMemoryFpsSession.EndPlayback, failures);
         }
         finally
         {

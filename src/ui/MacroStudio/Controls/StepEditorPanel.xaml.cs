@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -219,7 +219,7 @@ public partial class StepEditorPanel : UserControl
             netLimit: step is NetLimitStep,
             clockShift: step is ClockShiftStep,
             weakNet: step is WeakNetStep,
-            frameLock: step is FrameLockStep,
+            frameLock: step is FrameLockStep or YsrFpsToggleStep,
             parallel: step is ParallelStep,
             textWhen: step is TextWhenStep);
 
@@ -340,6 +340,10 @@ public partial class StepEditorPanel : UserControl
                 FrameLockProcessBox.Text = frame.ProcessName;
                 FrameLockFpsBox.Text = frame.EffectiveFps.ToString();
                 ShowFrameLockFields(frame.Action);
+                break;
+            case YsrFpsToggleStep ysr:
+                FrameLockFpsBox.Text = ysr.ToggleFps.ToString();
+                ShowFrameLockFields(ysr.Action == YsrFpsAction.Stop ? FrameLockAction.Stop : FrameLockAction.Start, true, ysr.Backend);
                 break;
             case ParallelStep parallel:
                 ParallelTimeoutBox.Text = parallel.Timeout is { } timeout && timeout > TimeSpan.Zero
@@ -514,6 +518,7 @@ public partial class StepEditorPanel : UserControl
                         : weak.Duration,
                     TimeShift = ReadWeakNetTimeShift(weak.EffectiveTimeShift)
                 },
+            YsrFpsToggleStep ysr => ysr with { ToggleFps = ysr.Action == YsrFpsAction.Stop ? ysr.ToggleFps : (int)ReadDouble(FrameLockFpsBox.Text, ysr.ToggleFps) },
             FrameLockStep frame => frame.Action == FrameLockAction.Stop
                 ? frame with
                 {
@@ -581,6 +586,9 @@ public partial class StepEditorPanel : UserControl
                 break;
             case ClockShiftStep clock when clock.Action != ClockShiftAction.Restore:
                 Shift(ClockShiftHoursBox.Text, ClockShiftMinutesBox.Text);
+                break;
+            case YsrFpsToggleStep ysr:
+                if (ysr.Action != YsrFpsAction.Stop) Number(FrameLockFpsBox.Text, "目标帧率", ysr.Backend != FpsBackend.Ysr ? 0 : 1, 1000, true);
                 break;
             case FrameLockStep frame:
                 Process(FrameLockProcessBox.Text);
@@ -1198,8 +1206,22 @@ public partial class StepEditorPanel : UserControl
         WeakNetShiftHintText.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void ShowFrameLockFields(FrameLockAction action)
+    private void ShowFrameLockFields(FrameLockAction action, bool ysr = false, FpsBackend backend = FpsBackend.Ysr)
     {
+        FrameLockProcessLabelText.Visibility = FrameLockProcessBox.Visibility = ysr ? Visibility.Collapsed : Visibility.Visible;
+        FrameLockHintText.Text = ysr
+            ? (YsrFpsSession.TryReadCurrent(out var current) ? $"YSR 当前帧率：{current} FPS。" : "YSR 未连接。") + "目标帧率 1–1000；关闭或播放结束时恢复开启前的帧率。需先启动解帧器，不需要运行 fps_toggle.py。"
+            : L("FrameLockHint");
+        if (ysr && backend != FpsBackend.Ysr)
+        {
+            int unlockerCurrent;
+            bool connected = backend == FpsBackend.Fufu
+                ? FufuFpsSession.TryReadCurrent(out unlockerCurrent)
+                : GameMemoryFpsSession.TryReadCurrent(out unlockerCurrent);
+            FrameLockHintText.Text = (connected ? $"{backend} 配置目标：{unlockerCurrent} FPS。" : $"请在顶部「解帧器设置」检查 {backend} 路径、版本和解帧开关。")
+                + "0 表示 999 FPS；结束时恢复原配置目标。写入后等待解帧器应用，不代表实测 FPS 已达到。"
+                + (backend == FpsBackend.Fufu ? "Fufu 原版配置加载约 100–200 毫秒，需进入游戏世界验证。" : "KY3 补丁检查间隔为 20 毫秒；原版备用模式约 2 秒。请在设置中确认模式，实际响应延迟需实测。短时间切换可能合并。");
+        }
         var stop = action == FrameLockAction.Stop;
         FrameLockFpsLabelText.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;
         FrameLockFpsBox.Visibility = stop ? Visibility.Collapsed : Visibility.Visible;

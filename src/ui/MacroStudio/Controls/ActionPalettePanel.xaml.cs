@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -28,6 +28,7 @@ public partial class ActionPalettePanel : UserControl
         BasicActionsSection.Header = L("PaletteBasic");
         AdvancedActionsSection.Header = L("PaletteAdvanced");
         LoopActionsSection.Header = L("PaletteLoop");
+        YsrUnlockerSection.Header = L("PaletteYsrUnlocker");
         AddDelayText.Text = L("AddDelay");
         AddKeyboardText.Text = L("AddKeyboard");
         AddMouseText.Text = L("AddMouseButton");
@@ -51,6 +52,12 @@ public partial class ActionPalettePanel : UserControl
         AddWeakNetStopText.Text = L("AddWeakNetStop");
         AddFrameLockStartText.Text = L("AddFrameLockStart");
         AddFrameLockStopText.Text = L("AddFrameLockStop");
+        AddYsrFpsToggleText.Text = L("AddYsrFpsStart");
+        AddYsrFpsStopText.Text = L("AddYsrFpsStop");
+        AddKy3FpsStartText.Text = L("AddKy3FpsStart");
+        AddFufuFpsStartText.Text = L("AddFufuFpsStart");
+        AddKy3FpsStopText.Text = L("AddKy3FpsStop");
+        AddFufuFpsStopText.Text = L("AddFufuFpsStop");
         AddParallelText.Text = L("AddParallel");
         AddLoopText.Text = L("AddLoop");
         AddStopCurrentText.Text = L("AddStopCurrent");
@@ -79,6 +86,12 @@ public partial class ActionPalettePanel : UserControl
         AddWeakNetStopHintText.Text = L("AddWeakNetStopHint");
         AddFrameLockStartHintText.Text = L("AddFrameLockStartHint");
         AddFrameLockStopHintText.Text = L("AddFrameLockStopHint");
+        AddYsrFpsToggleHintText.Text = L("AddYsrFpsStartHint");
+        AddYsrFpsStopHintText.Text = L("AddYsrFpsStopHint");
+        AddKy3FpsStartHintText.Text = L("AddKy3FpsStartHint");
+        AddFufuFpsStartHintText.Text = L("AddFufuFpsStartHint");
+        AddKy3FpsStopHintText.Text = L("AddKy3FpsStopHint");
+        AddFufuFpsStopHintText.Text = L("AddFufuFpsStopHint");
         AddParallelHintText.Text = L("AddParallelHint");
         AddLoopHintText.Text = L("AddLoopHint");
         AddStopCurrentHintText.Text = L("AddStopCurrentHint");
@@ -214,6 +227,12 @@ public partial class ActionPalettePanel : UserControl
         ApplyButtonAppearance(AddWeakNetStopButton, MacroActionTemplateKind.WeakNetStop);
         ApplyButtonAppearance(AddFrameLockStartButton, MacroActionTemplateKind.FrameLockStart);
         ApplyButtonAppearance(AddFrameLockStopButton, MacroActionTemplateKind.FrameLockStop);
+        ApplyButtonAppearance(AddYsrFpsToggleButton, MacroActionTemplateKind.YsrFpsStart);
+        ApplyButtonAppearance(AddYsrFpsStopButton, MacroActionTemplateKind.YsrFpsStop);
+        ApplyButtonAppearance(AddKy3FpsStartButton, MacroActionTemplateKind.Ky3FpsStart);
+        ApplyButtonAppearance(AddFufuFpsStartButton, MacroActionTemplateKind.FufuFpsStart);
+        ApplyButtonAppearance(AddKy3FpsStopButton, MacroActionTemplateKind.Ky3FpsStop);
+        ApplyButtonAppearance(AddFufuFpsStopButton, MacroActionTemplateKind.FufuFpsStop);
         ApplyButtonAppearance(AddParallelButton, MacroActionTemplateKind.Parallel);
         ApplyButtonAppearance(AddLoopButton, MacroActionTemplateKind.Loop);
         ApplyButtonAppearance(AddStopCurrentButton, MacroActionTemplateKind.StopCurrent);

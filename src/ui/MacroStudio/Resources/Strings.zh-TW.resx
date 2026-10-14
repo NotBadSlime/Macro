@@ -272,14 +272,14 @@
   <data name="NetLimitStopHint" xml:space="preserve"><value>取消限速，恢復原來的網速。</value></data>
   <data name="NetLimiterHint" xml:space="preserve"><value>使用本機已安裝的 NetLimiter。新建時預設 695，只限制上傳，下載不限，單位是位元組/秒。</value></data>
   <data name="NetLimiterStopHint" xml:space="preserve"><value>取消 NetLimiter 裡的限速。本機沒安裝 NetLimiter 時，這張卡片不會改網路。</value></data>
-  <data name="ClockShiftHint" xml:space="preserve"><value>填 0 小時 0 分鐘則不改系統時間。同一次播放只按第一次撥快。斷網卡片仍會預設撥快。</value></data>
+  <data name="ClockShiftHint" xml:space="preserve"><value>填 0 小時 0 分鐘則不改系統時間。同一次播放只按第一次撥快。</value></data>
   <data name="ClockRestoreHint" xml:space="preserve"><value>立刻把系統時間改回。播放結束時如果還沒改回，也會自動改回。</value></data>
-  <data name="AddFrameLockStart" xml:space="preserve"><value>開啟鎖幀</value></data>
+  <data name="AddFrameLockStart" xml:space="preserve"><value>RTSS 開啟鎖幀</value></data>
   <data name="AddFrameLockStartHint" xml:space="preserve"><value>把指定程式限到設定幀數</value></data>
-  <data name="AddFrameLockStop" xml:space="preserve"><value>關閉鎖幀</value></data>
+  <data name="AddFrameLockStop" xml:space="preserve"><value>RTSS 關閉鎖幀</value></data>
   <data name="AddFrameLockStopHint" xml:space="preserve"><value>恢復這個程式原來的幀數上限</value></data>
-  <data name="TemplateFrameLockStart" xml:space="preserve"><value>開啟鎖幀</value></data>
-  <data name="TemplateFrameLockStop" xml:space="preserve"><value>關閉鎖幀</value></data>
+  <data name="TemplateFrameLockStart" xml:space="preserve"><value>RTSS 開啟鎖幀</value></data>
+  <data name="TemplateFrameLockStop" xml:space="preserve"><value>RTSS 關閉鎖幀</value></data>
   <data name="FrameLockProcess" xml:space="preserve"><value>處理程序名稱</value></data>
   <data name="FrameLockFps" xml:space="preserve"><value>鎖定幀數</value></data>
   <data name="FrameLockHint" xml:space="preserve"><value>幀數 1 到 1000。關閉時恢復原來的上限。播放結束也會恢復。</value></data>
@@ -399,8 +399,8 @@
   <data name="ForceStopConflictsWithColorSample" xml:space="preserve"><value>強制停止鍵不能和取色快捷鍵相同。</value></data>
   <data name="ListeningForceStopConflict" xml:space="preserve"><value>以下巨集與強制停止鍵衝突，未啟動監聽：{0}</value></data>
   <data name="PrecisionMode" xml:space="preserve"><value>精度模式</value></data>
-  <data name="PrecisionBalanced" xml:space="preserve"><value>基礎</value></data>
-  <data name="PrecisionExtremeDuringPlayback" xml:space="preserve"><value>高效能</value></data>
+  <data name="PrecisionBalanced" xml:space="preserve"><value>低占用</value></data>
+  <data name="PrecisionExtremeDuringPlayback" xml:space="preserve"><value>均衡（建議）</value></data>
   <data name="PrecisionUltraLowJitter" xml:space="preserve"><value>極限</value></data>
   <data name="WorkspaceWindowMenu" xml:space="preserve"><value>視窗</value></data>
   <data name="WorkspaceShow" xml:space="preserve"><value>顯示</value></data>
@@ -605,4 +605,5 @@
   <data name="LibraryPathHelp" xml:space="preserve"><value>資料庫 &gt; 資料夾 &gt; 巨集名。按 Enter 後巨集資料庫會跳到對應檔案或資料夾。</value></data>
   <data name="LibraryPathNotFound" xml:space="preserve"><value>找不到這條巨集路徑。</value></data>
   <data name="ListeningColorSampleConflict" xml:space="preserve"><value>以下巨集與取色快捷鍵衝突，未啟動監聽：{0}</value></data>
+  <data name="OpenLogs" xml:space="preserve"><value>開啟日誌</value></data>
 </root>

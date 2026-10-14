@@ -40,6 +40,17 @@ jobs:
       - name: Run core tests
         run: dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release --no-build
 
+      - name: Native scheduler regression (fake input only)
+        shell: pwsh
+        run: |
+          msbuild tests/MacroHid.NativePlayback.Tests/MacroHid.NativePlayback.Tests.vcxproj /p:Configuration=Release /p:Platform=x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & tests/MacroHid.NativePlayback.Tests/x64/Release/MacroHid.NativePlayback.Tests.exe
+          exit $LASTEXITCODE
+
+      - name: Frame comparison regression
+        run: python tests/test_frame_comparison.py
+
       - name: Run latency probe smoke test
         run: dotnet run --project src\tools\LatencyProbe\LatencyProbe.csproj --configuration Release --no-build -- --iterations 250 --interval-us 1000
 
@@ -126,4 +137,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MacroHID-installer-${{ github.sha }}
-          path: artifacts\installer\MacroHID-Setup-x64.exe
+          if-no-files-found: error
+          path: |
+            artifacts/packages/MacroHID-Setup-x64.exe
+            artifacts/packages/MacroHID-Portable-x64.zip
+            artifacts/packages/SHA256SUMS.txt

@@ -26,7 +26,7 @@ public sealed record PlaybackDelayProfile(
                 SleepOneThresholdUs: 4_000,
                 YieldThresholdUs: 750,
                 AggressiveSpinThresholdUs: 150,
-                FinalSpinWindowUs: 250,
+                FinalSpinWindowUs: PlaybackPerformancePolicy.For(mode).FinalSpinMicroseconds,
                 UseHighResolutionWaitableTimer: true,
                 NoSleepForSubTwoMillisecond: false),
             PrecisionMode.UltraLowJitter => new PlaybackDelayProfile(
@@ -34,15 +34,15 @@ public sealed record PlaybackDelayProfile(
                 SleepOneThresholdUs: 20_000,
                 YieldThresholdUs: 2_500,
                 AggressiveSpinThresholdUs: 2_000,
-                FinalSpinWindowUs: 2_000,
+                FinalSpinWindowUs: PlaybackPerformancePolicy.For(mode).FinalSpinMicroseconds,
                 UseHighResolutionWaitableTimer: true,
-                NoSleepForSubTwoMillisecond: true),
+                NoSleepForSubTwoMillisecond: false),
             _ => new PlaybackDelayProfile(
                 PrecisionMode.ExtremeDuringPlayback,
                 SleepOneThresholdUs: 8_000,
                 YieldThresholdUs: 1_500,
                 AggressiveSpinThresholdUs: 350,
-                FinalSpinWindowUs: 800,
+                FinalSpinWindowUs: PlaybackPerformancePolicy.For(mode).FinalSpinMicroseconds,
                 UseHighResolutionWaitableTimer: true,
                 NoSleepForSubTwoMillisecond: false)
         };
@@ -60,6 +60,20 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
     private readonly IHighResolutionClock clock;
     private readonly PlaybackDelayProfile profile;
     private readonly int calibratedSpinIterations;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(PrecisionMode, int), int> Calibration = new();
+
+    private static IReadOnlyDictionary<int, int> CoreClasses = new Dictionary<int, int>();
+    private static int CurrentClass() => Volatile.Read(ref CoreClasses).GetValueOrDefault(Thread.GetCurrentProcessorId(), -1);
+    public static void Prepare(PrecisionMode precision)
+    {
+        if (CoreClasses.Count == 0)
+            Volatile.Write(ref CoreClasses, LogicalProcessorInventory.Query().ToDictionary(p => p.ProcessorNumber, p => p.EfficiencyClass));
+        var key = (precision, CurrentClass());
+        if (Calibration.ContainsKey(key)) return;
+        var clock = new QpcHighResolutionClock();
+        var strategy = new QpcPlaybackDelayStrategy(clock, precision);
+        Calibration.TryAdd(key, strategy.CalibrateSpinCount());
+    }
 
     public QpcPlaybackDelayStrategy(IHighResolutionClock? clock = null, PrecisionMode precision = PrecisionMode.ExtremeDuringPlayback)
         : this(clock, PlaybackDelayProfile.ForPrecisionMode(precision))
@@ -70,7 +84,10 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
     {
         this.clock = clock ?? new QpcHighResolutionClock();
         this.profile = profile;
-        calibratedSpinIterations = CalibrateSpinCount();
+        // Never calibrate on a trigger. Custom clocks retain their deterministic test behavior.
+        calibratedSpinIterations = this.clock is QpcHighResolutionClock
+            ? Calibration.GetValueOrDefault((profile.Precision, CurrentClass()), 16)
+            : 16;
     }
 
     public void WaitUntil(long dueTick, long qpcFrequency, CancellationToken cancellationToken, bool noWait)
@@ -92,9 +109,9 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
 
             var remainingUs = ToMicroseconds(remainingTicks, qpcFrequency);
             if (profile.UseHighResolutionWaitableTimer
-                && remainingUs > profile.FinalSpinWindowUs + 750
+                && remainingUs > profile.FinalSpinWindowUs + 50
                 && TryWaitWithHighResolutionWaitableTimer(
-                    Math.Min(remainingUs - profile.FinalSpinWindowUs, CancellationPollChunkUs)))
+                    Math.Min(remainingUs - profile.FinalSpinWindowUs, CancellationPollChunkUs), cancellationToken))
             {
                 continue;
             }
@@ -167,46 +184,46 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
         return (long)Math.Round(ticks * 1_000_000.0 / qpcFrequency, MidpointRounding.AwayFromZero);
     }
 
-    private static bool TryWaitWithHighResolutionWaitableTimer(long waitUs)
+    private static bool TryWaitWithHighResolutionWaitableTimer(long waitUs, CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows() || waitUs <= 0)
         {
             return false;
         }
 
-        var timer = RuntimeNativeMethods.CreateWaitableTimerExW(
+        var timer = threadTimer ??= new ThreadTimer();
+        if (timer.Handle == IntPtr.Zero) return false;
+        return timer.Wait(waitUs, cancellationToken);
+    }
+
+    [ThreadStatic] private static ThreadTimer? threadTimer;
+    internal static void ReleaseThreadTimer() { threadTimer?.Dispose(); threadTimer = null; }
+    private sealed class ThreadTimer : IDisposable
+    {
+        private IntPtr handle = RuntimeNativeMethods.CreateWaitableTimerExW(
             IntPtr.Zero,
             null,
             RuntimeNativeMethods.CreateWaitableTimerHighResolution,
             RuntimeNativeMethods.TimerAllAccess);
-        if (timer == IntPtr.Zero)
+        internal IntPtr Handle => handle;
+        private readonly IntPtr[] handles = new IntPtr[2];
+        internal bool Wait(long waitUs, CancellationToken token)
         {
-            return false;
+            var due = -Math.Max(1, waitUs * 10);
+            if (!RuntimeNativeMethods.SetWaitableTimerEx(Handle, ref due, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0)) return false;
+            handles[0] = Handle;
+            handles[1] = token.WaitHandle.SafeWaitHandle.DangerousGetHandle();
+            var result = WaitForMultipleObjects(2, handles, false, (uint)Math.Clamp(waitUs / 1000 + 8, 1, 60000));
+            token.ThrowIfCancellationRequested();
+            return result == 0;
         }
-
-        try
-        {
-            var dueTime100ns = -Math.Max(1, waitUs * 10);
-            if (!RuntimeNativeMethods.SetWaitableTimerEx(
-                    timer,
-                    ref dueTime100ns,
-                    lPeriod: 0,
-                    pfnCompletionRoutine: IntPtr.Zero,
-                    lpArgToCompletionRoutine: IntPtr.Zero,
-                    wakeContext: IntPtr.Zero,
-                    tolerableDelay: 0))
-            {
-                return false;
-            }
-
-            var timeoutMs = (uint)Math.Clamp(waitUs / 1_000 + 8, 1, 60_000);
-            return RuntimeNativeMethods.WaitForSingleObject(timer, timeoutMs) == RuntimeNativeMethods.WaitObject0;
-        }
-        finally
-        {
-            RuntimeNativeMethods.CloseHandle(timer);
-        }
+        private void Close() { var owned = Interlocked.Exchange(ref handle, IntPtr.Zero); if (owned != IntPtr.Zero) RuntimeNativeMethods.CloseHandle(owned); }
+        public void Dispose() { Close(); GC.SuppressFinalize(this); }
+        ~ThreadTimer() { Close(); }
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint WaitForMultipleObjects(uint count, IntPtr[] handles, bool waitAll, uint milliseconds);
     }
+
 }
 
 public interface IMacroInputSink
@@ -223,7 +240,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     private readonly IMacroInputSink inputSink;
     private readonly IPlaybackDelayStrategy? configuredDelayStrategy;
     private readonly Func<PixelCondition, bool> livePixelEvaluator;
-    private readonly Func<string, MacroDocument?>? macroResolver;
+    private readonly Func<string, MacroDocument?>? configuredMacroResolver;
+    private Func<string, MacroDocument?>? macroResolver => PlaybackMacroSnapshot.Resolver ?? configuredMacroResolver;
     private readonly IHighResolutionClock clock;
     private readonly object preparedPlanGate = new();
     private MacroDocument? cachedDocument;
@@ -231,6 +249,10 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     private CompiledPlaybackPlan? cachedCompiledPlan;
     private NativePlaybackPreparedPlan? cachedNativePlan;
     private MacroDocument? warmedDocument;
+    private bool nativePreparationAvailable;
+    private readonly ConditionActionPlanCache.Store preparedConditions = new();
+    private MacroDocument? conditionPreparedDocument;
+    private PlaybackExecutionOptions? conditionPreparedOptions;
 
     public MacroPlaybackExecutor(
         IMacroInputSink inputSink,
@@ -243,11 +265,15 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         this.clock = clock ?? new QpcHighResolutionClock();
         this.configuredDelayStrategy = delayStrategy;
         this.livePixelEvaluator = livePixelEvaluator ?? ScreenPixelSampler.Matches;
-        this.macroResolver = macroResolver;
+        configuredMacroResolver = macroResolver;
     }
 
     public void Prepare(MacroDocument document, PlaybackExecutionOptions options)
     {
+        if (Environment.GetEnvironmentVariable("MACROHID_DISABLE_PREPARE") == "1") return;
+        QpcPlaybackDelayStrategy.Prepare(options.Precision);
+        nativePreparationAvailable = PlaybackPerformancePolicy.For(options.Precision).PreferNative
+            && NativePlaybackWarmup.PrepareForPrecision(options.Precision, options.AffinityMask);
         if (!ReferenceEquals(warmedDocument, document))
         {
             if (warmedDocument is not null)
@@ -259,8 +285,11 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             warmedDocument = document;
         }
 
-        if (!CanUseNativePreparedPlan(document, options)
-            || RequiresManagedControlFlow(document, options))
+        preparedConditions.Dispose();
+        ConditionActionPlanCache.Prewarm(document, preparedConditions, clock.Frequency, macroResolver, options.PressFloor,
+            CanAttemptNativeIteration(options));
+        conditionPreparedDocument = document; conditionPreparedOptions = options;
+        if (RequiresManagedControlFlow(document, options))
         {
             ClearPreparedPlan();
             return;
@@ -271,6 +300,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             clock.Frequency,
             GetPixelEvaluator(options.PixelMode),
             macroResolver,
+            waitDurationSampler: wait => wait.Duration, // Prepare a skeleton; never consume random samples here.
             pressFloor: options.PressFloor);
         var nativePlan = TryCreateNativePreparedPlan(document, options, compiledPlan);
         lock (preparedPlanGate)
@@ -292,6 +322,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         }
 
         ClearPreparedPlan();
+        preparedConditions.Dispose();
     }
 
     public Task<PlaybackRunResult> RunAsync(
@@ -299,32 +330,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         PlaybackExecutionOptions options,
         CancellationToken cancellationToken)
     {
-        var tcs = new TaskCompletionSource<PlaybackRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                var result = RunWithPrecisionContext(document, options, cancellationToken);
-                tcs.TrySetResult(result);
-            }
-            catch (OperationCanceledException)
-            {
-                tcs.TrySetCanceled(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                tcs.TrySetException(ex);
-            }
-        })
-        {
-            IsBackground = true,
-            Priority = ThreadPriority.Highest,
-            Name = "MacroHID-Playback"
-        };
-
-        thread.Start();
-        return tcs.Task;
+        return PlaybackWorkers.Playback.Run(() => RunWithPrecisionContext(document, options, cancellationToken));
     }
 
     private PlaybackRunResult RunWithPrecisionContext(
@@ -332,9 +338,17 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         PlaybackExecutionOptions options,
         CancellationToken cancellationToken)
     {
-        using var affinityScope = ProcessAffinityScope.TryEnter(options.AffinityMask);
-        using var precisionContext = PrecisionPlaybackContext.Enter(options.Precision);
-        return Run(document, options, cancellationToken);
+        PlaybackTrace.Mark(PlaybackTraceStage.WorkerStart);
+        var thread = Thread.CurrentThread;
+        var previousPriority = thread.Priority;
+        try
+        {
+            thread.Priority = PlaybackPerformancePolicy.For(options.Precision).ExecutionThreadPriority;
+            using var precisionContext = PrecisionPlaybackContext.Enter(options.Precision);
+            PlaybackRuntimeStatus.ReportBackend("managed");
+            return Run(document, options, cancellationToken);
+        }
+        finally { thread.Priority = previousPriority; }
     }
 
     private PlaybackRunResult Run(
@@ -361,6 +375,9 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
         using var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var effectScope = new PlaybackEffectScope();
+        using var macroSnapshot = new PlaybackMacroSnapshot(document, configuredMacroResolver);
+        using var callScope = new ConditionalMacroCallScope(document);
+        using var conditionPlans = new ConditionActionPlanCache(ReferenceEquals(conditionPreparedDocument, document) && conditionPreparedOptions == options ? preparedConditions : null);
         cancellationToken = runCancellation.Token;
         var safetyPlan = PlaybackInputSafetyPlan.Create(document, macroResolver);
         var completedIterationReleaseActions = options.Mode == PlaybackMode.FixedCount
@@ -402,6 +419,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             : TryCreateNativePreparedPlan(document, options, plan);
         var nativePreparedPlan = cachedPreparedPlan ?? localPreparedPlan;
 
+        PlaybackTrace.Mark(PlaybackTraceStage.PlanReady);
         var plannedIterationStartTick = clock.GetTimestamp();
         var playbackTriggerTick = plannedIterationStartTick;
 
@@ -451,7 +469,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     continue;
                 }
 
-                var iterationPlan = plan.RequiresResampling || options.PixelMode == PixelEvaluationMode.Live
+                var iterationPlan = plan.RequiresResampling || (options.PixelMode == PixelEvaluationMode.Live && ContainsPixelWhen(document.Steps))
                     ? plan.Resample()
                     : plan;
                 var iterationStartTick = plannedIterationStartTick;
@@ -516,6 +534,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                                 pauseCoordinator.WaitUntil(dueTick, delayStrategy, qpcFrequency, iterationToken, options.NoWait);
                             }
                             iterationToken.ThrowIfCancellationRequested();
+                            PlaybackTrace.Mark(PlaybackTraceStage.Deadline, dueTick);
+                            PlaybackTrace.Mark(PlaybackTraceStage.SubmitStart);
                             RecordJitter(timingRecorder, dueTick, qpcFrequency);
 
                             if (inputSink is SendInputMacroSink batchSink)
@@ -695,7 +715,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         iterationToken,
                         ref sequence,
                         ref actionsSubmitted,
-                        nativeControl))
+                        nativeControl, iterationStartTick))
                 {
                     return false;
                 }
@@ -736,7 +756,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         CancellationToken cancellationToken,
         ref uint sequence,
         ref int actionsSubmitted,
-        NativePlaybackRunControl? playbackControl = null)
+        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0)
     {
         if (!CanAttemptNativeIteration(options))
         {
@@ -761,7 +781,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 out diagnostics,
                 out fallbackReason,
                 enableCpuScan: NativePlaybackWarmup.CpuScanReady,
-                playbackControl: playbackControl);
+                playbackControl: playbackControl, timelineStart: timelineStart);
         }
         else
         {
@@ -772,15 +792,17 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 out diagnostics,
                 out fallbackReason,
                 enableCpuScan: NativePlaybackWarmup.CpuScanReady,
-                playbackControl: playbackControl);
+                playbackControl: playbackControl, timelineStart: timelineStart);
         }
 
         if (!ranNative)
         {
+            PlaybackRuntimeStatus.ReportBackend(diagnostics.BackendName, fallbackReason);
             sendInput.SetNativePlaybackDiagnostics(diagnostics with { NativeFallbackReason = fallbackReason });
             return false;
         }
 
+        PlaybackRuntimeStatus.ReportBackend(diagnostics.BackendName, diagnostics.NativeFallbackReason);
         sendInput.SetNativePlaybackDiagnostics(diagnostics);
         if (diagnostics.Cancelled || cancellationToken.IsCancellationRequested)
         {
@@ -794,7 +816,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private bool CanAttemptNativeIteration(PlaybackExecutionOptions options)
     {
-        return !options.BackgroundWindow
+        return nativePreparationAvailable && !options.BackgroundWindow
             && CanUseNativePrecision(options.Precision)
             && !options.NoWait
             && configuredDelayStrategy is null
@@ -873,7 +895,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private bool CanUseNativePreparedPlan(MacroDocument document, PlaybackExecutionOptions options)
     {
-        return !options.BackgroundWindow
+        return nativePreparationAvailable && !options.BackgroundWindow
             && CanUseNativePrecision(options.Precision)
             && !options.NoWait
             && configuredDelayStrategy is null
@@ -892,7 +914,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         {
             switch (step)
             {
-                case PixelWhenStep or WeakNetStep or NetLimitStep or ClockShiftStep or ParallelStep or TextWhenStep or ParallelBranchStep or FrameLockStep:
+                case PixelWhenStep or WeakNetStep or NetLimitStep or ClockShiftStep or ParallelStep or TextWhenStep or ParallelBranchStep or FrameLockStep or YsrFpsToggleStep:
                     return true;
                 case RepeatStep repeat when ContainsPixelWhen(repeat.Steps):
                     return true;
@@ -1052,7 +1074,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     textEvaluator: (step, token) => conditionEvaluator.Evaluate(
                         new TextMatcher(step.Region, step.ExpectedText, step.Contains, step.Language, step.UseRegex),
                         token),
-                    pressFloor: options.PressFloor);
+                    pressFloor: options.PressFloor, precision: options.Precision);
                 var flow = MacroControlFlowResult.Completed;
                 try
                 {
@@ -1562,8 +1584,11 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private static void DisposeMonitors(List<ConditionMonitor> monitors)
     {
+        foreach (var monitor in monitors) monitor.Deactivate();
+        var failures = new List<Exception>();
         foreach (var monitor in monitors)
-            monitor.Dispose();
+            try { monitor.Dispose(); } catch (Exception ex) { failures.Add(ex); }
+        if (failures.Count > 0) throw new AggregateException("条件监控执行失败", failures);
     }
 
     private void ApplyTimingStats(PlaybackTimingRecorder timingRecorder)
@@ -1580,7 +1605,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         timingRecorder.RecordJitter(clock.GetTimestamp(), dueTick, qpcFrequency);
     }
 
-    private IReadOnlyList<StepTimeWindow> CreateConditionTimeWindows(MacroDocument document, long qpcFrequency)
+    internal IReadOnlyList<StepTimeWindow> CreateConditionTimeWindows(MacroDocument document, long qpcFrequency)
     {
         var windows = new List<StepTimeWindow>();
         var elapsedTicks = 0L;

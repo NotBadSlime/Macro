@@ -97,7 +97,7 @@ internal static class NativePlaybackEngine
         int outlierThresholdUs = 250,
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
-        NativePlaybackRunControl? playbackControl = null)
+        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0)
     {
         return TryRunTimeline(
             plan.ExportNativeTimeline(),
@@ -109,7 +109,7 @@ internal static class NativePlaybackEngine
             outlierThresholdUs,
             enableCpuScan,
             engineMode,
-            playbackControl);
+            playbackControl, timelineStart);
     }
 
     public static bool TryRunTimeline(
@@ -122,7 +122,7 @@ internal static class NativePlaybackEngine
         int outlierThresholdUs = 250,
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
-        NativePlaybackRunControl? playbackControl = null)
+        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0)
     {
         if (!TryCreatePreparedPlan(timeline, qpcFrequency, out var preparedPlan, out diagnostics, out fallbackReason))
         {
@@ -140,7 +140,7 @@ internal static class NativePlaybackEngine
             enableCpuScan,
             engineMode,
             includePlanCreateInStartup: true,
-            playbackControl: playbackControl);
+            playbackControl: playbackControl, timelineStart: timelineStart);
     }
 
     public static bool TryCreatePreparedPlan(
@@ -210,7 +210,7 @@ internal static class NativePlaybackEngine
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
         bool includePlanCreateInStartup = false,
-        NativePlaybackRunControl? playbackControl = null)
+        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0)
     {
         diagnostics = EmptyDiagnostics("native", string.Empty);
         fallbackReason = string.Empty;
@@ -234,7 +234,7 @@ internal static class NativePlaybackEngine
             : Math.Min(timeline.Batches.Length, 65_536);
         var nativeOutlierEvents = outlierEventCapacity == 0
             ? Array.Empty<NativeOutlierEvent>()
-            : new NativeOutlierEvent[outlierEventCapacity];
+            : preparedPlan.RentOutliers(outlierEventCapacity);
         GCHandle outlierEventsHandle = default;
 
         try
@@ -268,7 +268,7 @@ internal static class NativePlaybackEngine
                 OutlierEvents = outlierEventsHandle.IsAllocated
                     ? outlierEventsHandle.AddrOfPinnedObject()
                     : IntPtr.Zero,
-                OutlierEventCapacity = checked((uint)nativeOutlierEvents.Length)
+                OutlierEventCapacity = checked((uint)outlierEventCapacity)
             };
 
             var modes = effectiveEngineMode switch
@@ -280,9 +280,13 @@ internal static class NativePlaybackEngine
             foreach (var mode in modes)
             {
                 options.NativeEngineMode = (int)mode;
-                var backendName = mode == NativeEngineMode.Standby ? "native-standby" : "native-inline";
-                var runStatus = playbackControl is null
-                    ? NativePlaybackInterop.MhpRunPlan(preparedPlan.Handle, ref options, ref cancelFlag, out var stats)
+                var shared = Environment.GetEnvironmentVariable("MACROHID_LEGACY_PLAYBACK") != "1";
+                var backendName = shared ? "native-shared" : mode == NativeEngineMode.Standby ? "native-standby" : "native-inline";
+                MhpRunStats stats;
+                var runStatus = shared
+                    ? NativePlaybackInterop.SubmitAndWait(preparedPlan.Handle, ref options, playbackControl?.Handle ?? IntPtr.Zero, cancellationToken, out stats, timelineStart)
+                    : playbackControl is null
+                    ? NativePlaybackInterop.MhpRunPlan(preparedPlan.Handle, ref options, ref cancelFlag, out stats)
                     : NativePlaybackInterop.MhpRunPlanControlled(
                         preparedPlan.Handle,
                         ref options,
@@ -300,6 +304,8 @@ internal static class NativePlaybackEngine
 
                 if (runStatus == MhpStatus.Ok || runStatus == MhpStatus.Cancelled)
                 {
+                    if (shared && precision == PrecisionMode.UltraLowJitter && stats.BatchesSubmitted > 0 && stats.WorkerMmcssAppliedCount == 0)
+                        diagnostics = diagnostics with { NativeFallbackReason = "MMCSS Pro Audio unavailable; execution used Highest." };
                     return true;
                 }
 
@@ -317,6 +323,8 @@ internal static class NativePlaybackEngine
                     continue;
                 }
 
+                if (stats.BatchesSubmitted > 0 || stats.NativeInputsSubmitted > 0 || stats.FailedSubmissions > 0)
+                    throw new InvalidOperationException($"Native playback stopped after submission; replay is prohibited: {statusText}");
                 fallbackReason = $"native playback failed: {statusText}";
                 diagnostics = FromStats(stats, "managed", fallbackReason, cancelled: false, planCreateUs, nativeOutlierEvents, includePlanCreateInStartup);
                 return false;
@@ -350,6 +358,7 @@ internal static class NativePlaybackEngine
             {
                 outlierEventsHandle.Free();
             }
+            if (nativeOutlierEvents.Length > 0) preparedPlan.ReturnOutliers(nativeOutlierEvents);
         }
     }
 

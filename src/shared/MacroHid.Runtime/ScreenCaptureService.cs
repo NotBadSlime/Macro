@@ -59,53 +59,50 @@ public static class ScreenCaptureService
         public BITMAPINFOHEADER bmiHeader;
     }
 
-    public static byte[]? CaptureRegion(ScreenRegion region)
+    public static byte[]? CaptureRegion(ScreenRegion region) => CaptureRegionCore(region, false, out _);
+
+    internal static PixelFrame CaptureFrame(ScreenRegion region)
     {
-        if (BackgroundWindowSession.IsActive)
-        {
-            return BackgroundWindowSession.CopyRegion(region);
-        }
+        if (Environment.GetEnvironmentVariable("MACROHID_LEGACY_IMAGES") == "1")
+            return PixelFrame.FromRgb(CaptureRegionAsRgb(region));
+        var raw = CaptureRegionCore(region, true, out var pooled);
+        return raw is null ? new PixelFrame([], 0) : new PixelFrame(raw, checked(region.Width * region.Height), pooled);
+    }
 
-        var width = region.Width;
-        var height = region.Height;
-        if (width <= 0 || height <= 0) return null;
-
+    private static byte[]? CaptureRegionCore(ScreenRegion region, bool rent, out bool pooled)
+    {
+        pooled = false;
+        if (region.Width <= 0 || region.Height <= 0) return null;
+        if (BackgroundWindowSession.IsActive) return BackgroundWindowSession.CopyRegion(region);
+        int size = checked(region.Width * region.Height * 4);
         var screenDc = GetDC(IntPtr.Zero);
         if (screenDc == IntPtr.Zero) return null;
-
+        IntPtr memDc = IntPtr.Zero, bitmap = IntPtr.Zero, oldBitmap = IntPtr.Zero;
+        byte[]? pixels = null;
+        bool success = false;
         try
         {
-            var memDc = CreateCompatibleDC(screenDc);
-            var bitmap = CreateCompatibleBitmap(screenDc, width, height);
-            var oldBitmap = SelectObject(memDc, bitmap);
-
-            BitBlt(memDc, 0, 0, width, height, screenDc, region.TopLeft.X, region.TopLeft.Y, SRCCOPY);
-
-            var bmi = new BITMAPINFO
-            {
-                bmiHeader = new BITMAPINFOHEADER
-                {
-                    biSize = Marshal.SizeOf<BITMAPINFOHEADER>(),
-                    biWidth = width,
-                    biHeight = -height,
-                    biPlanes = 1,
-                    biBitCount = 32,
-                    biCompression = 0
-                }
-            };
-
-            var stride = width * 4;
-            var pixels = new byte[stride * height];
-            GetDIBits(memDc, bitmap, 0, (uint)height, pixels, ref bmi, DIB_RGB_COLORS);
-
-            SelectObject(memDc, oldBitmap);
-            DeleteObject(bitmap);
-            DeleteDC(memDc);
-
+            memDc = CreateCompatibleDC(screenDc);
+            if (memDc == IntPtr.Zero) return null;
+            bitmap = CreateCompatibleBitmap(screenDc, region.Width, region.Height);
+            if (bitmap == IntPtr.Zero) return null;
+            oldBitmap = SelectObject(memDc, bitmap);
+            if (!BitBlt(memDc, 0, 0, region.Width, region.Height, screenDc, region.TopLeft.X, region.TopLeft.Y, SRCCOPY)) return null;
+            SelectObject(memDc, oldBitmap); oldBitmap = IntPtr.Zero;
+            var bmi = new BITMAPINFO { bmiHeader = new BITMAPINFOHEADER {
+                biSize = Marshal.SizeOf<BITMAPINFOHEADER>(), biWidth = region.Width,
+                biHeight = -region.Height, biPlanes = 1, biBitCount = 32 } };
+            pixels = rent ? System.Buffers.ArrayPool<byte>.Shared.Rent(size) : new byte[size];
+            if (GetDIBits(memDc, bitmap, 0, (uint)region.Height, pixels, ref bmi, DIB_RGB_COLORS) != region.Height) return null;
+            pooled = rent; success = true;
             return pixels;
         }
         finally
         {
+            if (!success && rent && pixels is not null) System.Buffers.ArrayPool<byte>.Shared.Return(pixels);
+            if (oldBitmap != IntPtr.Zero) SelectObject(memDc, oldBitmap);
+            if (bitmap != IntPtr.Zero) DeleteObject(bitmap);
+            if (memDc != IntPtr.Zero) DeleteDC(memDc);
             ReleaseDC(IntPtr.Zero, screenDc);
         }
     }

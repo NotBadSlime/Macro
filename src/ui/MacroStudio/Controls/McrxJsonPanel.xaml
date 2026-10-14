@@ -14,6 +14,7 @@
                         MinWidth="72"
                         Content="应用"
                         Click="ApplyJson_Click" />
+                <TextBlock x:Name="JsonValidationText" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Danger}" />
             </DockPanel>
 
             <TextBox x:Name="MacroEditor"

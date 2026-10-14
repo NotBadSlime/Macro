@@ -1,0 +1,57 @@
+{
+  "_说明": "targetFps=0 为不限帧(999)；F1-F12 键码为112-123；restoreHotkey 恢复本次启动时的帧率，并停止扩展覆写；修改后重启游戏。",
+  "rules": [
+    {
+      "id": 1,
+      "virtualKey": 112,
+      "targetFps": 60,
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "virtualKey": 113,
+      "targetFps": 90,
+      "enabled": true
+    },
+    {
+      "id": 3,
+      "virtualKey": 114,
+      "targetFps": 120,
+      "enabled": true
+    },
+    {
+      "id": 4,
+      "virtualKey": 115,
+      "targetFps": 144,
+      "enabled": true
+    },
+    {
+      "id": 5,
+      "virtualKey": 116,
+      "targetFps": 165,
+      "enabled": true
+    },
+    {
+      "id": 6,
+      "virtualKey": 117,
+      "targetFps": 240,
+      "enabled": true
+    },
+    {
+      "id": 7,
+      "virtualKey": 118,
+      "targetFps": 0,
+      "enabled": true
+    },
+    {
+      "id": 8,
+      "virtualKey": 119,
+      "targetFps": 30,
+      "enabled": true
+    }
+  ],
+  "restoreHotkey": {
+    "virtualKey": 120,
+    "enabled": true
+  }
+}

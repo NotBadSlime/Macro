@@ -1,0 +1,36 @@
+<Application x:Class="SkirkFps.App" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" StartupUri="MainWindow.xaml">
+ <Application.Resources>
+  <Style TargetType="ToolTip">
+   <Setter Property="Background" Value="#292630" /><Setter Property="Foreground" Value="#F0EEF8" />
+   <Setter Property="BorderBrush" Value="#514A61" /><Setter Property="BorderThickness" Value="1" />
+   <Setter Property="Padding" Value="12,8" /><Setter Property="MaxWidth" Value="340" />
+   <Setter Property="HasDropShadow" Value="False" />
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToolTip">
+    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+     <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" Foreground="{TemplateBinding Foreground}" TextWrapping="Wrap" FontSize="12" />
+    </Border>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#F0EEF8" /></Style>
+  <Style TargetType="Button">
+   <Setter Property="Foreground" Value="#E8E5F0" /><Setter Property="Background" Value="#25252D" /><Setter Property="BorderBrush" Value="#3D3C48" />
+   <Setter Property="Padding" Value="14,8" /><Setter Property="Cursor" Value="Hand" /><Setter Property="VerticalContentAlignment" Value="Center" />
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="B" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#383443" /></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="B" Property="BorderBrush" Value="#AC9CE6" /></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="TextBox">
+   <Setter Property="Foreground" Value="#F0EEF8" /><Setter Property="Background" Value="#17171D" /><Setter Property="BorderBrush" Value="#41404A" /><Setter Property="CaretBrush" Value="#C9BAFF" /><Setter Property="Padding" Value="10,2" /><Setter Property="VerticalContentAlignment" Value="Center" />
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="B" CornerRadius="8" BorderThickness="1" BorderBrush="{TemplateBinding BorderBrush}" Background="{TemplateBinding Background}"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" /></Border><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="B" Property="BorderBrush" Value="#B9A5F8" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#DBD6EA" /><Setter Property="VerticalAlignment" Value="Center" /></Style>
+  <Style TargetType="ScrollBar">
+   <Setter Property="Width" Value="9" /><Setter Property="Background" Value="Transparent" />
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar">
+    <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True">
+     <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent" /></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+     <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="#514B61" CornerRadius="4" Margin="2,0" /></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+     <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent" /></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+    </Track>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+ </Application.Resources>
+</Application>

@@ -35,7 +35,6 @@ public partial class MainWindow : Window
 
     private GlobalKeyboardHook? keyboardHook;
     private bool runNowEmergencyStopArmed;
-    private int runNowGeneration;
     private MacroInputRecorder? macroRecorder;
     private MacroPlaybackController? playbackController;
     private readonly Dictionary<string, MacroPlaybackController> listeningControllers = [];
@@ -76,6 +75,8 @@ public partial class MainWindow : Window
         editorState = new MacroEditorState(libraryStore);
 
         InitializeComponent();
+        // Keep the larger sequence viewport inside the usable desktop on small screens.
+        Height = Math.Min(Height, Math.Max(MinHeight, SystemParameters.WorkArea.Height - 24));
         autoSaveTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(450)
@@ -85,7 +86,15 @@ public partial class MainWindow : Window
         {
             Interval = TimeSpan.FromSeconds(2)
         };
-        coreSelectionTimer.Tick += (_, _) => PollAutomaticCoreSelection();
+        coreSelectionTimer.Tick += (_, _) => {
+            PollAutomaticCoreSelection();
+            var preparation = PlaybackRuntimeStatus.Preparation;
+            var state = preparation.Preparing ? "准备中" : preparation.Ready ? "已就绪" : "待准备";
+            var reason = string.Join("；", new[] { preparation.Reason, PlaybackRuntimeStatus.FallbackReason }.Where(s => !string.IsNullOrEmpty(s)));
+            PerformanceStatusText.Text = $"{state} · 实际后端：{PlaybackRuntimeStatus.ActualBackend}"
+                + (PlaybackRuntimeStatus.ActiveRuns > 2 ? $" · 并发 {PlaybackRuntimeStatus.ActiveRuns}，超出已验证规模" : "");
+            PerformanceStatusText.ToolTip = $"准备后端：{preparation.Backend}\n回退 / 准备原因：{(reason.Length == 0 ? "无" : reason)}";
+        };
         ContentRendered += MainWindow_ContentRendered;
         LocalizationService.Initialize();
         ConfigureWorkspaceDockHost();
@@ -339,7 +348,8 @@ public partial class MainWindow : Window
             DockedSize: panel.DefaultDockedSize,
             Order: panel.DefaultOrder,
             IsPinned: true,
-            FloatingBounds: new WorkspaceFloatingBounds(120, 120, 720, 520));
+            FloatingBounds: new WorkspaceFloatingBounds(120, 120, 720,
+                id == "sequence" ? Math.Min(760, Math.Max(220, SystemParameters.WorkArea.Height - 24)) : 520));
     }
 
     private void WindowMenu_Click(object sender, RoutedEventArgs e)
@@ -894,6 +904,9 @@ public partial class MainWindow : Window
     private void OnSequenceEditorTextChanged(string text)
     {
         if (syncingJsonPanel) return;
+        jsonRevision++;
+        jsonValid = true;
+        JsonPanel.SetValidationMessage("");
         syncingJsonPanel = true;
         JsonPanel.EditorText = text;
         syncingJsonPanel = false;
@@ -901,6 +914,8 @@ public partial class MainWindow : Window
 
     private void RefreshJsonPanelText()
     {
+        jsonRevision++;
+        jsonValid = true;
         if (syncingJsonPanel) return;
 
         try
@@ -917,16 +932,17 @@ public partial class MainWindow : Window
     private void OnJsonPanelEditorTextChanged(string text)
     {
         if (syncingJsonPanel || editorState.IsEditLocked) return;
-        TryApplyJsonTextToEditor(text, showStatus: false);
+        QueueJsonValidation(text);
     }
 
     private void OnApplyJsonRequested()
     {
+        jsonRevision++;
         if (RejectLockedEdit()) return;
         TryApplyJsonTextToEditor(JsonPanel.EditorText, showStatus: true);
     }
 
-    private bool TryApplyJsonTextToEditor(string text, bool showStatus)
+    private bool TryApplyJsonTextToEditor(string text, bool showStatus, MacroDocument? parsed = null)
     {
         if (editorState.IsEditLocked)
         {
@@ -936,16 +952,19 @@ public partial class MainWindow : Window
 
         try
         {
-            McrxParser.Parse(text);
+            parsed ??= McrxParser.Parse(text);
             syncingJsonPanel = true;
-            SequencePanelControl.EditorText = text;
+            SequencePanelControl.SetParsedDocument(text, parsed);
             syncingJsonPanel = false;
-            SequencePanelControl.ValidateCurrentMacro();
+            jsonValid = true;
+            JsonPanel.SetValidationMessage("");
             RefreshEditorAfterSequenceDocumentChange(showStatus ? L("JsonApplied") : null);
             return true;
         }
         catch (Exception ex)
         {
+            jsonValid = false;
+            JsonPanel.SetValidationMessage(ex.Message);
             syncingJsonPanel = false;
             if (showStatus)
             {
@@ -1007,6 +1026,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -1039,7 +1059,7 @@ public partial class MainWindow : Window
                 : SequencePanelControl.GetCurrentDocument();
             if (source?.IsLocked != true)
             {
-                libraryStore.SaveMacro(id, document);
+                SaveCurrentRevision(id, document);
             }
             var item = libraryStore.DuplicateMacro(id, $"{document.Name} Copy");
             editorState.SelectedMacroId = item.Id;
@@ -1049,6 +1069,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -1090,6 +1111,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             var message = LocalizationService.Format("DeleteFailed", ex.Message);
             SetStatus(message);
             DialogOwnerService.MessageBoxSafe(
@@ -1154,6 +1176,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             var message = LocalizationService.Format("DeleteFailed", ex.Message);
             SetStatus(message);
             DialogOwnerService.MessageBoxSafe(this, message, L("Delete"), MessageBoxButton.OK, MessageBoxImage.Error);
@@ -1179,6 +1202,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -1192,6 +1216,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -1216,6 +1241,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -1249,7 +1275,7 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(savedMask))
         {
-            NativePlaybackWarmup.Shutdown();
+            NativePlaybackWarmup.QueueWarmUpForPrecision(runtimePrecisionSettings.Precision, "");
             return;
         }
 
@@ -1363,35 +1389,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RestartListeningWithCurrentSettings()
+    private async void RestartListeningWithCurrentSettings()
     {
-        if (!listening)
-        {
-            return;
-        }
-
+        if (!listening || shutdownStarted) return;
         var activeIds = listeningControllers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        StopListeningControllers();
-        if (activeIds.Count == 0)
+        int requested = ++listeningUpdateGeneration;
+        try
         {
-            listening = false;
-            RefreshKeyboardHook();
-            RefreshLibraryListeningState();
-            return;
+            var candidates = await Task.Run(() => BuildListeningCandidates().Where(c => activeIds.Contains(c.Item.Id)).ToList());
+            if (requested != listeningUpdateGeneration || shutdownStarted) return;
+            if (candidates.Count == 0) { StopListeningControllers(); listening = false; RefreshKeyboardHook(); return; }
+            await StartListeningCandidates(candidates, editorState.SelectedMacroId is { } id ? [id] : null);
         }
-
-        var candidates = BuildListeningCandidates()
-            .Where(candidate => activeIds.Contains(candidate.Item.Id))
-            .ToList();
-        if (candidates.Count == 0)
-        {
-            listening = false;
-            RefreshKeyboardHook();
-            RefreshLibraryListeningState();
-            return;
-        }
-
-        StartListeningCandidates(candidates, editorState.SelectedMacroId is { } selectedId ? [selectedId] : null);
+        catch (Exception ex) { AppLog.Error("Listening", "Update failed; retaining previous definitions", ex); SetStatus(ex.Message); }
     }
 
     private void OnLibraryStructureEdited()
@@ -1425,7 +1435,7 @@ public partial class MainWindow : Window
         MacroLibraryItem item;
         if (targetMacroId is not null && existingItem is not null)
         {
-            item = libraryStore.SaveMacro(targetMacroId, document);
+            item = SaveCurrentRevision(targetMacroId, document);
         }
         else
         {
@@ -1455,18 +1465,31 @@ public partial class MainWindow : Window
         autoSaveTimer.Start();
     }
 
-    private void PerformDebouncedAutoSave()
+    private async void PerformDebouncedAutoSave()
     {
         autoSaveTimer.Stop();
+        if (!jsonValid || shutdownStarted) return;
         try
         {
-            AutoSaveCurrentMacro(updateStatus: false);
+            var id = activeEditorMacroId;
+            if (id is null) { AutoSaveCurrentMacro(false); return; }
+            var document = GetDocumentWithPlayback();
+            var revision = saveRevisions.AddOrUpdate(id, 1, (_, current) => current + 1);
+            var previous = pendingAutoSave;
+            pendingAutoSave = Task.Run(async () => {
+                try { await previous.ConfigureAwait(false); } catch { }
+                lock (libraryStore.SyncRoot)
+                {
+                    if (saveRevisions.GetValueOrDefault(id) != revision || libraryStore.TryGetItem(id) is null) return;
+                    libraryStore.SaveMacro(id, document);
+                }
+            });
+            await pendingAutoSave;
+            if (shutdownStarted || saveRevisions.GetValueOrDefault(id) != revision) return;
+            if (activeEditorMacroId == id) LibraryPanel.RefreshList();
             RestartListeningWithCurrentSettings();
         }
-        catch (Exception ex)
-        {
-            SetStatus(ex.Message);
-        }
+        catch (Exception ex) { AppLog.Error("AutoSave", "Save failed", ex); SetStatus(ex.Message); }
     }
 
     private void OnStepSelectionChanged(int stepIndex)
@@ -1581,11 +1604,12 @@ public partial class MainWindow : Window
 
         try
         {
-            libraryStore.SaveMacro(activeId, GetDocumentWithPlayback());
+            SaveCurrentRevision(activeId, GetDocumentWithPlayback());
             return true;
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
             return false;
         }
@@ -1627,10 +1651,11 @@ public partial class MainWindow : Window
 
         try
         {
-            libraryStore.SaveMacro(activeId, GetDocumentWithPlayback());
+            SaveCurrentRevision(activeId, GetDocumentWithPlayback());
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -1661,6 +1686,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             var persisted = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, macroId, StringComparison.OrdinalIgnoreCase));
             ApplyEditLock(persisted?.IsLocked == true);
             SetStatus(ex.Message);
@@ -1734,6 +1760,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -1755,6 +1782,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -1821,13 +1849,14 @@ public partial class MainWindow : Window
                 .Where(candidate => desiredIds.Contains(candidate.Item.Id))
                 .ToList();
             var selectedIds = selectedCandidates.Select(candidate => candidate.Item.Id).ToArray();
-            var count = StartListeningCandidates(candidates, selectedIds);
+            var count = await StartListeningCandidates(candidates, selectedIds);
             PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
             SetStatus($"{L("Listening")} ({count})");
             await Task.CompletedTask;
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
             SetStatus(L("PlaybackError"));
@@ -1869,13 +1898,14 @@ public partial class MainWindow : Window
                 candidates.Add(current);
             }
 
-            var count = StartListeningCandidates(candidates, [current.Item.Id]);
+            var count = await StartListeningCandidates(candidates, [current.Item.Id]);
             PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
             SetStatus($"{L("Listening")} ({count})");
             await Task.CompletedTask;
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
             SetStatus(L("PlaybackError"));
@@ -1936,7 +1966,7 @@ public partial class MainWindow : Window
         SetStatus(L("ListeningPausedStatus"));
     }
 
-    private void ResumePausedListening()
+    private async void ResumePausedListening()
     {
         listeningPaused = false;
         pauseOwnedByCapture = false;
@@ -1963,12 +1993,13 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var count = StartListeningCandidates(candidates, ids);
+            var count = await StartListeningCandidates(candidates, ids);
             PlaybackPanelControl.SetPlaybackStatus($"{L("PlaybackStatusListening")} ({count})");
             SetStatus(LocalizationService.Format("ListeningResumePartial", count));
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -2055,10 +2086,12 @@ public partial class MainWindow : Window
         return macroIds.Count;
     }
 
-    private int StartListeningCandidates(
+    private async Task<int> StartListeningCandidates(
         IReadOnlyList<ListeningCandidate> candidates,
         IReadOnlyCollection<string>? preferredIds = null)
     {
+        if (shutdownStarted) return 0;
+        using var preparation = TrackPreparation();
         var colorSample = runtimePrecisionSettings.ColorSampleGesture;
         var forceStop = runtimePrecisionSettings.ForceStopGesture;
         var colorConflicts = candidates
@@ -2085,46 +2118,34 @@ public partial class MainWindow : Window
                 && ProcessFiltersOverlap(left, right),
             preferredIds);
 
-        var controllers = new Dictionary<string, MacroPlaybackController>(StringComparer.OrdinalIgnoreCase);
-        var macroNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var groupProcessFilters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var revision = ++listeningUpdateGeneration;
+        var optionsById = resolved.ToDictionary(c => c.Item.Id, c => CreatePlaybackOptions(c.Document));
+        var known = new Dictionary<string, string>(listeningFingerprints);
+        var prepared = await Task.Run(() => PrepareListeningDefinitions(resolved, optionsById, known));
+        if (revision != listeningUpdateGeneration || shutdownStarted)
+        {
+            foreach (var update in prepared.Values) update.Executor.Dispose();
+            return listeningControllers.Count;
+        }
+        var conflictMessage = FormatReservedHotkeyConflict(colorConflicts, stopConflicts);
+        if (resolved.Count == 0) throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
+        var desired = resolved.Select(c => c.Item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in listeningControllers.Keys.Where(id => !desired.Contains(id)).ToArray()) StopListeningController(id);
         foreach (var candidate in resolved)
         {
-            var item = candidate.Item;
-            var document = candidate.Document;
-            var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
-            var options = CreatePlaybackOptions(document);
-            executor.Prepare(document, options);
-            controllers[item.Id] = new MacroPlaybackController(document, executor, options);
-            macroNames[item.Id] = document.Name;
-            groupProcessFilters[item.Id] = candidate.GroupProcessFilter;
+            string id = candidate.Item.Id;
+            if (prepared.TryGetValue(id, out var update))
+            {
+                if (listeningControllers.TryGetValue(id, out var existing))
+                    existing.UpdateDefinition(candidate.Document, update.Executor, optionsById[id]);
+                else listeningControllers[id] = new(candidate.Document, update.Executor, optionsById[id]);
+                listeningFingerprints[id] = update.Fingerprint;
+            }
+            listeningMacroNames[id] = candidate.Document.Name;
+            listeningGroupProcessFilters[id] = candidate.GroupProcessFilter;
+            listeningBindings[id] = candidate.Trigger;
         }
-
-        var conflictMessage = FormatReservedHotkeyConflict(colorConflicts, stopConflicts);
-        if (controllers.Count == 0)
-            throw new InvalidOperationException(
-                string.IsNullOrEmpty(conflictMessage) ? L("ChooseTriggerBeforeListening") : conflictMessage);
-
-        StopListeningControllers();
-        listening = false;
-
-        foreach (var (id, controller) in controllers)
-        {
-            listeningControllers[id] = controller;
-        }
-
-        foreach (var (id, name) in macroNames)
-        {
-            listeningMacroNames[id] = name;
-        }
-
-        foreach (var (id, groupProcessFilter) in groupProcessFilters)
-        {
-            listeningGroupProcessFilters[id] = groupProcessFilter;
-        }
-
-        playbackController = null;
-        listening = true;
+        listening = listeningControllers.Count > 0;
         RefreshKeyboardHook();
         RefreshLibraryListeningState();
         if (!string.IsNullOrEmpty(conflictMessage))
@@ -2132,15 +2153,18 @@ public partial class MainWindow : Window
             SetStatus(conflictMessage);
         }
 
-        return controllers.Count;
+        return listeningControllers.Count;
     }
 
     private void StopListeningControllers()
     {
+        listeningUpdateGeneration++;
+        listeningBindings.Clear();
+        listeningFingerprints.Clear();
         foreach (var controller in listeningControllers.Values)
         {
             controller.Stop();
-            controller.Dispose();
+            RetireController(controller);
         }
 
         listeningControllers.Clear();
@@ -2151,13 +2175,16 @@ public partial class MainWindow : Window
 
     private void StopListeningController(string id)
     {
+        listeningUpdateGeneration++;
+        listeningBindings.Remove(id);
+        listeningFingerprints.Remove(id);
         if (!listeningControllers.Remove(id, out var controller))
         {
             return;
         }
 
         controller.Stop();
-        controller.Dispose();
+        RetireController(controller);
         listeningMacroNames.Remove(id);
         listeningGroupProcessFilters.Remove(id);
         activeTriggeredControllerIds.Remove(id);
@@ -2175,54 +2202,25 @@ public partial class MainWindow : Window
 
     private void RefreshKeyboardHook()
     {
-        keyboardHook?.Dispose();
-        keyboardHook = null;
-
         var bindings = new List<HotkeyBinding>();
-        if (runNowEmergencyStopArmed)
-        {
-            bindings.Add(new HotkeyBinding(CoreHotkeys.EmergencyStopId, new HotkeyGesture(HidModifier.None, HidKey.Escape)));
-        }
-
+        if (runNowEmergencyStopArmed) bindings.Add(new(CoreHotkeys.EmergencyStopId, new(HidModifier.None, HidKey.Escape)));
         if (!coreHotkeysSuspended && macroRecorder is null)
         {
-            bindings.Add(new HotkeyBinding(CoreHotkeys.ColorSampleId, runtimePrecisionSettings.ColorSampleGesture));
-            if (runtimePrecisionSettings.ForceStopGesture is { } forceStop)
-            {
-                bindings.Add(new HotkeyBinding(CoreHotkeys.ForceStopId, forceStop));
-            }
+            bindings.Add(new(CoreHotkeys.ColorSampleId, runtimePrecisionSettings.ColorSampleGesture));
+            if (runtimePrecisionSettings.ForceStopGesture is { } stop) bindings.Add(new(CoreHotkeys.ForceStopId, stop));
         }
-
-        if (listeningControllers.Count > 0)
-        {
-            var activeIds = listeningControllers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var candidates = BuildListeningCandidates()
-                .Where(candidate => activeIds.Contains(candidate.Item.Id))
-                .ToList();
-            var colorSample = runtimePrecisionSettings.ColorSampleGesture;
-            var forceStop = runtimePrecisionSettings.ForceStopGesture;
-            foreach (var candidate in candidates)
-            {
-                if (CoreHotkeys.GesturesEqual(candidate.Trigger, colorSample)
-                    || (forceStop is not null && CoreHotkeys.GesturesEqual(candidate.Trigger, forceStop)))
-                {
-                    StopListeningController(candidate.Item.Id);
-                    continue;
-                }
-
-                bindings.Add(new HotkeyBinding(candidate.Item.Id, candidate.Trigger));
-            }
-        }
-
+        foreach (var pair in listeningBindings) bindings.Add(new(pair.Key, pair.Value));
+        Volatile.Write(ref hotkeyRoutes, listeningControllers.ToDictionary(pair => pair.Key,
+            pair => new HotkeyRoute(pair.Value, listeningGroupProcessFilters.GetValueOrDefault(pair.Key, ""),
+                listeningMacroNames.GetValueOrDefault(pair.Key, ""), runtimePrecisionSettings.BackgroundWindow)));
         listening = listeningControllers.Count > 0;
-        if (bindings.Count == 0)
+        if (bindings.Count == 0) { keyboardHook?.Stop(); return; }
+        if (keyboardHook is null)
         {
-            return;
+            keyboardHook = new GlobalKeyboardHook();
+            keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
+            keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
         }
-
-        keyboardHook = new GlobalKeyboardHook();
-        keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
-        keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
         keyboardHook.Start(bindings);
     }
 
@@ -2489,7 +2487,7 @@ public partial class MainWindow : Window
             {
                 if (string.IsNullOrWhiteSpace(runtimePrecisionSettings.AffinityMask))
                 {
-                    NativePlaybackWarmup.Shutdown();
+                    NativePlaybackWarmup.QueueWarmUpForPrecision(runtimePrecisionSettings.Precision, "");
                 }
                 else
                 {
@@ -2578,33 +2576,48 @@ public partial class MainWindow : Window
 
     private async void OnRunNow()
     {
+        if (shutdownStarted || preparingImmediate) return;
+        if (immediateController is { Status: PlaybackStatus.Running or PlaybackStatus.Stopping })
+        { SetStatus(L("PlaybackStatusStopping")); return; }
+        using var preparation = TrackPreparation();
+        preparingImmediate = true;
+        MacroPlaybackExecutor? prepared = null;
+        long epoch = Interlocked.Read(ref stopEpoch);
         try
         {
-            if (macroRecorder is not null)
-            {
-                StopMacroRecording(insertSteps: true, restoreWindow: true);
-            }
-
+            if (macroRecorder is not null) StopMacroRecording(insertSteps: true, restoreWindow: true);
             var document = GetDocumentWithPlayback();
-            playbackController?.Dispose();
-            var executor = new MacroPlaybackExecutor(inputSink, macroResolver: ResolveMacroForPlayback);
+            var id = activeEditorMacroId;
             var options = CreatePlaybackOptions(document).ForImmediateRun();
-            executor.Prepare(document, options);
-            var generation = ++runNowGeneration;
             runNowEmergencyStopArmed = true;
             RefreshKeyboardHook();
-            playbackController = new MacroPlaybackController(document, executor, options);
-            await playbackController.RunNowAsync();
+            if (immediateController is not null) await immediateController.DisposeAsync();
+            prepared = await Task.Run(() => {
+                var frozen = CaptureResolver(document, id);
+                var executor = new MacroPlaybackExecutor(inputSink, macroResolver: frozen.Resolver);
+                try { executor.Prepare(document, options); return executor; }
+                catch { executor.Dispose(); throw; }
+            });
+            if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) { DisarmRunNowEmergencyStop(); return; }
+            lock (triggerGate)
+            {
+                if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) return;
+                playbackController = immediateController = new(document, prepared, options);
+                prepared = null;
+                _ = playbackController.RunNowAsync();
+            }
             PlaybackPanelControl.SetPlaybackResult(L("RunNowOnceHint"));
             UpdatePlaybackStatus();
-            _ = WatchPlaybackAsync(playbackController, generation);
+            WatchPlayback(playbackController);
         }
         catch (Exception ex)
         {
+            AppLog.Error("Playback", "Start failed", ex);
             DisarmRunNowEmergencyStop();
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
         }
+        finally { prepared?.Dispose(); preparingImmediate = false; }
     }
 
     private void DisarmRunNowEmergencyStop()
@@ -2655,18 +2668,14 @@ public partial class MainWindow : Window
 
     private void OnStopPlayback()
     {
+        RequestAllStops();
         DisarmRunNowEmergencyStop();
-        playbackController?.Stop();
-        foreach (var controller in listeningControllers.Values)
-        {
-            controller.Stop();
-        }
 
         PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
 
         UpdatePlaybackStatus();
         if (playbackController is not null)
-            _ = WatchPlaybackAsync(playbackController);
+            WatchPlayback(playbackController);
     }
 
     private void OnImportApplied(MacroDocument document)
@@ -2756,6 +2765,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             DisposeMacroRecorder();
             RestartKeyboardHookAfterRecording();
             SetRecordingUiState(false);
@@ -2792,6 +2802,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             recordedSteps = [];
             SetStatus(LocalizationService.Format("RecordingFailed", ex.Message));
         }
@@ -2866,6 +2877,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             keyboardHook?.Dispose();
             keyboardHook = null;
             listening = false;
@@ -2902,6 +2914,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -2949,27 +2962,9 @@ public partial class MainWindow : Window
         var mode = PlaybackPanelControl.GetSelectedPlaybackMode();
         if (!int.TryParse(PlaybackPanelControl.CountText, out var count) || count < 1) count = 1;
 
-        var root = JsonNode.Parse(SequencePanelControl.EditorText)?.AsObject()
-            ?? throw new JsonException("Macro JSON root must be an object.");
-
-        var macroName = SequencePanelControl.MacroName;
-        if (!string.IsNullOrWhiteSpace(macroName))
-            root["name"] = macroName;
-
-        var playback = new JsonObject
-        {
-            ["mode"] = ToPlaybackModeText(mode),
-            ["count"] = count
-        };
-        if (trigger is not null) playback["trigger"] = trigger.ToString();
-        root["playback"] = playback;
-
-        SequencePanelControl.EditorText = root.ToJsonString(new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
-        });
-        SequencePanelControl.ValidateCurrentMacro();
+        var document = SequencePanelControl.GetCurrentDocument();
+        var settings = document.Playback with { Trigger = trigger, Mode = mode, Count = count };
+        if (settings != document.Playback) SequencePanelControl.SetEditorDocument(document with { Playback = settings });
     }
 
     private void RefreshConditionStepChoices()
@@ -3004,106 +2999,66 @@ public partial class MainWindow : Window
 
     private void KeyboardHook_TriggerPressed(object? sender, HotkeyTriggeredEventArgs e)
     {
-        _ = Dispatcher.InvokeAsync(async () =>
+        if (shutdownStarted) return;
+        if (e.Id == CoreHotkeys.EmergencyStopId || e.Id == CoreHotkeys.ForceStopId)
         {
-            if (string.Equals(e.Id, CoreHotkeys.EmergencyStopId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(e.Id, CoreHotkeys.ForceStopId, StringComparison.OrdinalIgnoreCase))
-            {
-                OnStopPlayback();
-                PlaybackPanelControl.SetPlaybackResult(L("ForceStopTriggered"));
-                SetStatus(L("ForceStopTriggered"));
-                return;
-            }
-
-            if (string.Equals(e.Id, CoreHotkeys.ColorSampleId, StringComparison.OrdinalIgnoreCase))
-            {
-                CopyColorSample();
-                return;
-            }
-
-            if (!listeningControllers.TryGetValue(e.Id, out var controller)) return;
-            var foregroundProcess = ForegroundProcessService.GetForegroundProcessName();
-            var groupProcessFilter = listeningGroupProcessFilters.TryGetValue(e.Id, out var groupFilter)
-                ? groupFilter
-                : string.Empty;
-            if (!runtimePrecisionSettings.BackgroundWindow
-                && !MacroLibraryActivationFilter.Matches(groupProcessFilter, foregroundProcess))
-            {
-                return;
-            }
-
-            activeTriggeredControllerIds.Add(e.Id);
-            playbackController = controller;
-            await controller.TriggerPressedAsync();
+            RequestAllStops();
+            Dispatcher.BeginInvoke(() => { PlaybackPanelControl.SetPlaybackResult(L("ForceStopTriggered")); UpdatePlaybackStatus(); });
+            return;
+        }
+        if (e.Id == CoreHotkeys.ColorSampleId) { Dispatcher.BeginInvoke(CopyColorSample); return; }
+        if (!Volatile.Read(ref hotkeyRoutes).TryGetValue(e.Id, out var route)) return;
+        long epoch = Interlocked.Read(ref stopEpoch);
+        if (!route.Background && !MacroLibraryActivationFilter.Matches(route.Filter, ForegroundProcessService.GetForegroundProcessName())) return;
+        lock (triggerGate)
+        {
+            if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) return;
+            route.Controller.TriggerPressedAsync(e.CallbackQpc);
+            heldControllers[e.Id] = route.Controller;
+        }
+        long run = route.Controller.RunId;
+        var completion = route.Controller.WhenIdleAsync();
+        Dispatcher.BeginInvoke(() => {
+            if (epoch != Interlocked.Read(ref stopEpoch) || run != route.Controller.RunId) return;
+            playbackController = route.Controller;
             UpdatePlaybackStatus();
-            if (listeningMacroNames.TryGetValue(e.Id, out var macroName))
-            {
-                SetStatus(macroName);
-            }
-
-            _ = WatchPlaybackAsync(controller);
+            SetStatus(route.Controller.Status == PlaybackStatus.Stopping ? L("PlaybackStatusStopping") : route.Name);
+            ObservePlayback(route.Controller, run, completion);
         });
     }
 
     private void KeyboardHook_TriggerReleased(object? sender, HotkeyTriggeredEventArgs e)
     {
-        _ = Dispatcher.InvokeAsync(() =>
-        {
-            if (string.Equals(e.Id, CoreHotkeys.ForceStopId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(e.Id, CoreHotkeys.EmergencyStopId, StringComparison.OrdinalIgnoreCase)) return;
-            if (!listeningControllers.TryGetValue(e.Id, out var controller)) return;
-            if (!activeTriggeredControllerIds.Remove(e.Id)) return;
-            controller.TriggerReleased();
-            playbackController = controller;
-            UpdatePlaybackStatus();
-            _ = WatchPlaybackAsync(controller);
-        });
+        if (heldControllers.TryRemove(e.Id, out var controller)) controller.TriggerReleased();
     }
 
-    private async Task WatchPlaybackAsync(MacroPlaybackController controller, int runNowGenerationSnapshot = 0)
+    private void ObservePlayback(MacroPlaybackController controller, long run, Task<PlaybackRunResult> completion)
     {
-        try
+        if (run == 0) return;
+        var observed = observedRuns.GetValue(controller, _ => new());
+        if (observed.Value == run) return;
+        observed.Value = run;
+        _ = WatchPlaybackAsync(controller, run, completion);
+    }
+    private void WatchPlayback(MacroPlaybackController controller)
+        => ObservePlayback(controller, controller.RunId, controller.WhenIdleAsync());
+
+    private async Task WatchPlaybackAsync(MacroPlaybackController controller, long run, Task<PlaybackRunResult> completion)
+    {
+        var result = await completion;
+        if (shutdownStarted || run != controller.RunId || !ReferenceEquals(playbackController, controller)) return;
+        if (ReferenceEquals(immediateController, controller)) DisarmRunNowEmergencyStop();
+        if (result.Status == PlaybackRunStatus.Failed)
         {
-            var result = await controller.WhenIdleAsync();
-            await Dispatcher.InvokeAsync(() =>
-            {
-                if (runNowGenerationSnapshot != 0 && runNowGenerationSnapshot == runNowGeneration)
-                {
-                    DisarmRunNowEmergencyStop();
-                }
-
-                if (result.Status == PlaybackRunStatus.Failed)
-                {
-                    var error = controller.LastError;
-                    if (error is not null)
-                    {
-                        App.Log($"[PLAYBACK ERROR] {error}");
-                    }
-                    PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
-                    PlaybackPanelControl.SetPlaybackResult(error?.Message ?? L("PlaybackError"));
-                    SetStatus(L("PlaybackError"));
-                    return;
-                }
-
-                PlaybackPanelControl.SetPlaybackStatus(listening ? L("PlaybackStatusListening") : L("PlaybackStatusIdle"));
-                PlaybackPanelControl.SetPlaybackResult(LocalizationService.Format("LastResultRunSummary", result.IterationsCompleted, result.ActionsSubmitted, result.Cancelled));
-                SetStatus(listening ? L("Listening") : L("Idle"));
-            });
+            PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
+            PlaybackPanelControl.SetPlaybackResult(controller.LastError?.Message ?? L("PlaybackError"));
+            SetStatus(L("PlaybackError"));
         }
-        catch (Exception ex)
+        else
         {
-            App.Log($"[PLAYBACK WATCH ERROR] {ex}");
-            await Dispatcher.InvokeAsync(() =>
-            {
-                if (runNowGenerationSnapshot != 0 && runNowGenerationSnapshot == runNowGeneration)
-                {
-                    DisarmRunNowEmergencyStop();
-                }
-
-                PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
-                PlaybackPanelControl.SetPlaybackResult(ex.Message);
-                SetStatus(L("PlaybackError"));
-            });
+            UpdatePlaybackStatus();
+            PlaybackPanelControl.SetPlaybackResult(LocalizationService.Format("LastResultRunSummary", result.IterationsCompleted, result.ActionsSubmitted, result.Cancelled));
+            SetStatus(listening ? L("Listening") : L("Idle"));
         }
     }
 
@@ -3119,7 +3074,31 @@ public partial class MainWindow : Window
         SetStatus(L(StatusResourceKey(playbackController.Status)));
     }
 
-    private void SetStatus(string text) => StatusText.Text = text;
+    private void SetStatus(string text)
+    {
+        if (StatusText.Text != text) AppLog.Info("Status", text);
+        StatusText.Text = text;
+    }
+
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppLog.DirectoryPath);
+            Process.Start(new ProcessStartInfo(AppLog.DirectoryPath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("App", "Unable to open log directory", ex);
+            SetStatus(ex.Message);
+        }
+    }
+
+    private void UnlockerSettings_Click(object sender, RoutedEventArgs e)
+    {
+        try { DialogOwnerService.ShowDialogSafe(new UnlockerSettingsWindow(), this); }
+        catch (Exception ex) { SetStatus(ex.Message); }
+    }
 
     // --- Window chrome ---
 
@@ -3141,7 +3120,13 @@ public partial class MainWindow : Window
 
     private IntPtr WindowProcedure(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WM_GETMINMAXINFO)
+        if (!exitConfirmed && (msg == WM_CLOSE
+            || (msg == WM_SYSCOMMAND && (wParam.ToInt64() & 0xFFF0) == SC_CLOSE)))
+        {
+            handled = true;
+            QueueClosePrompt();
+        }
+        else if (msg == WM_GETMINMAXINFO)
         {
             ApplyWorkAreaMaximizeBounds(hwnd, lParam);
             handled = true;
@@ -3391,6 +3376,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
             DialogOwnerService.MessageBoxSafe(
                 this,
@@ -3447,6 +3433,7 @@ public partial class MainWindow : Window
         OpenButton.Content = L("OpenMacroFile");
         SaveButton.Content = L("SaveMacroAs");
         WindowMenuButton.Content = L("WorkspaceWindowMenu");
+        OpenLogsButton.Content = L("OpenLogs");
         ShowPanelsMenuItem.Header = L("WorkspaceShow");
         FloatPanelsMenuItem.Header = L("WorkspaceFloat");
         DockPanelsMenuItem.Header = L("WorkspaceDock");
@@ -3576,6 +3563,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -3606,6 +3594,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppLog.Error("MainWindow", "Operation failed", ex);
             SetStatus(ex.Message);
         }
     }
@@ -3749,12 +3738,18 @@ public partial class MainWindow : Window
     {
         if (exitConfirmed)
         {
+            if (!shutdownFinished) { e.Cancel = true; FinishShutdownAsync(); return; }
             DisposeTrayIcon();
             base.OnClosing(e);
             return;
         }
 
         e.Cancel = true;
+        QueueClosePrompt();
+    }
+
+    private void QueueClosePrompt()
+    {
         if (closePromptQueued)
         {
             return;
@@ -3763,8 +3758,14 @@ public partial class MainWindow : Window
         closePromptQueued = true;
         Dispatcher.BeginInvoke(new Action(() =>
         {
-            closePromptQueued = false;
-            ApplyCloseBehavior();
+            try
+            {
+                ApplyCloseBehavior();
+            }
+            finally
+            {
+                closePromptQueued = false;
+            }
         }));
     }
 
@@ -3773,7 +3774,13 @@ public partial class MainWindow : Window
         var behavior = runtimePrecisionSettings.CloseButton;
         if (behavior == CloseButtonBehavior.Ask)
         {
+            // Taskbar close can arrive while minimized or inactive; make the owned prompt visible.
+            if (isInTray) RestoreFromTray();
+            if (!IsVisible) Show();
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Activate();
             var dialog = new CloseWindowPrompt();
+            dialog.ContentRendered += (_, _) => dialog.Activate();
             if (DialogOwnerService.ShowDialogSafe(dialog, this) != true)
             {
                 return;
@@ -3924,6 +3931,8 @@ public partial class MainWindow : Window
     }
 
     private const int WM_SYSCOMMAND = 0x0112;
+    private const int WM_CLOSE = 0x0010;
+    private const long SC_CLOSE = 0xF060;
     private const int WM_GETMINMAXINFO = 0x0024;
     private const int WM_WINDOWPOSCHANGING = 0x0046;
     private const int WM_DISPLAYCHANGE = 0x007E;

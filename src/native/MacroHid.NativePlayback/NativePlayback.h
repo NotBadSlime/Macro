@@ -161,5 +161,17 @@ extern "C"
 
     __declspec(dllexport) void __cdecl MhpDestroyPlan(void* plan);
 
+    struct MhpRunTrace { int64_t queued, firstSubmit, lastSubmit, completed; };
+    __declspec(dllexport) MhpStatus __cdecl MhpPrepareEngine(const MhpRunOptions* options, uint64_t allowedMask, MhpRunStats* stats);
+    __declspec(dllexport) MhpStatus __cdecl MhpScanCoresOnMask(uint64_t mask, MhpCoreSample* samples, uint32_t capacity, uint32_t* written, MhpCoreProgressFn progress);
+    __declspec(dllexport) MhpStatus __cdecl MhpSubmitPlanAt(void* plan, const MhpRunOptions* options, void* control, int64_t timelineStart, void** run, HANDLE* completion);
+    __declspec(dllexport) MhpStatus __cdecl MhpGetRunTrace(void* run, MhpRunTrace* trace);
+    // Retains plan/control. Options' outlier buffer must remain alive until completion.
+    // Completion is a borrowed HANDLE; MhpReleaseRun cancels and waits before releasing it.
+    __declspec(dllexport) MhpStatus __cdecl MhpSubmitPlan(void* plan, const MhpRunOptions* options, void* playbackControl, void** run, HANDLE* completion);
+    __declspec(dllexport) void __cdecl MhpCancelRun(void* run);
+    __declspec(dllexport) MhpStatus __cdecl MhpGetRunResult(void* run, MhpRunStats* stats);
+    __declspec(dllexport) void __cdecl MhpReleaseRun(void* run);
+
     __declspec(dllexport) const wchar_t* __cdecl MhpGetLastErrorText();
 }

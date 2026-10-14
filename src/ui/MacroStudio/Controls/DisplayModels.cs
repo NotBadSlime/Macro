@@ -318,7 +318,7 @@ public enum StepDisplayKind
     Delay
 }
 
-public sealed class StepDisplayItem
+public sealed class StepDisplayItem : INotifyPropertyChanged
 {
     private static readonly Brush GreenBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
     private static readonly Brush BlueBrush = new SolidColorBrush(Color.FromRgb(0, 122, 255));
@@ -358,27 +358,54 @@ public sealed class StepDisplayItem
         BackgroundBrush = appearance.Background;
     }
 
-    public int Index { get; }
-    public IReadOnlyList<int> StepPath { get; }
-    public string StepPathText { get; }
-    public string Icon { get; }
-    public string ActionIndicator { get; }
-    public string Title { get; }
-    public string Badge { get; }
-    public Brush AccentBrush { get; }
-    public Brush ActionForeground { get; }
-    public Brush IconBrush { get; }
-    public Brush BackgroundBrush { get; }
-    public StepDisplayKind Kind { get; }
-    public int Indent { get; }
-    public MacroActionTemplateKind AppearanceKind { get; }
-    public Thickness LeftMargin { get; }
+    public int Index { get; private set; }
+    public IReadOnlyList<int> StepPath { get; private set; }
+    public string StepPathText { get; private set; }
+    public string Icon { get; private set; }
+    public string ActionIndicator { get; private set; }
+    public string Title { get; private set; }
+    public string Badge { get; private set; }
+    public Brush AccentBrush { get; private set; }
+    public Brush ActionForeground { get; private set; }
+    public Brush IconBrush { get; private set; }
+    public Brush BackgroundBrush { get; private set; }
+    public StepDisplayKind Kind { get; private set; }
+    public int Indent { get; private set; }
+    public MacroActionTemplateKind AppearanceKind { get; private set; }
+    public Thickness LeftMargin { get; private set; }
     public bool IsStructural => Kind is StepDisplayKind.LoopStart or StepDisplayKind.LoopEnd or StepDisplayKind.ConditionStart or StepDisplayKind.ConditionEnd or StepDisplayKind.GroupStart or StepDisplayKind.GroupEnd;
     public bool IsContainerEnd => Kind is StepDisplayKind.LoopEnd or StepDisplayKind.ConditionEnd;
     public bool IsConditionEndpoint { get; set; }
     public List<Brush> ConditionBars { get; set; } = [];
     public int ExecutionOrdinal { get; set; } = -1;
     public string StepNumberLabel { get; set; } = string.Empty;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    internal long Identity { get; set; }
+    internal void NotifyAppearanceChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    internal void UpdateFrom(StepDisplayItem other)
+    {
+        bool changed = false;
+        if (!Equals(Index, other.Index)) { Index = other.Index; changed = true; }
+        if (!StepPath.SequenceEqual(other.StepPath)) { StepPath = other.StepPath; changed = true; }
+        if (!Equals(StepPathText, other.StepPathText)) { StepPathText = other.StepPathText; changed = true; }
+        if (!Equals(Icon, other.Icon)) { Icon = other.Icon; changed = true; }
+        if (!Equals(ActionIndicator, other.ActionIndicator)) { ActionIndicator = other.ActionIndicator; changed = true; }
+        if (!Equals(Title, other.Title)) { Title = other.Title; changed = true; }
+        if (!Equals(Badge, other.Badge)) { Badge = other.Badge; changed = true; }
+        if (!Equals(AccentBrush, other.AccentBrush)) { AccentBrush = other.AccentBrush; changed = true; }
+        if (!Equals(ActionForeground, other.ActionForeground)) { ActionForeground = other.ActionForeground; changed = true; }
+        if (!Equals(IconBrush, other.IconBrush)) { IconBrush = other.IconBrush; changed = true; }
+        if (!Equals(BackgroundBrush, other.BackgroundBrush)) { BackgroundBrush = other.BackgroundBrush; changed = true; }
+        if (!Equals(Kind, other.Kind)) { Kind = other.Kind; changed = true; }
+        if (!Equals(Indent, other.Indent)) { Indent = other.Indent; changed = true; }
+        if (!Equals(AppearanceKind, other.AppearanceKind)) { AppearanceKind = other.AppearanceKind; changed = true; }
+        if (!Equals(LeftMargin, other.LeftMargin)) { LeftMargin = other.LeftMargin; changed = true; }
+        if (ExecutionOrdinal != other.ExecutionOrdinal || StepNumberLabel != other.StepNumberLabel) changed = true;
+        ExecutionOrdinal = other.ExecutionOrdinal;
+        StepNumberLabel = other.StepNumberLabel;
+        if (changed) NotifyAppearanceChanged();
+    }
 
     public static void AssignExecutionOrdinals(IList<StepDisplayItem> items)
     {
@@ -615,6 +642,17 @@ public sealed class StepDisplayItem
                 frame.Action == FrameLockAction.Stop
                     ? MacroActionTemplateKind.FrameLockStop
                     : MacroActionTemplateKind.FrameLockStart),
+            YsrFpsToggleStep ysr => new StepDisplayItem(
+                index,
+                path,
+                "▶",
+                "",
+                LocalizationService.Get(ysr.Backend == FpsBackend.Fufu ? (ysr.Action == YsrFpsAction.Stop ? "AddFufuFpsStop" : "AddFufuFpsStart") : ysr.Backend == FpsBackend.Ky3 ? (ysr.Action == YsrFpsAction.Stop ? "AddKy3FpsStop" : "AddKy3FpsStart") : (ysr.Action switch { YsrFpsAction.Start => "AddYsrFpsStart", YsrFpsAction.Stop => "AddYsrFpsStop", _ => "AddYsrFpsToggle" })),
+                ysr.Action == YsrFpsAction.Stop ? "恢复原帧率" : $"{ysr.ToggleFps} FPS",
+                OrangeBrush,
+                StepDisplayKind.Normal,
+                indent,
+                ysr.Backend == FpsBackend.Fufu ? (ysr.Action == YsrFpsAction.Stop ? MacroActionTemplateKind.FufuFpsStop : MacroActionTemplateKind.FufuFpsStart) : ysr.Backend == FpsBackend.Ky3 ? (ysr.Action == YsrFpsAction.Stop ? MacroActionTemplateKind.Ky3FpsStop : MacroActionTemplateKind.Ky3FpsStart) : (ysr.Action switch { YsrFpsAction.Start => MacroActionTemplateKind.YsrFpsStart, YsrFpsAction.Stop => MacroActionTemplateKind.YsrFpsStop, _ => MacroActionTemplateKind.YsrFpsToggle })),
             _ => new StepDisplayItem(index, path, "?", "", step.GetType().Name, "", GrayBrush, StepDisplayKind.Normal, indent, MacroActionTemplateKind.Delay)
         };
     }

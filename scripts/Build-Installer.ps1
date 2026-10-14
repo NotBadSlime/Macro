@@ -1,19 +1,38 @@
 param(
-    [string]$Version = "1.6.0",
+    [string]$Version = "2.0.0",
 
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
 
     [switch]$InstallInno,
 
-    [string]$OutputRoot = ""
+    [string]$OutputRoot = "",
+
+    [switch]$Launch,
+
+    [string]$ShortcutDirectory = "D:\360MoveData\Users\12849\Desktop\Start Item"
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $artifactRoot = Join-Path $repoRoot "artifacts"
-$inputRoot = Join-Path $artifactRoot "installer-input"
-$outputRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) { Join-Path $artifactRoot "installer" } else { $OutputRoot }
+$packageRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    Join-Path $artifactRoot "packages"
+} else { [IO.Path]::GetFullPath($OutputRoot) }
+. (Join-Path $PSScriptRoot "Packaging-Helpers.ps1")
+Assert-ArtifactPath $packageRoot
+$fixedLocalRoot = Join-Path $artifactRoot "local-run"
+Assert-ArtifactPath $fixedLocalRoot
+if ($packageRoot.TrimEnd('\') -eq $fixedLocalRoot -or
+    $packageRoot.StartsWith($fixedLocalRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or
+    $fixedLocalRoot.StartsWith($packageRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Package and local-run directories must not overlap."
+}
+# Build in a fresh staging directory. Published paths remain stable.
+$outputRoot = Join-Path $artifactRoot ("packaging-stage-" + [Guid]::NewGuid().ToString('N'))
+Assert-ArtifactPath $outputRoot
+
+$inputRoot = Join-Path $outputRoot "build-input"
 $issPath = Join-Path $repoRoot "installer\MacroHID.iss"
 
 function Find-InnoCompiler {
@@ -46,6 +65,13 @@ function Copy-DirectoryIfExists([string]$Source, [string]$Destination) {
     Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
 }
 
+function Publish-Checked([string]$Project, [string]$Destination, [bool]$SelfContained) {
+    dotnet publish $Project --configuration $Configuration --runtime win-x64 `
+        --self-contained $SelfContained.ToString().ToLowerInvariant() --output $Destination `
+        --disable-build-servers -p:BuildInParallel=false -v:minimal
+    if ($LASTEXITCODE -ne 0) { throw "Publish failed for $Project (exit $LASTEXITCODE)." }
+}
+
 function Copy-NativePlaybackDll([string]$DllPath, [string]$DestinationRoot) {
     foreach ($component in @("MacroStudio", "MacroRunner", "LatencyProbe")) {
         $destination = Join-Path $DestinationRoot $component
@@ -56,7 +82,7 @@ function Copy-NativePlaybackDll([string]$DllPath, [string]$DestinationRoot) {
 
 function Copy-WindowsOcrServer([string]$SourceRoot, [string]$DestinationRoot) {
     foreach ($component in @("MacroStudio", "MacroRunner")) {
-        $destination = Join-Path $DestinationRoot $component
+        $destination = Join-Path (Join-Path $DestinationRoot $component) "ocr"
         New-Item -ItemType Directory -Path $destination -Force | Out-Null
         Copy-Item -Path (Join-Path $SourceRoot "*") -Destination $destination -Recurse -Force
     }
@@ -64,7 +90,7 @@ function Copy-WindowsOcrServer([string]$SourceRoot, [string]$DestinationRoot) {
 
 function Assert-WindowsOcrServerCopied([string]$DestinationRoot) {
     foreach ($component in @("MacroStudio", "MacroRunner")) {
-        $exe = Join-Path (Join-Path $DestinationRoot $component) "WindowsOcrServer.exe"
+        $exe = Join-Path (Join-Path $DestinationRoot $component) "ocr\WindowsOcrServer.exe"
         if (-not (Test-Path $exe)) {
             throw "WindowsOcrServer.exe was not copied for ${component}: $exe"
         }
@@ -89,6 +115,7 @@ function New-PortableRootShortcut([string]$ShortcutPath, [string]$TargetPath, [s
 }
 
 function New-PortableAppLayout([string]$SourceRoot, [string]$AppRoot) {
+    Assert-ArtifactPath $AppRoot
     if (Test-Path $AppRoot) {
         Remove-Item -LiteralPath $AppRoot -Recurse -Force
     }
@@ -115,7 +142,7 @@ Set shell = CreateObject("WScript.Shell")
 shell.CurrentDirectory = fso.GetParentFolderName(exe)
 shell.Run """" & exe & """", 1, False
 "@
-    Set-Content -LiteralPath (Join-Path $AppRoot "MacroStudio.vbs") -Value $launchVbs -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $AppRoot "MacroStudio.vbs") -Value $launchVbs -Encoding Unicode
 
     $launchCmd = @"
 @echo off
@@ -124,15 +151,9 @@ start "" "%ROOT%MacroStudio\MacroStudio.exe"
 "@
     Set-Content -LiteralPath (Join-Path $AppRoot "MacroStudio.cmd") -Value $launchCmd -Encoding ASCII
 
-    New-PortableRootShortcut `
-        -ShortcutPath (Join-Path $AppRoot "MacroStudio.lnk") `
-        -TargetPath (Join-Path $AppRoot "MacroStudio\MacroStudio.exe") `
-        -WorkingDirectory (Join-Path $AppRoot "MacroStudio") `
-        -Description "MacroStudio"
-
     $missing = @(
         (Join-Path $AppRoot "MacroStudio\MacroStudio.exe"),
-        (Join-Path $AppRoot "MacroStudio.lnk")
+        (Join-Path $AppRoot "MacroStudio.cmd")
     ) | Where-Object { -not (Test-Path $_) }
     if ($missing.Count -gt 0) {
         throw "Portable layout is missing: $($missing -join ', ')"
@@ -148,25 +169,21 @@ if (-not $iscc) {
     throw "Inno Setup compiler ISCC.exe was not found. Install Inno Setup 6 or rerun with -InstallInno."
 }
 
-if (Test-Path $inputRoot) {
-    Remove-Item -LiteralPath $inputRoot -Recurse -Force
-}
+New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
 
-if (Test-Path $outputRoot) {
-    Remove-Item -LiteralPath $outputRoot -Recurse -Force
-}
-
-New-Item -ItemType Directory -Path $inputRoot, $outputRoot | Out-Null
-
+# Prevent simultaneous packagers from replacing the same fixed outputs.
+New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+$buildLock = [IO.File]::Open((Join-Path $artifactRoot 'packaging.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 Push-Location $repoRoot
 try {
+    Confirm-StopBuildProcesses @((Join-Path $repoRoot "src"), $fixedLocalRoot, $packageRoot)
     $nativeDll = & (Join-Path $PSScriptRoot "Build-NativePlayback.ps1") -Configuration $Configuration | Select-Object -Last 1
 
-    dotnet publish "src\ui\MacroStudio\MacroStudio.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $inputRoot "MacroStudio")
-    dotnet publish "src\tools\MacroRunner\MacroRunner.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $inputRoot "MacroRunner")
-    dotnet publish "src\tools\LatencyProbe\LatencyProbe.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output (Join-Path $inputRoot "LatencyProbe")
+    Publish-Checked "src\ui\MacroStudio\MacroStudio.csproj" (Join-Path $inputRoot "MacroStudio") $false
+    Publish-Checked "src\tools\MacroRunner\MacroRunner.csproj" (Join-Path $inputRoot "MacroRunner") $false
+    Publish-Checked "src\tools\LatencyProbe\LatencyProbe.csproj" (Join-Path $inputRoot "LatencyProbe") $false
     $ocrServerOutput = Join-Path $inputRoot "WindowsOcrServer"
-    dotnet publish "src\tools\WindowsOcrServer\WindowsOcrServer.csproj" --configuration $Configuration --runtime win-x64 --self-contained false --output $ocrServerOutput
+    Publish-Checked "src\tools\WindowsOcrServer\WindowsOcrServer.csproj" $ocrServerOutput $false
     Copy-NativePlaybackDll $nativeDll $inputRoot
     Copy-WindowsOcrServer $ocrServerOutput $inputRoot
     Assert-WindowsOcrServerCopied $inputRoot
@@ -197,6 +214,7 @@ try {
     $portableStage = Join-Path $outputRoot "portable-stage"
     $portableAppRoot = Join-Path $portableStage "MacroHID"
     $portableZip = Join-Path $outputRoot "MacroHID-Portable-x64.zip"
+    Assert-ArtifactPath $portableStage
     if (Test-Path $portableStage) {
         Remove-Item -LiteralPath $portableStage -Recurse -Force
     }
@@ -214,9 +232,47 @@ try {
         [System.IO.Compression.CompressionLevel]::Optimal,
         $false)
 
+    # Keep the standalone desktop build separate from the smaller distribution packages.
+    $localRoot = Join-Path $outputRoot "local-run"
+    $localStudio = Join-Path $localRoot "MacroStudio"
+    Publish-Checked "src\ui\MacroStudio\MacroStudio.csproj" $localStudio $true
+    Publish-Checked "src\tools\WindowsOcrServer\WindowsOcrServer.csproj" (Join-Path $localStudio "ocr") $true
+    Copy-Item -LiteralPath $nativeDll -Destination (Join-Path $localStudio "MacroHid.NativePlayback.dll") -Force
+    $localExe = Join-Path $localStudio "MacroStudio.exe"
+    if (-not (Test-Path -LiteralPath $localExe)) { throw "Standalone executable missing: $localExe" }
+    # Recheck after publishing in case a user started the old build meanwhile.
+    Confirm-StopBuildProcesses @($fixedLocalRoot, $packageRoot)
+    New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+    $fixedInstaller = Join-Path $packageRoot "MacroHID-Setup-x64.exe"
+    $fixedZip = Join-Path $packageRoot "MacroHID-Portable-x64.zip"
+    $checksums = Join-Path $outputRoot "SHA256SUMS.txt"
+    $checksumLines = foreach ($packageFile in @($installer, $portableZip)) {
+        "{0}  {1}" -f (Get-FileHash -LiteralPath $packageFile -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path -Leaf $packageFile)
+    }
+    Set-Content -LiteralPath $checksums -Value $checksumLines -Encoding ascii
+    Publish-StagedOutputs @(
+        @{ Source = $installer; Target = $fixedInstaller },
+        @{ Source = $portableZip; Target = $fixedZip },
+        @{ Source = $checksums; Target = (Join-Path $packageRoot "SHA256SUMS.txt") },
+        @{ Source = $localRoot; Target = $fixedLocalRoot }
+    ) $outputRoot
+    $installer = $fixedInstaller
+    $portableZip = $fixedZip
+    $localStudio = Join-Path $fixedLocalRoot "MacroStudio"
+    $localExe = Join-Path $localStudio "MacroStudio.exe"
+    New-Item -ItemType Directory -Path $ShortcutDirectory -Force | Out-Null
+    $shortcutName = "MacroHID " + [char]0x672C + [char]0x5730 + [char]0x7248 + ".lnk"
+    $desktopShortcut = Join-Path $ShortcutDirectory $shortcutName
+    New-PortableRootShortcut -ShortcutPath $desktopShortcut -TargetPath $localExe `
+        -WorkingDirectory $localStudio -Description "MacroHID $Version local standalone build"
     Write-Host "Installer created: $installer"
     Write-Host "Portable zip created: $portableZip"
+    Write-Host "Standalone executable: $localExe"
+    Write-Host "Shortcut: $desktopShortcut"
+    Write-Host "Previous outputs and build staging retained at: $outputRoot"
+    if ($Launch) { Start-Process -FilePath $localExe -WorkingDirectory $localStudio -WindowStyle Hidden }
 }
 finally {
+    $buildLock.Dispose()
     Pop-Location
 }

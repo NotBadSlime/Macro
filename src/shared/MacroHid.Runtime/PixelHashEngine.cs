@@ -4,10 +4,16 @@ namespace MacroHid.Runtime;
 
 public static class PixelHashEngine
 {
-    public static byte[] ComputeHash(ScreenRegion region)
+    public static byte[] ComputeHash(ScreenRegion region, Func<ScreenRegion, RgbColor[]>? capture = null, CancellationToken cancellationToken = default)
     {
-        var pixels = ScreenCaptureService.CaptureRegionAsRgb(region);
-        if (pixels.Length == 0) return [];
+        cancellationToken.ThrowIfCancellationRequested();
+        using var pixels = capture is null ? ScreenCaptureService.CaptureFrame(region) : PixelFrame.FromRgb(capture(region));
+        return ComputeHash(region, pixels, cancellationToken);
+    }
+
+    internal static byte[] ComputeHash(ScreenRegion region, PixelFrame pixels, CancellationToken cancellationToken)
+    {
+        if (pixels.Count == 0) return [];
 
         var width = region.Width;
         var height = region.Height;
@@ -24,6 +30,7 @@ public static class PixelHashEngine
 
                 for (int y = by * blockH; y < Math.Min((by + 1) * blockH, height); y++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     for (int x = bx * blockW; x < Math.Min((bx + 1) * blockW, width); x++)
                     {
                         var pixel = pixels[y * width + x];
@@ -60,9 +67,10 @@ public static class PixelHashEngine
         return 1.0 - (sumSqDiff / maxPossible);
     }
 
-    public static bool Matches(ScreenRegion region, byte[] referenceHash, double threshold)
+    public static bool Matches(ScreenRegion region, byte[] referenceHash, double threshold, Func<ScreenRegion, RgbColor[]>? capture = null,
+        CancellationToken cancellationToken = default)
     {
-        var currentHash = ComputeHash(region);
+        var currentHash = ComputeHash(region, capture, cancellationToken);
         if (currentHash.Length == 0) return false;
         return CompareSimilarity(currentHash, referenceHash) >= threshold;
     }

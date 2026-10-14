@@ -127,6 +127,14 @@ public sealed class WorkspacePanelWindow : Window
         windowRoot.Children.Add(ResizeBottomThumb);
         windowRoot.Children.Add(ResizeRightThumb);
         windowRoot.Children.Add(ResizeCornerThumb);
+        if (panelId == "sequence")
+        {
+            AddResizeHandle(windowRoot, HorizontalAlignment.Left, VerticalAlignment.Stretch, Cursors.SizeWE, true, false, false);
+            AddResizeHandle(windowRoot, HorizontalAlignment.Stretch, VerticalAlignment.Top, Cursors.SizeNS, false, true, false);
+            AddResizeHandle(windowRoot, HorizontalAlignment.Left, VerticalAlignment.Top, Cursors.SizeNWSE, true, true, true);
+            AddResizeHandle(windowRoot, HorizontalAlignment.Right, VerticalAlignment.Top, Cursors.SizeNESW, false, true, true);
+            AddResizeHandle(windowRoot, HorizontalAlignment.Left, VerticalAlignment.Bottom, Cursors.SizeNESW, true, false, true);
+        }
         Content = windowRoot;
     }
 
@@ -166,16 +174,41 @@ public sealed class WorkspacePanelWindow : Window
         }
     }
 
-    private void ResizeWindow(double widthDelta, double heightDelta)
+    private void AddResizeHandle(Grid root, HorizontalAlignment horizontal, VerticalAlignment vertical,
+        Cursor cursor, bool fromLeft, bool fromTop, bool corner)
     {
+        var handle = new Thumb
+        {
+            HorizontalAlignment = horizontal,
+            VerticalAlignment = vertical,
+            Cursor = cursor,
+            Width = horizontal == HorizontalAlignment.Stretch ? double.NaN : corner ? 20 : 10,
+            Height = vertical == VerticalAlignment.Stretch ? double.NaN : corner ? 20 : 10,
+            Template = CreateTransparentThumbTemplate(),
+            Focusable = false
+        };
+        handle.DragDelta += (_, e) => ResizeWindow(
+            horizontal == HorizontalAlignment.Stretch ? 0 : e.HorizontalChange,
+            vertical == VerticalAlignment.Stretch ? 0 : e.VerticalChange, fromLeft, fromTop);
+        Panel.SetZIndex(handle, corner ? 22 : 20);
+        root.Children.Add(handle);
+    }
+
+    private void ResizeWindow(double widthDelta, double heightDelta, bool fromLeft = false, bool fromTop = false)
+    {
+        if (WindowState != WindowState.Normal) return;
         if (Math.Abs(widthDelta) > 0.01)
         {
-            Width = Math.Max(MinWidth, Width + widthDelta);
+            var oldWidth = Width;
+            Width = Math.Max(MinWidth, Width + (fromLeft ? -widthDelta : widthDelta));
+            if (fromLeft) Left += oldWidth - Width;
         }
 
         if (Math.Abs(heightDelta) > 0.01)
         {
-            Height = Math.Max(MinHeight, Height + heightDelta);
+            var oldHeight = Height;
+            Height = Math.Max(MinHeight, Height + (fromTop ? -heightDelta : heightDelta));
+            if (fromTop) Top += oldHeight - Height;
         }
     }
 

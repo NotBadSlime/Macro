@@ -110,12 +110,67 @@ internal struct MhpCoreSample
     public long MaxLateUs;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct MhpRunTrace { public long Queued, FirstSubmit, LastSubmit, Completed; }
+
 internal static partial class NativePlaybackInterop
 {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void CoreProgressCallback(uint processorNumber, int completed, int total, long maxLateUs);
 
     private const string LibraryName = "MacroHid.NativePlayback.dll";
+
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern MhpStatus MhpSubmitPlan(IntPtr plan, ref MhpRunOptions options, IntPtr control, out IntPtr run, out IntPtr completion);
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void MhpCancelRun(IntPtr run);
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern MhpStatus MhpGetRunResult(IntPtr run, out MhpRunStats stats);
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void MhpReleaseRun(IntPtr run);
+
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern MhpStatus MhpSubmitPlanAt(IntPtr plan, ref MhpRunOptions options, IntPtr control, long origin, out IntPtr run, out IntPtr completion);
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern MhpStatus MhpGetRunTrace(IntPtr run, out MhpRunTrace trace);
+
+    internal static MhpStatus SubmitAndWait(IntPtr plan, ref MhpRunOptions options, IntPtr control, CancellationToken token, out MhpRunStats stats, long timelineStart = 0)
+    {
+        stats = default;
+        token.ThrowIfCancellationRequested();
+        var status = MhpSubmitPlanAt(plan, ref options, control, timelineStart, out var run, out var completion);
+        if (status != MhpStatus.Ok) return status;
+        try
+        {
+            using var registration = token.Register(() => MhpCancelRun(run));
+            using var done = new EventWaitHandle(false, EventResetMode.ManualReset);
+            done.SafeWaitHandle = new Microsoft.Win32.SafeHandles.SafeWaitHandle(completion, ownsHandle: false);
+            done.WaitOne();
+            if (PlaybackTrace.Log.IsEnabled() && MhpGetRunTrace(run, out var trace) == MhpStatus.Ok)
+            {
+                PlaybackTrace.Mark(PlaybackTraceStage.NativeQueued, trace.Queued);
+                if (trace.FirstSubmit != 0) PlaybackTrace.Mark(PlaybackTraceStage.NativeFirstSubmit, trace.FirstSubmit);
+                if (trace.LastSubmit != 0) PlaybackTrace.Mark(PlaybackTraceStage.NativeLastSubmit, trace.LastSubmit);
+                PlaybackTrace.Mark(PlaybackTraceStage.NativeComplete, trace.Completed);
+            }
+            return MhpGetRunResult(run, out stats);
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException or BadImageFormatException)
+        {
+            // Acceptance is the no-replay boundary, even when a later ABI call fails.
+            throw new InvalidOperationException("Native run was accepted; managed replay is prohibited.", ex);
+        }
+        finally
+        {
+            try { MhpReleaseRun(run); }
+            catch (Exception ex) { throw new InvalidOperationException("Native run cleanup failed; managed replay is prohibited.", ex); }
+        }
+    }
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    public static extern MhpStatus MhpPrepareEngine(ref MhpRunOptions options, ulong allowedMask, out MhpRunStats stats);
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    public static extern MhpStatus MhpScanCoresOnMask(ulong mask, [Out] MhpCoreSample[] samples, uint capacity, out uint written, CoreProgressCallback? progress);
 
     [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl, SetLastError = true)]
     public static extern MhpStatus MhpWarmEngine(

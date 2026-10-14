@@ -13,12 +13,26 @@ public sealed class HotkeyTriggeredEventArgs : EventArgs
         Gesture = gesture;
     }
 
+    public long CallbackQpc { get; init; }
+#if MACROHID_HOTKEY_PROBE
+    public bool ProbeInjected { get; init; }
+#endif
     public string Id { get; }
     public HotkeyGesture Gesture { get; }
 }
 
 public sealed class GlobalKeyboardHook : IDisposable
 {
+    private long callbackQpc;
+#if MACROHID_HOTKEY_PROBE
+    // Only compiled into the standalone measurement tool. Production continues
+    // to reject injected input, including this tag.
+    private IntPtr probeTag;
+    public IntPtr ProbeInjectedInputTag { get => Volatile.Read(ref probeTag); set => Volatile.Write(ref probeTag, value); }
+    private bool probeInjected;
+    public event Action<int, bool, long>? ProbeInputObserved;
+    public event Action<long>? ProbeOutputForwarded;
+#endif
     private const int WhKeyboardLl = 13;
     private const int WhMouseLl = 14;
     private const int WmKeyDown = 0x0100;
@@ -46,6 +60,8 @@ public sealed class GlobalKeyboardHook : IDisposable
     private readonly HashSet<MouseButton> pressedMouseButtons = [];
     private readonly Dictionary<string, HotkeyGesture> gestures = [];
     private readonly HashSet<string> triggersDown = [];
+    private System.Windows.Threading.Dispatcher? hookDispatcher;
+    private readonly Dictionary<string, HotkeyGesture> heldGestures = [];
     private IntPtr hookHandle;
     private IntPtr mouseHookHandle;
 
@@ -66,7 +82,20 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     public void Start(IEnumerable<HotkeyBinding> bindings)
     {
-        Stop();
+        var snapshot = bindings.ToArray();
+        if (hookDispatcher is null)
+        {
+            var ready = new TaskCompletionSource<System.Windows.Threading.Dispatcher>();
+            var thread = new Thread(() => {
+                ready.SetResult(System.Windows.Threading.Dispatcher.CurrentDispatcher);
+                System.Windows.Threading.Dispatcher.Run();
+            }) { IsBackground = true, Name = "MacroHID-Hotkeys", Priority = ThreadPriority.AboveNormal };
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            hookDispatcher = ready.Task.GetAwaiter().GetResult();
+        }
+        if (!hookDispatcher.CheckAccess()) { hookDispatcher.Invoke(() => Start(snapshot)); return; }
+        gestures.Clear();
         var distinctBindings = bindings
             .Select(binding => new HotkeyBinding(binding.Id ?? string.Empty, binding.Gesture))
             .GroupBy(binding => binding.Id, StringComparer.OrdinalIgnoreCase)
@@ -83,7 +112,9 @@ public sealed class GlobalKeyboardHook : IDisposable
             gestures[binding.Id] = binding.Gesture;
         }
 
+        if (hookHandle != IntPtr.Zero) return;
         triggersDown.Clear();
+        heldGestures.Clear();
         pressedKeys.Clear();
         pressedHidKeys.Clear();
         pressedMouseButtons.Clear();
@@ -103,6 +134,7 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     public void Stop()
     {
+        if (hookDispatcher is { HasShutdownStarted: false } dispatcher && !dispatcher.CheckAccess()) { dispatcher.Invoke(Stop); return; }
         if (hookHandle != IntPtr.Zero)
         {
             UnhookWindowsHookEx(hookHandle);
@@ -116,6 +148,7 @@ public sealed class GlobalKeyboardHook : IDisposable
         }
 
         gestures.Clear();
+        heldGestures.Clear();
         triggersDown.Clear();
         pressedKeys.Clear();
         pressedHidKeys.Clear();
@@ -125,6 +158,7 @@ public sealed class GlobalKeyboardHook : IDisposable
     public void Dispose()
     {
         Stop();
+        hookDispatcher?.BeginInvokeShutdown(System.Windows.Threading.DispatcherPriority.Send);
     }
 
     public static bool TryMapVirtualKeyToHidKey(int virtualKey, out HidKey key)
@@ -274,11 +308,22 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        callbackQpc = System.Diagnostics.Stopwatch.GetTimestamp();
+#if MACROHID_HOTKEY_PROBE
+        bool observeOutputReturn = false;
+#endif
         if (nCode >= 0 && gestures.Count > 0)
         {
             var message = wParam.ToInt32();
             var data = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
-            if ((data.Flags & LlkHfInjected) == 0)
+            bool accept = (data.Flags & LlkHfInjected) == 0;
+#if MACROHID_HOTKEY_PROBE
+            probeInjected = (data.Flags & LlkHfInjected) != 0;
+            ProbeInputObserved?.Invoke(data.VirtualKeyCode, message is WmKeyDown or WmSysKeyDown, callbackQpc);
+            observeOutputReturn = data.VirtualKeyCode == 0x87 && message is WmKeyDown or WmSysKeyDown;
+            accept |= ProbeInjectedInputTag != IntPtr.Zero && data.ExtraInfo == ProbeInjectedInputTag;
+#endif
+            if (accept)
             {
                 if (message is WmKeyDown or WmSysKeyDown)
                 {
@@ -296,11 +341,18 @@ public sealed class GlobalKeyboardHook : IDisposable
             }
         }
 
+#if MACROHID_HOTKEY_PROBE
+        var result = CallNextHookEx(hookHandle, nCode, wParam, lParam);
+        if (observeOutputReturn) ProbeOutputForwarded?.Invoke(System.Diagnostics.Stopwatch.GetTimestamp());
+        return result;
+#else
         return CallNextHookEx(hookHandle, nCode, wParam, lParam);
+#endif
     }
 
     private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        callbackQpc = System.Diagnostics.Stopwatch.GetTimestamp();
         if (nCode >= 0 && gestures.Count > 0)
         {
             var message = wParam.ToInt32();
@@ -376,7 +428,12 @@ public sealed class GlobalKeyboardHook : IDisposable
             }
 
             triggersDown.Add(id);
-            TriggerPressed?.Invoke(this, new HotkeyTriggeredEventArgs(id, currentGesture));
+            heldGestures[id] = currentGesture;
+            TriggerPressed?.Invoke(this, new HotkeyTriggeredEventArgs(id, currentGesture) { CallbackQpc = callbackQpc
+#if MACROHID_HOTKEY_PROBE
+                , ProbeInjected = probeInjected
+#endif
+            });
         }
     }
 
@@ -384,13 +441,14 @@ public sealed class GlobalKeyboardHook : IDisposable
     {
         foreach (var id in triggersDown.ToList())
         {
-            if (!gestures.TryGetValue(id, out var currentGesture) || GestureIsDown(currentGesture))
+            if (!(heldGestures.TryGetValue(id, out var currentGesture) || gestures.TryGetValue(id, out currentGesture)) || GestureIsDown(currentGesture))
             {
                 continue;
             }
 
             triggersDown.Remove(id);
-            TriggerReleased?.Invoke(this, new HotkeyTriggeredEventArgs(id, currentGesture));
+            heldGestures.Remove(id);
+            TriggerReleased?.Invoke(this, new HotkeyTriggeredEventArgs(id, currentGesture) { CallbackQpc = callbackQpc });
         }
     }
 

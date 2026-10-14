@@ -38,6 +38,8 @@ public partial class McrxJsonPanel : UserControl
         ApplyJsonButton.Content = LocalizationService.Get("Apply");
     }
 
+    public void SetValidationMessage(string message) { JsonValidationText.Text = message; }
+
     public void SetReadOnly(bool value)
     {
         MacroEditor.IsReadOnly = value;

@@ -16,6 +16,7 @@ public partial class PrecisionControlDialog : Window
         source = settings;
         PickCores = pickCores;
         ApplyLocalization();
+        PrecisionModeBox.SelectionChanged += (_, _) => UpdateProfileDescription();
         AffinityMaskBox.Text = settings.AffinityMask;
         foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
         {
@@ -25,6 +26,17 @@ public partial class PrecisionControlDialog : Window
                 break;
             }
         }
+    }
+
+    private void UpdateProfileDescription()
+    {
+        var mode = SelectedPrecision();
+        var policy = PlaybackPerformancePolicy.For(mode);
+        var impact = mode switch {
+            PrecisionMode.Balanced => "CPU 影响最低；适合 CPU 紧张、普通自动化。托管预编译。",
+            PrecisionMode.UltraLowJitter => "CPU 影响最高；适合 1–2ms 节奏。两个原生常驻线程共享辅助抢占。",
+            _ => "CPU 影响中等；适合大多数游戏与混合宏。原生预编译。" };
+        ProfileDescription.Text = $"响应目标：首次提交 P99 ≤ {policy.TargetStartupMicroseconds}µs；迟到 P99.9 ≤ {policy.TargetJitterMicroseconds}µs。\n{impact}\n最终自旋窗口：{policy.FinalSpinMicroseconds}µs；空闲时事件等待。";
     }
 
     public Func<string, string?>? PickCores { get; }

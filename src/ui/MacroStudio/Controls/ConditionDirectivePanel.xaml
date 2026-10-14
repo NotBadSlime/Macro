@@ -98,9 +98,13 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+            <WrapPanel>
             <TextBlock x:Name="ConditionSequenceTitleText"
                        Text="条件列表"
+                       Margin="0,0,8,0" VerticalAlignment="Center"
                        Style="{StaticResource PanelTitle}" />
+            <local:ListZoomControl TargetElement="{Binding ElementName=ConditionListViewport}" />
+            </WrapPanel>
             <WrapPanel Grid.Row="1"
                        Margin="0,8,0,0">
                 <Button x:Name="AddConditionButton"
@@ -143,7 +147,7 @@
                 AllowDrop="True"
                 DragOver="ConditionList_DragOver"
                 Drop="ConditionList_Drop">
-            <Grid>
+            <Grid x:Name="ConditionListViewport">
                 <ListBox x:Name="ConditionList"
                          AllowDrop="True"
                          ItemTemplate="{StaticResource ConditionItemTemplate}"

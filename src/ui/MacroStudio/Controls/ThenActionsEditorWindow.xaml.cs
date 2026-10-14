@@ -12,6 +12,7 @@ public partial class ThenActionsEditorWindow : Window
     public ThenActionsEditorWindow(IReadOnlyList<MacroStep> initialSteps, MacroEditorState? editorState = null)
     {
         InitializeComponent();
+        Height = Math.Min(Height, Math.Max(MinHeight, SystemParameters.WorkArea.Height - 24));
         ThemedDialogChrome.Apply(this);
         steps = initialSteps.ToList();
         if (editorState is not null)

@@ -2,6 +2,8 @@ bin/
 obj/
 artifacts/
 src/**/x64/
+tests/**/x64/
+__pycache__/
 src/driver/MacroHidDriver/MacroHidDriver/
 src/service/MacroEngineService/MacroEng.*/
 .vs/
@@ -16,3 +18,7 @@ TestResults/
 .worktrees/
 
 .superpowers/
+/tmp/
+/build/
+/.workbuddy-ai/
+/docs/research/evidence-*/

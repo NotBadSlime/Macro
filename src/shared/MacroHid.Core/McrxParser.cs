@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace MacroHid.Core;
 
@@ -180,6 +180,18 @@ public static class McrxParser
             "net.limit" => ParseNetLimit(stepElement),
             "clock.shift" => ParseClockShift(stepElement),
             "frame.lock" => ParseFrameLock(stepElement),
+            "memory.fps.start" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Start, FpsBackend.Ky3),
+            "memory.fps.stop" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Stop, FpsBackend.Ky3),
+            "memory.fps.toggle" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Toggle, FpsBackend.Ky3),
+            "fufu.fps.start" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Start, FpsBackend.Fufu),
+            "fufu.fps.stop" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Stop, FpsBackend.Fufu),
+            "fufu.fps.toggle" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Toggle, FpsBackend.Fufu),
+            "ky3.fps.start" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Start, FpsBackend.Ky3),
+            "ky3.fps.stop" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Stop, FpsBackend.Ky3),
+            "ky3.fps.toggle" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Toggle, FpsBackend.Ky3),
+            "ysr.fps.toggle" => ParseYsrFpsToggle(stepElement),
+            "ysr.fps.start" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Start),
+            "ysr.fps.stop" => ParseYsrFpsToggle(stepElement, YsrFpsAction.Stop),
             "parallel" => ParseParallel(stepElement),
             "parallel.branch" => ParseParallelBranch(stepElement),
             _ => throw new JsonException($"Unsupported macro step type '{type}'.")
@@ -384,6 +396,14 @@ public static class McrxParser
             GetString(stepElement, "processName", "YuanShen.exe") ?? "YuanShen.exe",
             action,
             GetInt(stepElement, "fps", 60));
+    }
+
+    private static YsrFpsToggleStep ParseYsrFpsToggle(JsonElement stepElement, YsrFpsAction action = YsrFpsAction.Toggle, FpsBackend backend = FpsBackend.Ysr)
+    {
+        var fps = GetInt(stepElement, "toggleFps", 117);
+        if (fps < (backend != FpsBackend.Ysr ? 0 : 1) || fps > 1000) throw new FormatException("目标帧率超出有效范围。");
+        return new YsrFpsToggleStep(
+            fps, action, backend);
     }
 
     private static ParallelStep ParseParallel(JsonElement stepElement)

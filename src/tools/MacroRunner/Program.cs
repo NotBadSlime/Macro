@@ -53,6 +53,9 @@ if (!options.Send)
     return 0;
 }
 
+foreach (string recovery in UnlockerConfiguration.RecoverPending())
+    Console.WriteLine(recovery);
+
 try
 {
     Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;

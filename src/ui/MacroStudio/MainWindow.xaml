@@ -4,7 +4,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:MacroStudio.Controls"
         Title="MacroHID Studio"
-        Height="600"
+        Height="820"
         Width="1120"
         MinHeight="560"
         MinWidth="1040"
@@ -53,6 +53,11 @@
                                 Style="{StaticResource CommandBarButton}"
                                 Content="另存当前宏"
                                 Click="SaveMacro_Click" />
+                        <Button x:Name="OpenLogsButton"
+                                Style="{StaticResource CommandBarButton}"
+                                Content="打开日志"
+                                Click="OpenLogs_Click" />
+                        <Button Style="{StaticResource CommandBarButton}" Content="解帧器设置" Click="UnlockerSettings_Click" />
                         <Button x:Name="WindowMenuButton"
                                 Style="{StaticResource CommandBarButton}"
                                 Content="窗口"
@@ -97,10 +102,13 @@
                                 CornerRadius="12"
                                 Padding="10,5"
                                 Margin="0,0,10,0">
+                            <StackPanel>
                             <TextBlock x:Name="StatusText"
                                        Foreground="{DynamicResource SecondaryText}"
                                        VerticalAlignment="Center"
                                        Text="Input backend ready" />
+                            <TextBlock x:Name="PerformanceStatusText" FontSize="10" Foreground="{DynamicResource SecondaryText}" MaxWidth="380" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
                         </Border>
                         <Button x:Name="PauseListeningButton"
                                 Style="{StaticResource CommandBarButton}"

@@ -1,4 +1,4 @@
-namespace MacroHid.Core;
+﻿namespace MacroHid.Core;
 
 public enum MacroKind
 {
@@ -564,6 +564,12 @@ public sealed record FrameLockStep(
         }
     }
 }
+
+public enum YsrFpsAction { Toggle, Start, Stop }
+public enum FpsBackend { Ysr, Ky3, Fufu }
+
+public sealed record YsrFpsToggleStep(
+    int ToggleFps = 117, YsrFpsAction Action = YsrFpsAction.Toggle, FpsBackend Backend = FpsBackend.Ysr) : MacroStep;
 
 public sealed record ParallelBranchStep(string Name, IReadOnlyList<MacroStep> Steps) : MacroStep;
 

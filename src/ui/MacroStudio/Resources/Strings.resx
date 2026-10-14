@@ -336,10 +336,10 @@
   <data name="ForceStopConflictsWithColorSample" xml:space="preserve"><value>The force stop key must be different from the color sample hotkey.</value></data>
   <data name="ListeningForceStopConflict" xml:space="preserve"><value>These macros use the force-stop key and were not started: {0}</value></data>
   <data name="PrecisionBalanced" xml:space="preserve">
-    <value>Basic</value>
+    <value>Low overhead</value>
   </data>
   <data name="PrecisionExtremeDuringPlayback" xml:space="preserve">
-    <value>High performance</value>
+    <value>Balanced (recommended)</value>
   </data>
   <data name="PrecisionUltraLowJitter" xml:space="preserve">
     <value>Extreme</value>
@@ -572,19 +572,26 @@
   <data name="NetLimitStopHint" xml:space="preserve"><value>Removes the limit and restores normal speed.</value></data>
   <data name="NetLimiterHint" xml:space="preserve"><value>Uses NetLimiter if it is installed. New cards start at 695. Only upload is limited; download is left alone. The number is bytes per second.</value></data>
   <data name="NetLimiterStopHint" xml:space="preserve"><value>Removes the NetLimiter limit. If NetLimiter is not installed, this card leaves the network unchanged.</value></data>
-  <data name="ClockShiftHint" xml:space="preserve"><value>0 hours and 0 minutes leaves the clock unchanged. One playback uses only the first shift. Disconnect cards still shift by default.</value></data>
+  <data name="ClockShiftHint" xml:space="preserve"><value>0 hours and 0 minutes leaves the clock unchanged. One playback uses only the first shift.</value></data>
   <data name="ClockRestoreHint" xml:space="preserve"><value>Puts the clock back immediately. Playback end restores it if it is still shifted.</value></data>
-  <data name="AddFrameLockStart" xml:space="preserve"><value>Start frame lock</value></data>
+  <data name="AddFrameLockStart" xml:space="preserve"><value>RTSS Start frame lock</value></data>
   <data name="AddFrameLockStartHint" xml:space="preserve"><value>Limit a program to the chosen FPS</value></data>
-  <data name="AddFrameLockStop" xml:space="preserve"><value>Stop frame lock</value></data>
+  <data name="AddFrameLockStop" xml:space="preserve"><value>RTSS Stop frame lock</value></data>
   <data name="AddFrameLockStopHint" xml:space="preserve"><value>Restore that program's previous frame limit</value></data>
-  <data name="TemplateFrameLockStart" xml:space="preserve"><value>start frame lock</value></data>
-  <data name="TemplateFrameLockStop" xml:space="preserve"><value>stop frame lock</value></data>
+  <data name="AddYsrFpsToggle" xml:space="preserve"><value>Toggle FPS</value></data>
+  <data name="AddYsrFpsToggleHint" xml:space="preserve"><value>Switch to set FPS and restore with another toggle</value></data>
+  <data name="TemplateFrameLockStart" xml:space="preserve"><value>RTSS start frame lock</value></data>
+  <data name="TemplateFrameLockStop" xml:space="preserve"><value>RTSS stop frame lock</value></data>
   <data name="FrameLockProcess" xml:space="preserve"><value>Process</value></data>
   <data name="FrameLockFps" xml:space="preserve"><value>Frame limit</value></data>
   <data name="FrameLockHint" xml:space="preserve"><value>FPS is 1 to 1000. Stop restores the previous limit. Playback end restores it too.</value></data>
   <data name="PaletteBasic" xml:space="preserve"><value>Basics</value></data>
   <data name="PaletteAdvanced" xml:space="preserve"><value>Advanced</value></data>
+  <data name="PaletteYsrUnlocker" xml:space="preserve"><value>Frame lock module</value></data>
+  <data name="AddYsrFpsStart" xml:space="preserve"><value>YSR frame lock on</value></data>
+  <data name="AddYsrFpsStop" xml:space="preserve"><value>YSR frame lock off</value></data>
+  <data name="AddYsrFpsStartHint" xml:space="preserve"><value>Target 117 FPS; editable in the card</value></data>
+  <data name="AddYsrFpsStopHint" xml:space="preserve"><value>Restore the FPS before activation</value></data>
   <data name="PaletteLoop" xml:space="preserve"><value>Loop control</value></data>
   <data name="ParallelTimeoutMs" xml:space="preserve"><value>Timeout (ms, empty waits until match or playback stops)</value></data>
   <data name="ParallelStart" xml:space="preserve"><value>Parallel</value></data>
@@ -889,4 +896,13 @@
   <data name="LibraryPathHelp" xml:space="preserve"><value>Database &gt; folder &gt; macro. Press Enter to jump the library to that file or folder.</value></data>
   <data name="LibraryPathNotFound" xml:space="preserve"><value>Could not find that database path.</value></data>
   <data name="ListeningColorSampleConflict" xml:space="preserve"><value>These macros use the color-sample hotkey and were not started: {0}</value></data>
+  <data name="AddKy3FpsStart" xml:space="preserve"><value>KY3 开启锁帧</value></data>
+  <data name="AddKy3FpsStop" xml:space="preserve"><value>KY3 恢复帧率</value></data>
+  <data name="AddKy3FpsStartHint" xml:space="preserve"><value>修改已有 KY3 解帧器目标值</value></data>
+  <data name="AddKy3FpsStopHint" xml:space="preserve"><value>恢复解帧器原目标值</value></data>
+  <data name="AddFufuFpsStart" xml:space="preserve"><value>Fufu 开启锁帧</value></data>
+  <data name="AddFufuFpsStop" xml:space="preserve"><value>Fufu 恢复帧率</value></data>
+  <data name="AddFufuFpsStartHint" xml:space="preserve"><value>进入游戏后修改 Fufu 解帧器目标值</value></data>
+  <data name="AddFufuFpsStopHint" xml:space="preserve"><value>恢复解帧器原目标值</value></data>
+  <data name="OpenLogs" xml:space="preserve"><value>Open logs</value></data>
 </root>
