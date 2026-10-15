@@ -222,7 +222,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 2.0.1", MacroHidReleaseVersionIsTwoZeroOne),
+    ("MacroHID release version is 2.0.2", MacroHidReleaseVersionIsTwoZeroTwo),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -265,6 +265,7 @@ var tests = new (string Name, Action Body)[]
     ("Delay batch adjustment shifts every delay card and keeps undo", DelayBatchAdjustmentShiftsEveryDelayCardAndKeepsUndo),
     ("MacroStudio exposes core color sample hotkey and library path navigation", MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation),
     ("MacroStudio keeps precision as a global runtime setting", MacroStudioKeepsPrecisionAsGlobalRuntimeSetting),
+    ("MacroStudio basic control confirm keeps every dialog field", MacroStudioBasicControlConfirmKeepsEveryDialogField),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
@@ -3952,22 +3953,22 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsTwoZeroOne()
+static void MacroHidReleaseVersionIsTwoZeroTwo()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.1.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.2.md"));
 
-    Assert.Contains("<Version>2.0.1</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>2.0.1.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>2.0.1.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>2.0.2</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>2.0.2.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>2.0.2.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"2.0.1\"", installer);
-    Assert.Contains("[string]$Version = \"2.0.1\"", installerBuild);
-    Assert.Contains("当前正式版是 **2.0.0**，最新测试版是 **2.0.1**", readme);
-    Assert.Contains("MacroHID 2.0.1 测试版", releaseNotes);
+    Assert.Contains("#define AppVersion \"2.0.2\"", installer);
+    Assert.Contains("[string]$Version = \"2.0.2\"", installerBuild);
+    Assert.Contains("当前正式版是 **2.0.2**", readme);
+    Assert.Contains("MacroHID 2.0.2 正式版", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -5112,6 +5113,24 @@ static void MacroStudioKeepsPrecisionAsGlobalRuntimeSetting()
     Assert.Contains("runtimePrecisionSettings.AffinityMask", mainWindowCode);
     Assert.DoesNotContain("document.Playback.Precision,", mainWindowCode);
     Assert.DoesNotContain("document.Playback.AffinityMask)", mainWindowCode);
+}
+
+static void MacroStudioBasicControlConfirmKeepsEveryDialogField()
+{
+    // 回归：确定后 OnPrecisionSettingsEdited 会从面板重读设置。若重读时只拼出部分字段，
+    // 默认间隔、组合键间隔、强制停止键、关闭按钮会被默认值覆盖并写盘，表现为"点确定不生效"。
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+
+    var start = mainWindowCode.IndexOf("private RuntimePrecisionSettings ReadRuntimePrecisionSettingsFromPanel()", StringComparison.Ordinal);
+    Assert.True(start >= 0);
+    var end = mainWindowCode.IndexOf("private void WarmUpRuntimePrecision()", start, StringComparison.Ordinal);
+    Assert.True(end > start);
+    var readMethod = mainWindowCode[start..end];
+
+    Assert.DoesNotContain("new RuntimePrecisionSettings(", readMethod);
+    Assert.Contains("LibraryPanel.RuntimeSettings", readMethod);
+    Assert.Contains("public RuntimePrecisionSettings RuntimeSettings => runtimeSettings;", libraryCode);
 }
 
 static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()

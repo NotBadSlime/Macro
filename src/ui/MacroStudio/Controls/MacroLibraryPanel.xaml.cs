@@ -237,6 +237,8 @@ public partial class MacroLibraryPanel : UserControl
 
     public PrecisionMode GetSelectedPrecisionMode() => runtimeSettings.Precision;
 
+    public RuntimePrecisionSettings RuntimeSettings => runtimeSettings;
+
     public void SetRuntimePrecisionControls(RuntimePrecisionSettings settings)
     {
         runtimeSettings = settings;
