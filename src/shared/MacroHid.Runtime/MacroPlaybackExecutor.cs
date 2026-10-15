@@ -349,6 +349,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         {
             thread.Priority = PlaybackPerformancePolicy.For(options.Precision).ExecutionThreadPriority;
             using var precisionContext = PrecisionPlaybackContext.Enter(options.Precision);
+            PlaybackTrace.Mark(PlaybackTraceStage.PrecisionEntered);
             PlaybackRuntimeStatus.ReportBackend("managed");
             return Run(document, options, cancellationToken);
         }
@@ -383,6 +384,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         using var callScope = new ConditionalMacroCallScope(document);
         using var conditionPlans = new ConditionActionPlanCache(ReferenceEquals(conditionPreparedDocument, document) && conditionPreparedOptions == options ? preparedConditions : null);
         cancellationToken = runCancellation.Token;
+        PlaybackTrace.Mark(PlaybackTraceStage.ScopesReady);
         var hasCachedPlan = TryGetPreparedPlan(document, options, out var cachedPlan, out var cachedPreparedPlan, out var cachedSafetyPlan);
         var safetyPlan = cachedSafetyPlan ?? PlaybackInputSafetyPlan.Create(document, macroResolver);
         var completedIterationReleaseActions = options.Mode == PlaybackMode.FixedCount
@@ -391,6 +393,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         using var safetyRegistration = PlaybackInputSafetyRegistry.Register(
             inputSink,
             safetyPlan.EmergencyReleaseActions);
+        PlaybackTrace.Mark(PlaybackTraceStage.SafetyReady);
 
         if (RequiresManagedControlFlow(document, options))
         {

@@ -7,7 +7,9 @@ public enum PlaybackTraceStage
 {
     Hotkey = 1, Dispatch, WorkerStart, PlanReady, Deadline, SubmitStart, SubmitEnd,
     CancelRequested, CleanupComplete, NativeQueued, NativeFirstSubmit, NativeLastSubmit,
-    NativeComplete, Receiver
+    NativeComplete, Receiver,
+    // Appended after Receiver so existing numeric values do not move. Between WorkerStart and PlanReady.
+    PrecisionEntered, ScopesReady, SafetyReady
 }
 
 // Enable the MacroHid-Playback EventSource only during measurement. QPC values are
