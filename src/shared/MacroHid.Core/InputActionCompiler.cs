@@ -60,6 +60,23 @@ public static class InputActionCompiler
         Func<WaitStep, TimeSpan>? waitDurationSampler = null,
         InputPressFloor? pressFloor = null)
     {
+        var timeline = CompileWithTimeline(document, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, pressFloor);
+        return (timeline.Actions, timeline.DurationTicks);
+    }
+
+    /// <summary>
+    /// <see cref="CompileWithDuration"/> plus <c>WrittenTicks</c>: where the user's own timeline ends (trailing wait included),
+    /// without the press floor's delay of a final release. A loop repeats at this period.
+    /// </summary>
+    public static (IReadOnlyList<ScheduledInputAction> Actions, long DurationTicks, long WrittenTicks) CompileWithTimeline(
+        MacroDocument document,
+        long startTick,
+        long qpcFrequency,
+        Func<PixelCondition, bool>? pixelEvaluator = null,
+        Func<string, MacroDocument?>? macroResolver = null,
+        Func<WaitStep, TimeSpan>? waitDurationSampler = null,
+        InputPressFloor? pressFloor = null)
+    {
         if (qpcFrequency <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(qpcFrequency), "QPC frequency must be positive.");
@@ -69,7 +86,9 @@ public static class InputActionCompiler
         var elapsedTicks = 0L;
         var pressGaps = new PressReleaseGapTracker(qpcFrequency, pressFloor);
         CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, pressGaps, ref elapsedTicks, depth: 0);
-        return (actions, Math.Max(0, elapsedTicks));
+        // The total covers the last action even when the press floor delayed it past the cursor (e.g. a bare {A down}{A up}).
+        var lastDue = actions.Count == 0 ? 0 : actions.Max(a => a.DueTick - startTick);
+        return (actions, Math.Max(0, Math.Max(elapsedTicks, lastDue)), Math.Max(0, elapsedTicks));
     }
 
     private static void CompileSteps(
@@ -282,8 +301,10 @@ public static class InputActionCompiler
         MacroStep sourceStep,
         ref long elapsedTicks)
     {
-        var dueTick = pressGaps.AdjustDueTick(action, startTick + elapsedTicks);
-        elapsedTicks = Math.Max(elapsedTicks, dueTick - startTick);
+        var dueTick = pressGaps.ScheduleDueTick(action, startTick + elapsedTicks, out var moveCursor);
+        // The plain zero-gap hold delays only its own release; the user's timeline (the cursor) stays put. Chord holds and a press
+        // that had to wait for its own key's release move the cursor, as before.
+        if (moveCursor) elapsedTicks = Math.Max(elapsedTicks, dueTick - startTick);
         actions.Add(new ScheduledInputAction(action, dueTick, sourceStep));
     }
 

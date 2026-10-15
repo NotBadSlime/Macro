@@ -432,13 +432,26 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         // Start of the next iteration if this one ran on time: previous start + the macro's written duration. If the previous
         // iteration overran (condition waits, pauses, a stall), start from now instead of firing the missed time in a burst.
         var phaseLockedNextStartTick = 0L;
+        var hasConditionWindows = document.EffectiveConditions.Any();
+        // Tick of the next iteration's first action if its start is phase-locked (start + the first batch's offset).
+        var phaseLockedFirstActionOffset = 0L;
 
         try
         {
             while (iterationsCompleted < iterationsTarget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                plannedIterationStartTick = Math.Max(clock.GetTimestamp(), phaseLockedNextStartTick);
+                // Keep the written phase while the next iteration's first action is still in the future. If it is already past
+                // (the previous iteration overran, or a macro with no wait is simply back to back), start from now: running the
+                // missed time would fire a burst. A loop head wait ("wait N, press, release") lands in the future, so the
+                // previous iteration's delayed release and this iteration's wait overlap, as the written timeline says.
+                var nowTick = clock.GetTimestamp();
+                // Macros with conditions keep starting from now: their condition windows are measured from the iteration start and
+                // have not been re-validated for an earlier start.
+                plannedIterationStartTick = !hasConditionWindows
+                    && phaseLockedNextStartTick + phaseLockedFirstActionOffset > nowTick
+                    ? phaseLockedNextStartTick
+                    : nowTick;
                 var timeline = new ConditionTimeline(
                     document.EffectiveConditions.Count,
                     playbackTriggerTick,
@@ -483,7 +496,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     ? plan.Resample()
                     : plan;
                 var iterationStartTick = plannedIterationStartTick;
-                var iterationDurationTicks = Math.Max(1, iterationPlan.DurationTicks);
+                var iterationDurationTicks = Math.Max(1, iterationPlan.LoopPeriodTicks); // the written period, see CompiledPlaybackPlan.LoopPeriodTicks
 
                 if (!TryRunNativeIterationWithConditionMonitors(
                         document,
@@ -612,6 +625,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     ref actionsSubmitted);
                 iterationsCompleted++;
                 phaseLockedNextStartTick = iterationStartTick + iterationDurationTicks;
+                phaseLockedFirstActionOffset = iterationPlan.Batches.Count == 0 ? 0 : Math.Max(0, iterationPlan.Batches[0].DueTick);
             }
 
             ApplyTimingStats(timingRecorder);

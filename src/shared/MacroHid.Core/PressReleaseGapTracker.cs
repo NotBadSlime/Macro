@@ -216,6 +216,8 @@ public readonly record struct PressIdentity(int Kind, int Code)
 public sealed class PressReleaseGapTracker
 {
     private readonly Dictionary<PressIdentity, long> lastDownTicks = new();
+    // Per key: when its pending (possibly floor-delayed) release is due. The same key may not be pressed again earlier.
+    private readonly Dictionary<PressIdentity, long> releaseDueTicks = new();
     private readonly long zeroDelayHoldTicks;
     private readonly long modifierChordHoldTicks;
     private int modifiersHeld;
@@ -227,6 +229,39 @@ public sealed class PressReleaseGapTracker
         modifierChordHoldTicks = InputPressTiming.HoldTicks(resolved.ModifierChordHold, qpcFrequency);
     }
 
+    /// <summary>
+    /// Schedules an action on a timeline the user wrote. Unlike <see cref="AdjustDueTick(InputAction, long)"/>, the press floor
+    /// delays only this one release: the caller's cursor (the user's timeline) does not move, so a wait written after it still
+    /// counts from where the user put it ({LMB}{WAITMS:50}{LMB} is 50 ms apart). Order is kept per key, not globally: pressing
+    /// the same key again waits for its pending release, other keys are untouched.
+    /// </summary>
+    /// <param name="cursorTick">Where the user's timeline says this action happens.</param>
+    /// <param name="moveCursorToDue">
+    /// True when the caller must also move its cursor to the returned tick: a modifier-chord release (later actions must not
+    /// fire while the modifier is still held, or Ctrl+A then a click would become Ctrl+click) and a press that had to wait for
+    /// its own key's release. False for the plain zero-gap hold, which delays only that release.
+    /// </param>
+    public long ScheduleDueTick(InputAction action, long cursorTick, out bool moveCursorToDue)
+    {
+        moveCursorToDue = false;
+        if (PressIdentity.TryGet(action, out var identity, out var isDown) && isDown
+            && releaseDueTicks.TryGetValue(identity, out var pendingRelease) && cursorTick < pendingRelease)
+        {
+            cursorTick = pendingRelease; // the same key's earlier release has not happened yet
+            moveCursorToDue = true;
+        }
+
+        var modifiersHeldBeforeRelease = modifiersHeld; // AdjustDueTick updates the count; the chord test needs the value before
+        var due = AdjustDueTick(action, cursorTick);
+        if (PressIdentity.TryGet(action, out identity, out isDown) && !isDown)
+        {
+            releaseDueTicks[identity] = due;
+            // Chord holds keep the old behaviour: everything after them moves with them.
+            if (due > cursorTick && (modifiersHeldBeforeRelease > 0 || ModifierChord.Releases(action))) moveCursorToDue = true;
+        }
+
+        return due;
+    }
     public long AdjustDueTick(InputAction action, long dueTick)
     {
         if (!PressIdentity.TryGet(action, out var identity, out var isDown))

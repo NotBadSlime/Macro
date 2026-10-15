@@ -65,6 +65,7 @@ internal sealed class ManagedMacroControlFlowRunner
     {
         var frames = new List<ExecutionFrame> { ExecutionFrame.ForMacro(document) };
         var elapsedTicks = 0L;
+        var latestDueTick = long.MinValue; // latest tick any action was scheduled at, including releases the press floor delayed
         var nextSequence = sequence;
         var submittedActions = actionsSubmitted;
         var pressGaps = new PressReleaseGapTracker(qpcFrequency, pressFloor);
@@ -399,7 +400,9 @@ internal sealed class ManagedMacroControlFlowRunner
                 }
             }
 
-            // A trailing delay is part of the sequence, including effect-only macros.
+            // A trailing delay is part of the sequence, including effect-only macros. The end is never earlier than the last
+            // action, which the press floor may have delayed past the cursor.
+            if (latestDueTick > startTick + elapsedTicks) elapsedTicks = latestDueTick - startTick;
             WaitToCurrentTick();
             return MacroControlFlowResult.Completed;
         }
@@ -412,8 +415,10 @@ internal sealed class ManagedMacroControlFlowRunner
 
         void Submit(InputAction action)
         {
-            var dueTick = pressGaps.AdjustDueTick(action, startTick + elapsedTicks);
-            elapsedTicks = Math.Max(elapsedTicks, dueTick - startTick);
+            // Same rule as InputActionCompiler: the plain zero-gap hold delays only this release, the cursor stays put.
+            var dueTick = pressGaps.ScheduleDueTick(action, startTick + elapsedTicks, out var moveCursor);
+            if (moveCursor) elapsedTicks = Math.Max(elapsedTicks, dueTick - startTick);
+            latestDueTick = Math.Max(latestDueTick, dueTick);
             if (pauseCoordinator is null)
             {
                 delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait);

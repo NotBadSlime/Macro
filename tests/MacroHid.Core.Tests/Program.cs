@@ -156,8 +156,11 @@ var tests = new (string Name, Action Body)[]
     ("Playback runtime phase locks loop iterations", PlaybackRuntimePhaseLocksLoopIterations),
     ("Compiled playback plan preserves trailing step duration", CompiledPlaybackPlanPreservesTrailingStepDuration),
     ("Loop period includes a trailing wait (press hold + wait, was only the hold)", LoopPeriodHonoursTrailingWait),
-    ("Loop period with a leading wait is no worse than before (known: still +10 ms)", LoopPeriodWithLeadingWaitKnownLimit),
-    ("Wait between press and release is exact; click-wait-click keeps its known +10 ms", WaitBetweenPressAndReleaseIsExactAndClickWaitClickKnownLimit),
+    ("Loop period with a leading wait equals the written wait", LoopPeriodWithLeadingWaitKnownLimit),
+    ("Click, wait, click is exactly the written wait apart", WaitBetweenPressAndReleaseIsExactAndClickWaitClickKnownLimit),
+    ("Press floor delays only its own release", PressFloorDelaysOnlyItsOwnRelease),
+    ("Press floor keeps each key's own order", PressFloorKeepsEachKeysOwnOrder),
+    ("Press floor does not extend a trailing-wait total", PressFloorTotalDoesNotGrowWithTrailingWait),
     ("Relative mouse moves spread across their duration", RelativeMouseMovesSpreadAcrossTheirDuration),
     ("Playback executor keeps conditions active until iteration end", PlaybackExecutorKeepsConditionsActiveUntilIterationEnd),
     ("Playback executor runs condition then actions during long single step", PlaybackExecutorRunsConditionThenActionsDuringLongSingleStep),
@@ -673,7 +676,9 @@ static void PlaybackRuntimePhaseLocksLoopIterations()
     // The next iteration is anchored to previous start + written duration (not to "now"), so waits and overhead do not accumulate.
     // This used to be "plannedIterationStartTick += iterationDurationTicks", which the loop head then overwrote with the clock.
     Assert.Contains("phaseLockedNextStartTick = iterationStartTick + iterationDurationTicks", playbackCode);
-    Assert.Contains("Math.Max(clock.GetTimestamp(), phaseLockedNextStartTick)", playbackCode);
+    // ...and the phase is kept only while the next iteration's first action is still in the future (otherwise: start from now,
+    // never a burst of missed time).
+    Assert.Contains("phaseLockedNextStartTick + phaseLockedFirstActionOffset > nowTick", playbackCode);
 }
 
 // Loop timing, measured with a recording sink on the real clock. The macro is "A down, A up, wait" in three orders; every
@@ -712,7 +717,7 @@ static void LoopPeriodHonoursTrailingWait()
     // path did this; the native path with conditions did not). The extra 10 ms is the press floor, a known limit tracked with
     // the leading-wait case.
     foreach (var precision in new[] { PrecisionMode.Balanced, PrecisionMode.UltraLowJitter })
-        AssertMeanInterval(LoopStartIntervalsMs("tail", 40, 12, precision), expectedMs: 50, toleranceMs: 3, $"tail wait, {precision}");
+        AssertMeanInterval(LoopStartIntervalsMs("tail", 40, 12, precision), expectedMs: 40, toleranceMs: 3, $"tail wait, {precision}");
 }
 
 static void LoopPeriodWithLeadingWaitKnownLimit()
@@ -723,7 +728,7 @@ static void LoopPeriodWithLeadingWaitKnownLimit()
     // loop structure and is tracked separately. This test pins the current value so an accidental change shows up, and so
     // that whoever fixes it must update the expectation to 40.
     foreach (var precision in new[] { PrecisionMode.Balanced, PrecisionMode.UltraLowJitter })
-        AssertMeanInterval(LoopStartIntervalsMs("lead", 40, 12, precision), expectedMs: 50, toleranceMs: 3, $"leading wait (known +10 ms), {precision}");
+        AssertMeanInterval(LoopStartIntervalsMs("lead", 40, 12, precision), expectedMs: 40, toleranceMs: 3, $"leading wait, {precision}");
 }
 
 static void WaitBetweenPressAndReleaseIsExactAndClickWaitClickKnownLimit()
@@ -740,9 +745,49 @@ static void WaitBetweenPressAndReleaseIsExactAndClickWaitClickKnownLimit()
         CancellationToken.None).GetAwaiter().GetResult();
     Assert.Equal(2, sink.Downs.Count);
     var between = (sink.Downs[1] - sink.Downs[0]) * 1000.0 / Stopwatch.Frequency;
-    if (Math.Abs(between - 60) > 3) throw new InvalidOperationException($"click to click was {between:F2} ms, expected 60 (known +10 ms)");
+    if (Math.Abs(between - 50) > 3) throw new InvalidOperationException($"click to click was {between:F2} ms, expected 50");
 }
 
+// Timeline contract of the press floor, asserted on compiled ticks (1 tick = 1 us). The floor may delay one release; it must
+// not move what the user wrote after it, and it must keep each key's own order.
+static List<(long Due, string What)> CompileDues(string json)
+{
+    var actions = InputActionCompiler.Compile(McrxParser.Parse(json), startTick: 0, qpcFrequency: 1_000_000);
+    return actions.Select(a => (a.DueTick, a.Action switch
+    {
+        KeyInputAction k => $"{k.Key}.{k.Kind}",
+        MouseButtonInputAction m => $"{m.Button}.{m.Kind}",
+        _ => a.Action.GetType().Name
+    })).ToList();
+}
+
+static void PressFloorDelaysOnlyItsOwnRelease()
+{
+    // Click, 50 ms wait, click: the second press stays at the written 50 ms; only releases are delayed by the 10 ms floor.
+    var a = CompileDues("{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"},{\"type\":\"wait\",\"ms\":50},{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"}]}");
+    Assert.Equal(new (long, string)[] { (0, "A.Down"), (10_000, "A.Up"), (50_000, "A.Down"), (60_000, "A.Up") }.Length, a.Count);
+    Assert.Equal(0L, a[0].Due); Assert.Equal(10_000L, a[1].Due); Assert.Equal(50_000L, a[2].Due); Assert.Equal(60_000L, a[3].Due);
+    // A different key written after a zero-gap tap keeps its written time (0), it is not pushed behind A's delayed release.
+    var b = CompileDues("{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"},{\"type\":\"key.down\",\"key\":\"B\"},{\"type\":\"key.up\",\"key\":\"B\"}]}");
+    Assert.Equal(0L, b[2].Due);
+    Assert.Equal(10_000L, b[3].Due);
+}
+
+static void PressFloorKeepsEachKeysOwnOrder()
+{
+    // The same key pressed again before its delayed release would be an out-of-order press: it waits for that release.
+    var a = CompileDues("{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"},{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"}]}");
+    Assert.Equal(10_000L, a[1].Due);
+    Assert.Equal(10_000L, a[2].Due); // second press not before the first release
+    Assert.Equal(20_000L, a[3].Due);
+}
+
+static void PressFloorTotalDoesNotGrowWithTrailingWait()
+{
+    // down, up, wait 40: the written total is 40 ms; the delayed release (10 ms) sits inside it.
+    var plan = CompiledPlaybackPlan.Create(McrxParser.Parse("{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"},{\"type\":\"wait\",\"ms\":40}]}"), 1_000_000);
+    Assert.Equal(40_000L, plan.DurationTicks);
+}
 static void CompiledPlaybackPlanPreservesTrailingStepDuration()
 {
     const long frequency = 1_000_000;

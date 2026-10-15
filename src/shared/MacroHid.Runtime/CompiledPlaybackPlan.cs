@@ -17,6 +17,7 @@ public sealed class CompiledPlaybackPlan
         Func<string, MacroDocument?>? macroResolver,
         IReadOnlyList<CompiledInputBatch> batches,
         long durationTicks,
+        long loopPeriodTicks,
         bool requiresResampling,
         Dictionary<ActionBatchKey, PreparedInputBatch> preparedCache,
         InputPressFloor pressFloor)
@@ -29,6 +30,7 @@ public sealed class CompiledPlaybackPlan
         QpcFrequency = qpcFrequency;
         Batches = batches;
         DurationTicks = durationTicks;
+        LoopPeriodTicks = loopPeriodTicks;
         RequiresResampling = requiresResampling;
     }
 
@@ -37,6 +39,13 @@ public sealed class CompiledPlaybackPlan
     public IReadOnlyList<CompiledInputBatch> Batches { get; }
 
     public long DurationTicks { get; }
+
+    /// <summary>
+    /// How long one loop iteration lasts: the total the user wrote (trailing wait included), but never less than the span from
+    /// the first action to the last, so the next iteration cannot start before this one has released its keys. Differs from
+    /// <see cref="DurationTicks"/>, which also counts the press floor's delay of a final release.
+    /// </summary>
+    public long LoopPeriodTicks { get; }
 
     public bool RequiresResampling { get; }
 
@@ -88,7 +97,7 @@ public sealed class CompiledPlaybackPlan
         Dictionary<ActionBatchKey, PreparedInputBatch>? existingCache,
         InputPressFloor pressFloor)
     {
-        var compiled = InputActionCompiler.CompileWithDuration(
+        var compiled = InputActionCompiler.CompileWithTimeline(
             document,
             startTick: 0,
             qpcFrequency,
@@ -100,6 +109,8 @@ public sealed class CompiledPlaybackPlan
         var batches = BuildBatches(compiled.Actions, cache);
         var lastBatchTick = batches.Count == 0 ? 0 : Math.Max(0, batches[^1].DueTick);
         var durationTicks = Math.Max(compiled.DurationTicks, lastBatchTick);
+        var firstBatchTick = batches.Count == 0 ? 0 : Math.Max(0, batches[0].DueTick);
+        var loopPeriodTicks = Math.Max(compiled.WrittenTicks, lastBatchTick - firstBatchTick);
         return new CompiledPlaybackPlan(
             document,
             qpcFrequency,
@@ -107,6 +118,7 @@ public sealed class CompiledPlaybackPlan
             macroResolver,
             batches,
             durationTicks,
+            loopPeriodTicks,
             ContainsRandomWait(document.Steps) || document.EffectiveConditions.Any(c => ContainsRandomWait(c.ThenSteps)),
             cache,
             pressFloor);
