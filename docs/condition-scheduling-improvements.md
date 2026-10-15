@@ -47,6 +47,6 @@
 
 3ms 间隔误差 P95 略增，未放宽现有时序断言。额外 3000 轮持续测试中，1000 至 3000 轮线程数保持 15，句柄 300 至 301，私有内存 28.7 至 29.1MiB，未观察到持续增长；这些值在显式 GC 后采样，不代表长期无泄漏的证明。Skirk FPS 回归也全部通过。
 
-性能原始记录在 `tmp/timing-before.log`、`tmp/timing-after.log`、`tmp/timing-stress.log`，复现探针在 `tests/MacroHid.Scheduling.Benchmarks`。以 `dotnet run --project tests/MacroHid.Scheduling.Benchmarks -c Release -p:RuntimeRoot=<待测运行库目录> -- 300` 运行；目录须包含 Core、Runtime DLL。基准避免并发运行以减少负载干扰。实际游戏及设备兼容性仍需目标环境验证；GitHub 发布附件不由本地打包流程更新。
+性能原始记录在 `tmp/timing-before.log`、`tmp/timing-after.log`、`tmp/timing-stress.log`，复现探针已迁到 MacroLab 仓库的 `tests/MacroHid.Scheduling.Benchmarks`。以 `dotnet run --project tests/MacroHid.Scheduling.Benchmarks -c Release -p:RuntimeRoot=<待测运行库目录> -- 300` 运行；目录须包含 Core、Runtime DLL。基准避免并发运行以减少负载干扰。实际游戏及设备兼容性仍需目标环境验证；GitHub 发布附件不由本地打包流程更新。
 
 本次安装包、便携包和自包含本地运行版均已成功构建，固定路径与 Start Item 快捷方式已核对；便携包与本地版的 Core、Runtime、UI DLL 哈希一致。构建保留原有 NetLimiter 5.3.18 的 NU1701 框架兼容性警告，无编译错误。
