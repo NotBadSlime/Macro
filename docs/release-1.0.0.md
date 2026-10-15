@@ -17,7 +17,7 @@ MacroHID `1.0.0` 是当前正式版。这个版本聚焦在 MacroStudio 可用�
 
 构建和核心测试都通过；极限档在本机使用 `0xE` affinity 后，这轮 5000 轮长测单步最大偏差 `45us`，整轮最大偏差 `43us`，没有 `>100us` outlier。
 
-详见：[当前精度水平](current-precision-status.md)。
+详见：[当前精度水平](https://github.com/NotBadSlime/MacroLab/blob/main/docs/current-precision-status.md)。
 
 ## 验证
 

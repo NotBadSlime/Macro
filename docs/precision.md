@@ -1,6 +1,6 @@
 # MacroHID 用户态性能档位与验收
 
-2026-10-14 单宏尾部与真实接收补充：保留原生线程预配置与空闲配置保留，撤回两项尾部退化的实验；最终版本通过 30 次物理热键及 Win32/WPF 各 2,000 次自动接收。具体数值、最大值波动、测量起止点和复现命令见 [实测报告](single-macro-tail-and-end-to-end-2026-10-14.md)。原生微秒级调度误差不能代替端到端接收验收。
+2026-10-14 单宏尾部与真实接收补充：保留原生线程预配置与空闲配置保留，撤回两项尾部退化的实验；最终版本通过 30 次物理热键及 Win32/WPF 各 2,000 次自动接收。具体数值、最大值波动、测量起止点和复现命令见 [实测报告](https://github.com/NotBadSlime/MacroLab/blob/main/docs/single-macro-tail-and-end-to-end-2026-10-14.md)（已迁到 MacroLab 仓库）。原生微秒级调度误差不能代替端到端接收验收。
 
 ## 当前策略
 
@@ -93,4 +93,4 @@ CSV 保留 run、batch、due_qpc、submit_qpc、frequency、late_us。这是原�
 - 历史 Measure-PrecisionProfiles.ps1、-FailOnTargetMiss、-AutoTuneAffinity、Tune-LatencyAffinity.ps1、-TunePasses 与 edge-drop 核心候选策略仍可用于单路径诊断，不能代替双宏 + 游戏联合验收。
 - Trace-LatencyOutliers.ps1 可捕获 WPR CPU 数据；用 Windows Performance Analyzer 对齐 DPC/ISR、上下文切换与 QPC 长尾。
 
-当前实测和未完成的验收见 [current-precision-status.md](current-precision-status.md)。本机结果不能推广到未测试的游戏、版本和设备。
+当前实测和未完成的验收见 [current-precision-status.md](https://github.com/NotBadSlime/MacroLab/blob/main/docs/current-precision-status.md)（已迁到 MacroLab 仓库）。本机结果不能推广到未测试的游戏、版本和设备。
