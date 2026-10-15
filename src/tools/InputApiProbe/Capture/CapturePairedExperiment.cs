@@ -14,13 +14,19 @@ internal static class CapturePairedExperiment
         throw new ArgumentException($"Unsupported key '{name}', use F1..F24.");
     }
 
-    public static int Run(int samples, ushort vk, string output, string[] args)
+    public static int Run(int samples, ushort vk, string group, string output, string[] args)
     {
         Directory.CreateDirectory(output);
-        var candidates = new ICaptureStrategy[]
+        // RegisterHotKey consumes the key down, so Raw Input never sees it (measured with raw-diag --also);
+        // the two cannot share a group. ll-hook is the baseline in both.
+        var candidates = group switch
         {
-            new LowLevelHookCapture(vk), new RawInputCapture(vk), new RegisterHotKeyCapture(vk),
-            new PollingCapture(vk, 0), new PollingCapture(vk, 1)
+            "main" => new ICaptureStrategy[]
+            {
+                new LowLevelHookCapture(vk), new RawInputCapture(vk), new PollingCapture(vk, 0), new PollingCapture(vk, 1)
+            },
+            "hotkey" => new ICaptureStrategy[] { new LowLevelHookCapture(vk), new RegisterHotKeyCapture(vk) },
+            _ => throw new ArgumentException("--group must be main or hotkey")
         };
         var ticks = new Dictionary<string, List<long>>();
         var armed = new List<ICaptureStrategy>();
@@ -57,11 +63,11 @@ internal static class CapturePairedExperiment
             Thread.Sleep(500);
         }
         finally { foreach (var strategy in armed) strategy.Dispose(); }
-        using var file = new StreamWriter(Path.Combine(output, "capture-paired.csv"), false, new UTF8Encoding(false));
+        using var file = new StreamWriter(Path.Combine(output, $"capture-paired-{group}.csv"), false, new UTF8Encoding(false));
         file.WriteLine("sample,strategy,capture_qpc,frequency");
         foreach (var (id, list) in ticks)
             lock (list) for (int i = 0; i < list.Count; i++) file.WriteLine($"{i},{id},{list[i]},{Stopwatch.Frequency}");
-        Provenance.Write(Path.Combine(output, "capture-paired-provenance.json"), args);
+        Provenance.Write(Path.Combine(output, $"capture-paired-{group}-provenance.json"), args);
         foreach (var (id, list) in ticks) Console.WriteLine($"{id}: {list.Count} captures");
         return 0;
     }

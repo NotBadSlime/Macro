@@ -14,6 +14,7 @@ internal sealed class RawInputCapture(ushort vk) : ICaptureStrategy
 
     private readonly byte[] buffer = new byte[64];
     private MessageWindow? window;
+    private bool held;
 
     public string Id => "raw-input";
     public event Action<long>? Captured;
@@ -38,7 +39,11 @@ internal sealed class RawInputCapture(ushort vk) : ICaptureStrategy
         {
             ushort flags = BitConverter.ToUInt16(buffer, HeaderSize + 2);  // RAWKEYBOARD.Flags, bit 0 = RI_KEY_BREAK
             ushort key = BitConverter.ToUInt16(buffer, HeaderSize + 6);    // RAWKEYBOARD.VKey
-            if (key == vk && (flags & 1) == 0) Captured?.Invoke(tick);
+            if (key != vk) return false;
+            if ((flags & 1) != 0) { held = false; return false; }
+            if (held) return false; // auto-repeat of a key that is still down
+            held = true;
+            Captured?.Invoke(tick);
         }
         return false; // let DefWindowProc do the required WM_INPUT cleanup
     }

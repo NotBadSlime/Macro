@@ -20,7 +20,8 @@ internal static class Program
                             CapturePairedExperiment.ParseKey(Option("--key", "F8")), Option("--output", "tmp/input-api"), args);
                     case "capture-paired":
                         return CapturePairedExperiment.Run(int.Parse(Option("--physical", "30")),
-                            CapturePairedExperiment.ParseKey(Option("--key", "F8")), Option("--output", "tmp/input-api"), args);
+                            CapturePairedExperiment.ParseKey(Option("--key", "F8")), Option("--group", "main"),
+                            Option("--output", "tmp/input-api"), args);
                     case "capture":
                         return CaptureExperiment.Run(int.Parse(Option("--rounds", "5")), int.Parse(Option("--per-round", "2000")),
                             Option("--output", "tmp/input-api"), args);
