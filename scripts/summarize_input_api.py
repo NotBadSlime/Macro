@@ -205,6 +205,38 @@ def judge(groups, baseline):
     return {key: verdict(groups[baseline], value) for key, value in groups.items() if key != baseline}
 
 
+RIM_TYPEMOUSE, RIM_TYPEKEYBOARD = 0, 1
+RI_KEY_BREAK = 1
+
+
+def summarize_raw_diag(path, target_vk):
+    """raw-diag.csv -> whether WM_INPUT reached the window and, if so, what it carried.
+
+    diagnosis is one of: received-target | received-other-keys-only | no-readable-wm-input | no-wm-input.
+    """
+    rows = read_rows(path)
+    keyboard = [r for r in rows if int(r["read_ok"]) and int(r["type"]) == RIM_TYPEKEYBOARD]
+    by_vkey = {}
+    for r in keyboard:
+        by_vkey[int(r["vkey"])] = by_vkey.get(int(r["vkey"]), 0) + 1
+    target = [r for r in keyboard if int(r["vkey"]) == target_vk]
+    target_up = sum(1 for r in target if int(r["flags"]) & RI_KEY_BREAK)
+    if target:
+        diagnosis = "received-target"
+    elif keyboard:
+        diagnosis = "received-other-keys-only"
+    elif rows:
+        diagnosis = "no-readable-wm-input"
+    else:
+        diagnosis = "no-wm-input"
+    return {**fingerprint(path), "target_vk": target_vk, "total": len(rows),
+            "read_failures": sum(1 for r in rows if not int(r["read_ok"])),
+            "non_keyboard": sum(1 for r in rows if int(r["read_ok"]) and int(r["type"]) != RIM_TYPEKEYBOARD),
+            "target_down": len(target) - target_up, "target_up": target_up,
+            "devices": len({r["device"] for r in keyboard}), "by_vkey": by_vkey,
+            "diagnosis": diagnosis}
+
+
 def print_table(title, groups, verdicts, baseline):
     baselines = {baseline} if isinstance(baseline, str) or baseline is None else set(baseline)
     print(title)
@@ -228,16 +260,22 @@ def print_extras(result):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("capture", "inject", "paired"):
+    for name in ("capture", "inject", "paired", "raw-diag"):
         p = sub.add_parser(name)
         p.add_argument("csv", type=Path)
-        if name != "inject":
+        if name == "raw-diag":
+            p.add_argument("--vk", type=lambda v: int(v, 0), default=0x77)
+        elif name != "inject":
             p.add_argument("--baseline", default="ll-hook")
         if name == "capture":
             p.add_argument("--blocks", type=Path)
         p.add_argument("--output", type=Path)
     args = parser.parse_args()
-    if args.command == "paired":
+    if args.command == "raw-diag":
+        result = summarize_raw_diag(args.csv, args.vk)
+        for key, value in result.items():
+            print(f"{key}: {value}")
+    elif args.command == "paired":
         result = {**fingerprint(args.csv), "baseline": args.baseline, "deltas_us": summarize_paired(args.csv, args.baseline)}
         for key, value in result["deltas_us"].items():
             print(key, value)

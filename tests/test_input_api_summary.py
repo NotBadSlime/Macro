@@ -210,5 +210,51 @@ class PairedTests(unittest.TestCase):
                 module.summarize_paired(path, "ll-hook")
 
 
+class RawDiagTests(unittest.TestCase):
+    HEADER = ["seq", "qpc", "frequency", "read_ok", "device", "type", "make_code", "vkey", "flags", "message", "extra"]
+    F8 = 0x77
+
+    def write(self, folder, rows):
+        path = Path(folder) / "raw.csv"
+        write_csv(path, self.HEADER, rows)
+        return path
+
+    @staticmethod
+    def row(seq, vkey, flags=0, device=100, read_ok=1, rtype=1, make=66):
+        return [seq, 1000 + seq, 1000000, read_ok, device, rtype, make, vkey, flags, 0x100, 0]
+
+    def test_target_received(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.write(folder, [
+                self.row(0, self.F8), self.row(1, self.F8, flags=1),
+                self.row(2, 0x41), self.row(3, self.F8, device=200),
+            ])
+            result = module.summarize_raw_diag(path, self.F8)
+            self.assertEqual(result["total"], 4)
+            self.assertEqual((result["target_down"], result["target_up"]), (2, 1))
+            self.assertEqual(result["devices"], 2)
+            self.assertEqual(result["by_vkey"][self.F8], 3)
+            self.assertEqual(result["diagnosis"], "received-target")
+
+    def test_other_keys_only_means_filtered_not_missing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.write(folder, [self.row(0, 0x41), self.row(1, 0x42)])
+            result = module.summarize_raw_diag(path, self.F8)
+            self.assertEqual(result["target_down"], 0)
+            self.assertEqual(result["diagnosis"], "received-other-keys-only")
+
+    def test_no_keyboard_wm_input_at_all(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result = module.summarize_raw_diag(self.write(folder, [self.row(0, 0, read_ok=0)]), self.F8)
+            self.assertEqual(result["read_failures"], 1)
+            self.assertEqual(result["diagnosis"], "no-readable-wm-input")
+
+    def test_non_keyboard_type_is_not_counted_as_key(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result = module.summarize_raw_diag(self.write(folder, [self.row(0, self.F8, rtype=0)]), self.F8)
+            self.assertEqual(result["target_down"], 0)
+            self.assertEqual(result["non_keyboard"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

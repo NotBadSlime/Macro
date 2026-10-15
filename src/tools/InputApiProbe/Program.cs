@@ -14,6 +14,9 @@ internal static class Program
             {
                 switch (args.FirstOrDefault())
                 {
+                    case "raw-diag":
+                        return RawInputDiagExperiment.Run(int.Parse(Option("--seconds", "20")), Option("--window", "message"),
+                            Option("--flags", "sink"), Option("--output", "tmp/input-api"), args);
                     case "capture-paired":
                         return CapturePairedExperiment.Run(int.Parse(Option("--physical", "30")),
                             CapturePairedExperiment.ParseKey(Option("--key", "F8")), Option("--output", "tmp/input-api"), args);
@@ -27,7 +30,7 @@ internal static class Program
                         ReceiverProcess.Run(args[1], int.Parse(args[2]));
                         return 0;
                     default:
-                        Console.Error.WriteLine("Usage: InputApiProbe capture|capture-paired|inject|--receiver <name> <parentPid> [options]");
+                        Console.Error.WriteLine("Usage: InputApiProbe capture|capture-paired|raw-diag|inject|--receiver <name> <parentPid> [options]");
                         return 2;
                 }
             }
