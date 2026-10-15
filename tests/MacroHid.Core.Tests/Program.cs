@@ -155,6 +155,9 @@ var tests = new (string Name, Action Body)[]
     ("Playback runtime exposes precision context compiled plans and jitter stats", PlaybackRuntimeExposesPrecisionContextCompiledPlansAndJitterStats),
     ("Playback runtime phase locks loop iterations", PlaybackRuntimePhaseLocksLoopIterations),
     ("Compiled playback plan preserves trailing step duration", CompiledPlaybackPlanPreservesTrailingStepDuration),
+    ("Loop period includes a trailing wait (press hold + wait, was only the hold)", LoopPeriodHonoursTrailingWait),
+    ("Loop period with a leading wait is no worse than before (known: still +10 ms)", LoopPeriodWithLeadingWaitKnownLimit),
+    ("Wait between press and release is exact; click-wait-click keeps its known +10 ms", WaitBetweenPressAndReleaseIsExactAndClickWaitClickKnownLimit),
     ("Relative mouse moves spread across their duration", RelativeMouseMovesSpreadAcrossTheirDuration),
     ("Playback executor keeps conditions active until iteration end", PlaybackExecutorKeepsConditionsActiveUntilIterationEnd),
     ("Playback executor runs condition then actions during long single step", PlaybackExecutorRunsConditionThenActionsDuringLongSingleStep),
@@ -437,8 +440,11 @@ var tests = new (string Name, Action Body)[]
 };
 
 var failed = 0;
+// MACROHID_TEST_FILTER=<substring> runs only the matching tests (default: all).
+var testFilter = Environment.GetEnvironmentVariable("MACROHID_TEST_FILTER");
 foreach (var test in tests)
 {
+    if (!string.IsNullOrEmpty(testFilter) && !test.Name.Contains(testFilter, StringComparison.OrdinalIgnoreCase)) continue;
     try
     {
         test.Body();
@@ -664,7 +670,77 @@ static void PlaybackRuntimePhaseLocksLoopIterations()
 
     Assert.Contains("plannedIterationStartTick", playbackCode);
     Assert.Contains("iterationDurationTicks", playbackCode);
-    Assert.Contains("plannedIterationStartTick += iterationDurationTicks", playbackCode);
+    // The next iteration is anchored to previous start + written duration (not to "now"), so waits and overhead do not accumulate.
+    // This used to be "plannedIterationStartTick += iterationDurationTicks", which the loop head then overwrote with the clock.
+    Assert.Contains("phaseLockedNextStartTick = iterationStartTick + iterationDurationTicks", playbackCode);
+    Assert.Contains("Math.Max(clock.GetTimestamp(), phaseLockedNextStartTick)", playbackCode);
+}
+
+// Loop timing, measured with a recording sink on the real clock. The macro is "A down, A up, wait" in three orders; every
+// order must repeat at the total duration the user wrote (the 10 ms zero-gap hold may delay one release, never the period).
+static List<double> LoopStartIntervalsMs(string shape, int waitMs, int iterations, PrecisionMode precision)
+{
+    string steps = shape switch
+    {
+        "tail" => $"{{\"type\":\"key.down\",\"key\":\"A\"}},{{\"type\":\"key.up\",\"key\":\"A\"}},{{\"type\":\"wait\",\"ms\":{waitMs}}}",
+        "lead" => $"{{\"type\":\"wait\",\"ms\":{waitMs}}},{{\"type\":\"key.down\",\"key\":\"A\"}},{{\"type\":\"key.up\",\"key\":\"A\"}}",
+        "gap" => $"{{\"type\":\"key.down\",\"key\":\"A\"}},{{\"type\":\"wait\",\"ms\":{waitMs}}},{{\"type\":\"key.up\",\"key\":\"A\"}}",
+        _ => throw new ArgumentException(shape)
+    };
+    var document = McrxParser.Parse($"{{\"steps\":[{steps}]}}");
+    var sink = new TimestampedInputSink();
+    var executor = new MacroPlaybackExecutor(sink);
+    executor.RunAsync(document, new PlaybackExecutionOptions(PlaybackMode.FixedCount, iterations, PixelEvaluationMode.Skip, false, precision),
+        CancellationToken.None).GetAwaiter().GetResult();
+    var downs = sink.Downs;
+    if (downs.Count != iterations) throw new InvalidOperationException($"expected {iterations} key-downs, got {downs.Count}");
+    var intervals = new List<double>();
+    for (var i = 1; i < downs.Count; i++) intervals.Add((downs[i] - downs[i - 1]) * 1000.0 / Stopwatch.Frequency);
+    return intervals;
+}
+
+static void AssertMeanInterval(List<double> intervals, double expectedMs, double toleranceMs, string what)
+{
+    var mean = intervals.Average();
+    if (Math.Abs(mean - expectedMs) > toleranceMs) throw new InvalidOperationException($"{what}: mean loop period {mean:F2} ms, expected {expectedMs} +/- {toleranceMs} ms");
+}
+
+static void LoopPeriodHonoursTrailingWait()
+{
+    // "down, up, wait 40": the 10 ms zero-gap hold sits before the wait, so one loop is 10 + 40 = 50 ms. Before this fix the wait
+    // was dropped when no conditions were active and the loop repeated every ~10 ms (the Low precision tier and the managed
+    // path did this; the native path with conditions did not). The extra 10 ms is the press floor, a known limit tracked with
+    // the leading-wait case.
+    foreach (var precision in new[] { PrecisionMode.Balanced, PrecisionMode.UltraLowJitter })
+        AssertMeanInterval(LoopStartIntervalsMs("tail", 40, 12, precision), expectedMs: 50, toleranceMs: 3, $"tail wait, {precision}");
+}
+
+static void LoopPeriodWithLeadingWaitKnownLimit()
+{
+    // KNOWN LIMIT, not a goal: with the wait first, a 40 ms loop still repeats every ~50 ms. The press floor delays the final
+    // release by 10 ms and iterations run one after another on one thread, so the next iteration's leading wait cannot
+    // overlap it. Fixing this means letting iteration k+1's wait start while k's last release is pending; that changes the
+    // loop structure and is tracked separately. This test pins the current value so an accidental change shows up, and so
+    // that whoever fixes it must update the expectation to 40.
+    foreach (var precision in new[] { PrecisionMode.Balanced, PrecisionMode.UltraLowJitter })
+        AssertMeanInterval(LoopStartIntervalsMs("lead", 40, 12, precision), expectedMs: 50, toleranceMs: 3, $"leading wait (known +10 ms), {precision}");
+}
+
+static void WaitBetweenPressAndReleaseIsExactAndClickWaitClickKnownLimit()
+{
+    // The case that was already right must stay right: the wait sits between press and release.
+    AssertMeanInterval(LoopStartIntervalsMs("gap", 40, 12, PrecisionMode.Balanced), expectedMs: 40, toleranceMs: 3, "gap wait");
+    // KNOWN LIMIT: a click, a 50 ms wait, a click (the XMouse {LMB}{WAITMS:50}{LMB} shape) is 60 ms apart. The press floor
+    // delays the first release by 10 ms and the timeline moves with it. A first attempt to move only the release broke
+    // the hold times written after it (press and release collapsed onto one tick), so it was reverted; see the notes in
+    // the commit message. When this is fixed the expected value becomes 50.
+    var document = McrxParser.Parse("{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"},{\"type\":\"wait\",\"ms\":50},{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"}]}");
+    var sink = new TimestampedInputSink();
+    new MacroPlaybackExecutor(sink).RunAsync(document, new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Skip, false, PrecisionMode.Balanced),
+        CancellationToken.None).GetAwaiter().GetResult();
+    Assert.Equal(2, sink.Downs.Count);
+    var between = (sink.Downs[1] - sink.Downs[0]) * 1000.0 / Stopwatch.Frequency;
+    if (Math.Abs(between - 60) > 3) throw new InvalidOperationException($"click to click was {between:F2} ms, expected 60 (known +10 ms)");
 }
 
 static void CompiledPlaybackPlanPreservesTrailingStepDuration()
@@ -11019,6 +11095,16 @@ sealed class FailingPlaybackExecutor(Exception failure) : IMacroPlaybackExecutor
     }
 }
 
+sealed class TimestampedInputSink : IMacroInputSink
+{
+    public bool IsAvailable => true;
+    public List<long> Downs { get; } = [];
+    public void Submit(uint sequence, InputAction action)
+    {
+        if (action is KeyInputAction { Kind: KeyActionKind.Down }) Downs.Add(Stopwatch.GetTimestamp());
+    }
+    public InputSubmissionStats? GetStats() => null;
+}
 sealed class RecordingInputSink : IMacroInputSink
 {
     public bool IsAvailable => true;

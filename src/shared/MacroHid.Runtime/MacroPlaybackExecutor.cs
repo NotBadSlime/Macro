@@ -429,13 +429,16 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         PlaybackTrace.Mark(PlaybackTraceStage.PlanReady);
         var plannedIterationStartTick = clock.GetTimestamp();
         var playbackTriggerTick = plannedIterationStartTick;
+        // Start of the next iteration if this one ran on time: previous start + the macro's written duration. If the previous
+        // iteration overran (condition waits, pauses, a stall), start from now instead of firing the missed time in a burst.
+        var phaseLockedNextStartTick = 0L;
 
         try
         {
             while (iterationsCompleted < iterationsTarget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                plannedIterationStartTick = clock.GetTimestamp();
+                plannedIterationStartTick = Math.Max(clock.GetTimestamp(), phaseLockedNextStartTick);
                 var timeline = new ConditionTimeline(
                     document.EffectiveConditions.Count,
                     playbackTriggerTick,
@@ -497,7 +500,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         ref sequence,
                         ref actionsSubmitted,
                         out var nativeStopIteration,
-                        timeline))
+                        timeline,
+                        anotherIterationFollows: iterationsCompleted + 1 < iterationsTarget))
                 {
                     using var pauseCoordinator = HasPauseMainTimelineCondition(document)
                         ? new PlaybackPauseCoordinator(clock)
@@ -568,7 +572,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                             qpcFrequency,
                             iterationToken,
                             options.NoWait,
-                            pauseCoordinator);
+                            pauseCoordinator,
+                            anotherIterationFollows: iterationsCompleted + 1 < iterationsTarget);
                         CompleteAllMonitorsAfterCurrentEvaluation(monitors);
                         WaitForTriggeredConditionActions(monitors, iterationToken);
                         DeactivateAllMonitors(monitors);
@@ -606,7 +611,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     ref sequence,
                     ref actionsSubmitted);
                 iterationsCompleted++;
-                plannedIterationStartTick += iterationDurationTicks;
+                phaseLockedNextStartTick = iterationStartTick + iterationDurationTicks;
             }
 
             ApplyTimingStats(timingRecorder);
@@ -657,7 +662,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         ref uint sequence,
         ref int actionsSubmitted,
         out bool stopIterationRequested,
-        ConditionTimeline? timeline = null)
+        ConditionTimeline? timeline = null,
+        bool anotherIterationFollows = false)
     {
         stopIterationRequested = false;
         if (options.BackgroundWindow)
@@ -734,7 +740,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     qpcFrequency,
                     iterationToken,
                     options.NoWait,
-                    pauseCoordinator);
+                    pauseCoordinator,
+                    anotherIterationFollows);
                 CompleteAllMonitorsAfterCurrentEvaluation(monitors);
                 WaitForTriggeredConditionActions(monitors, iterationToken);
                 DeactivateAllMonitors(monitors);
@@ -1570,9 +1577,12 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         long qpcFrequency,
         CancellationToken cancellationToken,
         bool noWait,
-        PlaybackPauseCoordinator? pauseCoordinator = null)
+        PlaybackPauseCoordinator? pauseCoordinator = null,
+        bool anotherIterationFollows = false)
     {
-        if (monitors.Count > 0)
+        // Conditions must stay active until the iteration ends. Without conditions the tail is still part of the loop period
+        // ("press, release, wait 100" repeats every 100 ms, not every ~10 ms), but only matters when another iteration follows.
+        if (monitors.Count > 0 || anotherIterationFollows)
         {
             if (pauseCoordinator is null)
             {
