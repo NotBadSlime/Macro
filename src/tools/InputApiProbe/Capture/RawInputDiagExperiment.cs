@@ -8,7 +8,7 @@ namespace InputApiProbe;
 /// <summary>
 /// Raw Input diagnostics for physical keys: registers the same keyboard device as <see cref="RawInputCapture"/>
 /// but records every WM_INPUT without filtering, so "never delivered" and "delivered but filtered out" can be told apart.
-/// Variables are single-switch: --window message|toplevel, --flags sink|none.
+/// Variables are single-switch: --window message|toplevel, --flags sink|none, --also &lt;strategies armed alongside&gt;.
 /// </summary>
 internal static class RawInputDiagExperiment
 {
@@ -20,13 +20,39 @@ internal static class RawInputDiagExperiment
 
     private sealed record Row(int Seq, long Qpc, bool ReadOk, long Device, uint Type, ushort MakeCode, ushort VKey, ushort Flags, uint Message, uint Extra);
 
-    public static int Run(int seconds, string windowKind, string flagsKind, string output, string[] args)
+    public static int Run(int seconds, string windowKind, string flagsKind, string also, ushort vk, string output, string[] args)
     {
         Directory.CreateDirectory(output);
-        bool messageOnly = windowKind != "toplevel";
         if (windowKind is not ("message" or "toplevel")) throw new ArgumentException("--window must be message or toplevel");
         if (flagsKind is not ("sink" or "none")) throw new ArgumentException("--flags must be sink or none");
 
+        var companions = new List<ICaptureStrategy>();
+        var companionCounts = new Dictionary<string, int[]>();
+        try
+        {
+            foreach (var id in also.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                ICaptureStrategy strategy = id switch
+                {
+                    "ll-hook" => new LowLevelHookCapture(vk),
+                    "register-hotkey" => new RegisterHotKeyCapture(vk),
+                    "poll-spin" => new PollingCapture(vk, 0),
+                    "poll-1ms" => new PollingCapture(vk, 1),
+                    _ => throw new ArgumentException($"--also: unknown strategy '{id}'")
+                };
+                var count = new int[1];
+                companionCounts[strategy.Id] = count;
+                strategy.Captured += _ => Interlocked.Increment(ref count[0]);
+                companions.Add(strategy);
+                strategy.Start();
+            }
+            return RunCore(seconds, windowKind, flagsKind, also, companionCounts, output, args);
+        }
+        finally { foreach (var strategy in companions) strategy.Dispose(); }
+    }
+
+    private static int RunCore(int seconds, string windowKind, string flagsKind, string also, Dictionary<string, int[]> companionCounts, string output, string[] args)
+    {
         var rows = new List<Row>();
         var buffer = new byte[256];
         int seq = 0;
@@ -57,14 +83,14 @@ internal static class RawInputDiagExperiment
             return false;
         }
 
-        using (var window = new MessageWindow(OnMessage, visible: false, "raw-diag", messageOnly: messageOnly, onCreated: hwnd =>
+        using (var window = new MessageWindow(OnMessage, visible: false, "raw-diag", messageOnly: windowKind != "toplevel", onCreated: hwnd =>
         {
             var device = new RawInputDevice { UsagePage = 1, Usage = 6, Flags = flagsKind == "sink" ? RidevInputSink : 0, Target = hwnd };
             if (!RegisterRawInputDevices([device], 1, (uint)Marshal.SizeOf<RawInputDevice>()))
                 throw new InvalidOperationException($"RegisterRawInputDevices failed, error={Marshal.GetLastWin32Error()}");
         }))
         {
-            Console.WriteLine($"RAW_DIAG_READY window={windowKind} flags={flagsKind}: press keys for {seconds}s. Do not touch anything else.");
+            Console.WriteLine($"RAW_DIAG_READY window={windowKind} flags={flagsKind} also=[{also}]: press keys for {seconds}s. Do not touch anything else.");
             Thread.Sleep(seconds * 1000);
             if (window.HandlerFailure is not null) throw new InvalidOperationException("handler failed", window.HandlerFailure);
         }
@@ -75,7 +101,8 @@ internal static class RawInputDiagExperiment
             foreach (var r in rows)
                 file.WriteLine($"{r.Seq},{r.Qpc},{Stopwatch.Frequency},{(r.ReadOk ? 1 : 0)},{r.Device},{r.Type},{r.MakeCode},{r.VKey},{r.Flags},{r.Message},{r.Extra}");
         Provenance.Write(Path.Combine(output, "raw-diag-provenance.json"), args);
-        Console.WriteLine($"raw-diag: {rows.Count} WM_INPUT records ({windowKind}, {flagsKind})");
+        Console.WriteLine($"raw-diag: {rows.Count} WM_INPUT records ({windowKind}, {flagsKind}, also=[{also}])");
+        foreach (var (id, count) in companionCounts) Console.WriteLine($"companion {id}: {count[0]} captures");
         return 0;
     }
 

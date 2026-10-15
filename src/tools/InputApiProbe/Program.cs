@@ -16,7 +16,8 @@ internal static class Program
                 {
                     case "raw-diag":
                         return RawInputDiagExperiment.Run(int.Parse(Option("--seconds", "20")), Option("--window", "message"),
-                            Option("--flags", "sink"), Option("--output", "tmp/input-api"), args);
+                            Option("--flags", "sink"), Option("--also", ""),
+                            CapturePairedExperiment.ParseKey(Option("--key", "F8")), Option("--output", "tmp/input-api"), args);
                     case "capture-paired":
                         return CapturePairedExperiment.Run(int.Parse(Option("--physical", "30")),
                             CapturePairedExperiment.ParseKey(Option("--key", "F8")), Option("--output", "tmp/input-api"), args);
