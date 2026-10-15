@@ -10,15 +10,17 @@
 
 ## 当前代码状态
 
-- 分支 `input-api-comparison`（最新提交 `ac26e8c`），**尚未合并到 main**。内容：`src/tools/InputApiProbe`、`scripts/summarize_input_api.py`、`tests/test_input_api_summary.py`、设计/计划/结果文档。
+- 分支 `input-api-comparison`，已提 [PR #2](https://github.com/NotBadSlime/Macro/pull/2)，**待合并到 main**。内容：`src/tools/InputApiProbe`、`scripts/summarize_input_api.py`、`tests/test_input_api_summary.py`、设计/计划/结果文档。
 - 原始数据在本地 `tmp/input-api-20261015/`（已被 gitignore，不随仓库）。
 - 重跑方法：
   ```bash
   dotnet build src/tools/InputApiProbe/InputApiProbe.csproj -c Release
   src/tools/InputApiProbe/bin/Release/net8.0-windows/InputApiProbe.exe capture --rounds 5 --per-round 2000 --output tmp/<目录>
   src/tools/InputApiProbe/bin/Release/net8.0-windows/InputApiProbe.exe inject --rounds 5 --per-block 2000 --output tmp/<目录>   # 开始后点击接收窗口
-  src/tools/InputApiProbe/bin/Release/net8.0-windows/InputApiProbe.exe capture-paired --physical 30 --key F8 --output tmp/<目录>  # 物理按键
+  src/tools/InputApiProbe/bin/Release/net8.0-windows/InputApiProbe.exe capture-paired --physical 30 --key F8 --group main --output tmp/<目录>    # 物理按键；--group hotkey 单独测 RegisterHotKey
+  src/tools/InputApiProbe/bin/Release/net8.0-windows/InputApiProbe.exe raw-diag --seconds 20 --key F8 [--also register-hotkey,ll-hook,poll-spin,poll-1ms] --output tmp/<目录>  # Raw Input 不过滤的诊断
   python scripts/summarize_input_api.py capture|inject|paired <csv> --output <json>
+  python scripts/summarize_input_api.py raw-diag <csv> --vk 0x77
   ```
   测量期间不要碰键鼠，也不要同时构建或跑其他负载。
 
@@ -26,8 +28,8 @@
 
 | 序 | 项 | 目的 | 规模 |
 |---|---|---|---|
-| 1 | 合并分支 | 把探针和文档放进 main | 小 |
-| 2 | 修复并列组物理数据 | 弄清 Raw Input 对物理按键为 0 次、其余只有一半的原因 | 小 |
+| 1 | 合并分支（已提 [PR #2](https://github.com/NotBadSlime/Macro/pull/2)，待合并） | 把探针和文档放进 main | 小 |
+| 2 | 修复并列组物理数据（已完成） | 弄清 Raw Input 对物理按键为 0 次、其余只有一半的原因 | 小 |
 | 3 | ETW 追踪最慢样本 | 定位毫秒级尾部的真实来源 | 中 |
 | 4 | 接收端对照（0.75ms 下限） | 判断下限来自消息路由还是接收方式 | 中 |
 | 5 | 驱动级注入原型（新仓库） | 判断虚拟 HID 是否有可测量收益 | 大 |
@@ -38,18 +40,16 @@
 - 做法：用 `superpowers:finishing-a-development-branch` 走合并或 PR；用户决定方式。
 - 验收：main 上能构建探针，文档里的链接不失效。
 
-### 2. 修复并列组物理数据
+### 2. 修复并列组物理数据（已完成）
 
-现象：两次物理 F8 并列组中，低层钩子记到 30 次，RegisterHotKey 和两种轮询只有约一半，Raw Input 为 0；同一进程里 Raw Input 对合成输入正常。原因未知。
+结果见 [输入 API 对照结果](input-api-comparison-2026-10-15.md) 的「并列组」一节。原因有两个，都在探针里，不在系统或厂商软件里：
 
-假设与做法（逐个排除，每次只改一个变量）：
+1. `RegisterHotKey` 会让同一个键的 Raw Input 只收到抬起、收不到按下（合成 F24 对照：0 对 20）。两者不能放在同一组。
+2. 低层钩子把自动重复也算成按下，基线虚高。
 
-1. **消息窗口类型。** `RawInputCapture` 现在用 message-only 窗口（`messageOnly: true`）。设计计划原本留有备选：改为隐藏的顶层窗口（`messageOnly: false`）。先试这个，它是最便宜的假设。
-2. **按键本身。** 换成 F9 或其他不被厂商软件占用的键，重复 30 次。
-3. **后台软件。** 机器上运行着 Armoury Crate（`ArmouryCrate*`）和 Razer Synapse（`RazerAppEngine`），都可能处理 F 键或安装自己的钩子。关闭后重测，对照。
-4. **诊断输出。** 让 Raw Input 回调额外记录 `RAWINPUTHEADER.hDevice`、`RAWKEYBOARD.MakeCode/VKey/Flags`，以及收到的 `WM_INPUT` 总数（不过滤键），确认是「根本没收到」还是「收到但被过滤掉」。
+做了什么：新增 `raw-diag` 子命令（不过滤的 `WM_INPUT` 记录，`--also` 可单变量伴随其他方式）；并列组拆成 `--group main`（低层钩子、Raw Input、两种轮询）和 `--group hotkey`（低层钩子、RegisterHotKey）；低层钩子与 Raw Input 只计抬起后的第一次按下。重测每组 30 次物理 F8，30 对 30，所有候选都晚于低层钩子。
 
-验收：30 次物理按键下，所有候选的捕获数一致或差异有明确解释；`summarize_input_api.py paired` 给出每个候选相对低层钩子的先后差分位数。若某候选确实收不到物理按键，把这一点写进语义兼容表。
+**没有做的**：原计划中的换键（F9）、关闭 Armoury Crate / Razer Synapse 的对照不再需要，原因已查明与它们无关。
 
 ### 3. ETW 追踪最慢样本
 
