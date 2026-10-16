@@ -211,7 +211,7 @@ public sealed class SendInputMacroSink : IMacroInputSink
             return;
         }
 
-        RuntimeNativeMethods.QueryPerformanceFrequency(out var frequency);
+        var frequency = QpcFrequency;
         RuntimeNativeMethods.QueryPerformanceCounter(out var submitQpc);
         var chordDue = modifierChord.AdjustDueTick(
             prepared.Actions,
@@ -262,9 +262,14 @@ public sealed class SendInputMacroSink : IMacroInputSink
         modifierChord.NoteSent(prepared.Actions, afterSubmit);
     }
 
+    // QPC frequency is fixed at boot; reading it per batch was a needless system call on the submit path.
+    private static readonly long QpcFrequency = System.Diagnostics.Stopwatch.Frequency;
+    // Leave the last stretch of a chord wait to a spin; the timer wakes within this margin of its due time.
+    private const long ChordSpinWindowUs = 300;
+
     private static void WaitUntilTick(long dueTick)
     {
-        RuntimeNativeMethods.QueryPerformanceFrequency(out var frequency);
+        var frequency = QpcFrequency;
         if (frequency <= 0)
         {
             return;
@@ -278,8 +283,15 @@ public sealed class SendInputMacroSink : IMacroInputSink
                 return;
             }
 
-            var remainingMs = (dueTick - now) * 1000.0 / frequency;
-            if (remainingMs >= 2)
+            // Thread.Sleep(1) could overshoot a 30ms chord hold by a timer tick; the high-resolution timer does not.
+            var remainingUs = (dueTick - now) * 1_000_000 / frequency;
+            if (remainingUs > ChordSpinWindowUs + 50
+                && QpcPlaybackDelayStrategy.TryHighResolutionSleep(remainingUs - ChordSpinWindowUs))
+            {
+                continue;
+            }
+
+            if (remainingUs >= 2_000)
             {
                 Thread.Sleep(1);
             }
@@ -393,6 +405,8 @@ public sealed class SendInputMacroSink : IMacroInputSink
         }
     }
 
+    [ThreadStatic] private static NativeInput[]? singleInput;
+
     private static uint SubmitNativeInputs(NativeInput[] inputs)
     {
         if (inputs.Length == 0)
@@ -400,7 +414,9 @@ public sealed class SendInputMacroSink : IMacroInputSink
             return 0;
         }
 
-        if (!inputs.Any(MouseCursorUnclip.IsRelativeMouse))
+        var relative = false;
+        for (var i = 0; i < inputs.Length && !relative; i++) relative = MouseCursorUnclip.IsRelativeMouse(inputs[i]);
+        if (!relative)
         {
             PlaybackTrace.Mark(PlaybackTraceStage.SubmitStart);
             var sentBatch = RuntimeNativeMethods.SendInput((uint)inputs.Length, inputs, NativeInputSize.Value);
@@ -408,6 +424,8 @@ public sealed class SendInputMacroSink : IMacroInputSink
             return sentBatch;
         }
 
+        // Relative moves go one at a time (each needs its own edge check); reuse one array instead of allocating per move.
+        var one = singleInput ??= new NativeInput[1];
         uint sent = 0;
         for (var i = 0; i < inputs.Length; i++)
         {
@@ -416,11 +434,12 @@ public sealed class SendInputMacroSink : IMacroInputSink
                 MouseCursorUnclip.RecenterIfNeeded(inputs[i].Union.Mouse.Dx, inputs[i].Union.Mouse.Dy);
             }
 
+            one[0] = inputs[i];
             PlaybackTrace.Mark(PlaybackTraceStage.SubmitStart);
-            var one = RuntimeNativeMethods.SendInput(1, [inputs[i]], NativeInputSize.Value);
+            var result = RuntimeNativeMethods.SendInput(1, one, NativeInputSize.Value);
             PlaybackTrace.Mark(PlaybackTraceStage.SubmitEnd);
-            sent += one;
-            if (one != 1)
+            sent += result;
+            if (result != 1)
             {
                 break;
             }

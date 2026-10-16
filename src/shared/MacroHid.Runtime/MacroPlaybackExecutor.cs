@@ -196,6 +196,9 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
         return timer.Wait(waitUs, cancellationToken);
     }
 
+    /// <summary>Sleeps about <paramref name="waitUs"/> on this thread's high-resolution waitable timer. False if unavailable.</summary>
+    internal static bool TryHighResolutionSleep(long waitUs) => TryWaitWithHighResolutionWaitableTimer(waitUs, CancellationToken.None);
+
     [ThreadStatic] private static ThreadTimer? threadTimer;
     internal static void ReleaseThreadTimer() { threadTimer?.Dispose(); threadTimer = null; }
     private sealed class ThreadTimer : IDisposable

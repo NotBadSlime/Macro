@@ -221,6 +221,21 @@ int main(int argc, char** argv)
         }
         Check(MhpWarmEngine(&options, nullptr) == MhpOk, "warm");
         auto ms = [&](int value) { return options.qpcFrequency * value / 1000; };
+        {
+            // Relative moves are sent alone after their edge check; neighbouring keys keep one call.
+            INPUT mixed[6]{};
+            for (auto& in : mixed) { in.type = INPUT_KEYBOARD; in.ki.wVk = 'A'; }
+            for (int at : {2, 4, 5}) { mixed[at] = {}; mixed[at].type = INPUT_MOUSE; mixed[at].mi.dwFlags = MOUSEEVENTF_MOVE; mixed[at].mi.dx = 5; }
+            std::vector<UINT> sizes; int recentered = 0;
+            UINT total = SubmitSplittingRelativeMoves(6, mixed, [&](UINT n, INPUT*) { sizes.push_back(n); return n; },
+                [&](int, int) { recentered++; });
+            Check(total == 6 && recentered == 3, "mixed batch sent fully, one edge check per move");
+            Check((sizes == std::vector<UINT>{2, 1, 1, 1, 1}), "keys grouped, moves alone");
+            sizes.clear();
+            total = SubmitSplittingRelativeMoves(6, mixed, [&](UINT n, INPUT*) { sizes.push_back(n); return n == 1 ? 0u : n; },
+                [](int, int) {});
+            Check(total == 2 && sizes.size() == 2, "stops at the first short send");
+        }
         // Re-warming for another profile while idle re-configures the workers and must leave them usable.
         for (int mode : {1, 2, 1, 2})
         {

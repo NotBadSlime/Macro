@@ -339,22 +339,23 @@ namespace
             return;
         }
 
-        int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
-        int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
-        int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-        int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        // GetClipCursor returns the virtual screen when nothing clips, so the four GetSystemMetrics calls are only a
+        // fallback (an empty or failed clip query) rather than a cost on every relative move.
+        int left = 0, top = 0, width = 0, height = 0;
         RECT clip{};
-        if (GetClipCursor(&clip))
+        if (GetClipCursor(&clip) && clip.right - clip.left > 1 && clip.bottom - clip.top > 1)
         {
-            const int clipWidth = clip.right - clip.left;
-            const int clipHeight = clip.bottom - clip.top;
-            if (clipWidth > 1 && clipHeight > 1)
-            {
-                left = clip.left;
-                top = clip.top;
-                width = clipWidth;
-                height = clipHeight;
-            }
+            left = clip.left;
+            top = clip.top;
+            width = clip.right - clip.left;
+            height = clip.bottom - clip.top;
+        }
+        else
+        {
+            left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+            top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+            width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+            height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
         }
 
         if (width <= 1 || height <= 1)
@@ -380,6 +381,24 @@ namespace
     #ifdef MACROHID_PLAYBACK_TEST
     UINT (*g_testSubmit)(UINT, INPUT*) = nullptr;
     #endif
+    // A batch with relative moves: each move goes alone, right after its edge check; consecutive other inputs
+    // (keys, buttons, wheel) stay in one call. Stops at the first short send. Templated so tests can count calls.
+    template <typename Send, typename Recenter>
+    UINT SubmitSplittingRelativeMoves(UINT count, INPUT* inputs, Send send, Recenter recenter)
+    {
+        UINT sent = 0;
+        for (UINT i = 0; i < count; )
+        {
+            UINT run = 1;
+            if (IsRelativeMouseInput(inputs[i])) recenter(inputs[i].mi.dx, inputs[i].mi.dy);
+            else while (i + run < count && !IsRelativeMouseInput(inputs[i + run])) run++;
+            const UINT one = send(run, inputs + i);
+            sent += one;
+            if (one != run) break;
+            i += run;
+        }
+        return sent;
+    }
     UINT SubmitPlaybackInput(UINT count, INPUT* inputs)
     {
         #ifdef MACROHID_PLAYBACK_TEST
@@ -393,23 +412,8 @@ namespace
         if (std::none_of(inputs, inputs + count, IsRelativeMouseInput))
             return SendInput(count, inputs, sizeof(INPUT));
 
-        UINT sent = 0;
-        for (UINT i = 0; i < count; i++)
-        {
-            if (IsRelativeMouseInput(inputs[i]))
-            {
-                RecenterCursorIfNeeded(inputs[i].mi.dx, inputs[i].mi.dy);
-            }
-
-            const UINT one = SendInput(1, inputs + i, sizeof(INPUT));
-            sent += one;
-            if (one != 1)
-            {
-                break;
-            }
-        }
-
-        return sent;
+        return SubmitSplittingRelativeMoves(count, inputs,
+            [](UINT n, INPUT* p) { return SendInput(n, p, sizeof(INPUT)); }, RecenterCursorIfNeeded);
     }
 
     struct PlaybackControl
