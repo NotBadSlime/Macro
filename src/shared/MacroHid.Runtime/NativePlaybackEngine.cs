@@ -68,6 +68,11 @@ internal sealed record NativeOutlierTraceEvent(
 
 internal static class NativePlaybackEngine
 {
+    // Read once: this used to be an environment lookup on every native run, inside the hotkey-to-first-input path.
+    private static readonly bool LegacyPlaybackOverride = Environment.GetEnvironmentVariable("MACROHID_LEGACY_PLAYBACK") == "1";
+    private static readonly NativeEngineMode[] InlineOnly = [NativeEngineMode.Inline];
+    private static readonly NativeEngineMode[] StandbyThenInline = [NativeEngineMode.Standby, NativeEngineMode.Inline];
+
     private static bool CanUseNativePrecision(PrecisionMode precision)
     {
         return precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter;
@@ -276,17 +281,12 @@ internal static class NativePlaybackEngine
                 Generation = (uint)generation
             };
 
-            var modes = effectiveEngineMode switch
-            {
-                NativePlaybackEngineMode.Standby => new[] { NativeEngineMode.Standby, NativeEngineMode.Inline },
-                NativePlaybackEngineMode.Inline => new[] { NativeEngineMode.Inline },
-                _ => new[] { NativeEngineMode.Standby, NativeEngineMode.Inline }
-            };
+            var modes = effectiveEngineMode == NativePlaybackEngineMode.Inline ? InlineOnly : StandbyThenInline;
             foreach (var mode in modes)
             {
                 options.NativeEngineMode = (int)mode;
                 // MacroHID 1.6.0 runs on the older standby/inline engine; the environment variable stays a diagnostic override.
-                var shared = Environment.GetEnvironmentVariable("MACROHID_LEGACY_PLAYBACK") != "1"
+                var shared = !LegacyPlaybackOverride
                     && !PrecisionGenerations.UsesLegacyNativeEngine(generation);
                 var backendName = shared ? "native-shared" : mode == NativeEngineMode.Standby ? "native-standby" : "native-inline";
                 MhpRunStats stats;

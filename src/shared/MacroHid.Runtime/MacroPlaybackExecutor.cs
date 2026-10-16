@@ -1438,6 +1438,18 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         ConditionTimeline timeline,
         InputPressFloor pressFloor)
     {
+        // Fast path without an enumerator or list: almost every macro has no startup gate.
+        var hasGate = false;
+        foreach (var condition in document.EffectiveConditions)
+        {
+            if (condition.ExecutionMode == ConditionExecutionMode.GateMainSequence) { hasGate = true; break; }
+        }
+        if (!hasGate)
+        {
+            timeline.SetMainIterationTick(plannedIterationStartTick);
+            return StartupGateWaitResult.Proceed;
+        }
+
         var gates = document.EffectiveConditions
             .Where(condition => condition.ExecutionMode == ConditionExecutionMode.GateMainSequence)
             .ToList();

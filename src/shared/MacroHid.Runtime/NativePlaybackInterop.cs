@@ -136,6 +136,11 @@ internal static partial class NativePlaybackInterop
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     internal static extern MhpStatus MhpGetRunTrace(IntPtr run, out MhpRunTrace trace);
 
+    private const uint Infinite = 0xFFFFFFFF;
+    private const uint WaitObject0 = 0;
+    [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+    private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
     internal static MhpStatus SubmitAndWait(IntPtr plan, ref MhpRunOptions options, IntPtr control, CancellationToken token, out MhpRunStats stats, long timelineStart = 0)
     {
         stats = default;
@@ -145,9 +150,10 @@ internal static partial class NativePlaybackInterop
         try
         {
             using var registration = token.Register(() => MhpCancelRun(run));
-            using var done = new EventWaitHandle(false, EventResetMode.ManualReset);
-            done.SafeWaitHandle = new Microsoft.Win32.SafeHandles.SafeWaitHandle(completion, ownsHandle: false);
-            done.WaitOne();
+            // The completion event belongs to the native run (released by MhpReleaseRun). Waiting on it directly avoids an
+            // EventWaitHandle and a finalizable SafeWaitHandle per run on the hotkey path; cancellation still completes it.
+            if (WaitForSingleObject(completion, Infinite) != WaitObject0)
+                throw new InvalidOperationException($"Native run completion wait failed ({Marshal.GetLastWin32Error()}); managed replay is prohibited.");
             if (PlaybackTrace.Log.IsEnabled() && MhpGetRunTrace(run, out var trace) == MhpStatus.Ok)
             {
                 PlaybackTrace.Mark(PlaybackTraceStage.NativeQueued, trace.Queued);

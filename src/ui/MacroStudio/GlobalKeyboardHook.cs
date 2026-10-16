@@ -485,9 +485,20 @@ public sealed class GlobalKeyboardHook : IDisposable
             return ModifiersMatch(trigger.Modifiers);
         }
 
-        return ModifiersMatch(trigger.Modifiers)
-            && trigger.Keys.All(IsKeyDown)
-            && trigger.MouseButtons.All(pressedMouseButtons.Contains);
+        return ModifiersMatch(trigger.Modifiers) && AllKeysDown(trigger.Keys) && AllButtonsDown(trigger.MouseButtons);
+    }
+
+    // Hook callback: plain loops, no LINQ enumerator or delegate allocation per keystroke.
+    private bool AllKeysDown(IReadOnlyList<HidKey> keys)
+    {
+        for (var i = 0; i < keys.Count; i++) if (!IsKeyDown(keys[i])) return false;
+        return true;
+    }
+
+    private bool AllButtonsDown(IReadOnlyList<MouseButton> buttons)
+    {
+        for (var i = 0; i < buttons.Count; i++) if (!pressedMouseButtons.Contains(buttons[i])) return false;
+        return true;
     }
 
     private bool IsKeyDown(HidKey key)

@@ -5426,8 +5426,10 @@ static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()
     Assert.Contains("MouseButton.Middle => MacroHid.Core.MouseButton.Middle", playbackCode);
     Assert.Contains("trigger.Keys", hookCode);
     Assert.Contains("trigger.MouseButtons", hookCode);
-    Assert.Contains("All(IsKeyDown)", hookCode);
-    Assert.Contains("All(pressedMouseButtons.Contains)", hookCode);
+    // Every key and every mouse button of a multi-input trigger must be down (loops, no LINQ on the hook thread).
+    Assert.Contains("AllKeysDown(trigger.Keys) && AllButtonsDown(trigger.MouseButtons)", hookCode);
+    Assert.Contains("if (!IsKeyDown(keys[i])) return false;", hookCode);
+    Assert.Contains("if (!pressedMouseButtons.Contains(buttons[i])) return false;", hookCode);
     Assert.Contains("TryMapNumpadScanCode", hookCode);
     Assert.Contains("WmMiddleButtonDown", hookCode);
 
@@ -7217,10 +7219,11 @@ static void RuntimeUsesWarmedStandbyNativeEngineByDefaultAndKeepsInlineFallback(
     Assert.Contains("Standby", engine);
     Assert.Contains("Inline", engine);
     Assert.DoesNotContain("prefersInlineForDenseUltra", engine);
-    Assert.Contains("_ => new[] { NativeEngineMode.Standby, NativeEngineMode.Inline }", engine);
-    Assert.DoesNotContain("new[] { NativeEngineMode.Inline, NativeEngineMode.Standby }", engine);
-    Assert.Contains("NativePlaybackEngineMode.Standby => new[] { NativeEngineMode.Standby, NativeEngineMode.Inline }", engine);
-    Assert.Contains("NativePlaybackEngineMode.Inline => new[] { NativeEngineMode.Inline }", engine);
+    // Engine order: standby first with inline as fallback; Inline requests inline only. Arrays are static, not per run.
+    Assert.Contains("StandbyThenInline = [NativeEngineMode.Standby, NativeEngineMode.Inline]", engine);
+    Assert.DoesNotContain("[NativeEngineMode.Inline, NativeEngineMode.Standby]", engine);
+    Assert.Contains("InlineOnly = [NativeEngineMode.Inline]", engine);
+    Assert.Contains("effectiveEngineMode == NativePlaybackEngineMode.Inline ? InlineOnly : StandbyThenInline", engine);
     Assert.Contains("enableCpuScan: NativePlaybackWarmup.CpuScanReady", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs")));
     Assert.Contains("MhpPrepareEngine", warmup);
     Assert.Contains("MhpShutdownEngine", warmup);
