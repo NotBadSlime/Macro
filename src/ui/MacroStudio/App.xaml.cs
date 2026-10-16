@@ -34,7 +34,10 @@ public partial class App : Application
                 runtimePrecision.Precision,
                 runtimePrecision.AffinityMask,
                 runtimePrecision.Generation);
-            PlaybackPathWarmup.QueueRun();
+            PlaybackPathWarmup.QueueRun(
+                runtimePrecision.Precision,
+                runtimePrecision.AffinityMask,
+                runtimePrecision.Generation);
         }
         catch (Exception ex)
         {

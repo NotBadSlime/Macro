@@ -10,7 +10,10 @@ param(
 
     [int]$IntervalMs = 15,
 
-    [string]$Label = "run"
+    [string]$Label = "run",
+
+    # Extra probe arguments, e.g. "--no-native-path-warmup" for the A side of an A/B.
+    [string[]]$ProbeArgs = @()
 )
 
 # Every trigger injects F24 down/up into the foreground window.
@@ -23,7 +26,8 @@ $exe = Join-Path $repoRoot "src\tools\StartupLatencyProbe\bin\Release\net8.0-win
 
 function Invoke-Probe([string[]]$probeArgs) {
     for ($attempt = 1; $attempt -le 3; $attempt++) {
-        $lines = & $exe @probeArgs 2>&1 | ForEach-Object { "$_" }
+        $all = @($probeArgs) + @($script:ProbeArgs)
+        $lines = & $exe @all 2>&1 | ForEach-Object { "$_" }
         if ($LASTEXITCODE -eq 0 -and ($lines | Where-Object { $_ -like "SUMMARY *" })) { return $lines }
         Start-Sleep -Milliseconds 500
     }
@@ -55,4 +59,4 @@ $rows = foreach ($p in $Precision) {
         steady_p999_us = $steady.p999; steady_max_us = $steady.max
     }
 }
-$rows | Format-Table -AutoSize
+$rows | Format-Table -AutoSize | Out-String -Width 200

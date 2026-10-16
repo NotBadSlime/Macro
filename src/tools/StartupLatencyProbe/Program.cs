@@ -33,6 +33,8 @@ using var listener = new StageListener();
 var setup = Stopwatch.StartNew();
 NativePlaybackWarmup.TryWarmUpForPrecision(precision, "", PrecisionGeneration.Latest);
 PlaybackPathWarmup.Run();
+bool nativePathWarmup = !args.Contains("--no-native-path-warmup");
+int nativeWarmRounds = nativePathWarmup ? PlaybackPathWarmup.RunNative(precision, "", PrecisionGeneration.Latest) : 0;
 using var lease = policy.PreferNative ? PrecisionPlaybackContext.AcquireWarmLease() : null;
 
 var document = McrxParser.Parse("{\"steps\":[{\"type\":\"key.down\",\"key\":\"F24\"},{\"type\":\"key.up\",\"key\":\"F24\"}]}");
@@ -41,7 +43,7 @@ using var executor = new MacroPlaybackExecutor(new SendInputMacroSink());
 executor.Prepare(document, options);
 await using var controller = new MacroPlaybackController(document, executor, options);
 listener.Clear();
-Console.WriteLine($"precision={precision} runs={runs} interval={intervalMs}ms setup={setup.ElapsedMilliseconds}ms");
+Console.WriteLine($"precision={precision} runs={runs} interval={intervalMs}ms setup={setup.ElapsedMilliseconds}ms nativePathWarmupRounds={nativeWarmRounds}");
 
 var backends = new ConcurrentBag<string>();
 var hookThread = new Thread(() =>

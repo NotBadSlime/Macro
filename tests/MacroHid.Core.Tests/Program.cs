@@ -278,6 +278,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio exposes core color sample hotkey and library path navigation", MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation),
     ("MacroStudio keeps precision as a global runtime setting", MacroStudioKeepsPrecisionAsGlobalRuntimeSetting),
     ("MacroStudio basic control confirm keeps every dialog field", MacroStudioBasicControlConfirmKeepsEveryDialogField),
+    ("Startup path warm-up also runs the native branch for the selected profile", StartupPathWarmupRunsTheNativeBranch),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
@@ -5381,6 +5382,24 @@ static void MacroStudioBasicControlConfirmKeepsEveryDialogField()
     Assert.DoesNotContain("new RuntimePrecisionSettings(", readMethod);
     Assert.Contains("LibraryPanel.RuntimeSettings", readMethod);
     Assert.Contains("public RuntimePrecisionSettings RuntimeSettings => runtimeSettings;", libraryCode);
+}
+
+static void StartupPathWarmupRunsTheNativeBranch()
+{
+    // The first real hotkey paid ~2ms of JIT between PlanReady and NativeQueued when start-up warm-up only used an
+    // inert sink. The native phase must use a macro without input steps so nothing is injected.
+    var warmup = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "PlaybackPathWarmup.cs"));
+    var app = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "App.xaml.cs"));
+    var warmupNative = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "NativePlaybackWarmup.cs"));
+    Assert.Contains("public static int RunNative(", warmup);
+    Assert.Contains("[new WaitStep(TimeSpan.FromMilliseconds(1))]", warmup);
+    Assert.Contains("new MacroPlaybackExecutor(new SendInputMacroSink())", warmup);
+    Assert.Contains("PlaybackPathWarmup.QueueRun(\n                runtimePrecision.Precision", app.Replace("\r\n", "\n"));
+    // Workers are warmed for the selected profile, not always for 极限.
+    Assert.DoesNotContain("PrecisionMode = 2,", warmupNative);
+    Assert.Contains("PrecisionMode = Volatile.Read(ref preparedNativePrecision)", warmupNative);
+    // 低占用 has no native branch to warm.
+    Assert.Equal(0, PlaybackPathWarmup.RunNative(PrecisionMode.Balanced, "", PrecisionGeneration.Latest));
 }
 
 static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()

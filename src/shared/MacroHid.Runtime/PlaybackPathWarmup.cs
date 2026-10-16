@@ -6,19 +6,29 @@ namespace MacroHid.Runtime;
 /// <summary>
 /// Exercises the hotkey-to-first-input path once at startup so the first real press does not pay for JIT and
 /// P/Invoke stub generation (measured 33-36ms on the calling thread in a cold process; steady state is ~10us).
-/// Uses an inert sink and never calls <see cref="MacroPlaybackExecutor.Prepare"/>, which would re-prepare the
-/// native engine and could override the user's core selection. Status reporting is suppressed for the duration.
+/// <para>Phase 1 uses an inert sink and never calls <see cref="MacroPlaybackExecutor.Prepare"/>.</para>
+/// <para>Phase 2 (when a native profile is selected) runs the real native branch — Prepare, TryRunPrepared,
+/// SubmitAndWait — with a wait-only macro: the native plan has no batches, so nothing is injected. It prepares with
+/// the user's own profile and core mask, which the startup warm-up already did, so the engine is not re-targeted.
+/// Without it the first real hotkey paid ~2ms of JIT between PlanReady and NativeQueued.</para>
+/// Status reporting is suppressed for the duration.
 /// </summary>
 public static class PlaybackPathWarmup
 {
     private static int queued;
 
-    public static void QueueRun()
+    public static void QueueRun() => QueueRun(null, "", PrecisionGeneration.Latest);
+
+    public static void QueueRun(PrecisionMode? nativePrecision, string? affinityMask, PrecisionGeneration generation)
     {
         if (Interlocked.Exchange(ref queued, 1) != 0) return;
         try
         {
-            new Thread(() => Run()) { IsBackground = true, Name = "MacroHID-PathWarmup", Priority = ThreadPriority.BelowNormal }.Start();
+            new Thread(() =>
+            {
+                Run();
+                if (nativePrecision is { } precision) RunNative(precision, affinityMask, generation);
+            }) { IsBackground = true, Name = "MacroHID-PathWarmup", Priority = ThreadPriority.BelowNormal }.Start();
         }
         catch { }
     }
@@ -51,6 +61,34 @@ public static class PlaybackPathWarmup
         }
         catch { }
         return completed;
+    }
+
+    /// <returns>The number of rounds that ran on the native backend.</returns>
+    public static int RunNative(PrecisionMode precision, string? affinityMask, PrecisionGeneration generation, int rounds = 2)
+    {
+        if (!PlaybackPerformancePolicy.For(precision).PreferNative) return 0;
+        var native = 0;
+        try
+        {
+            using var quiet = PlaybackRuntimeStatus.Suppress();
+            // No input steps: the compiled plan has no batches, so the native run submits nothing.
+            var document = new MacroDocument(0, "(path warm-up)", [new WaitStep(TimeSpan.FromMilliseconds(1))]);
+            var options = new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Skip, false, precision, affinityMask ?? "")
+            {
+                PressFloor = InputPressFloor.Factory with { Generation = generation }
+            };
+            using var executor = new MacroPlaybackExecutor(new SendInputMacroSink());
+            executor.Prepare(document, options);
+            using var controller = new MacroPlaybackController(document, executor, options);
+            for (var i = 0; i < rounds; i++)
+            {
+                controller.TriggerPressedAsync();
+                var result = controller.WhenIdleAsync().GetAwaiter().GetResult();
+                if (result.InputStats?.BackendName.StartsWith("native", StringComparison.Ordinal) == true) native++;
+            }
+        }
+        catch { }
+        return native;
     }
 
     private sealed class InertSink : IMacroInputSink
