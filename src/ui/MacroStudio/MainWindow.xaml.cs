@@ -2217,9 +2217,15 @@ public partial class MainWindow : Window
         listening = listeningControllers.Count > 0;
         UpdatePrecisionWarmLease();
         if (bindings.Count == 0) { keyboardHook?.Stop(); return; }
+        if (keyboardHook is not null && keyboardHook.Mode != runtimePrecisionSettings.HotkeyInput)
+        {
+            // Detection mode changed: restart so the new front end takes over (held-key state is rebuilt from scratch).
+            keyboardHook.Stop();
+            keyboardHook.Mode = runtimePrecisionSettings.HotkeyInput;
+        }
         if (keyboardHook is null)
         {
-            keyboardHook = new GlobalKeyboardHook();
+            keyboardHook = new GlobalKeyboardHook { Mode = runtimePrecisionSettings.HotkeyInput };
             keyboardHook.TriggerPressed += KeyboardHook_TriggerPressed;
             keyboardHook.TriggerReleased += KeyboardHook_TriggerReleased;
         }

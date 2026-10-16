@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="../../shared/MacroHid.Runtime/MacroHid.Runtime.csproj" />
     <Compile Include="../../ui/MacroStudio/GlobalKeyboardHook.cs" Link="GlobalKeyboardHook.cs" />
+    <Compile Include="../../ui/MacroStudio/GlobalKeyboardHook.RawInput.cs" Link="GlobalKeyboardHook.RawInput.cs" />
     <Content Include="../../native/MacroHid.NativePlayback/x64/$(Configuration)/MacroHid.NativePlayback.dll"
              Link="MacroHid.NativePlayback.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

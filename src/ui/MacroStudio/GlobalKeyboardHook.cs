@@ -22,9 +22,27 @@ public sealed class HotkeyTriggeredEventArgs : EventArgs
     public HotkeyGesture Gesture { get; }
 }
 
-public sealed class GlobalKeyboardHook : IDisposable
+public enum HotkeyInputMode
+{
+    /// <summary>WH_KEYBOARD_LL / WH_MOUSE_LL: earliest detection (~50 us p50), but every key the system injects or receives,
+    /// including our own SendInput, waits for this process's hook callback.</summary>
+    LowLevelHook,
+
+    /// <summary>Raw Input: not in the synchronous hook chain, so our key SendInput is not slowed (~80 us p50 / ~350 us p99
+    /// measured), but the key is seen after every other hook (~240 us p50 detection). The colour-sample key is swallowed with
+    /// RegisterHotKey; if that cannot be registered the hook falls back to LowLevelHook.</summary>
+    RawInput
+}
+
+public sealed partial class GlobalKeyboardHook : IDisposable
 {
     private long callbackQpc;
+
+    /// <summary>Takes effect on the next Start after Stop (or the first Start).</summary>
+    public HotkeyInputMode Mode { get; set; } = HotkeyInputMode.LowLevelHook;
+
+    /// <summary>The mode actually running (RawInput falls back to LowLevelHook when the swallow hotkey is unavailable).</summary>
+    public HotkeyInputMode ActiveMode { get; private set; } = HotkeyInputMode.LowLevelHook;
 
     /// <summary>Hook-callback self time (entry to just before CallNextHookEx). Off unless MACROHID_HOOK_SELFTIME=1.</summary>
     public HookSelfTimeRecorder SelfTime { get; } = new()
@@ -119,12 +137,18 @@ public sealed class GlobalKeyboardHook : IDisposable
             gestures[binding.Id] = binding.Gesture;
         }
 
-        if (hookHandle != IntPtr.Zero) return;
+        if (hookHandle != IntPtr.Zero || rawInputActive) { UpdateRawSwallowHotkey(); return; }
         triggersDown.Clear();
         heldGestures.Clear();
         pressedKeys.Clear();
         pressedHidKeys.Clear();
         pressedMouseButtons.Clear();
+        if (Mode == HotkeyInputMode.RawInput && TryStartRawInput())
+        {
+            ActiveMode = HotkeyInputMode.RawInput;
+            return;
+        }
+        ActiveMode = HotkeyInputMode.LowLevelHook;
         hookHandle = SetWindowsHookEx(WhKeyboardLl, keyboardHookProc, IntPtr.Zero, 0);
         if (hookHandle == IntPtr.Zero)
         {
@@ -142,6 +166,7 @@ public sealed class GlobalKeyboardHook : IDisposable
     public void Stop()
     {
         if (hookDispatcher is { HasShutdownStarted: false } dispatcher && !dispatcher.CheckAccess()) { dispatcher.Invoke(Stop); return; }
+        StopRawInput();
         if (hookHandle != IntPtr.Zero)
         {
             UnhookWindowsHookEx(hookHandle);

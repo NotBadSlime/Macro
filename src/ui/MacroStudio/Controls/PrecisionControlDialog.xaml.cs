@@ -23,6 +23,7 @@ public partial class PrecisionControlDialog : Window
         StartLeadBox.Text = settings.StartLeadMicroseconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         StartLeadBox.TextChanged += (_, _) => ValidateAffinityMask();
         CompensateSendInputCheck.IsChecked = settings.CompensateSendInputCost;
+        RawInputHotkeysCheck.IsChecked = settings.HotkeyInput == HotkeyInputMode.RawInput;
         foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
         {
             if (string.Equals(item.Tag?.ToString(), ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
@@ -135,6 +136,8 @@ public partial class PrecisionControlDialog : Window
         StartLeadHelpText.Text = L("StartLeadHelp");
         CompensateSendInputCheck.Content = L("CompensateSendInput");
         CompensateSendInputHelpText.Text = L("CompensateSendInputHelp");
+        RawInputHotkeysCheck.Content = L("RawInputHotkeys");
+        RawInputHotkeysHelpText.Text = L("RawInputHotkeysHelp");
         ChooseCoresButton.Content = L("ChooseCores");
         CancelButton.Content = L("Cancel");
         ConfirmButton.Content = L("Confirm");
@@ -176,7 +179,8 @@ public partial class PrecisionControlDialog : Window
             Generation = SelectedGeneration(),
             AffinityMask = mask,
             StartLeadMicroseconds = lead,
-            CompensateSendInputCost = CompensateSendInputCheck.IsChecked == true
+            CompensateSendInputCost = CompensateSendInputCheck.IsChecked == true,
+            HotkeyInput = RawInputHotkeysCheck.IsChecked == true ? HotkeyInputMode.RawInput : HotkeyInputMode.LowLevelHook
         };
         DialogResult = true;
     }

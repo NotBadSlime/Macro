@@ -656,4 +656,6 @@
   <data name="StartLeadInvalid" xml:space="preserve"><value>請填 0 到 {0} 的整數。</value></data>
   <data name="CompensateSendInput" xml:space="preserve"><value>依 SendInput 耗時提前送出</value></data>
   <data name="CompensateSendInputHelp" xml:space="preserve"><value>播放時分別學習按鍵和滑鼠的典型送出耗時（按鍵要先經過系統裡所有鍵盤鉤子），提前這麼多送出，使輸入平均落在寫下的時刻。僅最新精度版本生效。</value></data>
+  <data name="RawInputHotkeys" xml:space="preserve"><value>用 Raw Input 偵測熱鍵</value></data>
+  <data name="RawInputHotkeysHelp" xml:space="preserve"><value>讓 MacroStudio 退出鍵盤鉤子鏈，它送出的每個按鍵（以及你自己打的字）都不再被它拖慢：實測按鍵 SendInput 中位 249 → 188 微秒、P99 1280 → 976 微秒。代價是熱鍵本身被察覺得更晚（約 +190 微秒），因為 Raw Input 要等其他程式的鉤子都處理完才到。取色鍵無法佔用時自動改用低階鉤子。</value></data>
 </root>

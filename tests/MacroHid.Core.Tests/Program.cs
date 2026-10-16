@@ -282,6 +282,7 @@ var tests = new (string Name, Action Body)[]
     ("Hold times are edited in milliseconds and stored in microseconds", HoldTimesAreEditedInMilliseconds),
     ("Light and dark themes define the same brushes and every language has every string", ThemesAndLanguagesStayInStep),
     ("Hotkey runs can start a fixed lead after the key and compensate the SendInput cost", HotkeyStartAlignmentAndSendCompensation),
+    ("Raw Input hotkeys map keys like the low-level hook and fall back when the swallow key is unavailable", RawInputHotkeysMatchTheLowLevelHook),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
@@ -5515,6 +5516,32 @@ static void HotkeyStartAlignmentAndSendCompensation()
     finally { Directory.Delete(dir, recursive: true); }
     var mainCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
     Assert.Contains("&& runtimePrecisionSettings.Generation == PrecisionGeneration.Latest", mainCode);
+}
+
+static void RawInputHotkeysMatchTheLowLevelHook()
+{
+    // Raw Input reports generic Shift/Ctrl/Alt; the trigger matcher works on the left/right codes the hook delivers.
+    Assert.Equal(0xA0, GlobalKeyboardHook.NormalizeRawVirtualKey(0x10, 0x2A, false)); // left shift
+    Assert.Equal(0xA1, GlobalKeyboardHook.NormalizeRawVirtualKey(0x10, 0x36, false)); // right shift
+    Assert.Equal(0xA2, GlobalKeyboardHook.NormalizeRawVirtualKey(0x11, 0x1D, false)); // left ctrl
+    Assert.Equal(0xA3, GlobalKeyboardHook.NormalizeRawVirtualKey(0x11, 0x1D, true));  // right ctrl
+    Assert.Equal(0xA4, GlobalKeyboardHook.NormalizeRawVirtualKey(0x12, 0x38, false)); // left alt
+    Assert.Equal(0xA5, GlobalKeyboardHook.NormalizeRawVirtualKey(0x12, 0x38, true));  // right alt
+    Assert.Equal(0x77, GlobalKeyboardHook.NormalizeRawVirtualKey(0x77, 0x42, false)); // F8 unchanged
+
+    var raw = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "GlobalKeyboardHook.RawInput.cs"));
+    var hook = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "GlobalKeyboardHook.cs"));
+    var main = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    // Our own playback must stay invisible to the hotkeys: injected raw input has no device.
+    Assert.Contains("if (header.Device == IntPtr.Zero) return;", raw);
+    // The colour-sample key is still swallowed; if that is impossible the low-level hook takes over.
+    Assert.Contains("RegisterHotKey(rawWindow.Handle, ColorSampleHotkeyId", raw);
+    Assert.Contains("if (Mode == HotkeyInputMode.RawInput && TryStartRawInput())", hook);
+    Assert.Contains("ActiveMode = HotkeyInputMode.LowLevelHook;", hook);
+    // Mouse raw input only when a binding needs it (it slowed injected mouse moves).
+    Assert.Contains("var wantMouse = gestures.Values.Any(gesture => gesture.MouseButtons.Count > 0);", raw);
+    Assert.Contains("keyboardHook.Mode != runtimePrecisionSettings.HotkeyInput", main);
+    Assert.Equal(HotkeyInputMode.LowLevelHook, MacroStudio.Services.RuntimePrecisionSettings.Default.HotkeyInput);
 }
 
 static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()

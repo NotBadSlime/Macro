@@ -60,7 +60,9 @@ public sealed record RuntimePrecisionSettings(
     // Hotkey runs start exactly this long after the key (0 = as soon as ready). See PlaybackExecutionOptions.StartLeadMicroseconds.
     int StartLeadMicroseconds = 0,
     // Submit early by the learned SendInput cost. Only the latest generation uses it; older generations keep their timing.
-    bool CompensateSendInputCost = true)
+    bool CompensateSendInputCost = true,
+    // How hotkeys are detected. RawInput keeps this process out of the synchronous keyboard hook chain.
+    HotkeyInputMode HotkeyInput = HotkeyInputMode.LowLevelHook)
 {
     public const int MaxStartLeadMicroseconds = 5000;
     public static RuntimePrecisionSettings Default { get; } = new(ColorSampleHotkey: CoreHotkeys.DefaultColorSampleText);

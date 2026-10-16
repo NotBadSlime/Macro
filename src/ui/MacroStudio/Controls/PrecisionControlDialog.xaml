@@ -43,6 +43,8 @@
         <TextBlock x:Name="StartLeadHelpText" Style="{StaticResource FieldHelpText}" />
         <CheckBox x:Name="CompensateSendInputCheck" Content="按 SendInput 耗时提前提交" Margin="0,0,0,2" />
         <TextBlock x:Name="CompensateSendInputHelpText" Style="{StaticResource FieldHelpText}" />
+        <CheckBox x:Name="RawInputHotkeysCheck" Content="用 Raw Input 检测热键" Margin="0,0,0,2" />
+        <TextBlock x:Name="RawInputHotkeysHelpText" Style="{StaticResource FieldHelpText}" />
 
         <Border Style="{StaticResource DialogSectionDivider}" />
 

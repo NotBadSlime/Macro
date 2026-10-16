@@ -253,6 +253,9 @@ public static class SendInputEncoder
         if ((modifiers & HidModifier.RightGui) != 0) yield return 0x5C;
     }
 
+    /// <summary>The Windows virtual-key code for a HID key (0 when it has none).</summary>
+    public static ushort VirtualKeyOf(HidKey key) => MapKey(key);
+
     private static ushort MapKey(HidKey key)
     {
         if (key is >= HidKey.A and <= HidKey.Z)

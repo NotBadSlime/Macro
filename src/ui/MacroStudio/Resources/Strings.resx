@@ -956,4 +956,6 @@
   <data name="StartLeadInvalid" xml:space="preserve"><value>Enter a whole number from 0 to {0}.</value></data>
   <data name="CompensateSendInput" xml:space="preserve"><value>Submit early by the SendInput cost</value></data>
   <data name="CompensateSendInputHelp" xml:space="preserve"><value>Learns the typical send cost for keys and for mouse input while macros run (keys pass every keyboard hook on the system first) and sends that much earlier, so input arrives on the written time on average. Latest precision version only.</value></data>
+  <data name="RawInputHotkeys" xml:space="preserve"><value>Detect hotkeys with Raw Input</value></data>
+  <data name="RawInputHotkeysHelp" xml:space="preserve"><value>Takes MacroStudio out of the keyboard hook chain, so every key it sends (and every key you type) is not slowed by it: measured key SendInput p50 249 → 188 µs, p99 1280 → 976 µs. The hotkey itself is seen later (about +190 µs), because Raw Input arrives after all other programs&apos; hooks. If the colour-sample key cannot be reserved, the low-level hook is used.</value></data>
 </root>
