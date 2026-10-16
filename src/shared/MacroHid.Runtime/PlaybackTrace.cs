@@ -9,7 +9,9 @@ public enum PlaybackTraceStage
     CancelRequested, CleanupComplete, NativeQueued, NativeFirstSubmit, NativeLastSubmit,
     NativeComplete, Receiver,
     // Appended after Receiver so existing numeric values do not move. Between WorkerStart and PlanReady.
-    PrecisionEntered, ScopesReady, SafetyReady
+    PrecisionEntered, ScopesReady, SafetyReady,
+    // Appended: when the first batch's SendInput call returned.
+    NativeFirstReturn
 }
 
 // Enable the MacroHid-Playback EventSource only during measurement. QPC values are

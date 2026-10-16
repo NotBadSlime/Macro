@@ -43,6 +43,19 @@ using var lease = policy.PreferNative ? PrecisionPlaybackContext.AcquireWarmLeas
 
 var document = McrxParser.Parse("{\"steps\":[{\"type\":\"key.down\",\"key\":\"F24\"},{\"type\":\"key.up\",\"key\":\"F24\"}]}");
 var options = new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Skip, false, precision);
+// Newer options by reflection so this file builds against older revisions too (A/B runs).
+int leadUs = int.Parse(Option("--lead-us", "0"), CultureInfo.InvariantCulture);
+bool compensate = args.Contains("--compensate");
+options = SetInit(options, "StartLeadMicroseconds", leadUs);
+options = SetInit(options, "CompensateSendInputCost", compensate);
+static PlaybackExecutionOptions SetInit(PlaybackExecutionOptions o, string name, object value)
+{
+    var property = typeof(PlaybackExecutionOptions).GetProperty(name);
+    if (property is null) return o;
+    var copy = o with { };
+    property.SetValue(copy, value);
+    return copy;
+}
 using var executor = new MacroPlaybackExecutor(new SendInputMacroSink());
 executor.Prepare(document, options);
 await using var controller = new MacroPlaybackController(document, executor, options);
@@ -89,12 +102,18 @@ foreach (var stage in stages)
 }
 var finalStage = samples.Any(s => s.ContainsKey(PlaybackTraceStage.NativeFirstSubmit))
     ? PlaybackTraceStage.NativeFirstSubmit : PlaybackTraceStage.SubmitStart;
+// --end return: measure to when the first SendInput returned (input delivered to hooks), the moment that matters.
+if (Option("--end", "submit") == "return" && Enum.TryParse<PlaybackTraceStage>("NativeFirstReturn", out var returned)
+    && samples.Any(s => s.ContainsKey(returned)))
+    finalStage = returned;
 var finals = samples.Where(s => s.ContainsKey(PlaybackTraceStage.Hotkey) && s.ContainsKey(finalStage))
     .Select(s => Us(s[finalStage] - s[PlaybackTraceStage.Hotkey])).ToArray();
 var steady = finals.Skip(1).OrderBy(v => v).ToArray();
 double Q(double q) => steady.Length == 0 ? 0 : steady[Math.Min(steady.Length - 1, (int)Math.Ceiling(q * steady.Length) - 1)];
+double mean = steady.Length == 0 ? 0 : steady.Average();
+double sd = steady.Length == 0 ? 0 : Math.Sqrt(steady.Select(v => (v - mean) * (v - mean)).Average());
 Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-    $"SUMMARY stage={finalStage} first={finals[0]:F1} p50={Q(0.5):F1} p99={Q(0.99):F1} p999={Q(0.999):F1} max={(steady.Length == 0 ? 0 : steady[^1]):F1}"));
+    $"SUMMARY stage={finalStage} first={finals[0]:F1} p50={Q(0.5):F1} p90={Q(0.9):F1} p99={Q(0.99):F1} p999={Q(0.999):F1} max={(steady.Length == 0 ? 0 : steady[^1]):F1} sd={sd:F1} iqr={Q(0.75) - Q(0.25):F1}"));
 return 0;
 
 sealed class StageListener : EventListener

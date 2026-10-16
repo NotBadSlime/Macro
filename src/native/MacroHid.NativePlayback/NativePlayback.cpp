@@ -2977,6 +2977,14 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpSubmitPlanAt(void* plan, c
     return MhpWin32Error;
 }
 
+// Median SendInput call cost the scheduler has learned for key batches and for batches with mouse input (us, 0 = not yet).
+extern "C" __declspec(dllexport) void __cdecl MhpGetSendCost(int64_t* keyboardUs, int64_t* mouseUs)
+{
+    const int64_t frequency = QueryFrequency();
+    if (keyboardUs) *keyboardUs = SendCosts().MedianUs(SendCostTracker::Keyboard, frequency);
+    if (mouseUs) *mouseUs = SendCosts().MedianUs(SendCostTracker::Mouse, frequency);
+}
+
 extern "C" __declspec(dllexport) void __cdecl MhpCancelRun(void* handle)
 {
     if (auto* owned = static_cast<AsyncPlaybackRun*>(handle)) owned->run->cancelled.store(true, std::memory_order_release);

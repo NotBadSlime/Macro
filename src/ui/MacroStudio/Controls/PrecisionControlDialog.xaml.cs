@@ -20,6 +20,9 @@ public partial class PrecisionControlDialog : Window
         PrecisionGenerationBox.SelectionChanged += (_, _) => UpdateGenerationDescription();
         AffinityMaskBox.Text = settings.AffinityMask;
         AffinityMaskBox.TextChanged += (_, _) => ValidateAffinityMask();
+        StartLeadBox.Text = settings.StartLeadMicroseconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        StartLeadBox.TextChanged += (_, _) => ValidateAffinityMask();
+        CompensateSendInputCheck.IsChecked = settings.CompensateSendInputCost;
         foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
         {
             if (string.Equals(item.Tag?.ToString(), ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
@@ -92,8 +95,16 @@ public partial class PrecisionControlDialog : Window
         catch (Exception ex) { error = ex.Message; }
         AffinityMaskErrorText.Text = error;
         FieldState.SetHasError(AffinityMaskBox, error.Length > 0);
-        ConfirmButton.IsEnabled = error.Length == 0;
+        var leadOk = TryParseStartLead(out _);
+        StartLeadErrorText.Text = leadOk ? string.Empty
+            : LocalizationService.Format("StartLeadInvalid", RuntimePrecisionSettings.MaxStartLeadMicroseconds);
+        FieldState.SetHasError(StartLeadBox, !leadOk);
+        ConfirmButton.IsEnabled = error.Length == 0 && leadOk;
     }
+
+    private bool TryParseStartLead(out int microseconds) =>
+        int.TryParse(StartLeadBox.Text.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out microseconds)
+        && microseconds <= RuntimePrecisionSettings.MaxStartLeadMicroseconds;
 
     public Func<string, string?>? PickCores { get; }
 
@@ -119,6 +130,11 @@ public partial class PrecisionControlDialog : Window
         AffinityMaskLabelText.Text = L("AffinityMask");
         AffinityMaskHelpText.Text = L("AffinityMaskHelp");
         PrecisionNextRunNoteText.Text = L("PrecisionNextRunNote");
+        StartLeadLabelText.Text = L("StartLead");
+        StartLeadUnitText.Text = L("Microseconds");
+        StartLeadHelpText.Text = L("StartLeadHelp");
+        CompensateSendInputCheck.Content = L("CompensateSendInput");
+        CompensateSendInputHelpText.Text = L("CompensateSendInputHelp");
         ChooseCoresButton.Content = L("ChooseCores");
         CancelButton.Content = L("Cancel");
         ConfirmButton.Content = L("Confirm");
@@ -153,11 +169,14 @@ public partial class PrecisionControlDialog : Window
         }
 
         var mask = PlaybackAffinityMask.NormalizeOrThrow(AffinityMaskBox.Text);
+        TryParseStartLead(out var lead);
         Settings = source with
         {
             Precision = SelectedPrecision(),
             Generation = SelectedGeneration(),
-            AffinityMask = mask
+            AffinityMask = mask,
+            StartLeadMicroseconds = lead,
+            CompensateSendInputCost = CompensateSendInputCheck.IsChecked == true
         };
         DialogResult = true;
     }

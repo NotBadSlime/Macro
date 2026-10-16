@@ -281,6 +281,7 @@ var tests = new (string Name, Action Body)[]
     ("Startup path warm-up also runs the native branch for the selected profile", StartupPathWarmupRunsTheNativeBranch),
     ("Hold times are edited in milliseconds and stored in microseconds", HoldTimesAreEditedInMilliseconds),
     ("Light and dark themes define the same brushes and every language has every string", ThemesAndLanguagesStayInStep),
+    ("Hotkey runs can start a fixed lead after the key and compensate the SendInput cost", HotkeyStartAlignmentAndSendCompensation),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
@@ -5480,6 +5481,40 @@ static void ThemesAndLanguagesStayInStep()
     Assert.DoesNotContain("SetStatus(ex.Message)", mainCode);
     Assert.DoesNotContain("ToolTip = \"关闭\"", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ThemedDialogChrome.cs")));
     Assert.DoesNotContain("响应目标：", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml.cs")));
+}
+
+static void HotkeyStartAlignmentAndSendCompensation()
+{
+    // Wiring: the controller carries the hook time to the worker, the executor anchors the first start to it, and the
+    // native run is asked to compensate. Timing behaviour is covered by the native scheduler test and the latency probe.
+    var executorCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs"));
+    var controllerCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackController.cs"));
+    Assert.Contains("var phaseLockedNextStartTick = StartAnchorTick(options, plannedIterationStartTick);", executorCode);
+    Assert.Contains("PlaybackTrigger.CallbackQpc.Value = callbackQpc;", controllerCode);
+    Assert.Contains("compensateSendInput: options.CompensateSendInputCost", executorCode);
+
+    // Options are part of the prepared-plan key, so both are init properties with "off" defaults for other callers.
+    var defaults = new PlaybackExecutionOptions(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Skip, false);
+    Assert.Equal(0, defaults.StartLeadMicroseconds);
+    Assert.True(!defaults.CompensateSendInputCost);
+
+    // Settings: persisted, clamped, and compensation only reaches the run for the latest generation.
+    var dir = Path.Combine(Path.GetTempPath(), "macrohid-lead-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    try
+    {
+        var path = Path.Combine(dir, "settings.json");
+        MacroStudio.Services.RuntimePrecisionSettingsStore.Save(
+            MacroStudio.Services.RuntimePrecisionSettings.Default with { StartLeadMicroseconds = 99_999, CompensateSendInputCost = false }, path);
+        var loaded = MacroStudio.Services.RuntimePrecisionSettingsStore.Load(path);
+        Assert.Equal(MacroStudio.Services.RuntimePrecisionSettings.MaxStartLeadMicroseconds, loaded.StartLeadMicroseconds);
+        Assert.True(!loaded.CompensateSendInputCost);
+        Assert.True(MacroStudio.Services.RuntimePrecisionSettings.Default.CompensateSendInputCost);
+        Assert.Equal(0, MacroStudio.Services.RuntimePrecisionSettings.Default.StartLeadMicroseconds);
+    }
+    finally { Directory.Delete(dir, recursive: true); }
+    var mainCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    Assert.Contains("&& runtimePrecisionSettings.Generation == PrecisionGeneration.Latest", mainCode);
 }
 
 static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()

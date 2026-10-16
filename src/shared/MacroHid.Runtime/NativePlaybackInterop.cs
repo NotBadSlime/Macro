@@ -43,6 +43,8 @@ internal struct MhpRunOptions
     public int LoopStepCount;
     public long QpcFrequency;
     public int NativeEngineMode;
+    // Bit 0 = compensate SendInput cost. Fills the padding after NativeEngineMode: still 48 bytes.
+    public uint Flags;
     public IntPtr OutlierEvents;
     public uint OutlierEventCapacity;
     // PrecisionGeneration as a number (0 latest, 1 = 2.0.0/2.0.1, 2 = 1.6.0, 3 = 2.0.2). Fills the padding after OutlierEventCapacity: still 48 bytes.
@@ -113,7 +115,7 @@ internal struct MhpCoreSample
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct MhpRunTrace { public long Queued, FirstSubmit, LastSubmit, Completed; }
+internal struct MhpRunTrace { public long Queued, FirstSubmit, LastSubmit, Completed, FirstReturn; }
 
 internal static partial class NativePlaybackInterop
 {
@@ -135,6 +137,9 @@ internal static partial class NativePlaybackInterop
     internal static extern MhpStatus MhpSubmitPlanAt(IntPtr plan, ref MhpRunOptions options, IntPtr control, long origin, out IntPtr run, out IntPtr completion);
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     internal static extern MhpStatus MhpGetRunTrace(IntPtr run, out MhpRunTrace trace);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void MhpGetSendCost(out long keyboardUs, out long mouseUs);
 
     private const uint Infinite = 0xFFFFFFFF;
     private const uint WaitObject0 = 0;
@@ -158,6 +163,7 @@ internal static partial class NativePlaybackInterop
             {
                 PlaybackTrace.Mark(PlaybackTraceStage.NativeQueued, trace.Queued);
                 if (trace.FirstSubmit != 0) PlaybackTrace.Mark(PlaybackTraceStage.NativeFirstSubmit, trace.FirstSubmit);
+                if (trace.FirstReturn != 0) PlaybackTrace.Mark(PlaybackTraceStage.NativeFirstReturn, trace.FirstReturn);
                 if (trace.LastSubmit != 0) PlaybackTrace.Mark(PlaybackTraceStage.NativeLastSubmit, trace.LastSubmit);
                 PlaybackTrace.Mark(PlaybackTraceStage.NativeComplete, trace.Completed);
             }

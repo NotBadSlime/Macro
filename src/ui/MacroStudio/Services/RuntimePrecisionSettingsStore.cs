@@ -56,8 +56,13 @@ public sealed record RuntimePrecisionSettings(
     string ForceStopHotkey = "",
     CloseButtonBehavior CloseButton = CloseButtonBehavior.Ask,
     [property: JsonConverter(typeof(LenientPrecisionGenerationConverter))]
-    PrecisionGeneration Generation = PrecisionGeneration.Latest)
+    PrecisionGeneration Generation = PrecisionGeneration.Latest,
+    // Hotkey runs start exactly this long after the key (0 = as soon as ready). See PlaybackExecutionOptions.StartLeadMicroseconds.
+    int StartLeadMicroseconds = 0,
+    // Submit early by the learned SendInput cost. Only the latest generation uses it; older generations keep their timing.
+    bool CompensateSendInputCost = true)
 {
+    public const int MaxStartLeadMicroseconds = 5000;
     public static RuntimePrecisionSettings Default { get; } = new(ColorSampleHotkey: CoreHotkeys.DefaultColorSampleText);
 
     public HotkeyGesture ColorSampleGesture => CoreHotkeys.ParseOrDefault(ColorSampleHotkey);
@@ -142,7 +147,8 @@ public static class RuntimePrecisionSettingsStore
             ZeroGapHoldMicroseconds = ClampMicroseconds(settings.ZeroGapHoldMicroseconds),
             ModifierChordHoldMicroseconds = ClampMicroseconds(settings.ModifierChordHoldMicroseconds),
             ForceStopHotkey = NormalizeForceStop(settings.ForceStopHotkey),
-            Generation = PrecisionGenerations.Normalize(settings.Generation)
+            Generation = PrecisionGenerations.Normalize(settings.Generation),
+            StartLeadMicroseconds = Math.Clamp(settings.StartLeadMicroseconds, 0, RuntimePrecisionSettings.MaxStartLeadMicroseconds)
         };
     }
 

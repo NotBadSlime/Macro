@@ -5,6 +5,47 @@ inline bool BatchTraceEnabled()
     static const bool enabled = []{ wchar_t v[4]{}; return GetEnvironmentVariableW(L"MACROHID_BATCH_TRACE", v, 4) == 1 && v[0] == L'1'; }();
     return enabled;
 }
+// Typical SendInput call cost per batch kind, learned from real submissions. A key goes through every low-level keyboard
+// hook in the session before SendInput returns; on a machine with input-method and vendor tools installed that measured
+// 190-300 us median for a key versus 85-105 us for a mouse move. Submitting that much earlier makes the input land on
+// the written time on average. Median of the last 64 samples (robust to the occasional multi-ms stall), clamped.
+class SendCostTracker
+{
+public:
+    enum Kind { Keyboard = 0, Mouse = 1, Count = 2 };
+    static constexpr int Window = 64;
+    static constexpr int64_t MaxLeadUs = 1000;
+    void Note(int kind, int64_t costTicks)
+    {
+        auto& k = kinds[kind];
+        std::lock_guard<std::mutex> lock(k.gate);
+        k.samples[k.next] = costTicks; k.next = (k.next + 1) % Window; if (k.filled < Window) k.filled++;
+        if (k.filled < 8) return;
+        std::array<int64_t, Window> copy{};
+        std::copy_n(k.samples.begin(), k.filled, copy.begin());
+        std::nth_element(copy.begin(), copy.begin() + k.filled / 2, copy.begin() + k.filled);
+        k.median.store(copy[k.filled / 2], std::memory_order_relaxed);
+    }
+    // Ticks to submit early; 0 until enough samples exist.
+    int64_t Lead(int kind, int64_t frequency) const
+    {
+        const int64_t median = kinds[kind].median.load(std::memory_order_relaxed);
+        return std::clamp<int64_t>(median, 0, frequency * MaxLeadUs / 1000000);
+    }
+    int64_t MedianUs(int kind, int64_t frequency) const
+    {
+        return kinds[kind].median.load(std::memory_order_relaxed) * 1000000 / std::max<int64_t>(1, frequency);
+    }
+private:
+    struct PerKind { std::mutex gate; std::array<int64_t, Window> samples{}; int next = 0; int filled = 0; std::atomic<int64_t> median{0}; };
+    PerKind kinds[Count];
+};
+inline SendCostTracker& SendCosts() { static SendCostTracker tracker; return tracker; }
+inline int BatchKind(const INPUT* inputs, uint32_t count)
+{
+    for (uint32_t i = 0; i < count; i++) if (inputs[i].type == INPUT_MOUSE) return SendCostTracker::Mouse;
+    return SendCostTracker::Keyboard;
+}
 // Manual-reset completion events are recycled: CreateEventW was a kernel call on every submit, inside the
 // hotkey-to-first-input path. An event is reset when it comes back (off that path), after the run's last
 // owner has released it, so no waiter can still be using it. The pool is bounded; extras are closed.
@@ -131,10 +172,20 @@ class SharedPlaybackScheduler
         g_playbackActive.fetch_sub(1, std::memory_order_acq_rel);
         SetEvent(run.completed);
     }
+    // Early submission for the expected SendInput cost of this batch (0 when the run did not ask for it).
+    int64_t SendLead(ScheduledRun& run, size_t index)
+    {
+        if (!(run.options.flags & MhpFlagCompensateSendInput)) return 0;
+        const auto& batch = run.plan->batches[index];
+        if (!batch.inputCount) return 0;
+        return SendCosts().Lead(BatchKind(run.plan->inputs.data() + batch.inputOffset, batch.inputCount), run.frequency);
+    }
     int64_t Due(ScheduledRun& run)
     {
         const auto& batch = run.plan->batches[run.next];
-        int64_t due = run.start + batch.dueTicks + TotalPausedTicks(run.control);
+        // The lead moves only the written time. Release dependencies and chord holds are applied after it, from the
+        // measured start of the press, so a compensated hold is never shorter than written.
+        int64_t due = run.start + batch.dueTicks + TotalPausedTicks(run.control) - SendLead(run, run.next);
         for (const auto& dependency : run.plan->releaseDependencies[run.next])
             due = std::max(due, run.submittedAt[dependency.first] + dependency.second);
         return run.chord.AdjustDue(due,
@@ -159,7 +210,7 @@ class SharedPlaybackScheduler
     {
         const size_t index = run.next;
         const auto& batch = run.plan->batches[index];
-        const int64_t nominalDue = run.start + batch.dueTicks + TotalPausedTicks(run.control);
+        const int64_t nominalDue = run.start + batch.dueTicks + TotalPausedTicks(run.control) - SendLead(run, index);
         const int64_t actual = QueryCounter();
         const DWORD cpu = CurrentProcessorNumber();
         UINT sent = 0;
@@ -170,6 +221,8 @@ class SharedPlaybackScheduler
             if (sent != batch.inputCount) error = GetLastError();
         }
         const int64_t submitted = QueryCounter();
+        if (sent == batch.inputCount && batch.inputCount)
+            SendCosts().Note(BatchKind(run.plan->inputs.data() + batch.inputOffset, batch.inputCount), submitted - actual);
         std::unique_lock<std::mutex> lock(gate, std::defer_lock);
         if (!exclusive) lock.lock();
         auto& stats = run.stats;
@@ -178,7 +231,7 @@ class SharedPlaybackScheduler
         const int64_t lateUs = std::max<int64_t>(0, ToMicroseconds(actual - nominalDue, run.frequency));
         if (!run.IsStopped() || sent > 0)
         {
-            if (!run.trace.firstSubmit) run.trace.firstSubmit = actual;
+            if (!run.trace.firstSubmit) { run.trace.firstSubmit = actual; run.trace.firstReturn = submitted; }
             run.trace.lastSubmit = actual;
             // The release dependency counts the hold from when this batch STARTED (actual), not from when its SendInput returned.
             // The hold the user wrote is the distance between the two planned times; if the press call itself takes a while
@@ -226,7 +279,10 @@ class SharedPlaybackScheduler
             if (!CanPumpSingleRun(run)) break;
             const int64_t target = Due(run);
             const int64_t remaining = target - QueryCounter();
-            if (remaining > spinTicks + timerMargin)
+            // The first batch of a hotkey-anchored run is at most the start lead away: spin up to 1 ms instead of a timer
+            // sleep, whose wake-up error (~100 us here) would break the constant start delay the anchor provides.
+            const int64_t spinLimit = run.next == 0 ? std::max(spinTicks, run.frequency / 1000) : spinTicks;
+            if (remaining > spinLimit + timerMargin)
             {
                 const int64_t waitUs = std::min<int64_t>(10000, (remaining - spinTicks) * 1000000 / run.frequency);
                 LARGE_INTEGER due{}; due.QuadPart = -std::max<int64_t>(1, waitUs * 10);
@@ -346,7 +402,7 @@ class SharedPlaybackScheduler
                 PumpSingleRun(*picked, worker, timer, priorityApplied, mmcss != nullptr, seen);
                 continue;
             }
-            const int64_t spinUs = picked->options.precisionMode == MhpUltraLowJitter ? 1000 : 300;
+            const int64_t spinUs = picked->next == 0 ? 1000 : picked->options.precisionMode == MhpUltraLowJitter ? 1000 : 300;
             int64_t remaining = target - QueryCounter();
             if (remaining > picked->frequency * (spinUs + 50) / 1000000)
             {

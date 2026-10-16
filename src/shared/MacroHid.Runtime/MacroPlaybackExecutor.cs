@@ -273,6 +273,16 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         configuredMacroResolver = macroResolver;
     }
 
+    /// <summary>Hotkey-anchored first start, or 0 when there is no hotkey time, no lead, or a non-QPC test clock.</summary>
+    private long StartAnchorTick(PlaybackExecutionOptions options, long nowTick)
+    {
+        var trigger = PlaybackTrigger.CallbackQpc.Value;
+        if (options.StartLeadMicroseconds <= 0 || trigger <= 0 || clock is not QpcHighResolutionClock) return 0;
+        var anchor = trigger + options.StartLeadMicroseconds * clock.Frequency / 1_000_000;
+        PlaybackTrigger.RecordStart(anchor > nowTick);
+        return anchor;
+    }
+
     public void Prepare(MacroDocument document, PlaybackExecutionOptions options)
     {
         if (Environment.GetEnvironmentVariable("MACROHID_DISABLE_PREPARE") == "1") return;
@@ -434,7 +444,9 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         var playbackTriggerTick = plannedIterationStartTick;
         // Start of the next iteration if this one ran on time: previous start + the macro's written duration. If the previous
         // iteration overran (condition waits, pauses, a stall), start from now instead of firing the missed time in a burst.
-        var phaseLockedNextStartTick = 0L;
+        // The first iteration is anchored to the hotkey: hook callback time + the configured start lead, so the variable
+        // hand-off work before this point does not move the macro. If that moment has already passed, it starts from now.
+        var phaseLockedNextStartTick = StartAnchorTick(options, plannedIterationStartTick);
         var hasConditionWindows = document.EffectiveConditions.Any();
         // The selected precision generation. Earlier generations start every iteration from now, repeat at the compiled duration
         // (press-floor delay included) and drop a trailing wait when no condition monitor exists.
@@ -816,7 +828,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 out fallbackReason,
                 enableCpuScan: NativePlaybackWarmup.CpuScanReady,
                 playbackControl: playbackControl, timelineStart: timelineStart,
-                generation: options.PressFloor.Generation);
+                generation: options.PressFloor.Generation, compensateSendInput: options.CompensateSendInputCost);
         }
         else
         {
@@ -828,7 +840,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 out fallbackReason,
                 enableCpuScan: NativePlaybackWarmup.CpuScanReady,
                 playbackControl: playbackControl, timelineStart: timelineStart,
-                generation: options.PressFloor.Generation);
+                generation: options.PressFloor.Generation, compensateSendInput: options.CompensateSendInputCost);
         }
 
         if (!ranNative)

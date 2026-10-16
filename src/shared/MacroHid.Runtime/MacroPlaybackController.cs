@@ -37,6 +37,15 @@ public sealed record PlaybackExecutionOptions(
     string BackgroundProcess = "")
 {
     public InputPressFloor PressFloor { get; init; } = InputPressFloor.Factory;
+    /// <summary>
+    /// Hotkey runs start this long after the hook saw the key, instead of whenever preparation finishes, so the start
+    /// delay is constant. 0 keeps the old behaviour (start as soon as ready). Overruns start immediately.
+    /// </summary>
+    public int StartLeadMicroseconds { get; init; }
+    /// <summary>
+    /// Submit each batch this much earlier for the expected SendInput call cost, measured per input kind while running.
+    /// </summary>
+    public bool CompensateSendInputCost { get; init; }
     public PlaybackExecutionOptions ForImmediateRun()
     {
         if (Mode == PlaybackMode.FixedCount)
@@ -152,7 +161,9 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
         var completion = new TaskCompletionSource<PlaybackRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         activeRun = completion.Task;
         long previousTrace = PlaybackTrace.Run.Value;
+        long previousTrigger = PlaybackTrigger.CallbackQpc.Value;
         PlaybackTrace.Run.Value = RunId;
+        PlaybackTrigger.CallbackQpc.Value = callbackQpc;
         try
         {
             PlaybackTrace.Mark(PlaybackTraceStage.Hotkey, callbackQpc);
@@ -161,7 +172,7 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
             // After the hand-off: the worker is already starting, so logging no longer sits on the trigger path.
             AppLog.Info("Playback", $"Start run={RunId}; macro={currentDocument.Name}; mode={options.Mode}");
         }
-        finally { PlaybackTrace.Run.Value = previousTrace; }
+        finally { PlaybackTrace.Run.Value = previousTrace; PlaybackTrigger.CallbackQpc.Value = previousTrigger; }
     }
     private async Task RunAndResetAsync(IMacroPlaybackExecutor currentExecutor, MacroDocument currentDocument,
         PlaybackExecutionOptions options, CancellationTokenSource cancellation, TaskCompletionSource<PlaybackRunResult> completion)

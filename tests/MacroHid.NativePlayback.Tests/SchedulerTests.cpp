@@ -24,15 +24,17 @@ std::atomic<int> calls{0}, inputsSent{0}, partial{0};
 std::array<std::atomic<int64_t>, 2> firstCalls{};
 std::atomic<bool> blockSubmit{false}, insideSubmit{false};
 std::atomic<int> slowFirstCallUs{0}; // when > 0, the first call of a run takes this long, like a slow SendInput
+std::atomic<int> slowEveryCallUs{0}; // when > 0, every call takes this long (SendInput cost learning)
 UINT FakeInput(UINT count, INPUT*)
 {
     int call = calls.fetch_add(1); if (call < 2) firstCalls[call] = QueryCounter();
     insideSubmit = true;
-    if (call == 0 && slowFirstCallUs > 0)
+    const int slowUs = slowEveryCallUs > 0 ? slowEveryCallUs.load() : call == 0 ? slowFirstCallUs.load() : 0;
+    if (slowUs > 0)
     {
         // Spin, do not Sleep: Sleep(2) often lasts 10+ ms, and a press call longer than the hold would legitimately
         // delay the release (a run submits strictly one batch at a time), which would make the test measure the wrong thing.
-        const int64_t until = QueryCounter() + QueryFrequency() * slowFirstCallUs / 1000000;
+        const int64_t until = QueryCounter() + QueryFrequency() * slowUs / 1000000;
         while (QueryCounter() < until) YieldProcessor();
     }
     while (blockSubmit) Sleep(1);
@@ -313,6 +315,44 @@ int main(int argc, char** argv)
                 Check(between >= 5000 - kHoldSlackUs, "written hold shortened by a slow press");        // the guarantee that must stay
                 Check(between < 5000 + 800, "slow press pushed the release later than written"); // the point of the change
             }
+            slowFirstCallUs = 0;
+            MhpDestroyPlan(plan);
+        }
+        {
+            // SendInput cost compensation: after the scheduler learns a slow call (here 600 us for a key batch), a compensated
+            // run starts each batch that much earlier, but a release still never comes sooner than the written hold after the
+            // press actually started.
+            INPUT inputs[2]{};
+            for (auto& input : inputs) { input.type = INPUT_KEYBOARD; input.ki.wVk = 'A'; }
+            inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            MhpBatch batches[]{{ms(3),0,1,1},{ms(8),1,1,1}};
+            void* plan = nullptr;
+            Check(MhpCreatePlan(inputs, 2, batches, 2, &plan) == MhpOk, "compensation plan");
+            auto run = [&](uint32_t flags, int64_t& pressLeadUs, int64_t& holdUs)
+            {
+                slowEveryCallUs = 600;
+                calls = 0;
+                auto o = options; o.flags = flags;
+                const int64_t origin = QueryCounter();
+                void* handle = nullptr; HANDLE done = nullptr;
+                Check(MhpSubmitPlanAt(plan, &o, nullptr, origin, &handle, &done) == MhpOk, "compensation submit");
+                Check(WaitForSingleObject(done, 2000) == WAIT_OBJECT_0, "compensation completion");
+                MhpReleaseRun(handle);
+                pressLeadUs = 3000 - ToMicroseconds(firstCalls[0] - origin, options.qpcFrequency);
+                holdUs = ToMicroseconds(firstCalls[1] - firstCalls[0], options.qpcFrequency);
+            };
+            int64_t lead = 0, hold = 0;
+            for (int i = 0; i < 40; i++) run(0, lead, hold); // fill the 64-sample window with slow calls (2 per run)
+            int64_t keyUs = 0, mouseUs = 0; MhpGetSendCost(&keyUs, &mouseUs);
+            std::cout << "learned_key_send_us=" << keyUs << "\n";
+            Check(keyUs >= 500 && keyUs <= 800, "tracker learned the slow key call");
+            run(0, lead, hold);
+            Check(lead <= 50, "uncompensated run starts on the written time");
+            run(MhpFlagCompensateSendInput, lead, hold);
+            std::cout << "compensated_press_lead_us=" << lead << " hold_us=" << hold << "\n";
+            Check(lead >= 450 && lead <= 900, "compensated press goes out about one send cost early");
+            Check(hold >= 5000 - kHoldSlackUs, "compensation never shortens the written hold");
+            slowEveryCallUs = 0;
             slowFirstCallUs = 0;
             MhpDestroyPlan(plan);
         }

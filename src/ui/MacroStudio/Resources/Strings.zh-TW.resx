@@ -651,4 +651,9 @@
   <data name="AddFufuFpsStop" xml:space="preserve"><value>Fufu 恢復幀率</value></data>
   <data name="AddFufuFpsStartHint" xml:space="preserve"><value>進入遊戲後修改 Fufu 解幀器目標值</value></data>
   <data name="AddFufuFpsStopHint" xml:space="preserve"><value>恢復解幀器原目標值</value></data>
+  <data name="StartLead" xml:space="preserve"><value>熱鍵啟動對齊</value></data>
+  <data name="StartLeadHelp" xml:space="preserve"><value>0 表示準備好就開始（每次會差幾十到幾百微秒）。填 400 之類的值，每次熱鍵都在按下後正好這麼久開始，啟動延遲恆定，可以在巨集裡預先扣除。來不及準備好的那次會立即開始。</value></data>
+  <data name="StartLeadInvalid" xml:space="preserve"><value>請填 0 到 {0} 的整數。</value></data>
+  <data name="CompensateSendInput" xml:space="preserve"><value>依 SendInput 耗時提前送出</value></data>
+  <data name="CompensateSendInputHelp" xml:space="preserve"><value>播放時分別學習按鍵和滑鼠的典型送出耗時（按鍵要先經過系統裡所有鍵盤鉤子），提前這麼多送出，使輸入平均落在寫下的時刻。僅最新精度版本生效。</value></data>
 </root>

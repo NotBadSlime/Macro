@@ -28,6 +28,11 @@ extern "C"
         MhpUltraLowJitter = 2
     };
 
+    enum MhpRunFlags : uint32_t
+    {
+        MhpFlagCompensateSendInput = 1
+    };
+
     enum MhpNativeEngineMode : int32_t
     {
         MhpNativeEngineAuto = 0,
@@ -62,6 +67,9 @@ extern "C"
         int32_t loopStepCount;
         int64_t qpcFrequency;
         int32_t nativeEngineMode;
+        // Bit 0: submit each batch early by the running median SendInput cost of its kind (MhpFlagCompensateSendInput).
+        // Fills the padding after nativeEngineMode; the struct stays 48 bytes and older callers pass 0.
+        uint32_t flags;
         MhpOutlierEvent* outlierEvents;
         uint32_t outlierEventCapacity;
         // Precision generation, see MacroHid.Core PrecisionGeneration: 0 = latest (default, also what an older caller that
@@ -165,7 +173,8 @@ extern "C"
 
     __declspec(dllexport) void __cdecl MhpDestroyPlan(void* plan);
 
-    struct MhpRunTrace { int64_t queued, firstSubmit, lastSubmit, completed; };
+    // firstReturn: when the first batch's SendInput returned (keys reach later hooks/targets about then).
+    struct MhpRunTrace { int64_t queued, firstSubmit, lastSubmit, completed, firstReturn; };
     // Per-batch record (QPC ticks). Collected only when MACROHID_BATCH_TRACE=1 is set before the
     // first run; nominalDue excludes pause/dependency/chord shifts, effectiveDue includes them.
     struct MhpBatchTrace

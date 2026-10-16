@@ -32,6 +32,20 @@
 
         <Border Style="{StaticResource DialogSectionDivider}" />
 
+        <TextBlock x:Name="StartLeadLabelText"
+                   Text="热键启动对齐"
+                   Style="{StaticResource FieldLabel}" />
+        <DockPanel LastChildFill="True">
+            <TextBlock x:Name="StartLeadUnitText" DockPanel.Dock="Right" Style="{StaticResource FieldUnitText}" Text="微秒" />
+            <TextBox x:Name="StartLeadBox" Height="32" />
+        </DockPanel>
+        <TextBlock x:Name="StartLeadErrorText" Style="{StaticResource FieldErrorText}" />
+        <TextBlock x:Name="StartLeadHelpText" Style="{StaticResource FieldHelpText}" />
+        <CheckBox x:Name="CompensateSendInputCheck" Content="按 SendInput 耗时提前提交" Margin="0,0,0,2" />
+        <TextBlock x:Name="CompensateSendInputHelpText" Style="{StaticResource FieldHelpText}" />
+
+        <Border Style="{StaticResource DialogSectionDivider}" />
+
         <TextBlock x:Name="AffinityMaskLabelText"
                    Text="极限核心掩码"
                    Style="{StaticResource FieldLabel}" />

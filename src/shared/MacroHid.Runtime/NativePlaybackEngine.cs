@@ -103,7 +103,7 @@ internal static class NativePlaybackEngine
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
         NativePlaybackRunControl? playbackControl = null, long timelineStart = 0,
-        PrecisionGeneration generation = PrecisionGeneration.Latest)
+        PrecisionGeneration generation = PrecisionGeneration.Latest, bool compensateSendInput = false)
     {
         return TryRunTimeline(
             plan.ExportNativeTimeline(),
@@ -115,7 +115,7 @@ internal static class NativePlaybackEngine
             outlierThresholdUs,
             enableCpuScan,
             engineMode,
-            playbackControl, timelineStart, generation);
+            playbackControl, timelineStart, generation, compensateSendInput);
     }
 
     public static bool TryRunTimeline(
@@ -129,7 +129,7 @@ internal static class NativePlaybackEngine
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
         NativePlaybackRunControl? playbackControl = null, long timelineStart = 0,
-        PrecisionGeneration generation = PrecisionGeneration.Latest)
+        PrecisionGeneration generation = PrecisionGeneration.Latest, bool compensateSendInput = false)
     {
         if (!TryCreatePreparedPlan(timeline, qpcFrequency, out var preparedPlan, out diagnostics, out fallbackReason))
         {
@@ -147,7 +147,7 @@ internal static class NativePlaybackEngine
             enableCpuScan,
             engineMode,
             includePlanCreateInStartup: true,
-            playbackControl: playbackControl, timelineStart: timelineStart, generation: generation);
+            playbackControl: playbackControl, timelineStart: timelineStart, generation: generation, compensateSendInput: compensateSendInput);
     }
 
     public static bool TryCreatePreparedPlan(
@@ -218,7 +218,7 @@ internal static class NativePlaybackEngine
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
         bool includePlanCreateInStartup = false,
         NativePlaybackRunControl? playbackControl = null, long timelineStart = 0,
-        PrecisionGeneration generation = PrecisionGeneration.Latest)
+        PrecisionGeneration generation = PrecisionGeneration.Latest, bool compensateSendInput = false)
     {
         generation = PrecisionGenerations.Normalize(generation);
         diagnostics = EmptyDiagnostics("native", string.Empty);
@@ -278,7 +278,8 @@ internal static class NativePlaybackEngine
                     ? outlierEventsHandle.AddrOfPinnedObject()
                     : IntPtr.Zero,
                 OutlierEventCapacity = checked((uint)outlierEventCapacity),
-                Generation = (uint)generation
+                Generation = (uint)generation,
+                Flags = compensateSendInput ? 1u : 0u
             };
 
             var modes = effectiveEngineMode == NativePlaybackEngineMode.Inline ? InlineOnly : StandbyThenInline;

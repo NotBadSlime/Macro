@@ -951,4 +951,9 @@
   <data name="FloatPanel" xml:space="preserve"><value>Float</value></data>
   <data name="ClosePanel" xml:space="preserve"><value>Close panel</value></data>
   <data name="StatusErrorPrefix" xml:space="preserve"><value>Failed: {0}</value></data>
+  <data name="StartLead" xml:space="preserve"><value>Hotkey start alignment</value></data>
+  <data name="StartLeadHelp" xml:space="preserve"><value>0 starts as soon as ready (varies by tens to hundreds of µs). A value such as 400 starts every hotkey run exactly that long after the key, so the start delay is constant and can be compensated in the macro. Runs not ready in time start immediately.</value></data>
+  <data name="StartLeadInvalid" xml:space="preserve"><value>Enter a whole number from 0 to {0}.</value></data>
+  <data name="CompensateSendInput" xml:space="preserve"><value>Submit early by the SendInput cost</value></data>
+  <data name="CompensateSendInputHelp" xml:space="preserve"><value>Learns the typical send cost for keys and for mouse input while macros run (keys pass every keyboard hook on the system first) and sends that much earlier, so input arrives on the written time on average. Latest precision version only.</value></data>
 </root>

@@ -2645,7 +2645,10 @@ public partial class MainWindow : Window
             runtimePrecisionSettings.BackgroundWindow,
             ResolveBackgroundProcess(document))
         {
-            PressFloor = runtimePrecisionSettings.PressFloor
+            PressFloor = runtimePrecisionSettings.PressFloor,
+            StartLeadMicroseconds = runtimePrecisionSettings.StartLeadMicroseconds,
+            CompensateSendInputCost = runtimePrecisionSettings.CompensateSendInputCost
+                && runtimePrecisionSettings.Generation == PrecisionGeneration.Latest
         };
     }
 
