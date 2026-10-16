@@ -5,6 +5,31 @@ inline bool BatchTraceEnabled()
     static const bool enabled = []{ wchar_t v[4]{}; return GetEnvironmentVariableW(L"MACROHID_BATCH_TRACE", v, 4) == 1 && v[0] == L'1'; }();
     return enabled;
 }
+// Manual-reset completion events are recycled: CreateEventW was a kernel call on every submit, inside the
+// hotkey-to-first-input path. An event is reset when it comes back (off that path), after the run's last
+// owner has released it, so no waiter can still be using it. The pool is bounded; extras are closed.
+inline std::mutex& CompletionPoolGate() { static std::mutex gate; return gate; }
+inline std::vector<HANDLE>& CompletionPool() { static std::vector<HANDLE> pool; return pool; }
+inline HANDLE AcquireCompletionEvent()
+{
+    {
+        std::lock_guard<std::mutex> lock(CompletionPoolGate());
+        auto& pool = CompletionPool();
+        if (!pool.empty()) { HANDLE event = pool.back(); pool.pop_back(); return event; }
+    }
+    return CreateEventW(nullptr, TRUE, FALSE, nullptr);
+}
+inline void ReturnCompletionEvent(HANDLE event)
+{
+    if (!event) return;
+    if (ResetEvent(event))
+    {
+        std::lock_guard<std::mutex> lock(CompletionPoolGate());
+        auto& pool = CompletionPool();
+        if (pool.size() < 16) { pool.push_back(event); return; }
+    }
+    CloseHandle(event);
+}
 struct ScheduledRun
 {
     NativePlan* plan;
@@ -34,7 +59,7 @@ struct ScheduledRun
         : plan(p), options(o), control(c), externalCancel(flag), start(0),
           frequency(o.qpcFrequency > 0 ? o.qpcFrequency : QueryFrequency())
     {
-        completed = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        completed = AcquireCompletionEvent();
         if (!completed) throw std::bad_alloc();
         try
         {
@@ -51,8 +76,8 @@ struct ScheduledRun
             // on a hot start.
             late.clear(); loopLate.clear();
         }
-        catch (...) { CloseHandle(completed); completed = nullptr; throw; }
-        if (BatchTraceEnabled()) try { batchTrace.reserve(p->batches.size()); } catch (...) { CloseHandle(completed); completed = nullptr; throw; }
+        catch (...) { ReturnCompletionEvent(completed); completed = nullptr; throw; }
+        if (BatchTraceEnabled()) try { batchTrace.reserve(p->batches.size()); } catch (...) { ReturnCompletionEvent(completed); completed = nullptr; throw; }
         p->references.fetch_add(1);
         stats.selectedCpuSet = UINT32_MAX;
         stats.maxLateBatchIndex = UINT32_MAX;
@@ -63,7 +88,7 @@ struct ScheduledRun
     }
     ~ScheduledRun()
     {
-        if (completed) CloseHandle(completed);
+        if (completed) ReturnCompletionEvent(completed);
         if (scratchSlot >= 0)
         {
             std::lock_guard<std::mutex> lock(plan->scratchGate);
@@ -437,8 +462,17 @@ public:
         { std::lock_guard<std::mutex> lock(gate); if (!ready || stopping) return {}; run->owner = nextOwner++ % 2; run->cores = plan->configuredCores;
           run->stats.selectedWorker0 = run->cores[0].processorNumber; run->stats.selectedWorker1 = run->cores[1].processorNumber;
           run->stats.selectedWorker0MaxLateUs = run->cores[0].maxLateUs; run->stats.selectedWorker1MaxLateUs = run->cores[1].maxLateUs; runs.push_back(run); g_playbackActive.fetch_add(1, std::memory_order_acq_rel); }
-        Notify();
+        // Only 极限 lets the non-owner worker take a batch, so other profiles wake just the owner. The generation still
+        // advances, so a worker spinning for another run still re-scans and sees this one.
+        if (options.precisionMode == MhpUltraLowJitter) Notify();
+        else NotifyWorker(run->owner);
         return run;
+    }
+    void NotifyWorker(int worker)
+    {
+        generation.fetch_add(1, std::memory_order_release);
+        std::lock_guard<std::mutex> lock(eventGate);
+        if (changed[worker]) SetEvent(changed[worker]);
     }
     MhpStatus Run(NativePlan* plan, const MhpRunOptions& options, PlaybackControl* control, volatile long* cancel, MhpRunStats& stats)
     {

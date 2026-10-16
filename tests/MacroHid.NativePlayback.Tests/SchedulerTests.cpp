@@ -154,6 +154,43 @@ int main(int argc, char** argv)
             MhpReleaseRun(handle); MhpDestroyPlan(plan); MhpShutdownEngine();
             return 0;
         }
+        if ((argc == 4 || argc == 5) && std::string(argv[1]) == "--submit-benchmark")
+        {
+            // Many isolated single-batch runs, the way hotkeys arrive: submit-to-first-call latency and
+            // per-run submit cost. Fake input, no SendInput. Optional argv[4] = gap between runs in ms.
+            ProbeTimerResolution timer;
+            options.precisionMode = std::stoi(argv[2]);
+            const int count = std::stoi(argv[3]);
+            const int gapMs = argc == 5 ? std::stoi(argv[4]) : 2;
+            Check(count >= 10 && count <= 100000, "invalid count");
+            options.enableCpuScan = 0;
+            Check(MhpPrepareEngine(&options, 0, nullptr) == MhpOk, "submit benchmark warm");
+            INPUT input{}; input.type = INPUT_KEYBOARD; input.ki.wVk = 'A';
+            MhpBatch batch{0, 0, 1, 1};
+            void* plan = nullptr;
+            Check(MhpCreatePlan(&input, 1, &batch, 1, &plan) == MhpOk, "submit benchmark plan");
+            std::vector<double> startup, submitCost;
+            for (int i = 0; i < count; i++)
+            {
+                Sleep(gapMs);
+                calls = 0;
+                const auto before = QueryCounter();
+                void* handle = nullptr; HANDLE done = nullptr;
+                Check(MhpSubmitPlanAt(plan, &options, nullptr, before, &handle, &done) == MhpOk, "submit benchmark submit");
+                const auto after = QueryCounter();
+                Check(WaitForSingleObject(done, 3000) == WAIT_OBJECT_0, "submit benchmark completion");
+                startup.push_back((firstCalls[0] - before) * 1e6 / options.qpcFrequency);
+                submitCost.push_back((after - before) * 1e6 / options.qpcFrequency);
+                MhpReleaseRun(handle);
+            }
+            MhpDestroyPlan(plan);
+            auto pct = [](std::vector<double> v, double q) { std::sort(v.begin(), v.end()); return v[std::min(v.size() - 1, static_cast<size_t>(q * v.size()))]; };
+            std::cout << "submit benchmark mode=" << options.precisionMode << " runs=" << count
+                << " startup_us p50=" << pct(startup, .5) << " p99=" << pct(startup, .99) << " p999=" << pct(startup, .999)
+                << " submit_us p50=" << pct(submitCost, .5) << " p99=" << pct(submitCost, .99) << "\n";
+            MhpShutdownEngine();
+            return 0;
+        }
         if (argc == 5 && std::string(argv[1]) == "--benchmark")
         {
             ProbeTimerResolution timer;
