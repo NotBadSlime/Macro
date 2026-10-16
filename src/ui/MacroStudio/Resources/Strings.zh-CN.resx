@@ -644,4 +644,11 @@
   <data name="DialogYes" xml:space="preserve"><value>是</value></data>
   <data name="DialogNo" xml:space="preserve"><value>否</value></data>
   <data name="SnapshotSampleMessage" xml:space="preserve"><value>目标进程没有运行。请先打开目标程序，再按一次快捷键。</value></data>
+  <data name="RestoreWindow" xml:space="preserve"><value>还原</value></data>
+  <data name="MaximizeWindow" xml:space="preserve"><value>最大化</value></data>
+  <data name="ToggleTheme" xml:space="preserve"><value>切换浅色 / 深色主题</value></data>
+  <data name="UnlockerSettings" xml:space="preserve"><value>解帧器设置</value></data>
+  <data name="FloatPanel" xml:space="preserve"><value>浮动</value></data>
+  <data name="ClosePanel" xml:space="preserve"><value>关闭面板</value></data>
+  <data name="StatusErrorPrefix" xml:space="preserve"><value>操作失败：{0}</value></data>
 </root>

@@ -160,6 +160,6 @@ public partial class MainWindow
             shutdownFinished = true;
             Close();
         }
-        catch (Exception ex) { AppLog.Error("Shutdown", "Cleanup failed", ex); SetStatus(ex.Message); }
+        catch (Exception ex) { AppLog.Error("Shutdown", "Cleanup failed", ex); SetErrorStatus(ex); }
     }
 }

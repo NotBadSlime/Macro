@@ -629,4 +629,26 @@
   <data name="DialogYes" xml:space="preserve"><value>是</value></data>
   <data name="DialogNo" xml:space="preserve"><value>否</value></data>
   <data name="SnapshotSampleMessage" xml:space="preserve"><value>目標程序沒有執行。請先開啟目標程式，再按一次快捷鍵。</value></data>
+  <data name="RestoreWindow" xml:space="preserve"><value>還原</value></data>
+  <data name="MaximizeWindow" xml:space="preserve"><value>最大化</value></data>
+  <data name="ToggleTheme" xml:space="preserve"><value>切換淺色 / 深色主題</value></data>
+  <data name="UnlockerSettings" xml:space="preserve"><value>解幀器設定</value></data>
+  <data name="FloatPanel" xml:space="preserve"><value>浮動</value></data>
+  <data name="ClosePanel" xml:space="preserve"><value>關閉面板</value></data>
+  <data name="StatusErrorPrefix" xml:space="preserve"><value>操作失敗：{0}</value></data>
+  <data name="AddYsrFpsToggle" xml:space="preserve"><value>YSR 切幀</value></data>
+  <data name="AddYsrFpsToggleHint" xml:space="preserve"><value>切換到設定 FPS，再按一次恢復</value></data>
+  <data name="PaletteYsrUnlocker" xml:space="preserve"><value>鎖幀模組</value></data>
+  <data name="AddYsrFpsStart" xml:space="preserve"><value>YSR 開啟鎖幀</value></data>
+  <data name="AddYsrFpsStop" xml:space="preserve"><value>YSR 關閉鎖幀</value></data>
+  <data name="AddYsrFpsStartHint" xml:space="preserve"><value>修改已有 KY3 解幀器目標值</value></data>
+  <data name="AddYsrFpsStopHint" xml:space="preserve"><value>恢復解幀器原目標值</value></data>
+  <data name="AddKy3FpsStart" xml:space="preserve"><value>KY3 開啟鎖幀</value></data>
+  <data name="AddKy3FpsStop" xml:space="preserve"><value>KY3 恢復幀率</value></data>
+  <data name="AddKy3FpsStartHint" xml:space="preserve"><value>修改已有 KY3 解幀器目標值</value></data>
+  <data name="AddKy3FpsStopHint" xml:space="preserve"><value>恢復解幀器原目標值</value></data>
+  <data name="AddFufuFpsStart" xml:space="preserve"><value>Fufu 開啟鎖幀</value></data>
+  <data name="AddFufuFpsStop" xml:space="preserve"><value>Fufu 恢復幀率</value></data>
+  <data name="AddFufuFpsStartHint" xml:space="preserve"><value>進入遊戲後修改 Fufu 解幀器目標值</value></data>
+  <data name="AddFufuFpsStopHint" xml:space="preserve"><value>恢復解幀器原目標值</value></data>
 </root>

@@ -968,7 +968,7 @@ public partial class MainWindow : Window
             syncingJsonPanel = false;
             if (showStatus)
             {
-                SetStatus(ex.Message);
+                SetErrorStatus(ex);
             }
 
             return false;
@@ -1027,7 +1027,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -1070,7 +1070,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -1203,7 +1203,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -1217,7 +1217,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -1242,7 +1242,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -1402,7 +1402,7 @@ public partial class MainWindow : Window
             if (candidates.Count == 0) { StopListeningControllers(); listening = false; RefreshKeyboardHook(); return; }
             await StartListeningCandidates(candidates, editorState.SelectedMacroId is { } id ? [id] : null);
         }
-        catch (Exception ex) { AppLog.Error("Listening", "Update failed; retaining previous definitions", ex); SetStatus(ex.Message); }
+        catch (Exception ex) { AppLog.Error("Listening", "Update failed; retaining previous definitions", ex); SetErrorStatus(ex); }
     }
 
     private void OnLibraryStructureEdited()
@@ -1490,7 +1490,7 @@ public partial class MainWindow : Window
             if (activeEditorMacroId == id) LibraryPanel.RefreshList();
             RestartListeningWithCurrentSettings();
         }
-        catch (Exception ex) { AppLog.Error("AutoSave", "Save failed", ex); SetStatus(ex.Message); }
+        catch (Exception ex) { AppLog.Error("AutoSave", "Save failed", ex); SetErrorStatus(ex); }
     }
 
     private void OnStepSelectionChanged(int stepIndex)
@@ -1611,7 +1611,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
             return false;
         }
     }
@@ -1657,7 +1657,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -1690,7 +1690,7 @@ public partial class MainWindow : Window
             AppLog.Error("MainWindow", "Operation failed", ex);
             var persisted = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, macroId, StringComparison.OrdinalIgnoreCase));
             ApplyEditLock(persisted?.IsLocked == true);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -1762,7 +1762,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -1784,7 +1784,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -2001,7 +2001,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -2917,7 +2917,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -3076,10 +3076,29 @@ public partial class MainWindow : Window
         SetStatus(L(StatusResourceKey(playbackController.Status)));
     }
 
-    private void SetStatus(string text)
+    private enum StatusLevel { Info, Warning, Error }
+
+    private void SetStatus(string text) => SetStatus(text, StatusLevel.Info);
+
+    private void SetStatus(string text, StatusLevel level)
     {
         if (StatusText.Text != text) AppLog.Info("Status", text);
         StatusText.Text = text;
+        StatusText.ToolTip = string.IsNullOrEmpty(text) ? null : text;
+        StatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, level switch
+        {
+            StatusLevel.Error => "Danger",
+            StatusLevel.Warning => "AccentOrange",
+            _ => "Accent"
+        });
+    }
+
+    /// <summary>Shows a failure in the status pill: the message only (full exception goes to the log), marked as an error.</summary>
+    private void SetErrorStatus(Exception ex)
+    {
+        var message = (ex is AggregateException { InnerException: { } inner } ? inner : ex).Message;
+        var firstLine = message.Split('\n', 2)[0].Trim();
+        SetStatus(LocalizationService.Format("StatusErrorPrefix", firstLine), StatusLevel.Error);
     }
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
@@ -3092,14 +3111,14 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("App", "Unable to open log directory", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
     private void UnlockerSettings_Click(object sender, RoutedEventArgs e)
     {
         try { DialogOwnerService.ShowDialogSafe(new UnlockerSettingsWindow(), this); }
-        catch (Exception ex) { SetStatus(ex.Message); }
+        catch (Exception ex) { SetErrorStatus(ex); }
     }
 
     // --- Window chrome ---
@@ -3348,7 +3367,7 @@ public partial class MainWindow : Window
         }
 
         MaximizeWindowButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
-        MaximizeWindowButton.ToolTip = WindowState == WindowState.Maximized ? "还原" : "最大化";
+        MaximizeWindowButton.ToolTip = L(WindowState == WindowState.Maximized ? "RestoreWindow" : "MaximizeWindow");
     }
 
     // --- File operations ---
@@ -3379,7 +3398,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
             DialogOwnerService.MessageBoxSafe(
                 this,
                 ex.Message,
@@ -3430,6 +3449,10 @@ public partial class MainWindow : Window
         Title = L("AppTitle");
         MinimizeWindowButton.ToolTip = L("Minimize");
         CloseWindowButton.ToolTip = L("CloseWindow");
+        ThemeToggleButton.ToolTip = L("ToggleTheme");
+        UnlockerSettingsButton.Content = L("UnlockerSettings");
+        RefreshWindowChromeButtons();
+        ApplyPanelChromeToolTips(this);
         UpdateTrayMenuText();
         LanguageLabelText.Text = L("Language");
         OpenButton.Content = L("OpenMacroFile");
@@ -3485,6 +3508,20 @@ public partial class MainWindow : Window
         }
 
         base.OnClosed(e);
+    }
+
+    // Panel header float/close buttons are unnamed in XAML (one pair per panel); find them by their click handlers' tags.
+    private static void ApplyPanelChromeToolTips(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is Button { Style: { } style } button && button.Tag is string
+                && ReferenceEquals(style, button.TryFindResource("ToolWindowChromeButton")))
+            {
+                button.ToolTip = (button.Content as string) == "\uE740" ? L("FloatPanel") : L("ClosePanel");
+            }
+            ApplyPanelChromeToolTips(child);
+        }
     }
 
     private void ApplyWorkspaceMenuItemText()
@@ -3566,7 +3603,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 
@@ -3597,7 +3634,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
-            SetStatus(ex.Message);
+            SetErrorStatus(ex);
         }
     }
 

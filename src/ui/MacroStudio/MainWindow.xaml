@@ -57,7 +57,7 @@
                                 Style="{StaticResource CommandBarButton}"
                                 Content="打开日志"
                                 Click="OpenLogs_Click" />
-                        <Button Style="{StaticResource CommandBarButton}" Content="解帧器设置" Click="UnlockerSettings_Click" />
+                        <Button x:Name="UnlockerSettingsButton" Style="{StaticResource CommandBarButton}" Content="解帧器设置" Click="UnlockerSettings_Click" />
                         <Button x:Name="WindowMenuButton"
                                 Style="{StaticResource CommandBarButton}"
                                 Content="窗口"
@@ -102,13 +102,18 @@
                                 CornerRadius="12"
                                 Padding="10,5"
                                 Margin="0,0,10,0">
+                            <DockPanel>
+                            <Ellipse x:Name="StatusDot" DockPanel.Dock="Left" Width="7" Height="7" Margin="0,5,8,0" VerticalAlignment="Top" Fill="{DynamicResource Accent}" />
                             <StackPanel>
                             <TextBlock x:Name="StatusText"
+                                       MaxWidth="380"
+                                       TextTrimming="CharacterEllipsis"
                                        Foreground="{DynamicResource SecondaryText}"
                                        VerticalAlignment="Center"
                                        Text="Input backend ready" />
                             <TextBlock x:Name="PerformanceStatusText" FontSize="10" Foreground="{DynamicResource SecondaryText}" MaxWidth="380" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
+                            </DockPanel>
                         </Border>
                         <Button x:Name="PauseListeningButton"
                                 Style="{StaticResource CommandBarButton}"

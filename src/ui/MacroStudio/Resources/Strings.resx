@@ -944,4 +944,11 @@
   <data name="DialogYes" xml:space="preserve"><value>Yes</value></data>
   <data name="DialogNo" xml:space="preserve"><value>No</value></data>
   <data name="SnapshotSampleMessage" xml:space="preserve"><value>The target process is not running. Start it first, then press the hotkey again.</value></data>
+  <data name="RestoreWindow" xml:space="preserve"><value>Restore</value></data>
+  <data name="MaximizeWindow" xml:space="preserve"><value>Maximize</value></data>
+  <data name="ToggleTheme" xml:space="preserve"><value>Switch light / dark theme</value></data>
+  <data name="UnlockerSettings" xml:space="preserve"><value>Unlocker settings</value></data>
+  <data name="FloatPanel" xml:space="preserve"><value>Float</value></data>
+  <data name="ClosePanel" xml:space="preserve"><value>Close panel</value></data>
+  <data name="StatusErrorPrefix" xml:space="preserve"><value>Failed: {0}</value></data>
 </root>

@@ -41,6 +41,11 @@ internal static class UiSnapshot
                     Render(ThemedMessageDialog.Create(null, LocalizationService.Get("SnapshotSampleMessage"),
                             LocalizationService.Get("MacroBasicControl"), MessageBoxButton.OKCancel, MessageBoxImage.Warning),
                         Path.Combine(directory, $"message-{suffix}.png"));
+                    var palette = new ActionPalettePanel();
+                    palette.ApplyLocalization();
+                    Render(new Window { Width = 400, Height = 760, Content = palette, WindowStyle = WindowStyle.None,
+                            Background = (Brush)Application.Current.FindResource("InspectorBackground") },
+                        Path.Combine(directory, $"palette-{suffix}.png"));
                 }
             }
             catch (Exception ex)

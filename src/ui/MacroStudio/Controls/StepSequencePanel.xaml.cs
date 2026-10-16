@@ -2070,19 +2070,7 @@ public partial class StepSequencePanel : UserControl
         return paths.All(path => PathsEqual(parent, path.Take(path.Count - 1).ToArray()));
     }
 
-    private static Brush GetDefaultConditionColor(int index)
-    {
-        Brush[] palette =
-        [
-            new SolidColorBrush(Color.FromRgb(99, 102, 241)),
-            new SolidColorBrush(Color.FromRgb(16, 185, 129)),
-            new SolidColorBrush(Color.FromRgb(245, 158, 11)),
-            new SolidColorBrush(Color.FromRgb(239, 68, 68)),
-            new SolidColorBrush(Color.FromRgb(139, 92, 246)),
-            new SolidColorBrush(Color.FromRgb(6, 182, 212)),
-        ];
-        return palette[index % palette.Length];
-    }
+    private static Brush GetDefaultConditionColor(int index) => AccentPalette.Condition(index);
 
     private static ConditionRangeHighlight CreateConditionRangeHighlight(ConditionalDirective directive, Brush color)
     {

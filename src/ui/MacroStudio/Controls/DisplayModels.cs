@@ -23,8 +23,8 @@ public sealed class BoolToThicknessConverter : IValueConverter
 
 public sealed class MacroLibraryListEntry
 {
-    private static readonly Brush MacroBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
-    private static readonly Brush ConditionMacroBrush = new SolidColorBrush(Color.FromRgb(255, 149, 0));
+    private static readonly Brush MacroBrush = AccentPalette.Green;
+    private static readonly Brush ConditionMacroBrush = AccentPalette.Orange;
 
     private MacroLibraryListEntry(MacroLibraryItem? item, string title, string subtitle, string icon, Brush accent, FontWeight weight)
     {
@@ -119,9 +119,9 @@ public sealed record MacroLibraryListenState(
     {
         get
         {
-            if (IsConflict) return new SolidColorBrush(Color.FromRgb(255, 59, 48));
-            if (IsGroupSummary && ListeningCount > 0) return new SolidColorBrush(Color.FromRgb(0, 122, 255));
-            if (IsListening) return new SolidColorBrush(Color.FromRgb(52, 199, 89));
+            if (IsConflict) return AccentPalette.Red;
+            if (IsGroupSummary && ListeningCount > 0) return AccentPalette.Blue;
+            if (IsListening) return AccentPalette.Green;
             return Brushes.Transparent;
         }
     }
@@ -137,8 +137,8 @@ public enum MacroLibraryDropIndicator
 
 public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
 {
-    private static readonly Brush GroupBrush = new SolidColorBrush(Color.FromRgb(0, 122, 255));
-    private static readonly Brush FolderBrush = new SolidColorBrush(Color.FromRgb(142, 142, 147));
+    private static readonly Brush GroupBrush = AccentPalette.Blue;
+    private static readonly Brush FolderBrush = AccentPalette.Gray;
 
     private MacroLibraryTreeNode(
         MacroLibraryGroup? group,
@@ -320,13 +320,13 @@ public enum StepDisplayKind
 
 public sealed class StepDisplayItem : INotifyPropertyChanged
 {
-    private static readonly Brush GreenBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
-    private static readonly Brush BlueBrush = new SolidColorBrush(Color.FromRgb(0, 122, 255));
-    private static readonly Brush OrangeBrush = new SolidColorBrush(Color.FromRgb(255, 149, 0));
-    private static readonly Brush PinkBrush = new SolidColorBrush(Color.FromRgb(255, 45, 85));
-    private static readonly Brush RedBrush = new SolidColorBrush(Color.FromRgb(255, 59, 48));
-    private static readonly Brush GrayBrush = new SolidColorBrush(Color.FromRgb(142, 142, 147));
-    private static readonly Brush LoopBrush = new SolidColorBrush(Color.FromRgb(239, 108, 0));
+    private static readonly Brush GreenBrush = AccentPalette.Green;
+    private static readonly Brush BlueBrush = AccentPalette.Blue;
+    private static readonly Brush OrangeBrush = AccentPalette.Orange;
+    private static readonly Brush PinkBrush = AccentPalette.Pink;
+    private static readonly Brush RedBrush = AccentPalette.Red;
+    private static readonly Brush GrayBrush = AccentPalette.Gray;
+    private static readonly Brush LoopBrush = AccentPalette.Loop;
 
     private StepDisplayItem(
         int index,

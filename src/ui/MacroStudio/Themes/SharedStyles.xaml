@@ -7,9 +7,7 @@
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
     </Style>
 
-    <SolidColorBrush x:Key="WorkspacePanelGlowBrush" Color="#662F80ED" />
-    <SolidColorBrush x:Key="RailSelectionGlow" Color="#332F80ED" />
-    <SolidColorBrush x:Key="SelectionBandBrush" Color="#2A2F80ED" />
+    <!-- WorkspacePanelGlowBrush, RailSelectionGlow, SelectionBandBrush: defined per theme (Light/DarkTheme.xaml). -->
 
     <Storyboard x:Key="WorkspacePanelEnterStoryboard">
         <DoubleAnimation Storyboard.TargetProperty="Opacity"
@@ -348,7 +346,7 @@
                             <Border x:Name="Glow"
                                     Margin="2"
                                     CornerRadius="9"
-                                    Background="{StaticResource RailSelectionGlow}"
+                                    Background="{DynamicResource RailSelectionGlow}"
                                     Opacity="0" />
                             <Border x:Name="ActiveMark"
                                     Width="3"
@@ -640,7 +638,7 @@
                             CornerRadius="11">
                         <Grid>
                             <Border x:Name="Glow"
-                                    Background="{StaticResource WorkspacePanelGlowBrush}"
+                                    Background="{DynamicResource WorkspacePanelGlowBrush}"
                                     CornerRadius="11"
                                     Opacity="0" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -668,7 +666,7 @@
         <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{StaticResource WorkspacePanelGlowBrush}" />
+                <Setter Property="Background" Value="{DynamicResource WorkspacePanelGlowBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>

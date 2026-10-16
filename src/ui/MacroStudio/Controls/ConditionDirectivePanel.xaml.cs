@@ -41,15 +41,7 @@ public partial class ConditionDirectivePanel : UserControl
     private IntPtr conditionDragMouseHookHandle;
     private readonly LowLevelMouseProc conditionDragMouseHookProc;
 
-    private static readonly Brush[] conditionColors =
-    [
-        new SolidColorBrush(Color.FromRgb(99, 102, 241)),
-        new SolidColorBrush(Color.FromRgb(16, 185, 129)),
-        new SolidColorBrush(Color.FromRgb(245, 158, 11)),
-        new SolidColorBrush(Color.FromRgb(239, 68, 68)),
-        new SolidColorBrush(Color.FromRgb(139, 92, 246)),
-        new SolidColorBrush(Color.FromRgb(6, 182, 212)),
-    ];
+    private static IReadOnlyList<Brush> conditionColors => AccentPalette.Conditions;
 
     public event EventHandler<ConditionSelectionChangedEventArgs>? ConditionSelectionChanged;
     public event EventHandler? ConditionsModified;
@@ -261,7 +253,7 @@ public partial class ConditionDirectivePanel : UserControl
 
     public Brush GetConditionColor(int index)
     {
-        return conditionColors[index % conditionColors.Length];
+        return conditionColors[index % conditionColors.Count];
     }
 
     private void RefreshList()

@@ -35,4 +35,21 @@
     <sys:Double x:Key="PanelShadowOpacity">0.18</sys:Double>
     <sys:Double x:Key="PanelShadowBlur">22</sys:Double>
 
+    <!-- Action palette icon badges -->
+    <SolidColorBrush x:Key="BadgeBlue" Color="#22344A" />
+    <SolidColorBrush x:Key="BadgeAmber" Color="#3E3322" />
+    <SolidColorBrush x:Key="BadgeGray" Color="#31363F" />
+    <SolidColorBrush x:Key="BadgeGreen" Color="#213A2C" />
+    <SolidColorBrush x:Key="BadgePurple" Color="#382740" />
+    <SolidColorBrush x:Key="BadgePink" Color="#402632" />
+    <SolidColorBrush x:Key="BadgeTeal" Color="#1F3A3E" />
+    <SolidColorBrush x:Key="BadgeRed" Color="#432629" />
+    <SolidColorBrush x:Key="BadgeMint" Color="#26382D" />
+    <SolidColorBrush x:Key="BadgeOrange" Color="#41301F" />
+
+    <!-- Selection glows (were fixed blue in SharedStyles) -->
+    <SolidColorBrush x:Key="WorkspacePanelGlowBrush" Color="#7A62B0FF" />
+    <SolidColorBrush x:Key="RailSelectionGlow" Color="#3362B0FF" />
+    <SolidColorBrush x:Key="SelectionBandBrush" Color="#3062B0FF" />
+
 </ResourceDictionary>

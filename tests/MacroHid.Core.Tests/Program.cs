@@ -280,6 +280,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio basic control confirm keeps every dialog field", MacroStudioBasicControlConfirmKeepsEveryDialogField),
     ("Startup path warm-up also runs the native branch for the selected profile", StartupPathWarmupRunsTheNativeBranch),
     ("Hold times are edited in milliseconds and stored in microseconds", HoldTimesAreEditedInMilliseconds),
+    ("Light and dark themes define the same brushes and every language has every string", ThemesAndLanguagesStayInStep),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
@@ -5440,6 +5441,45 @@ static void HoldTimesAreEditedInMilliseconds()
     foreach (var key in new[] { "FieldHelpText", "FieldErrorText", "DialogButtonRow", "FieldSectionTitle", "DialogSectionDivider" })
         Assert.Contains($"x:Key=\"{key}\"", styles);
     Assert.Contains("controls:FieldState.HasError", styles);
+}
+
+static void ThemesAndLanguagesStayInStep()
+{
+    static HashSet<string> Keys(string path, string pattern) =>
+        System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(path), pattern).Select(m => m.Groups[1].Value).ToHashSet();
+    var themes = Path.Combine("src", "ui", "MacroStudio", "Themes");
+    var light = Keys(Path.Combine(themes, "LightTheme.xaml"), "x:Key=\"(\\w+)\"");
+    var dark = Keys(Path.Combine(themes, "DarkTheme.xaml"), "x:Key=\"(\\w+)\"");
+    Assert.Equal(string.Join(",", light.Order()), string.Join(",", dark.Order()));
+    foreach (var key in new[] { "BadgeBlue", "BadgeAmber", "BadgeRed", "WorkspacePanelGlowBrush", "RailSelectionGlow", "SelectionBandBrush" })
+        Assert.True(light.Contains(key));
+
+    // Surfaces that sit on a panel follow the theme: no fixed light tints in the palette, no fixed glows.
+    var palette = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ActionPalettePanel.xaml"));
+    Assert.DoesNotContain("Background=\"#", palette);
+    var shared = File.ReadAllText(Path.Combine(themes, "SharedStyles.xaml"));
+    Assert.DoesNotContain("StaticResource WorkspacePanelGlowBrush", shared);
+    Assert.DoesNotContain("StaticResource RailSelectionGlow", shared);
+    // One condition palette, shared by the condition list and the sequence highlight.
+    Assert.DoesNotContain("FromRgb(99, 102, 241)", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepSequencePanel.xaml.cs")));
+    Assert.DoesNotContain("FromRgb(99, 102, 241)", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs")));
+
+    var resources = Path.Combine("src", "ui", "MacroStudio", "Resources");
+    var en = Keys(Path.Combine(resources, "Strings.resx"), "<data name=\"(\\w+)\"");
+    foreach (var file in new[] { "Strings.zh-CN.resx", "Strings.zh-TW.resx" })
+    {
+        var other = Keys(Path.Combine(resources, file), "<data name=\"(\\w+)\"");
+        Assert.Equal("", string.Join(",", en.Except(other).Order()));
+    }
+
+    // Window chrome text comes from resources, not literals.
+    var mainCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    Assert.DoesNotContain("? \"还原\" : \"最大化\"", mainCode);
+    Assert.Contains("ThemeToggleButton.ToolTip = L(\"ToggleTheme\")", mainCode);
+    Assert.Contains("UnlockerSettingsButton.Content = L(\"UnlockerSettings\")", mainCode);
+    Assert.DoesNotContain("SetStatus(ex.Message)", mainCode);
+    Assert.DoesNotContain("ToolTip = \"关闭\"", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ThemedDialogChrome.cs")));
+    Assert.DoesNotContain("响应目标：", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml.cs")));
 }
 
 static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()

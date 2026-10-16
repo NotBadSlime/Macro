@@ -1,6 +1,8 @@
 param(
     # Path to a JSON file: { "Key": { "en": "...", "zh-CN": "...", "zh-TW": "..." }, ... }
-    [Parameter(Mandatory = $true)][string]$Strings
+    [Parameter(Mandatory = $true)][string]$Strings,
+    # Only write these languages (default all). Keys missing from a language's JSON entry are skipped for it.
+    [string[]]$Languages = @("en", "zh-CN", "zh-TW")
 )
 # Adds or replaces <data> entries in Strings.resx / Strings.zh-CN.resx / Strings.zh-TW.resx.
 # Keeps each file's line endings and writes UTF-8 without a BOM change (preserves an existing BOM).
@@ -9,6 +11,7 @@ $root = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) "src\ui\MacroStu
 $map = Get-Content -Raw -Encoding UTF8 $Strings | ConvertFrom-Json
 $files = @{ "en" = "Strings.resx"; "zh-CN" = "Strings.zh-CN.resx"; "zh-TW" = "Strings.zh-TW.resx" }
 foreach ($lang in $files.Keys) {
+    if ($Languages -notcontains $lang) { continue }
     $path = Join-Path $root $files[$lang]
     $bytes = [IO.File]::ReadAllBytes($path)
     $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF

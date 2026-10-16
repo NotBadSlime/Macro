@@ -274,7 +274,7 @@
                     Panel.ZIndex="20"
                     BorderBrush="{DynamicResource Accent}"
                     BorderThickness="1"
-                    Background="{StaticResource SelectionBandBrush}"
+                    Background="{DynamicResource SelectionBandBrush}"
                     CornerRadius="6"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Top"
