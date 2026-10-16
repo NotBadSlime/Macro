@@ -34,7 +34,11 @@ var setup = Stopwatch.StartNew();
 NativePlaybackWarmup.TryWarmUpForPrecision(precision, "", PrecisionGeneration.Latest);
 PlaybackPathWarmup.Run();
 bool nativePathWarmup = !args.Contains("--no-native-path-warmup");
-int nativeWarmRounds = nativePathWarmup ? PlaybackPathWarmup.RunNative(precision, "", PrecisionGeneration.Latest) : 0;
+// Looked up by reflection so the probe also builds against revisions before the native path warm-up existed (A/B runs).
+var runNative = typeof(PlaybackPathWarmup).GetMethod("RunNative");
+int nativeWarmRounds = nativePathWarmup && runNative is not null
+    ? (int)runNative.Invoke(null, [precision, "", PrecisionGeneration.Latest, 2])!
+    : 0;
 using var lease = policy.PreferNative ? PrecisionPlaybackContext.AcquireWarmLease() : null;
 
 var document = McrxParser.Parse("{\"steps\":[{\"type\":\"key.down\",\"key\":\"F24\"},{\"type\":\"key.up\",\"key\":\"F24\"}]}");

@@ -18,6 +18,10 @@ try {
     & .\scripts\Build-NativePlayback.ps1 -Configuration Release *> $null
     Pop-Location
     $probeProject = "src\tools\StartupLatencyProbe\StartupLatencyProbe.csproj"
+    # Older revisions predate the probe: use the current probe sources against their runtime.
+    $probeDir = Join-Path $worktree "src\tools\StartupLatencyProbe"
+    New-Item -ItemType Directory -Force $probeDir | Out-Null
+    Copy-Item (Join-Path $repoRoot "src\tools\StartupLatencyProbe\*.cs*") $probeDir -Force
     foreach ($root in @($worktree, $repoRoot)) {
         dotnet build (Join-Path $root $probeProject) -c Release -v q | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "probe build failed in $root" }
