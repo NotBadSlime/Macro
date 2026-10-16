@@ -18,6 +18,12 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
         base.OnStartup(e);
 
+        if (UiSnapshot.TryRun(this, e.Args))
+        {
+            ThemeService.ApplyTheme(AppTheme.Light);
+            return;
+        }
+
         Log("=== App Starting ===");
         UnlockerConfiguration.Faulted += (_, message) => Dispatcher.BeginInvoke(new Action(() =>
             DialogOwnerService.MessageBoxSafe(MainWindow, message, "解帧器配置控制已停止", MessageBoxButton.OK, MessageBoxImage.Warning)));
@@ -44,6 +50,9 @@ public partial class App : Application
             AppLog.Error("Startup", "ThemeService failed", ex);
             DialogOwnerService.MessageBoxSafe(null, $"Theme init failed:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+
+        // Created here instead of StartupUri so the --ui-snapshot mode above never constructs it (hooks, engine).
+        new MainWindow().Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

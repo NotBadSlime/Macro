@@ -37,6 +37,8 @@ public static class LocalizationService
         SetCurrentCulture(cultureName, persist: true);
     }
 
+    public static void SetLanguage(string cultureName, bool persist) => SetCurrentCulture(cultureName, persist);
+
     public static string NormalizeCultureName(CultureInfo culture)
     {
         foreach (var name in EnumerateCultureNames(culture))

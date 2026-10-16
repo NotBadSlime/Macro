@@ -21,6 +21,8 @@ public partial class MacroBasicControlDialog : Window
     public MacroBasicControlDialog(RuntimePrecisionSettings settings, Func<string, bool>? backgroundProcessRequired = null)
     {
         InitializeComponent();
+        // Scroll only when the screen is too short for the whole form (title bar and chrome take about 90px).
+        DialogBody.MaxHeight = Math.Max(420, SystemParameters.WorkArea.Height - 90);
         ThemedDialogChrome.Apply(this);
         source = settings;
         this.backgroundProcessRequired = backgroundProcessRequired;
@@ -33,8 +35,10 @@ public partial class MacroBasicControlDialog : Window
             ? CoreHotkeys.DefaultColorSampleText
             : settings.ColorSampleHotkey;
         StopTriggerTextBox.Text = settings.ForceStopHotkey;
-        ZeroGapHoldBox.Text = settings.ZeroGapHoldMicroseconds.ToString();
-        ModifierChordHoldBox.Text = settings.ModifierChordHoldMicroseconds.ToString();
+        ZeroGapHoldBox.Text = HoldTimeText.FormatMilliseconds(settings.ZeroGapHoldMicroseconds);
+        ModifierChordHoldBox.Text = HoldTimeText.FormatMilliseconds(settings.ModifierChordHoldMicroseconds);
+        ZeroGapHoldBox.TextChanged += (_, _) => ValidateHoldTimes();
+        ModifierChordHoldBox.TextChanged += (_, _) => ValidateHoldTimes();
         foreach (var item in CloseButtonBox.Items.OfType<ComboBoxItem>())
         {
             if (string.Equals(item.Tag?.ToString(), ToCloseButtonTag(settings.CloseButton), StringComparison.Ordinal))
@@ -45,6 +49,21 @@ public partial class MacroBasicControlDialog : Window
         }
         BackgroundWindowCheck.Checked += BackgroundWindowCheck_Changed;
         BackgroundWindowCheck.Unchecked += BackgroundWindowCheck_Changed;
+        ValidateHoldTimes();
+    }
+
+    /// <summary>Checks both hold fields as the user types; marks the box and disables 确定 while either is invalid.</summary>
+    private bool ValidateHoldTimes()
+    {
+        var zeroGapOk = HoldTimeText.TryParseMilliseconds(ZeroGapHoldBox.Text, out _);
+        var chordOk = HoldTimeText.TryParseMilliseconds(ModifierChordHoldBox.Text, out _);
+        var message = LocalizationService.Format("HoldMillisecondsInvalid", HoldTimeText.MaxMilliseconds);
+        ZeroGapHoldErrorText.Text = zeroGapOk ? string.Empty : message;
+        ModifierChordHoldErrorText.Text = chordOk ? string.Empty : message;
+        FieldState.SetHasError(ZeroGapHoldBox, !zeroGapOk);
+        FieldState.SetHasError(ModifierChordHoldBox, !chordOk);
+        ConfirmButton.IsEnabled = zeroGapOk && chordOk;
+        return zeroGapOk && chordOk;
     }
 
     public event Action? CaptureStarted;
@@ -56,15 +75,16 @@ public partial class MacroBasicControlDialog : Window
     private void ApplyLocalization()
     {
         Title = L("MacroBasicControl");
+        TargetSectionTitle.Text = L("BasicSectionTarget");
+        HotkeySectionTitle.Text = L("BasicSectionHotkeys");
+        TimingSectionTitle.Text = L("BasicSectionTiming");
         BackgroundWindowCheck.Content = L("BackgroundWindow");
         BackgroundProcessLabelText.Text = L("BackgroundProcess");
         SelectBackgroundProcessButton.Content = L("BackgroundSelectProcess");
         BackgroundProcessPlaceholderText.Text = L("BackgroundProcessPlaceholder");
         BackgroundWindowHelpText.Text = L("BackgroundWindowHelp");
-        BackgroundProcessBox.ToolTip = L("BackgroundWindowHelp");
         ColorSampleHotkeyLabelText.Text = L("ColorSampleHotkey");
         ColorSampleHotkeyHelpText.Text = L("ColorSampleHotkeyHelp");
-        ColorSampleHotkeyBox.ToolTip = L("ColorSampleHotkeyHelp");
         CaptureColorSampleButton.Content = L("Capture");
         StopTriggerLabelText.Text = L("StopTrigger");
         StopTriggerHintText.Text = L("StopTriggerHint");
@@ -72,12 +92,10 @@ public partial class MacroBasicControlDialog : Window
         ClearStopTriggerButton.Content = L("ClearHotkey");
         ZeroGapHoldLabelText.Text = L("ZeroGapHold");
         ZeroGapHoldHelpText.Text = L("ZeroGapHoldHelp");
-        ZeroGapHoldBox.ToolTip = L("ZeroGapHoldHelp");
         ModifierChordHoldLabelText.Text = L("ModifierChordHold");
         ModifierChordHoldHelpText.Text = L("ModifierChordHoldHelp");
-        ModifierChordHoldBox.ToolTip = L("ModifierChordHoldHelp");
-        ZeroGapUnitText.Text = L("Microseconds");
-        ModifierChordUnitText.Text = L("Microseconds");
+        ZeroGapUnitText.Text = L("Milliseconds");
+        ModifierChordUnitText.Text = L("Milliseconds");
         CloseButtonLabelText.Text = L("CloseButtonBehavior");
         CloseButtonHelpText.Text = L("CloseButtonBehaviorHelp");
         foreach (var item in CloseButtonBox.Items.OfType<ComboBoxItem>())
@@ -312,14 +330,11 @@ public partial class MacroBasicControlDialog : Window
     private void ConfirmButton_Click(object sender, RoutedEventArgs e)
     {
         StopCapture(commit: true);
-        if (!long.TryParse(ZeroGapHoldBox.Text.Trim(), out var zeroGap)
-            || !long.TryParse(ModifierChordHoldBox.Text.Trim(), out var chord)
-            || zeroGap < 0
-            || chord < 0
-            || zeroGap > InputPressTiming.MaxHoldMicroseconds
-            || chord > InputPressTiming.MaxHoldMicroseconds)
+        if (!ValidateHoldTimes()
+            || !HoldTimeText.TryParseMilliseconds(ZeroGapHoldBox.Text, out var zeroGap)
+            || !HoldTimeText.TryParseMilliseconds(ModifierChordHoldBox.Text, out var chord))
         {
-            DialogOwnerService.MessageBoxSafe(this, L("HoldMicrosecondsInvalid"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            (FieldState.GetHasError(ZeroGapHoldBox) ? ZeroGapHoldBox : ModifierChordHoldBox).Focus();
             return;
         }
 

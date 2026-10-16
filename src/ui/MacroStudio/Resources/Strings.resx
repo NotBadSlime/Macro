@@ -29,7 +29,7 @@
   <data name="RememberCloseChoice" xml:space="preserve"><value>Remember this choice</value></data>
   <data name="CloseButtonBehavior" xml:space="preserve"><value>Close button</value></data>
   <data name="CloseButtonAsk" xml:space="preserve"><value>Ask every time</value></data>
-  <data name="CloseButtonBehaviorHelp" xml:space="preserve"><value>Minimize always sends the window to the taskbar. The close button can hide it in the tray or exit. Ask every time until you pick one here or check Remember on the prompt.</value></data>
+  <data name="CloseButtonBehaviorHelp" xml:space="preserve"><value>Minimize always goes to the taskbar. With &quot;Ask every time&quot; you are asked on each close; ticking &quot;Remember this choice&quot; saves the answer here.</value></data>
   <data name="TrayShow" xml:space="preserve">
     <value>Show window</value>
   </data>
@@ -81,9 +81,7 @@
   <data name="CaptureStopTriggerHint" xml:space="preserve">
     <value>For example Alt+Tab or Tab</value>
   </data>
-  <data name="StopTriggerHint" xml:space="preserve">
-    <value>Stops every playing macro and releases keys that are still held. It never starts a macro.</value>
-  </data>
+  <data name="StopTriggerHint" xml:space="preserve"><value>Stops every running macro and releases keys still held. Never starts a macro.</value></data>
   <data name="StopTriggerMustDiffer" xml:space="preserve">
     <value>The force stop key must be different from the playback trigger.</value>
   </data>
@@ -96,9 +94,7 @@
   <data name="AffinityMask" xml:space="preserve">
     <value>Ultra affinity mask</value>
   </data>
-  <data name="AffinityMaskHelp" xml:space="preserve">
-    <value>Only affects Extreme mode: limits playback threads and the native engine to selected CPU cores to reduce migration jitter. Leave empty for automatic selection. Example: 0x1F.</value>
-  </data>
+  <data name="AffinityMaskHelp" xml:space="preserve"><value>Extreme only: restricts the Extreme playback threads and native engine to these CPUs to reduce migration jitter. Leave empty to pick automatically. Example: 0x1F.</value></data>
   <data name="ChooseCores" xml:space="preserve">
     <value>Choose cores</value>
   </data>
@@ -327,9 +323,9 @@
   <data name="MacroBasicControl" xml:space="preserve"><value>Macro basics</value></data>
   <data name="PrecisionControl" xml:space="preserve"><value>Precision</value></data>
   <data name="ZeroGapHold" xml:space="preserve"><value>Default gap</value></data>
-  <data name="ZeroGapHoldHelp" xml:space="preserve"><value>When a key or button has no delay between press and release, playback holds it for this long so the target still sees the press. Unit: microseconds. 0 sends press and release at the same moment. Default is 10000, which is 10 ms.</value></data>
+  <data name="ZeroGapHoldHelp" xml:space="preserve"><value>Default hold: when a key&apos;s press and release have no delay between them, the release waits this long so the target does not drop it. 0 sends both at once. Default 10 ms.</value></data>
   <data name="ModifierChordHold" xml:space="preserve"><value>Chord gap</value></data>
-  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>Ctrl, Shift, Alt, and Win chords are stretched to at least this long. If the modifier is released before the foreground app observes it, the shortcut does not fire. Default is 30000 microseconds, which is 30 ms. A longer delay written in the macro is kept.</value></data>
+  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>Chord hold: a shortcut with Ctrl, Shift, Alt or Win is held at least this long, otherwise the target may miss the modifier. Longer holds in the macro are kept. Default 30 ms.</value></data>
   <data name="Microseconds" xml:space="preserve"><value>µs</value></data>
   <data name="HoldMicrosecondsInvalid" xml:space="preserve"><value>Enter a whole number of microseconds from 0 through 60000000.</value></data>
   <data name="ClearHotkey" xml:space="preserve"><value>Clear</value></data>
@@ -644,7 +640,7 @@
   <data name="BackgroundProcess" xml:space="preserve"><value>Target process</value></data>
   <data name="BackgroundSelectProcess" xml:space="preserve"><value>Choose</value></data>
   <data name="BackgroundProcessPlaceholder" xml:space="preserve"><value>Use the database process</value></data>
-  <data name="BackgroundWindowHelp" xml:space="preserve"><value>Leave this empty to use the active process of the macro's database. Keys, clicks, and the wheel go to that window, and pixels and text are captured from it. The window may be covered, but not minimized.</value></data>
+  <data name="BackgroundWindowHelp" xml:space="preserve"><value>Empty uses the process enabled for this macro&apos;s database. Keys, clicks and wheel go to that window, and pixels and text are read from it. It may be covered but not minimized.</value></data>
   <data name="BackgroundProcessRequired" xml:space="preserve"><value>This macro is in the global database, which has no active process. Set the background playback target process.</value></data>
   <data name="ProcessGroupDatabaseSummary" xml:space="preserve"><value>Process group library · {0}</value></data>
   <data name="SelectProcess" xml:space="preserve"><value>Process</value></data>
@@ -890,7 +886,7 @@
   <data name="ListeningPausedStatus" xml:space="preserve"><value>Listening paused. Saved triggers are unchanged.</value></data>
   <data name="ListeningResumePartial" xml:space="preserve"><value>Restored {0} listener(s).</value></data>
   <data name="ColorSampleHotkey" xml:space="preserve"><value>Color sample hotkey</value></data>
-  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>Core global macro: available while MacroStudio is running. Copies cursor X/Y and pixel #RRGGBB, then shows them briefly. Conflicting macro triggers are skipped with a warning.</value></data>
+  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>Always available while MacroStudio runs: copies the cursor position and pixel color. Macros whose trigger conflicts with it are skipped with a notice.</value></data>
   <data name="ColorSampleCopied" xml:space="preserve"><value>Color sample copied</value></data>
   <data name="LibraryPath" xml:space="preserve"><value>Macro path</value></data>
   <data name="LibraryPathHelp" xml:space="preserve"><value>Database &gt; folder &gt; macro. Press Enter to jump the library to that file or folder.</value></data>
@@ -935,4 +931,17 @@
   <data name="PrecisionGenerationDesc202" xml:space="preserve">
     <value>2.0.2: the timeline fixes (a key press delays only its own release, loops repeat at the period you wrote), but the hold of a key is still counted from when the send call returns, as in 2.0.x.</value>
   </data>
+  <data name="PrecisionImpactLow" xml:space="preserve"><value>Lowest CPU use; for busy machines and everyday automation. Runs in managed code.</value></data>
+  <data name="PrecisionImpactBalanced" xml:space="preserve"><value>Moderate CPU use; suits most games and mixed macros. Runs on the native engine.</value></data>
+  <data name="PrecisionImpactExtreme" xml:space="preserve"><value>Highest CPU use; for 1–2 ms rhythms. Two resident native threads back each other up.</value></data>
+  <data name="PrecisionProfileTargets" xml:space="preserve"><value>Targets: first input P99 ≤ {0} µs, lateness P99.9 ≤ {1} µs. Final spin {2} µs, event wait when idle.</value></data>
+  <data name="PrecisionNextRunNote" xml:space="preserve"><value>Applies from the next run. The figures are targets for 1–2 concurrent macros after warm-up; condition polling intervals are unchanged.</value></data>
+  <data name="BasicSectionTarget" xml:space="preserve"><value>Target</value></data>
+  <data name="BasicSectionHotkeys" xml:space="preserve"><value>Hotkeys</value></data>
+  <data name="BasicSectionTiming" xml:space="preserve"><value>Key timing</value></data>
+  <data name="Milliseconds" xml:space="preserve"><value>ms</value></data>
+  <data name="HoldMillisecondsInvalid" xml:space="preserve"><value>Enter 0 to {0} ms, up to 3 decimals.</value></data>
+  <data name="DialogYes" xml:space="preserve"><value>Yes</value></data>
+  <data name="DialogNo" xml:space="preserve"><value>No</value></data>
+  <data name="SnapshotSampleMessage" xml:space="preserve"><value>The target process is not running. Start it first, then press the hotkey again.</value></data>
 </root>

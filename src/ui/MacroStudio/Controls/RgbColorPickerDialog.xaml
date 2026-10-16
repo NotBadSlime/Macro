@@ -5,14 +5,8 @@
         Width="390"
         SizeToContent="Height"
         ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource PageBackground}">
-    <Border Margin="12"
-            Padding="18"
-            Background="{DynamicResource PanelBackground}"
-            BorderBrush="{DynamicResource PanelBorder}"
-            BorderThickness="1"
-            CornerRadius="8">
+        WindowStartupLocation="CenterOwner">
+    <Border>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -75,10 +69,7 @@
                          KeyDown="HexValueBox_KeyDown" />
             </Grid>
 
-            <StackPanel Grid.Row="5"
-                        Orientation="Horizontal"
-                        HorizontalAlignment="Right"
-                        Margin="0,18,0,0">
+            <StackPanel Grid.Row="5" Style="{StaticResource DialogButtonRow}">
                 <Button x:Name="CancelButton"
                         Style="{StaticResource ToolButton}"
                         MinWidth="82"
@@ -87,7 +78,6 @@
                 <Button x:Name="ConfirmButton"
                         Style="{StaticResource PrimaryButton}"
                         MinWidth="82"
-                        Margin="8,0,0,0"
                         IsDefault="True"
                         Click="ConfirmButton_Click"
                         Content="确定" />

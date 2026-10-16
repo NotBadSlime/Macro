@@ -17,7 +17,7 @@
   <data name="RememberCloseChoice" xml:space="preserve"><value>記住我的選擇</value></data>
   <data name="CloseButtonBehavior" xml:space="preserve"><value>關閉按鈕</value></data>
   <data name="CloseButtonAsk" xml:space="preserve"><value>每次詢問</value></data>
-  <data name="CloseButtonBehaviorHelp" xml:space="preserve"><value>最小化始終縮到工作列。關閉按鈕可以收進托盤，或結束程式。選「每次詢問」時，每次點關閉都會再問一次；勾選「記住我的選擇」後，會寫到這裡。</value></data>
+  <data name="CloseButtonBehaviorHelp" xml:space="preserve"><value>最小化始終縮到工作列。選「每次詢問」時每次關閉都會問；勾選「記住我的選擇」後會儲存到這裡。</value></data>
   <data name="TrayShow" xml:space="preserve"><value>顯示主視窗</value></data>
   <data name="TrayExit" xml:space="preserve"><value>結束</value></data>
   <data name="Language" xml:space="preserve"><value>語言</value></data>
@@ -35,7 +35,7 @@
   <data name="Trigger" xml:space="preserve"><value>觸發鍵</value></data>
   <data name="StopTrigger" xml:space="preserve"><value>強制停止鍵</value></data>
   <data name="CaptureStopTriggerHint" xml:space="preserve"><value>例如 Alt+Tab 或 Tab</value></data>
-  <data name="StopTriggerHint" xml:space="preserve"><value>按下後停止所有正在播放的巨集，並立刻釋放還沒抬起的按鍵。不會啟動巨集。</value></data>
+  <data name="StopTriggerHint" xml:space="preserve"><value>停止所有正在播放的巨集，並立刻釋放還沒放開的按鍵。不會啟動巨集。</value></data>
   <data name="StopTriggerMustDiffer" xml:space="preserve"><value>強制停止鍵不能與播放觸發鍵相同。</value></data>
   <data name="ForceStopTriggered" xml:space="preserve"><value>已強制停止播放並釋放未抬起的按鍵。</value></data>
   <data name="Capture" xml:space="preserve"><value>擷取</value></data>
@@ -71,7 +71,7 @@
   <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次結果：已擷取 {0}</value></data>
   <data name="ProcessFilter" xml:space="preserve"><value>行程篩選</value></data>
   <data name="AffinityMask" xml:space="preserve"><value>極限核心遮罩</value></data>
-  <data name="AffinityMaskHelp" xml:space="preserve"><value>僅極限模式生效：限制極限模式播放執行緒和 Native 引擎使用指定 CPU 核心，減少執行緒遷移抖動；留空則自動選擇。範例：0x1F。</value></data>
+  <data name="AffinityMaskHelp" xml:space="preserve"><value>僅極限模式生效：限制極限模式播放執行緒和原生引擎使用這些 CPU，減少執行緒遷移抖動。留空則自動選擇。範例：0x1F。</value></data>
   <data name="ChooseCores" xml:space="preserve"><value>選擇核心</value></data>
   <data name="ChooseCoresTitle" xml:space="preserve"><value>選擇核心</value></data>
   <data name="ChooseCoresHelp" xml:space="preserve"><value>勾選要測量的邏輯核。預設勾選效能核，不含邏輯核 0。點「測試」會測量勾選的核心並顯示結果；點確定後寫入遮罩。</value></data>
@@ -337,7 +337,7 @@
   <data name="BackgroundProcess" xml:space="preserve"><value>目標行程</value></data>
   <data name="BackgroundSelectProcess" xml:space="preserve"><value>選擇</value></data>
   <data name="BackgroundProcessPlaceholder" xml:space="preserve"><value>與資料庫啟用行程一致</value></data>
-  <data name="BackgroundWindowHelp" xml:space="preserve"><value>留空時使用這個巨集所在資料庫的啟用行程。按鍵、點擊和滾輪投到該視窗，像素和文字也從該視窗截取。視窗可以被擋住，但不能最小化。</value></data>
+  <data name="BackgroundWindowHelp" xml:space="preserve"><value>留空時使用巨集所在資料庫的啟用程序。按鍵、點擊和滾輪投到該視窗，像素和文字也從該視窗擷取。視窗可以被遮住，但不能最小化。</value></data>
   <data name="BackgroundProcessRequired" xml:space="preserve"><value>這個巨集在全域資料庫裡，沒有啟用行程。請設定背景執行的目標行程。</value></data>
   <data name="ProcessGroupDatabaseSummary" xml:space="preserve"><value>行程群組巨集庫 · {0}</value></data>
   <data name="SelectProcess" xml:space="preserve"><value>行程</value></data>
@@ -390,9 +390,9 @@
   <data name="MacroBasicControl" xml:space="preserve"><value>巨集基礎控制</value></data>
   <data name="PrecisionControl" xml:space="preserve"><value>精度控制</value></data>
   <data name="ZeroGapHold" xml:space="preserve"><value>預設間隔</value></data>
-  <data name="ZeroGapHoldHelp" xml:space="preserve"><value>同一個按鍵的按下和抬起之間沒有寫延遲時，用這段時間把抬起往後推，避免目標把這一一下吞掉。單位是微秒。填 0 表示按下和抬起同一時刻發出。預設 10000，也就是 10 毫秒。</value></data>
+  <data name="ZeroGapHoldHelp" xml:space="preserve"><value>預設間隔：同一按鍵的按下和放開之間沒寫延遲時，放開延後這麼久，避免目標把這一下吞掉。填 0 表示同時送出。預設 10 毫秒。</value></data>
   <data name="ModifierChordHold" xml:space="preserve"><value>組合鍵間隔</value></data>
-  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>Ctrl、Shift、Alt、Win 和字母組成快速鍵時，按下到抬起若短於這段時間，會被拉到這段時間。組合鍵太短時，前景經常還沒讀到修飾鍵就已經抬起，快速鍵不會生效。預設 30000 微秒，也就是 30 毫秒。巨集裡寫得更長時，仍按寫下的時間播放。</value></data>
+  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>組合鍵間隔：帶 Ctrl、Shift、Alt、Win 的快捷鍵至少按住這麼久，否則目標可能讀不到修飾鍵。巨集裡寫得更長時依寫下的時間。預設 30 毫秒。</value></data>
   <data name="Microseconds" xml:space="preserve"><value>微秒</value></data>
   <data name="HoldMicrosecondsInvalid" xml:space="preserve"><value>預設間隔和組合鍵間隔請填寫 0 到 60000000 的整數微秒。</value></data>
   <data name="ClearHotkey" xml:space="preserve"><value>清除</value></data>
@@ -599,7 +599,7 @@
   <data name="ListeningPausedStatus" xml:space="preserve"><value>已暫停監聽。已儲存的觸發鍵不會被刪除。</value></data>
   <data name="ListeningResumePartial" xml:space="preserve"><value>已恢復 {0} 個監聽。</value></data>
   <data name="ColorSampleHotkey" xml:space="preserve"><value>取色快捷鍵</value></data>
-  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>軟體核心全域巨集：MacroStudio 執行時始終可用。按下後複製滑鼠座標與像素色號，並短暫顯示。與巨集觸發鍵衝突時會提示並略過該巨集。</value></data>
+  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>MacroStudio 執行時始終可用：複製滑鼠座標和像素色號。與巨集觸發鍵衝突時會提示並略過該巨集。</value></data>
   <data name="ColorSampleCopied" xml:space="preserve"><value>已複製取色結果</value></data>
   <data name="LibraryPath" xml:space="preserve"><value>巨集路徑</value></data>
   <data name="LibraryPathHelp" xml:space="preserve"><value>資料庫 &gt; 資料夾 &gt; 巨集名。按 Enter 後巨集資料庫會跳到對應檔案或資料夾。</value></data>
@@ -616,4 +616,17 @@
   <data name="PrecisionGenerationDesc16" xml:space="preserve"><value>1.6.0：包含 2.0.x 的全部行為，並使用舊的待命/內嵌引擎。</value></data>
   <data name="PrecisionGenerationV202" xml:space="preserve"><value>2.0.2（正式版）</value></data>
   <data name="PrecisionGenerationDesc202" xml:space="preserve"><value>2.0.2：包含時間線修復（按鍵下限只推遲它自己的釋放；迴圈按你所寫的週期重複），按鍵時長仍從傳送呼叫返回起算，與 2.0.x 相同。</value></data>
+  <data name="PrecisionImpactLow" xml:space="preserve"><value>CPU 佔用最低，適合 CPU 緊張或一般自動化。託管程式碼執行。</value></data>
+  <data name="PrecisionImpactBalanced" xml:space="preserve"><value>CPU 佔用中等，適合大多數遊戲和混合巨集。原生引擎執行。</value></data>
+  <data name="PrecisionImpactExtreme" xml:space="preserve"><value>CPU 佔用最高，適合 1–2 毫秒的節奏。兩個原生常駐執行緒互相兜底。</value></data>
+  <data name="PrecisionProfileTargets" xml:space="preserve"><value>目標：首次輸入 P99 ≤ {0} µs，遲到 P99.9 ≤ {1} µs。最終自旋 {2} µs，閒置時事件等待。</value></data>
+  <data name="PrecisionNextRunNote" xml:space="preserve"><value>從下一次執行開始生效。數值是預熱後 1–2 個並行巨集的目標；條件輪詢間隔不變。</value></data>
+  <data name="BasicSectionTarget" xml:space="preserve"><value>執行目標</value></data>
+  <data name="BasicSectionHotkeys" xml:space="preserve"><value>快捷鍵</value></data>
+  <data name="BasicSectionTiming" xml:space="preserve"><value>按鍵時間</value></data>
+  <data name="Milliseconds" xml:space="preserve"><value>毫秒</value></data>
+  <data name="HoldMillisecondsInvalid" xml:space="preserve"><value>請填 0 到 {0} 毫秒，最多 3 位小數。</value></data>
+  <data name="DialogYes" xml:space="preserve"><value>是</value></data>
+  <data name="DialogNo" xml:space="preserve"><value>否</value></data>
+  <data name="SnapshotSampleMessage" xml:space="preserve"><value>目標程序沒有執行。請先開啟目標程式，再按一次快捷鍵。</value></data>
 </root>

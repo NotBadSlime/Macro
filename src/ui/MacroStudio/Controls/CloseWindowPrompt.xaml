@@ -6,8 +6,7 @@
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        ShowInTaskbar="False"
-        Background="{DynamicResource PageBackground}">
+        ShowInTaskbar="False">
     <Window.Resources>
         <Style x:Key="CloseChoiceButton" TargetType="Button">
             <Setter Property="Background" Value="{DynamicResource ControlBackground}" />

@@ -279,6 +279,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio keeps precision as a global runtime setting", MacroStudioKeepsPrecisionAsGlobalRuntimeSetting),
     ("MacroStudio basic control confirm keeps every dialog field", MacroStudioBasicControlConfirmKeepsEveryDialogField),
     ("Startup path warm-up also runs the native branch for the selected profile", StartupPathWarmupRunsTheNativeBranch),
+    ("Hold times are edited in milliseconds and stored in microseconds", HoldTimesAreEditedInMilliseconds),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
@@ -5400,6 +5401,45 @@ static void StartupPathWarmupRunsTheNativeBranch()
     Assert.Contains("PrecisionMode = Volatile.Read(ref preparedNativePrecision)", warmupNative);
     // 低占用 has no native branch to warm.
     Assert.Equal(0, PlaybackPathWarmup.RunNative(PrecisionMode.Balanced, "", PrecisionGeneration.Latest));
+}
+
+static void HoldTimesAreEditedInMilliseconds()
+{
+    Assert.Equal("10", HoldTimeText.FormatMilliseconds(10_000));
+    Assert.Equal("30", HoldTimeText.FormatMilliseconds(30_000));
+    Assert.Equal("0", HoldTimeText.FormatMilliseconds(0));
+    Assert.Equal("12.345", HoldTimeText.FormatMilliseconds(12_345));
+    Assert.Equal("0.5", HoldTimeText.FormatMilliseconds(500));
+    foreach (var us in new long[] { 0, 1, 999, 10_000, 12_345, InputPressTiming.MaxHoldMicroseconds })
+    {
+        Assert.True(HoldTimeText.TryParseMilliseconds(HoldTimeText.FormatMilliseconds(us), out var back));
+        Assert.Equal(us, back);
+    }
+    Assert.True(HoldTimeText.TryParseMilliseconds(" 7,5 ", out var comma));
+    Assert.Equal(7_500L, comma);
+    foreach (var bad in new[] { "", " ", "-1", "abc", "1.2345", "60000.001", "1e3", "10ms" })
+        Assert.True(!HoldTimeText.TryParseMilliseconds(bad, out _));
+
+    // The basic control dialog edits milliseconds and validates in place instead of a message box on confirm.
+    var basicXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroBasicControlDialog.xaml"));
+    var basicCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroBasicControlDialog.xaml.cs"));
+    Assert.Contains("x:Name=\"ZeroGapHoldErrorText\"", basicXaml);
+    Assert.Contains("x:Name=\"ModifierChordHoldErrorText\"", basicXaml);
+    Assert.Contains("HoldTimeText.TryParseMilliseconds", basicCode);
+    Assert.Contains("HoldTimeText.FormatMilliseconds(settings.ZeroGapHoldMicroseconds)", basicCode);
+    Assert.DoesNotContain("L(\"HoldMicrosecondsInvalid\")", basicCode);
+
+    // Message boxes follow the theme: MessageBoxSafe shows the themed dialog, the system box is only a fallback.
+    var helper = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Services", "DialogOwnerService.cs"));
+    var themed = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ThemedMessageDialog.cs"));
+    Assert.Contains("Controls.ThemedMessageDialog.Show(owner, messageBoxText, caption, button, icon)", helper);
+    Assert.Contains("ThemedDialogChrome.Apply(this)", themed);
+    foreach (var value in new[] { "MessageBoxResult.OK", "MessageBoxResult.Cancel", "MessageBoxResult.Yes", "MessageBoxResult.No" })
+        Assert.Contains(value, themed);
+    var styles = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Themes", "SharedStyles.xaml"));
+    foreach (var key in new[] { "FieldHelpText", "FieldErrorText", "DialogButtonRow", "FieldSectionTitle", "DialogSectionDivider" })
+        Assert.Contains($"x:Key=\"{key}\"", styles);
+    Assert.Contains("controls:FieldState.HasError", styles);
 }
 
 static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()

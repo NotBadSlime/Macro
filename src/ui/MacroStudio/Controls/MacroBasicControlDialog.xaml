@@ -2,163 +2,161 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="宏基础控制"
-        Width="460"
+        Width="480"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
-        Background="{DynamicResource PageBackground}">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="720">
-        <StackPanel Margin="16">
-            <CheckBox x:Name="BackgroundWindowCheck"
-                      Content="后台执行"
-                      Margin="0,0,0,8" />
-            <TextBlock x:Name="BackgroundProcessLabelText"
-                       Text="目标进程"
-                       Style="{StaticResource FieldLabel}" />
-            <DockPanel Margin="0,0,0,4" LastChildFill="True">
-                <Button x:Name="SelectBackgroundProcessButton"
-                        DockPanel.Dock="Right"
-                        Width="72"
-                        Height="30"
-                        Content="选择"
-                        Click="SelectBackgroundProcess_Click" />
-                <Grid Margin="0,0,8,0">
-                    <TextBox x:Name="BackgroundProcessBox"
-                             Height="30"
-                             VerticalContentAlignment="Center" />
-                    <TextBlock x:Name="BackgroundProcessPlaceholderText"
-                               Text="与数据库启用进程一致"
-                               IsHitTestVisible="False">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderHintStyle}">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Text, ElementName=BackgroundProcessBox}" Value="">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </Grid>
-            </DockPanel>
-            <TextBlock x:Name="BackgroundWindowHelpText"
-                       TextWrapping="Wrap"
-                       FontSize="11"
-                       Foreground="{DynamicResource SecondaryText}"
-                       Margin="0,0,0,12" />
-
-            <TextBlock x:Name="ColorSampleHotkeyLabelText"
-                       Text="取色快捷键"
-                       Style="{StaticResource FieldLabel}" />
-            <DockPanel Margin="0,0,0,4" LastChildFill="True">
-                <Button x:Name="CaptureColorSampleButton"
-                        DockPanel.Dock="Right"
-                        Width="72"
-                        Height="30"
-                        Content="捕获"
-                        Click="CaptureColorSample_Click" />
-                <TextBox x:Name="ColorSampleHotkeyBox"
-                         Height="30"
-                         Margin="0,0,8,0"
-                         VerticalContentAlignment="Center"
-                         IsReadOnly="True" />
-            </DockPanel>
-            <TextBlock x:Name="ColorSampleHotkeyHelpText"
-                       TextWrapping="Wrap"
-                       FontSize="11"
-                       Foreground="{DynamicResource SecondaryText}"
-                       Margin="0,0,0,12" />
-
-            <TextBlock x:Name="StopTriggerLabelText"
-                       Text="强制停止键"
-                       Style="{StaticResource FieldLabel}" />
-            <DockPanel Margin="0,0,0,4" LastChildFill="True">
-                <Button x:Name="ClearStopTriggerButton"
-                        DockPanel.Dock="Right"
-                        Width="72"
-                        Height="30"
-                        Margin="8,0,0,0"
-                        Content="清除"
-                        Click="ClearStopTrigger_Click" />
-                <Button x:Name="CaptureStopTriggerButton"
-                        DockPanel.Dock="Right"
-                        Width="72"
-                        Height="30"
-                        Content="捕获"
-                        Click="CaptureStopTrigger_Click" />
-                <TextBox x:Name="StopTriggerTextBox"
-                         Height="30"
-                         Margin="0,0,8,0"
-                         VerticalContentAlignment="Center"
-                         IsReadOnly="True" />
-            </DockPanel>
-            <TextBlock x:Name="StopTriggerHintText"
-                       TextWrapping="Wrap"
-                       FontSize="11"
-                       Foreground="{DynamicResource SecondaryText}"
-                       Margin="0,0,0,12" />
-
-            <TextBlock x:Name="ZeroGapHoldLabelText"
-                       Text="默认间隔"
-                       Style="{StaticResource FieldLabel}" />
-            <DockPanel Margin="0,0,0,4" LastChildFill="True">
-                <TextBlock x:Name="ZeroGapUnitText"
-                           DockPanel.Dock="Right"
-                           Width="48"
-                           VerticalAlignment="Center"
-                           Margin="8,0,0,0"
-                           Text="微秒" />
-                <TextBox x:Name="ZeroGapHoldBox" Height="30" VerticalContentAlignment="Center" />
-            </DockPanel>
-            <TextBlock x:Name="ZeroGapHoldHelpText"
-                       TextWrapping="Wrap"
-                       FontSize="11"
-                       Foreground="{DynamicResource SecondaryText}"
-                       Margin="0,0,0,12" />
-
-            <TextBlock x:Name="ModifierChordHoldLabelText"
-                       Text="组合键间隔"
-                       Style="{StaticResource FieldLabel}" />
-            <DockPanel Margin="0,0,0,4" LastChildFill="True">
-                <TextBlock x:Name="ModifierChordUnitText"
-                           DockPanel.Dock="Right"
-                           Width="48"
-                           VerticalAlignment="Center"
-                           Margin="8,0,0,0"
-                           Text="微秒" />
-                <TextBox x:Name="ModifierChordHoldBox" Height="30" VerticalContentAlignment="Center" />
-            </DockPanel>
-            <TextBlock x:Name="ModifierChordHoldHelpText"
-                       TextWrapping="Wrap"
-                       FontSize="11"
-                       Foreground="{DynamicResource SecondaryText}"
-                       Margin="0,0,0,12" />
-
-            <TextBlock x:Name="CloseButtonLabelText"
-                       Text="关闭按钮"
-                       Style="{StaticResource FieldLabel}" />
-            <ComboBox x:Name="CloseButtonBox" Height="30" Margin="0,0,0,4">
-                <ComboBoxItem Tag="ask" Content="每次询问" />
-                <ComboBoxItem Tag="minimizeToTray" Content="最小化到托盘" />
-                <ComboBoxItem Tag="exit" Content="退出程序" />
-            </ComboBox>
-            <TextBlock x:Name="CloseButtonHelpText"
-                       TextWrapping="Wrap"
-                       FontSize="11"
-                       Foreground="{DynamicResource SecondaryText}"
-                       Margin="0,0,0,16" />
-
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="CancelButton" MinWidth="82" IsCancel="True" Content="取消" />
-                <Button x:Name="ConfirmButton"
-                        MinWidth="82"
-                        Margin="8,0,0,0"
-                        Style="{StaticResource PrimaryButton}"
-                        IsDefault="True"
-                        Content="确定"
-                        Click="ConfirmButton_Click" />
-            </StackPanel>
+        ResizeMode="NoResize">
+    <DockPanel x:Name="DialogBody">
+        <StackPanel DockPanel.Dock="Bottom" Style="{StaticResource DialogButtonRow}">
+            <Button x:Name="CancelButton" MinWidth="82" IsCancel="True" Content="取消" />
+            <Button x:Name="ConfirmButton"
+                    MinWidth="82"
+                    Style="{StaticResource PrimaryButton}"
+                    IsDefault="True"
+                    Content="确定"
+                    Click="ConfirmButton_Click" />
         </StackPanel>
-    </ScrollViewer>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+            <StackPanel>
+                <!-- 运行目标 -->
+                <TextBlock x:Name="TargetSectionTitle" Text="运行目标" Style="{StaticResource FieldSectionTitle}" />
+                <CheckBox x:Name="BackgroundWindowCheck"
+                          Content="后台执行"
+                          Margin="0,0,0,10" />
+                <TextBlock x:Name="BackgroundProcessLabelText"
+                           Text="目标进程"
+                           Style="{StaticResource FieldLabel}" />
+                <DockPanel LastChildFill="True">
+                    <Button x:Name="SelectBackgroundProcessButton"
+                            DockPanel.Dock="Right"
+                            MinWidth="76"
+                            Height="32"
+                            Margin="8,0,0,0"
+                            Content="选择"
+                            Click="SelectBackgroundProcess_Click" />
+                    <Grid>
+                        <TextBox x:Name="BackgroundProcessBox"
+                                 Height="32"
+                                 VerticalContentAlignment="Center" />
+                        <TextBlock x:Name="BackgroundProcessPlaceholderText"
+                                   Text="与数据库启用进程一致"
+                                   IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderHintStyle}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=BackgroundProcessBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </DockPanel>
+                <TextBlock x:Name="BackgroundWindowHelpText" Style="{StaticResource FieldHelpText}" />
+
+                <Border Style="{StaticResource DialogSectionDivider}" />
+
+                <!-- 快捷键 -->
+                <TextBlock x:Name="HotkeySectionTitle" Text="快捷键" Style="{StaticResource FieldSectionTitle}" />
+                <TextBlock x:Name="ColorSampleHotkeyLabelText"
+                           Text="取色快捷键"
+                           Style="{StaticResource FieldLabel}" />
+                <DockPanel LastChildFill="True">
+                    <Button x:Name="CaptureColorSampleButton"
+                            DockPanel.Dock="Right"
+                            MinWidth="76"
+                            Height="32"
+                            Margin="8,0,0,0"
+                            Content="捕获"
+                            Click="CaptureColorSample_Click" />
+                    <TextBox x:Name="ColorSampleHotkeyBox"
+                             Height="32"
+                             VerticalContentAlignment="Center"
+                             IsReadOnly="True" />
+                </DockPanel>
+                <TextBlock x:Name="ColorSampleHotkeyHelpText" Style="{StaticResource FieldHelpText}" />
+
+                <TextBlock x:Name="StopTriggerLabelText"
+                           Text="强制停止键"
+                           Style="{StaticResource FieldLabel}" />
+                <DockPanel LastChildFill="True">
+                    <Button x:Name="ClearStopTriggerButton"
+                            DockPanel.Dock="Right"
+                            MinWidth="76"
+                            Height="32"
+                            Margin="8,0,0,0"
+                            Content="清除"
+                            Click="ClearStopTrigger_Click" />
+                    <Button x:Name="CaptureStopTriggerButton"
+                            DockPanel.Dock="Right"
+                            MinWidth="76"
+                            Height="32"
+                            Margin="8,0,0,0"
+                            Content="捕获"
+                            Click="CaptureStopTrigger_Click" />
+                    <TextBox x:Name="StopTriggerTextBox"
+                             Height="32"
+                             VerticalContentAlignment="Center"
+                             IsReadOnly="True" />
+                </DockPanel>
+                <TextBlock x:Name="StopTriggerHintText" Style="{StaticResource FieldHelpText}" />
+
+                <Border Style="{StaticResource DialogSectionDivider}" />
+
+                <!-- 按键时间：两个间隔并排，单位毫秒 -->
+                <TextBlock x:Name="TimingSectionTitle" Text="按键时间" Style="{StaticResource FieldSectionTitle}" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock x:Name="ZeroGapHoldLabelText"
+                                   Text="默认间隔"
+                                   Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="ZeroGapUnitText"
+                                       DockPanel.Dock="Right"
+                                       Style="{StaticResource FieldUnitText}"
+                                       Text="毫秒" />
+                            <TextBox x:Name="ZeroGapHoldBox" Height="32" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock x:Name="ZeroGapHoldErrorText" Style="{StaticResource FieldErrorText}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock x:Name="ModifierChordHoldLabelText"
+                                   Text="组合键间隔"
+                                   Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="ModifierChordUnitText"
+                                       DockPanel.Dock="Right"
+                                       Style="{StaticResource FieldUnitText}"
+                                       Text="毫秒" />
+                            <TextBox x:Name="ModifierChordHoldBox" Height="32" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock x:Name="ModifierChordHoldErrorText" Style="{StaticResource FieldErrorText}" />
+                    </StackPanel>
+                </Grid>
+                <!-- ModifierChordHoldHelp / ZeroGapHoldHelp: one combined explanation under both fields. -->
+                <TextBlock x:Name="ZeroGapHoldHelpText" Style="{StaticResource FieldHelpText}" Margin="2,6,0,2" />
+                <TextBlock x:Name="ModifierChordHoldHelpText" Style="{StaticResource FieldHelpText}" />
+
+                <Border Style="{StaticResource DialogSectionDivider}" />
+
+                <!-- 窗口 -->
+                <TextBlock x:Name="CloseButtonLabelText"
+                           Text="关闭按钮"
+                           Style="{StaticResource FieldLabel}" />
+                <ComboBox x:Name="CloseButtonBox" Height="32">
+                    <ComboBoxItem Tag="ask" Content="每次询问" />
+                    <ComboBoxItem Tag="minimizeToTray" Content="最小化到托盘" />
+                    <ComboBoxItem Tag="exit" Content="退出程序" />
+                </ComboBox>
+                <TextBlock x:Name="CloseButtonHelpText" Style="{StaticResource FieldHelpText}" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </Window>

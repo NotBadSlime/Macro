@@ -36,7 +36,8 @@ public static class ThemedDialogChrome
         }
 
         window.Content = null;
-        body.Margin = new Thickness(16, 4, 16, 16);
+        // Same inset for every dialog; dialogs must not add their own outer margin on top.
+        body.Margin = new Thickness(20, 6, 20, 18);
 
         var title = new TextBlock();
         title.Style = (Style)window.FindResource("ToolWindowTitle");
@@ -45,7 +46,7 @@ public static class ThemedDialogChrome
         var closeButton = new Button
         {
             Content = "\uE711",
-            ToolTip = "关闭"
+            ToolTip = LocalizationService.Get("CloseWindow")
         };
         closeButton.Style = (Style)window.FindResource("ToolWindowChromeButton");
         closeButton.Click += (_, _) => window.Close();

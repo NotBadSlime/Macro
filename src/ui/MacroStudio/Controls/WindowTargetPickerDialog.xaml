@@ -6,9 +6,8 @@
         Height="460"
         MinWidth="520"
         MinHeight="360"
-        WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource PageBackground}">
-    <Grid Margin="14">
+        WindowStartupLocation="CenterOwner">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -76,17 +75,13 @@
             </Grid>
         </Border>
 
-        <StackPanel Grid.Row="2"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,12,0,0">
+        <StackPanel Grid.Row="2" Style="{StaticResource DialogButtonRow}">
             <Button x:Name="CancelButton"
                     MinWidth="82"
                     IsCancel="True"
                     Content="取消" />
             <Button x:Name="SelectButton"
                     MinWidth="82"
-                    Margin="8,0,0,0"
                     Style="{StaticResource PrimaryButton}"
                     IsDefault="True"
                     Content="选择"

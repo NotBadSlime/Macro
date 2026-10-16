@@ -17,7 +17,7 @@
   <data name="RememberCloseChoice" xml:space="preserve"><value>记住我的选择</value></data>
   <data name="CloseButtonBehavior" xml:space="preserve"><value>关闭按钮</value></data>
   <data name="CloseButtonAsk" xml:space="preserve"><value>每次询问</value></data>
-  <data name="CloseButtonBehaviorHelp" xml:space="preserve"><value>最小化始终缩到任务栏。关闭按钮可以收进托盘，或退出程序。选「每次询问」时，每次点关闭都会再问一次；勾选「记住我的选择」后，会写到这里。</value></data>
+  <data name="CloseButtonBehaviorHelp" xml:space="preserve"><value>最小化始终缩到任务栏。选「每次询问」时每次关闭都会问；勾选「记住我的选择」后会保存到这里。</value></data>
   <data name="TrayShow" xml:space="preserve"><value>显示主窗口</value></data>
   <data name="TrayExit" xml:space="preserve"><value>退出</value></data>
   <data name="Language" xml:space="preserve"><value>语言</value></data>
@@ -35,7 +35,7 @@
   <data name="Trigger" xml:space="preserve"><value>触发键</value></data>
   <data name="StopTrigger" xml:space="preserve"><value>强制停止键</value></data>
   <data name="CaptureStopTriggerHint" xml:space="preserve"><value>例如 Alt+Tab 或 Tab</value></data>
-  <data name="StopTriggerHint" xml:space="preserve"><value>按下后停止所有正在播放的宏，并立刻释放还没抬起的按键。不会启动宏。</value></data>
+  <data name="StopTriggerHint" xml:space="preserve"><value>停止所有正在播放的宏，并立刻释放还没抬起的按键。不会启动宏。</value></data>
   <data name="StopTriggerMustDiffer" xml:space="preserve"><value>强制停止键不能与播放触发键相同。</value></data>
   <data name="ForceStopTriggered" xml:space="preserve"><value>已强制停止播放并释放未抬起的按键。</value></data>
   <data name="Capture" xml:space="preserve"><value>捕获</value></data>
@@ -71,7 +71,7 @@
   <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次结果：已捕获 {0}</value></data>
   <data name="ProcessFilter" xml:space="preserve"><value>进程筛选</value></data>
   <data name="AffinityMask" xml:space="preserve"><value>极限核心掩码</value></data>
-  <data name="AffinityMaskHelp" xml:space="preserve"><value>仅极限模式生效：限制极限模式播放线程和 Native 引擎使用指定 CPU 核心，减少线程迁移抖动；留空则自动选择。示例：0x1F。</value></data>
+  <data name="AffinityMaskHelp" xml:space="preserve"><value>仅极限模式生效：限制极限模式播放线程和原生引擎使用这些 CPU，减少线程迁移抖动。留空则自动选择。示例：0x1F。</value></data>
   <data name="ChooseCores" xml:space="preserve"><value>选择核心</value></data>
   <data name="ChooseCoresTitle" xml:space="preserve"><value>选择核心</value></data>
   <data name="ChooseCoresHelp" xml:space="preserve"><value>勾选要测量的逻辑核。默认勾选性能核，不含逻辑核 0。点「测试」会测量勾选的核心并显示结果；点确定后写入掩码。</value></data>
@@ -344,7 +344,7 @@
   <data name="BackgroundProcess" xml:space="preserve"><value>目标进程</value></data>
   <data name="BackgroundSelectProcess" xml:space="preserve"><value>选择</value></data>
   <data name="BackgroundProcessPlaceholder" xml:space="preserve"><value>与数据库启用进程一致</value></data>
-  <data name="BackgroundWindowHelp" xml:space="preserve"><value>留空时使用这个宏所在数据库的启用进程。按键、点击和滚轮投到该窗口，像素和文字也从该窗口截取。窗口可以被挡住，但不能最小化。</value></data>
+  <data name="BackgroundWindowHelp" xml:space="preserve"><value>留空时使用宏所在数据库的启用进程。按键、点击和滚轮投到该窗口，像素和文字也从该窗口截取。窗口可以被挡住，但不能最小化。</value></data>
   <data name="BackgroundProcessRequired" xml:space="preserve"><value>这个宏在全局数据库里，没有启用进程。请设置后台执行的目标进程。</value></data>
   <data name="ProcessGroupDatabaseSummary" xml:space="preserve"><value>进程组宏库 · {0}</value></data>
   <data name="SelectProcess" xml:space="preserve"><value>进程</value></data>
@@ -397,9 +397,9 @@
   <data name="MacroBasicControl" xml:space="preserve"><value>宏基础控制</value></data>
   <data name="PrecisionControl" xml:space="preserve"><value>精度控制</value></data>
   <data name="ZeroGapHold" xml:space="preserve"><value>默认间隔</value></data>
-  <data name="ZeroGapHoldHelp" xml:space="preserve"><value>同一按键的按下和抬起之间没有写延迟时，用这段时间把抬起推后，避免目标把这一下吞掉。单位是微秒。填 0 表示按下和抬起同一时刻发出。默认 10000，也就是 10 毫秒。</value></data>
+  <data name="ZeroGapHoldHelp" xml:space="preserve"><value>默认间隔：同一按键的按下和抬起之间没写延迟时，抬起推后这么久，避免目标把这一下吞掉。填 0 表示同时发出。默认 10 毫秒。</value></data>
   <data name="ModifierChordHold" xml:space="preserve"><value>组合键间隔</value></data>
-  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>Ctrl、Shift、Alt、Win 和字母组成快捷键时，按下到抬起若短于这段时间，会被拉到这段时间。组合键太短时，前台经常还没读到修饰键就已经抬起，快捷键不会生效。默认 30000 微秒，也就是 30 毫秒。宏里写得更长时，仍按写下的时间播放。</value></data>
+  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>组合键间隔：带 Ctrl、Shift、Alt、Win 的快捷键至少按住这么久，否则目标可能读不到修饰键。宏里写得更长时按写下的时间。默认 30 毫秒。</value></data>
   <data name="Microseconds" xml:space="preserve"><value>微秒</value></data>
   <data name="HoldMicrosecondsInvalid" xml:space="preserve"><value>默认间隔和组合键间隔请填写 0 到 60000000 的整数微秒。</value></data>
   <data name="ClearHotkey" xml:space="preserve"><value>清除</value></data>
@@ -606,7 +606,7 @@
   <data name="ListeningPausedStatus" xml:space="preserve"><value>已暂停监听。已保存的触发键不会被删除。</value></data>
   <data name="ListeningResumePartial" xml:space="preserve"><value>已恢复 {0} 个监听。</value></data>
   <data name="ColorSampleHotkey" xml:space="preserve"><value>取色快捷键</value></data>
-  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>软件核心全局宏：MacroStudio 运行时始终可用。按下后复制鼠标坐标和像素色号，并短暂显示。与宏触发键冲突时会提示并跳过该宏。</value></data>
+  <data name="ColorSampleHotkeyHelp" xml:space="preserve"><value>MacroStudio 运行时始终可用：复制鼠标坐标和像素色号。与宏触发键冲突时会提示并跳过该宏。</value></data>
   <data name="ColorSampleCopied" xml:space="preserve"><value>已复制取色结果</value></data>
   <data name="LibraryPath" xml:space="preserve"><value>宏路径</value></data>
   <data name="LibraryPathHelp" xml:space="preserve"><value>数据库 &gt; 文件夹 &gt; 宏名。回车后宏数据库会跳到对应文件或文件夹。</value></data>
@@ -631,4 +631,17 @@
   <data name="PrecisionGenerationDesc16" xml:space="preserve"><value>1.6.0：包含 2.0.x 的全部行为，并使用旧的待命/内联引擎。</value></data>
   <data name="PrecisionGenerationV202" xml:space="preserve"><value>2.0.2（正式版）</value></data>
   <data name="PrecisionGenerationDesc202" xml:space="preserve"><value>2.0.2：包含时间线修复（按键下限只推迟它自己的释放；循环按你所写的周期重复），按键时长仍从发送调用返回起算，与 2.0.x 相同。</value></data>
+  <data name="PrecisionImpactLow" xml:space="preserve"><value>CPU 占用最低，适合 CPU 紧张或普通自动化。托管代码执行。</value></data>
+  <data name="PrecisionImpactBalanced" xml:space="preserve"><value>CPU 占用中等，适合大多数游戏和混合宏。原生引擎执行。</value></data>
+  <data name="PrecisionImpactExtreme" xml:space="preserve"><value>CPU 占用最高，适合 1–2 毫秒的节奏。两个原生常驻线程互相兜底。</value></data>
+  <data name="PrecisionProfileTargets" xml:space="preserve"><value>目标：首次输入 P99 ≤ {0} µs，迟到 P99.9 ≤ {1} µs。最终自旋 {2} µs，空闲时事件等待。</value></data>
+  <data name="PrecisionNextRunNote" xml:space="preserve"><value>从下一次运行开始生效。数值是预热后 1–2 个并发宏的目标；条件轮询间隔不变。</value></data>
+  <data name="BasicSectionTarget" xml:space="preserve"><value>运行目标</value></data>
+  <data name="BasicSectionHotkeys" xml:space="preserve"><value>快捷键</value></data>
+  <data name="BasicSectionTiming" xml:space="preserve"><value>按键时间</value></data>
+  <data name="Milliseconds" xml:space="preserve"><value>毫秒</value></data>
+  <data name="HoldMillisecondsInvalid" xml:space="preserve"><value>请填 0 到 {0} 毫秒，最多 3 位小数。</value></data>
+  <data name="DialogYes" xml:space="preserve"><value>是</value></data>
+  <data name="DialogNo" xml:space="preserve"><value>否</value></data>
+  <data name="SnapshotSampleMessage" xml:space="preserve"><value>目标进程没有运行。请先打开目标程序，再按一次快捷键。</value></data>
 </root>

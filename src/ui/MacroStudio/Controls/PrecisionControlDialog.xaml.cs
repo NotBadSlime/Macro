@@ -19,6 +19,7 @@ public partial class PrecisionControlDialog : Window
         PrecisionModeBox.SelectionChanged += (_, _) => UpdateProfileDescription();
         PrecisionGenerationBox.SelectionChanged += (_, _) => UpdateGenerationDescription();
         AffinityMaskBox.Text = settings.AffinityMask;
+        AffinityMaskBox.TextChanged += (_, _) => ValidateAffinityMask();
         foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
         {
             if (string.Equals(item.Tag?.ToString(), ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
@@ -34,6 +35,8 @@ public partial class PrecisionControlDialog : Window
             .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), generationTag, StringComparison.Ordinal))
             ?? PrecisionGenerationBox.Items[0];
         UpdateGenerationDescription();
+        UpdateProfileDescription();
+        ValidateAffinityMask();
     }
 
     private void UpdateGenerationDescription()
@@ -71,10 +74,25 @@ public partial class PrecisionControlDialog : Window
         var mode = SelectedPrecision();
         var policy = PlaybackPerformancePolicy.For(mode);
         var impact = mode switch {
-            PrecisionMode.Balanced => "CPU 影响最低；适合 CPU 紧张、普通自动化。托管预编译。",
-            PrecisionMode.UltraLowJitter => "CPU 影响最高；适合 1–2ms 节奏。两个原生常驻线程共享辅助抢占。",
-            _ => "CPU 影响中等；适合大多数游戏与混合宏。原生预编译。" };
-        ProfileDescription.Text = $"响应目标：首次提交 P99 ≤ {policy.TargetStartupMicroseconds}µs；迟到 P99.9 ≤ {policy.TargetJitterMicroseconds}µs。\n{impact}\n最终自旋窗口：{policy.FinalSpinMicroseconds}µs；空闲时事件等待。";
+            PrecisionMode.Balanced => L("PrecisionImpactLow"),
+            PrecisionMode.UltraLowJitter => L("PrecisionImpactExtreme"),
+            _ => L("PrecisionImpactBalanced") };
+        ProfileDescription.Text = LocalizationService.Format("PrecisionProfileTargets",
+            policy.TargetStartupMicroseconds, policy.TargetJitterMicroseconds, policy.FinalSpinMicroseconds) + "\n" + impact;
+        // The core mask only applies to 极限; dim it for the other profiles instead of hiding it.
+        var extreme = mode == PrecisionMode.UltraLowJitter;
+        AffinityMaskBox.IsEnabled = extreme;
+        ChooseCoresButton.IsEnabled = extreme;
+    }
+
+    private void ValidateAffinityMask()
+    {
+        var error = string.Empty;
+        try { PlaybackAffinityMask.NormalizeOrThrow(AffinityMaskBox.Text); }
+        catch (Exception ex) { error = ex.Message; }
+        AffinityMaskErrorText.Text = error;
+        FieldState.SetHasError(AffinityMaskBox, error.Length > 0);
+        ConfirmButton.IsEnabled = error.Length == 0;
     }
 
     public Func<string, string?>? PickCores { get; }
@@ -87,7 +105,6 @@ public partial class PrecisionControlDialog : Window
         PrecisionModeLabelText.Text = L("PrecisionMode");
         PrecisionGenerationLabelText.Text = L("PrecisionGeneration");
         PrecisionGenerationHelpText.Text = L("PrecisionGenerationHelp");
-        PrecisionGenerationBox.ToolTip = L("PrecisionGenerationHelp");
         foreach (var item in PrecisionGenerationBox.Items.OfType<ComboBoxItem>())
         {
             item.Content = item.Tag?.ToString() switch
@@ -101,7 +118,7 @@ public partial class PrecisionControlDialog : Window
         }
         AffinityMaskLabelText.Text = L("AffinityMask");
         AffinityMaskHelpText.Text = L("AffinityMaskHelp");
-        AffinityMaskBox.ToolTip = L("AffinityMaskHelp");
+        PrecisionNextRunNoteText.Text = L("PrecisionNextRunNote");
         ChooseCoresButton.Content = L("ChooseCores");
         CancelButton.Content = L("Cancel");
         ConfirmButton.Content = L("Confirm");
@@ -128,21 +145,21 @@ public partial class PrecisionControlDialog : Window
 
     private void ConfirmButton_Click(object sender, RoutedEventArgs e)
     {
-        try
+        ValidateAffinityMask();
+        if (!ConfirmButton.IsEnabled)
         {
-            var mask = PlaybackAffinityMask.NormalizeOrThrow(AffinityMaskBox.Text);
-            Settings = source with
-            {
-                Precision = SelectedPrecision(),
-                Generation = SelectedGeneration(),
-                AffinityMask = mask
-            };
-            DialogResult = true;
+            AffinityMaskBox.Focus();
+            return;
         }
-        catch (Exception ex)
+
+        var mask = PlaybackAffinityMask.NormalizeOrThrow(AffinityMaskBox.Text);
+        Settings = source with
         {
-            DialogOwnerService.MessageBoxSafe(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Information);
-        }
+            Precision = SelectedPrecision(),
+            Generation = SelectedGeneration(),
+            AffinityMask = mask
+        };
+        DialogResult = true;
     }
 
     private PrecisionMode SelectedPrecision()

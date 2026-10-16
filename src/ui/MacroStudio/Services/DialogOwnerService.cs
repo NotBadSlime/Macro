@@ -53,6 +53,15 @@ public static class DialogOwnerService
         if (icon == MessageBoxImage.Error || icon == MessageBoxImage.Warning)
             MacroHid.Runtime.AppLog.Error("Dialog", $"{caption}: {messageBoxText}");
         var owner = TryGetShownOwner(source);
+        // Themed so it matches light/dark; falls back to the system box if no application resources exist yet.
+        if (Application.Current?.TryFindResource("ThemedDialogRootStyle") is Style)
+        {
+            try { return Controls.ThemedMessageDialog.Show(owner, messageBoxText, caption, button, icon); }
+            catch (Exception ex) when (ex is InvalidOperationException or ResourceReferenceKeyNotFoundException)
+            {
+                MacroHid.Runtime.AppLog.Error("Dialog", "Themed message dialog failed", ex);
+            }
+        }
         return owner is null
             ? MessageBox.Show(messageBoxText, caption, button, icon)
             : MessageBox.Show(owner, messageBoxText, caption, button, icon);

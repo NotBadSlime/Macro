@@ -1,58 +1,62 @@
 <Window x:Class="MacroStudio.Controls.PrecisionControlDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MacroStudio.Controls"
         Title="精度控制"
-        Width="500"
+        Width="480"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
-        Background="{DynamicResource PageBackground}">
-    <StackPanel Margin="16">
+        ResizeMode="NoResize">
+    <StackPanel>
         <TextBlock x:Name="PrecisionModeLabelText"
                    Text="精度模式"
                    Style="{StaticResource FieldLabel}" />
-        <ComboBox x:Name="PrecisionModeBox" Height="30" Margin="0,0,0,10">
+        <ComboBox x:Name="PrecisionModeBox" Height="32">
             <ComboBoxItem Tag="balanced" Content="低占用" />
             <ComboBoxItem Tag="extremeDuringPlayback" Content="均衡（推荐）" />
             <ComboBoxItem Tag="ultraLowJitter" Content="极限" />
         </ComboBox>
-
-        <TextBlock x:Name="ProfileDescription" TextWrapping="Wrap" Margin="0,0,0,12" />
+        <TextBlock x:Name="ProfileDescription" Style="{StaticResource FieldHelpText}" />
 
         <TextBlock x:Name="PrecisionGenerationLabelText"
                    Text="精度版本"
                    Style="{StaticResource FieldLabel}" />
-        <ComboBox x:Name="PrecisionGenerationBox" Height="30" Margin="0,0,0,6" AutomationProperties.AutomationId="PrecisionGenerationBox">
+        <ComboBox x:Name="PrecisionGenerationBox" Height="32" AutomationProperties.AutomationId="PrecisionGenerationBox">
             <ComboBoxItem Tag="latest" Content="最新（推荐）" />
             <ComboBoxItem Tag="v2_0_2" Content="2.0.2" />
             <ComboBoxItem Tag="v2_0" Content="2.0.x" />
             <ComboBoxItem Tag="v1_6" Content="1.6.0" />
         </ComboBox>
-        <TextBlock x:Name="PrecisionGenerationDescription" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,4" Foreground="{DynamicResource SecondaryText}" />
-        <TextBlock x:Name="PrecisionGenerationHelpText" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,12" Foreground="{DynamicResource SecondaryText}" />
-        <TextBlock Text="仅影响下一次运行；响应数值为预热后 1–2 个并发宏的待验证目标。条件轮询间隔保持原配置。" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource SecondaryText}" />
+        <TextBlock x:Name="PrecisionGenerationDescription" Style="{StaticResource FieldHelpText}" Margin="2,4,0,2" />
+        <TextBlock x:Name="PrecisionGenerationHelpText" Style="{StaticResource FieldHelpText}" />
+
+        <Border Style="{StaticResource DialogSectionDivider}" />
+
         <TextBlock x:Name="AffinityMaskLabelText"
                    Text="极限核心掩码"
                    Style="{StaticResource FieldLabel}" />
-        <TextBox x:Name="AffinityMaskBox" Height="30" />
-        <TextBlock x:Name="AffinityMaskHelpText"
-                   TextWrapping="Wrap"
-                   FontSize="11"
-                   Foreground="{DynamicResource SecondaryText}"
-                   Margin="0,4,0,10" />
-        <Button x:Name="ChooseCoresButton"
-                HorizontalAlignment="Left"
-                MinWidth="96"
-                Height="30"
-                Margin="0,0,0,16"
-                Content="选择核心"
-                Click="ChooseCoresButton_Click" />
+        <DockPanel LastChildFill="True">
+            <Button x:Name="ChooseCoresButton"
+                    DockPanel.Dock="Right"
+                    MinWidth="96"
+                    Height="32"
+                    Margin="8,0,0,0"
+                    Content="选择核心"
+                    Click="ChooseCoresButton_Click" />
+            <TextBox x:Name="AffinityMaskBox" Height="32" />
+        </DockPanel>
+        <TextBlock x:Name="AffinityMaskErrorText" Style="{StaticResource FieldErrorText}" />
+        <TextBlock x:Name="AffinityMaskHelpText" Style="{StaticResource FieldHelpText}" />
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <TextBlock x:Name="PrecisionNextRunNoteText"
+                   Text="仅影响下一次运行；响应数值为预热后 1–2 个并发宏的待验证目标。条件轮询间隔保持原配置。"
+                   Style="{StaticResource FieldHelpText}"
+                   Margin="2,0,0,14" />
+
+        <StackPanel Style="{StaticResource DialogButtonRow}">
             <Button x:Name="CancelButton" MinWidth="82" IsCancel="True" Content="取消" />
             <Button x:Name="ConfirmButton"
                     MinWidth="82"
-                    Margin="8,0,0,0"
                     Style="{StaticResource PrimaryButton}"
                     IsDefault="True"
                     Content="确定"

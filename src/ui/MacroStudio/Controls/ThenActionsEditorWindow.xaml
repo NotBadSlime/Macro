@@ -7,8 +7,7 @@
         Height="720"
         MinWidth="680"
         MinHeight="500"
-        WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource PageBackground}">
+        WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <DataTemplate x:Key="ThenActionStepTemplate">
             <Border Style="{StaticResource SoftListItemBorder}"
