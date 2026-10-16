@@ -1227,6 +1227,7 @@ public partial class MainWindow : Window
         {
             runtimePrecisionSettings = ReadRuntimePrecisionSettingsFromPanel();
             RuntimePrecisionSettingsStore.Save(runtimePrecisionSettings);
+            SystemLatencyCheck.ApplyQuietCores(runtimePrecisionSettings.AvoidNoisyCores ? SystemLatencyCheck.StableQuietMask : 0);
             WarmUpRuntimePrecision();
             if (listening)
             {

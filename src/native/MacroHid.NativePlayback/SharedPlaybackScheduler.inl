@@ -41,6 +41,9 @@ private:
     PerKind kinds[Count];
 };
 inline SendCostTracker& SendCosts() { static SendCostTracker tracker; return tracker; }
+// Logical processors the stall probe found quiet (0 = unknown / not restricted). Used as the soft affinity of the shared
+// workers outside 极限. Written by MhpScanCoreStalls / MhpSetQuietCores, read by idle and running workers.
+inline std::atomic<DWORD_PTR> g_quietCoreMask{0};
 inline int BatchKind(const INPUT* inputs, uint32_t count)
 {
     for (uint32_t i = 0; i < count; i++) if (inputs[i].type == INPUT_MOUSE) return SendCostTracker::Mouse;
@@ -327,6 +330,9 @@ class SharedPlaybackScheduler
         DWORD_PTR lastMask = 0;
         auto configure = [&](int mode, DWORD_PTR mask)
         {
+            // 极限 pins each worker to its selected core. Other profiles float, but only over the quiet set measured by the
+            // stall probe (interrupt-heavy cores excluded) when one is known: a soft restriction, not a single-core pin.
+            const DWORD_PTR effective = mode == MhpUltraLowJitter ? mask : g_quietCoreMask.load(std::memory_order_acquire);
             if (lastMode != mode)
             {
                 if (mmcss) { AvRevertMmThreadCharacteristics(mmcss); mmcss = nullptr; }
@@ -337,12 +343,12 @@ class SharedPlaybackScheduler
                 mmcss = AvSetMmThreadCharacteristicsW(L"Pro Audio", &task);
                 if (mmcss) AvSetMmThreadPriority(mmcss, AVRT_PRIORITY_HIGH);
             }
-            if (lastMode != mode || lastMask != mask)
+            if (lastMode != mode || lastMask != effective)
             {
                 if (oldAffinity) { SetThreadAffinityMask(GetCurrentThread(), oldAffinity); oldAffinity = 0; }
-                if (mode == MhpUltraLowJitter && mask) oldAffinity = SetThreadAffinityMask(GetCurrentThread(), mask);
+                if (effective) oldAffinity = SetThreadAffinityMask(GetCurrentThread(), effective);
             }
-            lastMode = mode; lastMask = mask;
+            lastMode = mode; lastMask = effective;
         };
         // Prepared means timer, priority, MMCSS and affinity are ready before
         // the first deadline, not just that the std::thread has been created.

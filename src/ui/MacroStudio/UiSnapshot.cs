@@ -27,11 +27,14 @@ internal static class UiSnapshot
         {
             try
             {
+                // Real data for the latency chart (no system change; quiet-core avoidance is not applied here).
+                MacroHid.Runtime.SystemLatencyCheck.Run(60, applyQuietCores: false);
                 foreach (var theme in new[] { AppTheme.Light, AppTheme.Dark })
                 {
                     ThemeService.ApplyTheme(theme);
                     var suffix = theme == AppTheme.Dark ? "dark" : "light";
                     var settings = RuntimePrecisionSettings.Default;
+                    Render(new LatencyCheckDialog(), Path.Combine(directory, $"latency-{suffix}.png"));
                     Render(new MacroBasicControlDialog(settings), Path.Combine(directory, $"basic-{suffix}.png"));
                     var invalid = new MacroBasicControlDialog(settings);
                     invalid.ZeroGapHoldBox.Text = "-3";

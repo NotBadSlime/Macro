@@ -117,6 +117,13 @@ internal struct MhpCoreSample
 [StructLayout(LayoutKind.Sequential)]
 internal struct MhpRunTrace { public long Queued, FirstSubmit, LastSubmit, Completed, FirstReturn; }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct MhpCoreStall
+{
+    public uint ProcessorNumber, PhysicalCoreId, EfficiencyClass, StallsOver50Us, StallsOver200Us, Noisy;
+    public long MaxStallUs, MaxLateUs;
+}
+
 internal static partial class NativePlaybackInterop
 {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -140,6 +147,15 @@ internal static partial class NativePlaybackInterop
 
     [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
     internal static extern void MhpGetSendCost(out long keyboardUs, out long mouseUs);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern MhpStatus MhpScanCoreStalls(ulong mask, uint windowMs, [Out] MhpCoreStall[] results, uint capacity, out uint written, CoreProgressCallback? progress);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern MhpStatus MhpSetQuietCores(ulong mask);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern ulong MhpGetQuietCores();
 
     private const uint Infinite = 0xFFFFFFFF;
     private const uint WaitObject0 = 0;

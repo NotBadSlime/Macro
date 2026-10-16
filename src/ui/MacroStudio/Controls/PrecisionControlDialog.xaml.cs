@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using MacroHid.Core;
+using MacroHid.Runtime;
 using MacroStudio.Services;
 
 namespace MacroStudio.Controls;
@@ -24,6 +25,7 @@ public partial class PrecisionControlDialog : Window
         StartLeadBox.TextChanged += (_, _) => ValidateAffinityMask();
         CompensateSendInputCheck.IsChecked = settings.CompensateSendInputCost;
         RawInputHotkeysCheck.IsChecked = settings.HotkeyInput == HotkeyInputMode.RawInput;
+        avoidNoisyCores = settings.AvoidNoisyCores;
         foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
         {
             if (string.Equals(item.Tag?.ToString(), ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
@@ -138,6 +140,10 @@ public partial class PrecisionControlDialog : Window
         CompensateSendInputHelpText.Text = L("CompensateSendInputHelp");
         RawInputHotkeysCheck.Content = L("RawInputHotkeys");
         RawInputHotkeysHelpText.Text = L("RawInputHotkeysHelp");
+        LatencyCheckLabelText.Text = L("LatencyCheck");
+        LatencyCheckHelpText.Text = L("LatencyCheckHelp");
+        RunLatencyCheckButton.Content = L("LatencyCheckRun");
+        LatencyCheckSummaryText.Text = SystemLatencyCheck.Last is { } report ? LatencyCheckDialog.Summarize(report) : L("LatencyCheckNotRun");
         ChooseCoresButton.Content = L("ChooseCores");
         CancelButton.Content = L("Cancel");
         ConfirmButton.Content = L("Confirm");
@@ -151,6 +157,16 @@ public partial class PrecisionControlDialog : Window
                 _ => item.Content
             };
         }
+    }
+
+    private bool avoidNoisyCores;
+
+    private void RunLatencyCheckButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new LatencyCheckDialog(avoidNoisyCores);
+        DialogOwnerService.ShowDialogSafe(dialog, this);
+        avoidNoisyCores = dialog.AvoidNoisyCores;
+        if (SystemLatencyCheck.Last is { } report) LatencyCheckSummaryText.Text = LatencyCheckDialog.Summarize(report);
     }
 
     private void ChooseCoresButton_Click(object sender, RoutedEventArgs e)
@@ -180,7 +196,8 @@ public partial class PrecisionControlDialog : Window
             AffinityMask = mask,
             StartLeadMicroseconds = lead,
             CompensateSendInputCost = CompensateSendInputCheck.IsChecked == true,
-            HotkeyInput = RawInputHotkeysCheck.IsChecked == true ? HotkeyInputMode.RawInput : HotkeyInputMode.LowLevelHook
+            HotkeyInput = RawInputHotkeysCheck.IsChecked == true ? HotkeyInputMode.RawInput : HotkeyInputMode.LowLevelHook,
+            AvoidNoisyCores = avoidNoisyCores
         };
         DialogResult = true;
     }

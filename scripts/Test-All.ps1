@@ -11,6 +11,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "native build failed" }
     $build = dotnet build MacroHID.sln -c Release -v q 2>&1
     $errors = $build | Select-String " error " | ForEach-Object { $_.Line } | Sort-Object -Unique
+    if ($errors -and ($errors -match "MSB3248|MSB3026|MSB3027|being used by another process")) {
+        # Transient file lock (antivirus scanning freshly written DLLs): retry once.
+        Start-Sleep -Seconds 3
+        $build = dotnet build MacroHID.sln -c Release -v q 2>&1
+        $errors = $build | Select-String " error " | ForEach-Object { $_.Line } | Sort-Object -Unique
+    }
     if ($errors) { $errors | Select-Object -First 20; throw "managed build failed" }
     if (-not $SkipManaged) {
         $out = dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj -c Release --no-build 2>&1

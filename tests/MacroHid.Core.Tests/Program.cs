@@ -283,6 +283,7 @@ var tests = new (string Name, Action Body)[]
     ("Light and dark themes define the same brushes and every language has every string", ThemesAndLanguagesStayInStep),
     ("Hotkey runs can start a fixed lead after the key and compensate the SendInput cost", HotkeyStartAlignmentAndSendCompensation),
     ("Raw Input hotkeys map keys like the low-level hook and fall back when the swallow key is unavailable", RawInputHotkeysMatchTheLowLevelHook),
+    ("System latency check finds noisy cores and avoids only those confirmed by repeated checks", SystemLatencyCheckAvoidsConfirmedNoisyCores),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
@@ -5542,6 +5543,28 @@ static void RawInputHotkeysMatchTheLowLevelHook()
     Assert.Contains("var wantMouse = gestures.Values.Any(gesture => gesture.MouseButtons.Count > 0);", raw);
     Assert.Contains("keyboardHook.Mode != runtimePrecisionSettings.HotkeyInput", main);
     Assert.Equal(HotkeyInputMode.LowLevelHook, MacroStudio.Services.RuntimePrecisionSettings.Default.HotkeyInput);
+}
+
+static void SystemLatencyCheckAvoidsConfirmedNoisyCores()
+{
+    // Real stall probe through the managed API (short window): it reports every core and never restricts to fewer than two.
+    var report = SystemLatencyCheck.Run(20, applyQuietCores: false);
+    Assert.True(report is not null);
+    Assert.Equal(Environment.ProcessorCount, report!.Cores.Count);
+    Assert.True(report.Cores.All(core => core.MaxStallUs >= 0));
+    var stable = SystemLatencyCheck.StableQuietMask;
+    Assert.True(stable == 0 || System.Numerics.BitOperations.PopCount(stable) >= 2);
+
+    // Avoidance follows the setting; the dialog never changes system configuration.
+    var dialog = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "LatencyCheckDialog.xaml.cs"));
+    var service = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "SystemLatencyCheck.cs"));
+    var app = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "App.xaml.cs"));
+    Assert.DoesNotContain("Registry", dialog + service);
+    Assert.DoesNotContain("powercfg", dialog + service);
+    Assert.Contains("var need = recentNoisy.Count == 1 ? 1 : 2;", service);
+    Assert.Contains("if (runtimePrecision.AvoidNoisyCores) SystemLatencyCheck.QueueStartupCheck();", app);
+    Assert.True(MacroStudio.Services.RuntimePrecisionSettings.Default.AvoidNoisyCores);
+    SystemLatencyCheck.ApplyQuietCores(0);
 }
 
 static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()

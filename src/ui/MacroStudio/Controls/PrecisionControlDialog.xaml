@@ -48,6 +48,21 @@
 
         <Border Style="{StaticResource DialogSectionDivider}" />
 
+        <TextBlock x:Name="LatencyCheckLabelText" Text="系统延迟检查" Style="{StaticResource FieldLabel}" />
+        <DockPanel LastChildFill="True">
+            <Button x:Name="RunLatencyCheckButton"
+                    DockPanel.Dock="Right"
+                    MinWidth="96"
+                    Height="32"
+                    Margin="8,0,0,0"
+                    Content="检查"
+                    Click="RunLatencyCheckButton_Click" />
+            <TextBlock x:Name="LatencyCheckSummaryText" Style="{StaticResource FieldHelpText}" Margin="2,0,0,0" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock x:Name="LatencyCheckHelpText" Style="{StaticResource FieldHelpText}" />
+
+        <Border Style="{StaticResource DialogSectionDivider}" />
+
         <TextBlock x:Name="AffinityMaskLabelText"
                    Text="极限核心掩码"
                    Style="{StaticResource FieldLabel}" />

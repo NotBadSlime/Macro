@@ -44,6 +44,8 @@ public partial class App : Application
                 runtimePrecision.Precision,
                 runtimePrecision.AffinityMask,
                 runtimePrecision.Generation);
+            // Short per-core stall check a few seconds in; playback then keeps off interrupt-heavy cores.
+            if (runtimePrecision.AvoidNoisyCores) SystemLatencyCheck.QueueStartupCheck();
         }
         catch (Exception ex)
         {

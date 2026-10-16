@@ -60,6 +60,11 @@ namespace
         int64_t p999LateUs = std::numeric_limits<int64_t>::max();
         int64_t meanLateUs = std::numeric_limits<int64_t>::max();
         int64_t score = std::numeric_limits<int64_t>::max();
+        // Stall probe: periods the spinning thread did not run at all (ISR/DPC/SMI/preemption) during the scan window.
+        int64_t maxStallUs = 0;
+        uint32_t stallsOver50Us = 0;
+        uint32_t stallsOver200Us = 0;
+        uint32_t stallWindowMs = 0; // 0 = not measured
         uint32_t physicalCoreId = std::numeric_limits<uint32_t>::max();
         uint32_t efficiencyClass = 0;
     };
@@ -763,6 +768,43 @@ namespace
             + frontQuarterPenalty;
     }
 
+    // A core is "noisy" when the thread is kept off it often or for long. Rates, not counts, so a 60 ms start-up check and
+    // a 1 s manual check agree. Measured on a 7945HX (1 s per core): interrupt-heavy cores (CPU 0, one device's target)
+    // 340-656 gaps >50 us/s, 11-234 >200 us/s, 0.7-10 ms max; quiet ones 0-47 >50 us/s, 0-6 >200 us/s, mostly 10-170 us
+    // max with an occasional single 1.5 ms event, which alone is not enough to call a core noisy.
+    constexpr int64_t NoisyStallsOver50UsPerSecond = 100;
+    constexpr int64_t NoisyStallsOver200UsPerSecond = 20;
+    constexpr int64_t NoisyMaxStallUs = 2000;
+    bool IsNoisyCore(const CoreChoice& choice)
+    {
+        const int64_t windowMs = std::max<int64_t>(1, choice.stallWindowMs);
+        return static_cast<int64_t>(choice.stallsOver50Us) * 1000 >= NoisyStallsOver50UsPerSecond * windowMs
+            || static_cast<int64_t>(choice.stallsOver200Us) * 1000 >= NoisyStallsOver200UsPerSecond * windowMs
+            || choice.maxStallUs >= NoisyMaxStallUs;
+    }
+
+    // Stalls dominate the score: one long stall decides the worst case that the core selection exists to avoid.
+    int64_t StallPenalty(const CoreChoice& choice)
+    {
+        return choice.maxStallUs * 1000
+            + static_cast<int64_t>(choice.stallsOver200Us) * 200000
+            + static_cast<int64_t>(choice.stallsOver50Us) * 5000
+            + (IsNoisyCore(choice) ? 1'000'000'000'000LL : 0);
+    }
+
+    CoreChoice UnmeasuredChoice(DWORD_PTR mask, uint32_t logicalIndex, uint32_t physicalCoreId, uint32_t efficiencyClass)
+    {
+        CoreChoice choice{};
+        choice.mask = mask;
+        choice.index = logicalIndex;
+        choice.processorNumber = ProcessorNumberFromMask(mask);
+        choice.maxLateUs = choice.p99LateUs = choice.p999LateUs = choice.meanLateUs = 0;
+        choice.score = static_cast<int64_t>(logicalIndex);
+        choice.physicalCoreId = physicalCoreId;
+        choice.efficiencyClass = efficiencyClass;
+        return choice;
+    }
+
     bool CoreChoiceBetter(const CoreChoice& candidate, const CoreChoice& best)
     {
         if (candidate.mask == 0)
@@ -892,11 +934,13 @@ namespace
         CoreChoice choice{ mask, index, ProcessorNumberFromMask(mask), std::numeric_limits<int64_t>::max() };
         choice.physicalCoreId = physicalCoreId;
         choice.efficiencyClass = efficiencyClass;
-        const DWORD_PTR previous = SetThreadAffinityMask(thread, mask);
-        if (previous == 0)
+        const DWORD_PTR previousAffinity = SetThreadAffinityMask(thread, mask);
+        if (previousAffinity == 0)
         {
             return choice;
         }
+        // Let the migration settle before measuring on the new core.
+        Sleep(0);
 
         const int64_t intervalTicks = std::max<int64_t>(1, frequency / 1000);
         int64_t dueTick = QueryCounter() + intervalTicks;
@@ -905,17 +949,35 @@ namespace
         std::vector<int64_t> lateSamples;
         const int samples = std::max(1, sampleCount);
         lateSamples.reserve(static_cast<size_t>(samples));
+        // Spin to each 1 ms deadline while recording gaps between consecutive counter reads. A gap is time this thread
+        // did not execute on the core: interrupts and DPCs routed there, SMIs, or preemption. Deadline lateness alone
+        // misses most of these (a stall between deadlines is invisible), and they are what produces rare max outliers.
+        const int64_t stall50 = std::max<int64_t>(1, frequency * 50 / 1000000);
+        const int64_t stall200 = std::max<int64_t>(1, frequency * 200 / 1000000);
+        int64_t maxGap = 0;
+        int64_t previous = QueryCounter();
         for (int i = 0; i < samples; i++)
         {
-            SpinUntil(dueTick, nullptr);
-            const int64_t late = std::max<int64_t>(0, ToMicroseconds(QueryCounter() - dueTick, frequency));
+            int64_t now = previous;
+            while (now < dueTick)
+            {
+                now = QueryCounter();
+                const int64_t gap = now - previous;
+                previous = now;
+                if (gap > maxGap) maxGap = gap;
+                if (gap > stall50) { choice.stallsOver50Us++; if (gap > stall200) choice.stallsOver200Us++; }
+                PauseProcessor();
+            }
+            const int64_t late = std::max<int64_t>(0, ToMicroseconds(now - dueTick, frequency));
             maxLate = std::max(maxLate, late);
             sumLate += late;
             lateSamples.push_back(late);
             dueTick += intervalTicks;
         }
 
-        SetThreadAffinityMask(thread, previous);
+        SetThreadAffinityMask(thread, previousAffinity);
+        choice.maxStallUs = ToMicroseconds(maxGap, frequency);
+        choice.stallWindowMs = static_cast<uint32_t>(samples);
         std::sort(lateSamples.begin(), lateSamples.end());
         choice.maxLateUs = maxLate;
         choice.p99LateUs = PercentileOfSorted(lateSamples, 0.99);
@@ -927,7 +989,8 @@ namespace
             choice.p99LateUs,
             choice.meanLateUs,
             choice.index,
-            allowedProcessorCount);
+            allowedProcessorCount)
+            + StallPenalty(choice);
         return choice;
     }
 
@@ -1016,7 +1079,7 @@ namespace
                     CoreScanSamplesPerCore,
                     topology.physicalCoreId,
                     topology.efficiencyClass)
-                : CoreChoice{ mask, logicalIndex, ProcessorNumberFromMask(mask), 0, 0, 0, 0, static_cast<int64_t>(logicalIndex), topology.physicalCoreId, topology.efficiencyClass };
+                : UnmeasuredChoice(mask, logicalIndex, topology.physicalCoreId, topology.efficiencyClass);
             if (candidate.mask != 0)
             {
                 choices.push_back(candidate);
@@ -1075,9 +1138,14 @@ namespace
 
         const auto choices = ScanEligibleCores(enableCpuScan, nullptr, false, allowedMask);
         selected.reserve(std::min<int>(requestedCount, static_cast<int>(choices.size())));
+        // Quiet candidates exist: drop the noisy ones entirely (the score already ranks them last; this also keeps them
+        // out of the "distinct physical core" fallback below).
+        const auto quietCount = std::count_if(choices.begin(), choices.end(), [](const CoreChoice& c) { return !IsNoisyCore(c); });
+        const bool skipNoisy = enableCpuScan && quietCount >= requestedCount;
         std::vector<uint32_t> usedPhysicalCores;
         for (const auto& choice : choices)
         {
+            if (skipNoisy && IsNoisyCore(choice)) continue;
             if (choice.processorNumber == 0 && static_cast<int>(choices.size()) > requestedCount)
             {
                 continue;
@@ -1100,6 +1168,7 @@ namespace
         {
             for (const auto& choice : choices)
             {
+                if (skipNoisy && IsNoisyCore(choice)) continue;
                 if (std::any_of(selected.begin(), selected.end(), [&](const CoreChoice& existing) { return existing.mask == choice.mask; }))
                 {
                     continue;
@@ -2521,6 +2590,60 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpScanCoresOnMask(uint64_t m
     }
 
     return MhpOk;
+}
+
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpScanCoreStalls(uint64_t mask, uint32_t windowMs, MhpCoreStall* results, uint32_t capacity, uint32_t* written, MhpCoreProgressFn progress)
+{
+    if (written) *written = 0;
+    if (!results && capacity) return MhpInvalidArgument;
+    if (PlaybackIsActive()) { SetLastErrorText(L"latency check deferred while playback is active"); return MhpWin32Error; }
+    DWORD_PTR processMask = 0, systemMask = 0;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &processMask, &systemMask) || !processMask) return MhpWin32Error;
+    if (mask) processMask &= static_cast<DWORD_PTR>(mask);
+    const int samples = static_cast<int>(std::clamp<uint32_t>(windowMs, 20, 2000));
+    const uint32_t total = CountAllowedProcessors(processMask);
+    const int64_t frequency = QueryFrequency();
+    HANDLE thread = GetCurrentThread();
+    const int previousPriority = GetThreadPriority(thread);
+    SetThreadPriority(thread, THREAD_PRIORITY_HIGHEST);
+    uint32_t index = 0, count = 0;
+    for (uint32_t bit = 0; bit < sizeof(DWORD_PTR) * 8; bit++)
+    {
+        const DWORD_PTR coreMask = static_cast<DWORD_PTR>(1) << bit;
+        if (!(processMask & coreMask)) continue;
+        const auto topology = LookupLogicalCore(bit);
+        if (progress) progress(bit, static_cast<int32_t>(index + 1), static_cast<int32_t>(total), -1);
+        const auto choice = MeasureCandidateCore(thread, coreMask, index, total, frequency, samples, topology.physicalCoreId, topology.efficiencyClass);
+        if (progress) progress(bit, static_cast<int32_t>(index + 1), static_cast<int32_t>(total), choice.maxStallUs);
+        if (count < capacity)
+        {
+            results[count] = { bit, topology.physicalCoreId, topology.efficiencyClass, choice.stallsOver50Us, choice.stallsOver200Us,
+                IsNoisyCore(choice) ? 1u : 0u, choice.maxStallUs, choice.maxLateUs };
+            count++;
+        }
+        index++;
+    }
+    SetThreadPriority(thread, previousPriority);
+    if (written) *written = count;
+    return MhpOk;
+}
+
+// Sets the quiet-core set used as the soft affinity of non-极限 workers (0 clears it). At least two processors, or it is
+// ignored, so the workers always have somewhere to run. Idle workers apply it right away.
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpSetQuietCores(uint64_t mask)
+{
+    DWORD_PTR processMask = 0, systemMask = 0;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &processMask, &systemMask)) return MhpWin32Error;
+    const DWORD_PTR usable = static_cast<DWORD_PTR>(mask) & processMask;
+    if (mask != 0 && CountAllowedProcessors(usable) < 2) return MhpInvalidArgument;
+    g_quietCoreMask.store(usable, std::memory_order_release);
+    g_sharedScheduler.Notify();
+    return MhpOk;
+}
+
+extern "C" __declspec(dllexport) uint64_t __cdecl MhpGetQuietCores()
+{
+    return static_cast<uint64_t>(g_quietCoreMask.load(std::memory_order_acquire));
 }
 
 extern "C" __declspec(dllexport) void __cdecl MhpShutdownEngine()

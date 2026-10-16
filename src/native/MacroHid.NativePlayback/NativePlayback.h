@@ -127,6 +127,19 @@ extern "C"
         int64_t maxLateUs;
     };
 
+    // Per-core stall probe result (see MhpScanCoreStalls). noisy = excluded from automatic core selection.
+    struct MhpCoreStall
+    {
+        uint32_t processorNumber;
+        uint32_t physicalCoreId;
+        uint32_t efficiencyClass;
+        uint32_t stallsOver50Us;
+        uint32_t stallsOver200Us;
+        uint32_t noisy;
+        int64_t maxStallUs;
+        int64_t maxLateUs;
+    };
+
     typedef void (__cdecl *MhpCoreProgressFn)(uint32_t processorNumber, int32_t completed, int32_t total, int64_t maxLateUs);
 
     __declspec(dllexport) MhpStatus __cdecl MhpWarmEngine(
@@ -187,6 +200,11 @@ extern "C"
     __declspec(dllexport) MhpStatus __cdecl MhpGetBatchTrace(void* run, MhpBatchTrace* records, uint32_t capacity, uint32_t* written);
     __declspec(dllexport) MhpStatus __cdecl MhpPrepareEngine(const MhpRunOptions* options, uint64_t allowedMask, MhpRunStats* stats);
     __declspec(dllexport) MhpStatus __cdecl MhpScanCoresOnMask(uint64_t mask, MhpCoreSample* samples, uint32_t capacity, uint32_t* written, MhpCoreProgressFn progress);
+    // Stall probe for every allowed logical processor (0 = all). Refuses while playback is active. Each core spins for
+    // windowMs (clamped to 20..2000). Results come back in processor-number order; it does not change the cached selection.
+    __declspec(dllexport) MhpStatus __cdecl MhpScanCoreStalls(uint64_t mask, uint32_t windowMs, MhpCoreStall* results, uint32_t capacity, uint32_t* written, MhpCoreProgressFn progress);
+    __declspec(dllexport) MhpStatus __cdecl MhpSetQuietCores(uint64_t mask);
+    __declspec(dllexport) uint64_t __cdecl MhpGetQuietCores();
     __declspec(dllexport) MhpStatus __cdecl MhpSubmitPlanAt(void* plan, const MhpRunOptions* options, void* control, int64_t timelineStart, void** run, HANDLE* completion);
     __declspec(dllexport) MhpStatus __cdecl MhpGetRunTrace(void* run, MhpRunTrace* trace);
     // Retains plan/control. Options' outlier buffer must remain alive until completion.

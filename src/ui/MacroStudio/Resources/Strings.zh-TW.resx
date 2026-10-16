@@ -658,4 +658,31 @@
   <data name="CompensateSendInputHelp" xml:space="preserve"><value>播放時分別學習按鍵和滑鼠的典型送出耗時（按鍵要先經過系統裡所有鍵盤鉤子），提前這麼多送出，使輸入平均落在寫下的時刻。僅最新精度版本生效。</value></data>
   <data name="RawInputHotkeys" xml:space="preserve"><value>用 Raw Input 偵測熱鍵</value></data>
   <data name="RawInputHotkeysHelp" xml:space="preserve"><value>讓 MacroStudio 退出鍵盤鉤子鏈，它送出的每個按鍵（以及你自己打的字）都不再被它拖慢：實測按鍵 SendInput 中位 249 → 188 微秒、P99 1280 → 976 微秒。代價是熱鍵本身被察覺得更晚（約 +190 微秒），因為 Raw Input 要等其他程式的鉤子都處理完才到。取色鍵無法佔用時自動改用低階鉤子。</value></data>
+  <data name="LatencyCheck" xml:space="preserve"><value>系統延遲檢查</value></data>
+  <data name="LatencyCheckRun" xml:space="preserve"><value>檢查…</value></data>
+  <data name="LatencyCheckNotRun" xml:space="preserve"><value>尚未檢查。</value></data>
+  <data name="LatencyCheckHelp" xml:space="preserve"><value>找出被中斷頻繁佔用的 CPU 核心（偶發延遲最大值的常見來源），並讓播放避開它們。</value></data>
+  <data name="LatencyCheckIntro" xml:space="preserve"><value>依次短暫佔用每個 CPU 核心，記錄系統讓 MacroStudio 無法執行的時長（裝置中斷、DPC、韌體）。不修改任何系統設定。耗時 2–30 秒，期間盡量不要做重負載操作。</value></data>
+  <data name="LatencyCheckWindow" xml:space="preserve"><value>每核偵測時長</value></data>
+  <data name="LatencyCheckStart" xml:space="preserve"><value>開始檢查</value></data>
+  <data name="LatencyCheckRunning" xml:space="preserve"><value>正在檢查…</value></data>
+  <data name="LatencyCheckUnavailable" xml:space="preserve"><value>現在無法檢查（原生引擎不可用，或有巨集正在播放）。</value></data>
+  <data name="LatencyCheckCoreTip" xml:space="preserve"><value>CPU {0}（實體核心 {1}）
+最長停頓：{2} 微秒
+超過 50 微秒：{3} 次，超過 200 微秒：{4} 次
+{5}</value></data>
+  <data name="LatencyCheckNoisy" xml:space="preserve"><value>嘈雜——已避開</value></data>
+  <data name="LatencyCheckQuiet" xml:space="preserve"><value>安靜</value></data>
+  <data name="LatencyCheckScale" xml:space="preserve"><value>柱高：每個核心的最長停頓，對數刻度，最高 {0} 微秒。每核 {1} 毫秒。紅色 = 嘈雜。</value></data>
+  <data name="LatencyCheckSummaryClean" xml:space="preserve"><value>{0} 個核心都很安靜，最長停頓 {1} 微秒。</value></data>
+  <data name="LatencyCheckSummaryNoisy" xml:space="preserve"><value>{1} 個核心中有 {0} 個嘈雜：CPU {2}。安靜核心的最長停頓：{3} 微秒。</value></data>
+  <data name="LatencyCheckAdviceClean" xml:space="preserve"><value>沒有需要避開的核心。如果仍有偶發延遲，來源在別處（目標程式、SendInput 鉤子）。</value></data>
+  <data name="LatencyCheckAdviceAvoided" xml:space="preserve"><value>• 播放已避開 CPU {0}（均衡和極限檔；極限檔從其餘核心裡選兩個）。一個核心在最近 3 次檢查中有 2 次嘈雜才會被避開。</value></data>
+  <data name="LatencyCheckAdviceCore0" xml:space="preserve"><value>• CPU 0 是 Windows 預設接收大部分中斷的核心，屬正常現象。</value></data>
+  <data name="LatencyCheckAdviceDevice" xml:space="preserve"><value>• 其他嘈雜核心通常在接收某個裝置（顯示卡、USB、網卡）的中斷。遷移這些中斷屬於系統級修改，MacroStudio 不會去做。</value></data>
+  <data name="LatencyCheckAdviceLong" xml:space="preserve"><value>• 部分停頓超過 5 毫秒：通常來自驅動（顯示卡 / 網卡 / 疊加層工具）或韌體。可以用 LatencyMon 定位具體驅動。</value></data>
+  <data name="LatencyCheckAdviceTooFew" xml:space="preserve"><value>• 安靜核心少於兩個：不做限制。</value></data>
+  <data name="LatencyCheckAvoidNoisy" xml:space="preserve"><value>自動避開嘈雜核心</value></data>
+  <data name="LatencyCheckAvoidNoisyHelp" xml:space="preserve"><value>啟動幾秒後也會自動做一次簡短檢查。均衡檔在安靜核心之間浮動，極限檔固定在其中兩個上。低佔用檔走託管程式碼，不受限制。</value></data>
+  <data name="LatencyCheckAdviceNotYet" xml:space="preserve"><value>• 暫未避開：一個核心在最近 3 次檢查中有 2 次嘈雜才會被避開。可再檢查一次確認。</value></data>
 </root>

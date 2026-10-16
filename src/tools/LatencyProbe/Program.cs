@@ -35,6 +35,12 @@ if (warmNative)
     var warmupUs = ToMicroseconds(Stopwatch.GetTimestamp() - warmupStart, Stopwatch.Frequency);
     Console.WriteLine($"nativeWarmup={warmupUs}us cpuScanReady={NativePlaybackWarmup.CpuScanReady}");
 }
+if (HasFlag(args, "--avoid-noisy"))
+{
+    // Same as MacroStudio's "avoid noisy cores": stall check, quiet cores become the workers' soft affinity.
+    for (var pass = 0; pass < 3; pass++) SystemLatencyCheck.Run(100);
+    Console.WriteLine($"avoidNoisy avoided=[{string.Join(",", SystemLatencyCheck.StableNoisy.Order())}] quietMask=0x{SystemLatencyCheck.CurrentQuietMask:X}");
+}
 
 using var precisionContext = legacy
     ? null

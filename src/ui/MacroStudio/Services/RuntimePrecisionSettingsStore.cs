@@ -62,7 +62,9 @@ public sealed record RuntimePrecisionSettings(
     // Submit early by the learned SendInput cost. Only the latest generation uses it; older generations keep their timing.
     bool CompensateSendInputCost = true,
     // How hotkeys are detected. RawInput keeps this process out of the synchronous keyboard hook chain.
-    HotkeyInputMode HotkeyInput = HotkeyInputMode.LowLevelHook)
+    HotkeyInputMode HotkeyInput = HotkeyInputMode.LowLevelHook,
+    // Keep native playback workers off cores the system latency check found interrupt-heavy (also checked at start-up).
+    bool AvoidNoisyCores = true)
 {
     public const int MaxStartLeadMicroseconds = 5000;
     public static RuntimePrecisionSettings Default { get; } = new(ColorSampleHotkey: CoreHotkeys.DefaultColorSampleText);

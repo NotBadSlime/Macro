@@ -1,0 +1,72 @@
+<Window x:Class="MacroStudio.Controls.LatencyCheckDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="系统延迟检查"
+        Width="620"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <StackPanel>
+        <TextBlock x:Name="IntroText" Style="{StaticResource FieldHelpText}" Margin="2,0,0,12" />
+
+        <DockPanel Margin="0,0,0,8">
+            <TextBlock x:Name="WindowLabelText" DockPanel.Dock="Left" Text="每核检测时长" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <ComboBox x:Name="WindowBox" DockPanel.Dock="Left" Width="110" Height="32">
+                <ComboBoxItem Tag="60" Content="60 ms" />
+                <ComboBoxItem Tag="200" Content="200 ms" IsSelected="True" />
+                <ComboBoxItem Tag="1000" Content="1 s" />
+            </ComboBox>
+            <Button x:Name="StartButton"
+                    DockPanel.Dock="Right"
+                    MinWidth="96"
+                    Height="32"
+                    Style="{StaticResource PrimaryButton}"
+                    Margin="8,0,-8,0"
+                    Content="开始检查"
+                    Click="StartButton_Click" />
+            <ProgressBar x:Name="Progress" Height="6" Margin="14,0,0,0" VerticalAlignment="Center" Minimum="0" Maximum="1" Value="0" />
+        </DockPanel>
+
+        <Border Background="{DynamicResource ControlBackground}"
+                BorderBrush="{DynamicResource ControlBorder}"
+                BorderThickness="1"
+                CornerRadius="11"
+                Padding="12,10">
+            <StackPanel>
+                <!-- One bar per logical processor; height = longest stall (log scale), red = noisy. -->
+                <ItemsControl x:Name="CoreBars" Height="140">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="1,0" ToolTip="{Binding Tip}" Background="Transparent">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Border Grid.Row="0" VerticalAlignment="Bottom" Height="{Binding BarHeight}" CornerRadius="3,3,1,1"
+                                        Background="{Binding Fill}" />
+                                <TextBlock Grid.Row="1" Text="{Binding Label}" FontSize="9" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource SecondaryText}" Margin="0,3,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock x:Name="ScaleText" Style="{StaticResource FieldHelpText}" Margin="0,6,0,0" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock x:Name="SummaryText" Style="{StaticResource FieldSectionTitle}" Margin="0,14,0,4" TextWrapping="Wrap" />
+        <TextBlock x:Name="AdviceText" Style="{StaticResource FieldHelpText}" />
+
+        <CheckBox x:Name="AvoidNoisyCheck" Content="自动避开嘈杂核心" IsChecked="True" Margin="0,0,0,2" />
+        <TextBlock x:Name="AvoidNoisyHelpText" Style="{StaticResource FieldHelpText}" />
+
+        <StackPanel Style="{StaticResource DialogButtonRow}">
+            <Button x:Name="CloseButton" MinWidth="82" IsCancel="True" IsDefault="True" Content="关闭" />
+        </StackPanel>
+    </StackPanel>
+</Window>

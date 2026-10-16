@@ -224,6 +224,24 @@ int main(int argc, char** argv)
         Check(MhpWarmEngine(&options, nullptr) == MhpOk, "warm");
         auto ms = [&](int value) { return options.qpcFrequency * value / 1000; };
         {
+            // Stall classification: interrupt-heavy cores are noisy, quiet ones are not; the penalty ranks noisy last.
+            CoreChoice quiet{}; quiet.mask = 2; quiet.maxStallUs = 1500; quiet.stallsOver50Us = 3; quiet.stallWindowMs = 1000;
+            CoreChoice manyGaps{}; manyGaps.mask = 4; manyGaps.maxStallUs = 150; manyGaps.stallsOver50Us = 400; manyGaps.stallWindowMs = 1000;
+            CoreChoice longStall{}; longStall.mask = 8; longStall.maxStallUs = 8700; longStall.stallsOver50Us = 7; longStall.stallWindowMs = 1000;
+            CoreChoice fewLong{}; fewLong.mask = 16; fewLong.maxStallUs = 300; fewLong.stallsOver200Us = 30; fewLong.stallWindowMs = 1000;
+            // Rates: 30 gaps in 60 ms is 500/s (noisy); 30 gaps in 1 s is not.
+            CoreChoice shortBusy{}; shortBusy.mask = 32; shortBusy.maxStallUs = 120; shortBusy.stallsOver50Us = 30; shortBusy.stallWindowMs = 60;
+            CoreChoice longQuiet = shortBusy; longQuiet.stallWindowMs = 1000;
+            Check(!IsNoisyCore(quiet) && !IsNoisyCore(longQuiet), "quiet cores (one 1.5 ms event, low rate) are not noisy");
+            Check(IsNoisyCore(manyGaps) && IsNoisyCore(longStall) && IsNoisyCore(fewLong) && IsNoisyCore(shortBusy), "noisy cores detected");
+            Check(StallPenalty(quiet) < StallPenalty(manyGaps) && StallPenalty(quiet) < StallPenalty(longStall), "noisy ranks last");
+            // Real probe on this machine: every core reports a result, nothing is left at the sentinel value.
+            std::vector<MhpCoreStall> stalls(64); uint32_t written = 0;
+            Check(MhpScanCoreStalls(0, 20, stalls.data(), 64, &written, nullptr) == MhpOk && written > 0, "stall probe");
+            for (uint32_t i = 0; i < written; i++) Check(stalls[i].maxStallUs >= 0 && stalls[i].maxStallUs < 1000000, "stall value");
+            std::cout << "stall_probe_cores=" << written << "\n";
+        }
+        {
             // Relative moves are sent alone after their edge check; neighbouring keys keep one call.
             INPUT mixed[6]{};
             for (auto& in : mixed) { in.type = INPUT_KEYBOARD; in.ki.wVk = 'A'; }

@@ -958,4 +958,31 @@
   <data name="CompensateSendInputHelp" xml:space="preserve"><value>Learns the typical send cost for keys and for mouse input while macros run (keys pass every keyboard hook on the system first) and sends that much earlier, so input arrives on the written time on average. Latest precision version only.</value></data>
   <data name="RawInputHotkeys" xml:space="preserve"><value>Detect hotkeys with Raw Input</value></data>
   <data name="RawInputHotkeysHelp" xml:space="preserve"><value>Takes MacroStudio out of the keyboard hook chain, so every key it sends (and every key you type) is not slowed by it: measured key SendInput p50 249 → 188 µs, p99 1280 → 976 µs. The hotkey itself is seen later (about +190 µs), because Raw Input arrives after all other programs&apos; hooks. If the colour-sample key cannot be reserved, the low-level hook is used.</value></data>
+  <data name="LatencyCheck" xml:space="preserve"><value>System latency check</value></data>
+  <data name="LatencyCheckRun" xml:space="preserve"><value>Check…</value></data>
+  <data name="LatencyCheckNotRun" xml:space="preserve"><value>Not checked yet.</value></data>
+  <data name="LatencyCheckHelp" xml:space="preserve"><value>Finds the CPU cores that interrupts keep busy — the usual source of rare late inputs — and keeps playback off them.</value></data>
+  <data name="LatencyCheckIntro" xml:space="preserve"><value>Briefly occupies each CPU core in turn and records how long the system kept MacroStudio off it (device interrupts, DPCs, firmware). Changes no system setting. Takes 2–30 s; avoid heavy work meanwhile.</value></data>
+  <data name="LatencyCheckWindow" xml:space="preserve"><value>Time per core</value></data>
+  <data name="LatencyCheckStart" xml:space="preserve"><value>Start</value></data>
+  <data name="LatencyCheckRunning" xml:space="preserve"><value>Checking…</value></data>
+  <data name="LatencyCheckUnavailable" xml:space="preserve"><value>Not available now (native engine missing, or a macro is playing).</value></data>
+  <data name="LatencyCheckCoreTip" xml:space="preserve"><value>CPU {0} (physical core {1})
+Longest stall: {2} µs
+Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
+{5}</value></data>
+  <data name="LatencyCheckNoisy" xml:space="preserve"><value>Noisy — avoided</value></data>
+  <data name="LatencyCheckQuiet" xml:space="preserve"><value>Quiet</value></data>
+  <data name="LatencyCheckScale" xml:space="preserve"><value>Bar height: longest stall per core, log scale up to {0} µs. {1} ms per core. Red = noisy.</value></data>
+  <data name="LatencyCheckSummaryClean" xml:space="preserve"><value>All {0} cores are quiet; longest stall {1} µs.</value></data>
+  <data name="LatencyCheckSummaryNoisy" xml:space="preserve"><value>{0} of {1} cores are noisy: CPU {2}. Quiet cores&apos; longest stall: {3} µs.</value></data>
+  <data name="LatencyCheckAdviceClean" xml:space="preserve"><value>Nothing to avoid. Rare late inputs, if any, come from elsewhere (the target program, SendInput hooks).</value></data>
+  <data name="LatencyCheckAdviceAvoided" xml:space="preserve"><value>• Playback avoids CPU {0} (Balanced and Extreme; Extreme picks its two cores from the rest). A core is avoided once it is noisy in 2 of the last 3 checks.</value></data>
+  <data name="LatencyCheckAdviceCore0" xml:space="preserve"><value>• CPU 0 is where Windows sends most interrupts by default; this is normal.</value></data>
+  <data name="LatencyCheckAdviceDevice" xml:space="preserve"><value>• Other noisy cores usually receive a device&apos;s interrupts (GPU, USB, network). Moving those interrupts is a system-level change and is not done by MacroStudio.</value></data>
+  <data name="LatencyCheckAdviceLong" xml:space="preserve"><value>• Some stalls exceed 5 ms: typically a driver (GPU / network / overlay tools) or firmware. LatencyMon can name the driver.</value></data>
+  <data name="LatencyCheckAdviceTooFew" xml:space="preserve"><value>• Fewer than two quiet cores: nothing is restricted.</value></data>
+  <data name="LatencyCheckAvoidNoisy" xml:space="preserve"><value>Avoid noisy cores automatically</value></data>
+  <data name="LatencyCheckAvoidNoisyHelp" xml:space="preserve"><value>Also runs briefly a few seconds after start-up. Balanced floats over the quiet cores, Extreme pins to two of them. Low runs in managed code and is not restricted.</value></data>
+  <data name="LatencyCheckAdviceNotYet" xml:space="preserve"><value>• Not avoided yet: a core is avoided once it is noisy in 2 of the last 3 checks. Run the check again to confirm.</value></data>
 </root>
