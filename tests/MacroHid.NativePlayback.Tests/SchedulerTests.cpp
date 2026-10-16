@@ -184,6 +184,16 @@ int main(int argc, char** argv)
         }
         Check(MhpWarmEngine(&options, nullptr) == MhpOk, "warm");
         auto ms = [&](int value) { return options.qpcFrequency * value / 1000; };
+        // Re-warming for another profile while idle re-configures the workers and must leave them usable.
+        for (int mode : {1, 2, 1, 2})
+        {
+            options.precisionMode = mode;
+            Check(MhpPrepareEngine(&options, 0, nullptr) == MhpOk, "profile re-warm");
+            calls = 0;
+            Run rewarmed({{0,0,1,1},{ms(2),0,1,1}}, options);
+            Check(rewarmed.Wait().batchesSubmitted == 2 && calls == 2, "run after profile re-warm");
+        }
+        options.precisionMode = MhpUltraLowJitter;
         for (int mode : {1, 2})
         {
             // Pause after the single-run path has started; neither the owner

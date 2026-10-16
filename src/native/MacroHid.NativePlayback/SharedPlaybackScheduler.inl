@@ -92,7 +92,9 @@ class SharedPlaybackScheduler
     bool ready = false;
     bool measured = false;
     bool singleRunFastPath = true;
-    int warmPrecision = 1;
+    // Precision the idle workers keep configured (MMCSS/affinity). Updated by every Warm() so a profile change
+    // is applied while idle instead of in front of the next run's first SendInput.
+    std::atomic<int> warmPrecision{1};
     DWORD_PTR preparedMask = 0;
     unsigned nextOwner = 0;
 
@@ -263,7 +265,7 @@ class SharedPlaybackScheduler
         };
         // Prepared means timer, priority, MMCSS and affinity are ready before
         // the first deadline, not just that the std::thread has been created.
-        configure(warmPrecision, cores[worker].mask);
+        configure(warmPrecision.load(std::memory_order_acquire), cores[worker].mask);
         { std::lock_guard<std::mutex> lock(gate); initializedWorkers++; }
         initialized.notify_one();
         while (true)
@@ -306,7 +308,9 @@ class SharedPlaybackScheduler
                 if (retiredCount) continue; // Return large buffers outside the queue lock.
                 // Keep the prepared thread state while sleeping. Re-entering
                 // MMCSS/affinity on every isolated hotkey is avoidable startup
-                // work; mode changes and shutdown restore it below.
+                // work; mode changes and shutdown restore it below. A warm-up
+                // for another profile wakes the workers so it is applied here.
+                configure(warmPrecision.load(std::memory_order_acquire), cores[worker].mask);
                 WaitForSingleObject(changed[worker], INFINITE);
                 continue;
             }
@@ -374,8 +378,13 @@ public:
     {
         std::lock_guard<std::mutex> life(lifecycle);
         if (stats) *stats = {};
+        const int requestedPrecision = options ? options->precisionMode : 1;
         bool alreadyReady;
+        bool precisionChanged = false;
         { std::lock_guard<std::mutex> lock(gate); alreadyReady = ready;
+          if (ready) precisionChanged = warmPrecision.exchange(requestedPrecision, std::memory_order_acq_rel) != requestedPrecision; }
+        if (precisionChanged) Notify();
+        { std::lock_guard<std::mutex> lock(gate);
           if (ready && preparedMask == allowedMask && (!(options && options->enableCpuScan) || measured)) { CopyCoreStats(stats); return MhpOk; }
           if (ready && PlaybackIsActive()) { CopyCoreStats(stats); SetLastErrorText(L"core preparation deferred while playback is active"); return MhpWin32Error; } }
         try
@@ -393,7 +402,7 @@ public:
             if (alreadyReady) return MhpOk;
             wchar_t disabled[8]{};
             singleRunFastPath = !(GetEnvironmentVariableW(L"MACROHID_DISABLE_SINGLE_RUN_FASTPATH", disabled, 8) > 0 && disabled[0] == L'1');
-            warmPrecision = options ? options->precisionMode : 1;
+            warmPrecision.store(requestedPrecision, std::memory_order_release);
             std::unique_lock<std::mutex> events(eventGate);
             for (size_t i = 0; i < 2; i++)
             {

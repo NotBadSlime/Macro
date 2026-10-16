@@ -40,6 +40,10 @@ public static class NativePlaybackWarmup
     // picker and the affinity-mask paths, which do not carry run options. Set whenever a precision warm-up is requested.
     private static int preparedGeneration;
     public static PrecisionGeneration Generation => (PrecisionGeneration)Volatile.Read(ref preparedGeneration);
+    // Native profile (1 = 均衡, 2 = 极限) the idle workers are configured for. The core picker and affinity-mask
+    // paths keep the last one requested, so they do not flip a 均衡 user's workers into MMCSS/affinity.
+    private static int preparedNativePrecision = (int)NativePrecisionMode.ExtremeDuringPlayback;
+    private enum NativePrecisionMode { ExtremeDuringPlayback = 1, UltraLowJitter = 2 }
     public static void QueueWarmUpForPrecision(PrecisionMode precision, string? affinityMask, PrecisionGeneration generation = PrecisionGeneration.Latest)
         => _ = Task.Run(() => TryWarmUpForPrecision(precision, affinityMask, generation));
     public static void TryWarmUpForPrecision(PrecisionMode precision, string? affinityMask, PrecisionGeneration generation = PrecisionGeneration.Latest)
@@ -53,6 +57,8 @@ public static class NativePlaybackWarmup
             PlaybackRuntimeStatus.SetPreparation(new(false, true, "managed", ""));
             return false;
         }
+        Volatile.Write(ref preparedNativePrecision, (int)(precision == PrecisionMode.UltraLowJitter
+            ? NativePrecisionMode.UltraLowJitter : NativePrecisionMode.ExtremeDuringPlayback));
         return Prepare(precision == PrecisionMode.UltraLowJitter, affinityMask, out _);
     }
     private static bool Prepare(bool scan, string? maskText, out MhpRunStats stats)
@@ -64,7 +70,7 @@ public static class NativePlaybackWarmup
             try
             {
                 PlaybackAffinityMask.TryParse(PlaybackAffinityMask.NormalizeOrThrow(maskText), out var mask);
-                var options = new MhpRunOptions { PrecisionMode = 2, EnableCpuScan = scan ? 1 : 0,
+                var options = new MhpRunOptions { PrecisionMode = Volatile.Read(ref preparedNativePrecision), EnableCpuScan = scan ? 1 : 0,
                     QpcFrequency = System.Diagnostics.Stopwatch.Frequency, NativeEngineMode = (int)NativeEngineMode.Standby,
                     Generation = (uint)Generation };
                 var status = NativePlaybackInterop.MhpPrepareEngine(ref options, mask, out stats);
