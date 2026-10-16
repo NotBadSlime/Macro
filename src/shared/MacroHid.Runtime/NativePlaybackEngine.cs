@@ -97,7 +97,8 @@ internal static class NativePlaybackEngine
         int outlierThresholdUs = 250,
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
-        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0)
+        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0,
+        PrecisionGeneration generation = PrecisionGeneration.Latest)
     {
         return TryRunTimeline(
             plan.ExportNativeTimeline(),
@@ -109,7 +110,7 @@ internal static class NativePlaybackEngine
             outlierThresholdUs,
             enableCpuScan,
             engineMode,
-            playbackControl, timelineStart);
+            playbackControl, timelineStart, generation);
     }
 
     public static bool TryRunTimeline(
@@ -122,7 +123,8 @@ internal static class NativePlaybackEngine
         int outlierThresholdUs = 250,
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
-        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0)
+        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0,
+        PrecisionGeneration generation = PrecisionGeneration.Latest)
     {
         if (!TryCreatePreparedPlan(timeline, qpcFrequency, out var preparedPlan, out diagnostics, out fallbackReason))
         {
@@ -140,7 +142,7 @@ internal static class NativePlaybackEngine
             enableCpuScan,
             engineMode,
             includePlanCreateInStartup: true,
-            playbackControl: playbackControl, timelineStart: timelineStart);
+            playbackControl: playbackControl, timelineStart: timelineStart, generation: generation);
     }
 
     public static bool TryCreatePreparedPlan(
@@ -210,8 +212,10 @@ internal static class NativePlaybackEngine
         bool enableCpuScan = false,
         NativePlaybackEngineMode engineMode = NativePlaybackEngineMode.Auto,
         bool includePlanCreateInStartup = false,
-        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0)
+        NativePlaybackRunControl? playbackControl = null, long timelineStart = 0,
+        PrecisionGeneration generation = PrecisionGeneration.Latest)
     {
+        generation = PrecisionGenerations.Normalize(generation);
         diagnostics = EmptyDiagnostics("native", string.Empty);
         fallbackReason = string.Empty;
 
@@ -268,7 +272,8 @@ internal static class NativePlaybackEngine
                 OutlierEvents = outlierEventsHandle.IsAllocated
                     ? outlierEventsHandle.AddrOfPinnedObject()
                     : IntPtr.Zero,
-                OutlierEventCapacity = checked((uint)outlierEventCapacity)
+                OutlierEventCapacity = checked((uint)outlierEventCapacity),
+                Generation = (uint)generation
             };
 
             var modes = effectiveEngineMode switch
@@ -280,7 +285,9 @@ internal static class NativePlaybackEngine
             foreach (var mode in modes)
             {
                 options.NativeEngineMode = (int)mode;
-                var shared = Environment.GetEnvironmentVariable("MACROHID_LEGACY_PLAYBACK") != "1";
+                // MacroHID 1.6.0 runs on the older standby/inline engine; the environment variable stays a diagnostic override.
+                var shared = Environment.GetEnvironmentVariable("MACROHID_LEGACY_PLAYBACK") != "1"
+                    && !PrecisionGenerations.UsesLegacyNativeEngine(generation);
                 var backendName = shared ? "native-shared" : mode == NativeEngineMode.Standby ? "native-standby" : "native-inline";
                 MhpRunStats stats;
                 var runStatus = shared

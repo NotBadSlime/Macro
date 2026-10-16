@@ -32,7 +32,8 @@ public partial class App : Application
             var runtimePrecision = RuntimePrecisionSettingsStore.Load();
             NativePlaybackWarmup.QueueWarmUpForPrecision(
                 runtimePrecision.Precision,
-                runtimePrecision.AffinityMask);
+                runtimePrecision.AffinityMask,
+                runtimePrecision.Generation);
             PlaybackPathWarmup.QueueRun();
         }
         catch (Exception ex)

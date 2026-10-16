@@ -50,6 +50,13 @@ public readonly record struct InputPressFloor(TimeSpan ZeroGapHold, TimeSpan Mod
 {
     public static InputPressFloor Factory { get; } = new(InputPressTiming.ZeroDelayHold, InputPressTiming.ModifierChordHold);
 
+    /// <summary>
+    /// Which generation of timing behaviour compiles and runs with this floor. It rides on the floor because the floor already
+    /// reaches the compiler, the tracker, the managed runner and the condition monitor. Defaults to the latest; set with
+    /// <c>floor with { Generation = ... }</c>, which keeps the two-argument constructor unchanged.
+    /// </summary>
+    public PrecisionGeneration Generation { get; init; } = PrecisionGeneration.Latest;
+
     public static InputPressFloor FromMicroseconds(long zeroGapMicroseconds, long modifierChordMicroseconds)
     {
         return new(
@@ -220,11 +227,13 @@ public sealed class PressReleaseGapTracker
     private readonly Dictionary<PressIdentity, long> releaseDueTicks = new();
     private readonly long zeroDelayHoldTicks;
     private readonly long modifierChordHoldTicks;
+    private readonly bool earlierTimeline;
     private int modifiersHeld;
 
     public PressReleaseGapTracker(long qpcFrequency, InputPressFloor? floor = null)
     {
         var resolved = floor ?? InputPressFloor.Factory;
+        earlierTimeline = PrecisionGenerations.UsesEarlierTimeline(resolved.Generation);
         zeroDelayHoldTicks = InputPressTiming.HoldTicks(resolved.ZeroGapHold, qpcFrequency);
         modifierChordHoldTicks = InputPressTiming.HoldTicks(resolved.ModifierChordHold, qpcFrequency);
     }
@@ -243,6 +252,15 @@ public sealed class PressReleaseGapTracker
     /// </param>
     public long ScheduleDueTick(InputAction action, long cursorTick, out bool moveCursorToDue)
     {
+        if (earlierTimeline)
+        {
+            // Generations before the timeline fix: the floor delays the release AND everything written after it. The cursor
+            // always follows the returned tick, which is what the callers did when they used AdjustDueTick directly.
+            var earlier = AdjustDueTick(action, cursorTick);
+            moveCursorToDue = true;
+            return earlier;
+        }
+
         moveCursorToDue = false;
         if (PressIdentity.TryGet(action, out var identity, out var isDown) && isDown
             && releaseDueTicks.TryGetValue(identity, out var pendingRelease) && cursorTick < pendingRelease)

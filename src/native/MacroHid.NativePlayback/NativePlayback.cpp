@@ -2475,12 +2475,12 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpWarmEngine(
         ? effectiveOptions.qpcFrequency
         : QueryFrequency();
     effectiveOptions.nativeEngineMode = MhpNativeEngineStandby;
-    return LegacyPlaybackEnabled() ? g_standbyEngine.Warm(&effectiveOptions, stats) : g_sharedScheduler.Warm(&effectiveOptions, stats);
+    return LegacyPlaybackEnabled(&effectiveOptions) ? g_standbyEngine.Warm(&effectiveOptions, stats) : g_sharedScheduler.Warm(&effectiveOptions, stats);
 }
 
 extern "C" __declspec(dllexport) MhpStatus __cdecl MhpPrepareEngine(const MhpRunOptions* options, uint64_t allowedMask, MhpRunStats* stats)
 {
-    return LegacyPlaybackEnabled() ? MhpWarmEngine(options, stats) : g_sharedScheduler.Warm(options, stats, static_cast<DWORD_PTR>(allowedMask));
+    return LegacyPlaybackEnabled(options) ? MhpWarmEngine(options, stats) : g_sharedScheduler.Warm(options, stats, static_cast<DWORD_PTR>(allowedMask));
 }
 
 extern "C" __declspec(dllexport) MhpStatus __cdecl MhpScanCores(
@@ -2586,7 +2586,7 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
         return MhpInvalidArgument;
     }
 
-    if (!LegacyPlaybackEnabled())
+    if (!LegacyPlaybackEnabled(options))
     {
         *stats = {};
         return g_sharedScheduler.Run(static_cast<NativePlan*>(plan), *options, static_cast<PlaybackControl*>(playbackControl), cancelFlag, *stats);

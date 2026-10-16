@@ -64,6 +64,10 @@ extern "C"
         int32_t nativeEngineMode;
         MhpOutlierEvent* outlierEvents;
         uint32_t outlierEventCapacity;
+        // Precision generation, see MacroHid.Core PrecisionGeneration: 0 = latest (default, also what an older caller that
+        // never sets it gets), 1 = MacroHID 2.0.0/2.0.1, 2 = MacroHID 1.6.0, 3 = MacroHID 2.0.2. Fills the padding after
+        // outlierEventCapacity, so the struct stays 48 bytes.
+        uint32_t generation;
     };
 
     struct MhpRunStats

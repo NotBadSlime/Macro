@@ -275,7 +275,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         if (Environment.GetEnvironmentVariable("MACROHID_DISABLE_PREPARE") == "1") return;
         QpcPlaybackDelayStrategy.Prepare(options.Precision);
         nativePreparationAvailable = PlaybackPerformancePolicy.For(options.Precision).PreferNative
-            && NativePlaybackWarmup.PrepareForPrecision(options.Precision, options.AffinityMask);
+            && NativePlaybackWarmup.PrepareForPrecision(options.Precision, options.AffinityMask, options.PressFloor.Generation);
         if (!ReferenceEquals(warmedDocument, document))
         {
             if (warmedDocument is not null)
@@ -433,6 +433,9 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         // iteration overran (condition waits, pauses, a stall), start from now instead of firing the missed time in a burst.
         var phaseLockedNextStartTick = 0L;
         var hasConditionWindows = document.EffectiveConditions.Any();
+        // The selected precision generation. Earlier generations start every iteration from now, repeat at the compiled duration
+        // (press-floor delay included) and drop a trailing wait when no condition monitor exists.
+        var earlierTimeline = PrecisionGenerations.UsesEarlierTimeline(options.PressFloor.Generation);
         // Tick of the next iteration's first action if its start is phase-locked (start + the first batch's offset).
         var phaseLockedFirstActionOffset = 0L;
 
@@ -448,7 +451,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 var nowTick = clock.GetTimestamp();
                 // Macros with conditions keep starting from now: their condition windows are measured from the iteration start and
                 // have not been re-validated for an earlier start.
-                plannedIterationStartTick = !hasConditionWindows
+                plannedIterationStartTick = !hasConditionWindows && !earlierTimeline
                     && phaseLockedNextStartTick + phaseLockedFirstActionOffset > nowTick
                     ? phaseLockedNextStartTick
                     : nowTick;
@@ -496,7 +499,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     ? plan.Resample()
                     : plan;
                 var iterationStartTick = plannedIterationStartTick;
-                var iterationDurationTicks = Math.Max(1, iterationPlan.LoopPeriodTicks); // the written period, see CompiledPlaybackPlan.LoopPeriodTicks
+                var iterationDurationTicks = Math.Max(1, earlierTimeline ? iterationPlan.DurationTicks : iterationPlan.LoopPeriodTicks); // the written period, see CompiledPlaybackPlan.LoopPeriodTicks
 
                 if (!TryRunNativeIterationWithConditionMonitors(
                         document,
@@ -514,7 +517,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                         ref actionsSubmitted,
                         out var nativeStopIteration,
                         timeline,
-                        anotherIterationFollows: iterationsCompleted + 1 < iterationsTarget))
+                        anotherIterationFollows: !earlierTimeline && iterationsCompleted + 1 < iterationsTarget))
                 {
                     using var pauseCoordinator = HasPauseMainTimelineCondition(document)
                         ? new PlaybackPauseCoordinator(clock)
@@ -586,7 +589,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                             iterationToken,
                             options.NoWait,
                             pauseCoordinator,
-                            anotherIterationFollows: iterationsCompleted + 1 < iterationsTarget);
+                            anotherIterationFollows: !earlierTimeline && iterationsCompleted + 1 < iterationsTarget);
                         CompleteAllMonitorsAfterCurrentEvaluation(monitors);
                         WaitForTriggeredConditionActions(monitors, iterationToken);
                         DeactivateAllMonitors(monitors);
@@ -809,7 +812,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 out diagnostics,
                 out fallbackReason,
                 enableCpuScan: NativePlaybackWarmup.CpuScanReady,
-                playbackControl: playbackControl, timelineStart: timelineStart);
+                playbackControl: playbackControl, timelineStart: timelineStart,
+                generation: options.PressFloor.Generation);
         }
         else
         {
@@ -820,7 +824,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 out diagnostics,
                 out fallbackReason,
                 enableCpuScan: NativePlaybackWarmup.CpuScanReady,
-                playbackControl: playbackControl, timelineStart: timelineStart);
+                playbackControl: playbackControl, timelineStart: timelineStart,
+                generation: options.PressFloor.Generation);
         }
 
         if (!ranNative)
@@ -1536,7 +1541,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 out _,
                 out _,
                 enableCpuScan: false,
-                engineMode: NativePlaybackEngineMode.Inline))
+                engineMode: NativePlaybackEngineMode.Inline,
+                generation: pressFloor.Generation))
         {
             return MacroControlFlowResult.Completed;
         }

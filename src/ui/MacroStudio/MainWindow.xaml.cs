@@ -1248,21 +1248,22 @@ public partial class MainWindow : Window
 
     private RuntimePrecisionSettings ReadRuntimePrecisionSettingsFromPanel()
     {
-        var precision = LibraryPanel.GetSelectedPrecisionMode();
-        var affinityMask = PlaybackAffinityMask.NormalizeOrThrow(LibraryPanel.AffinityMaskText);
-        return new RuntimePrecisionSettings(
-            precision,
-            affinityMask,
-            LibraryPanel.ColorSampleHotkeyText,
-            LibraryPanel.BackgroundWindowEnabled,
-            LibraryPanel.BackgroundProcessText);
+        // 以面板持有的完整设置为底，避免丢失默认间隔、组合键间隔、强制停止键、关闭按钮等字段。
+        var current = LibraryPanel.RuntimeSettings;
+        var affinityMask = PlaybackAffinityMask.NormalizeOrThrow(current.AffinityMask);
+        return current with
+        {
+            Precision = LibraryPanel.GetSelectedPrecisionMode(),
+            AffinityMask = affinityMask
+        };
     }
 
     private void WarmUpRuntimePrecision()
     {
         NativePlaybackWarmup.QueueWarmUpForPrecision(
             runtimePrecisionSettings.Precision,
-            runtimePrecisionSettings.AffinityMask);
+            runtimePrecisionSettings.AffinityMask,
+            runtimePrecisionSettings.Generation);
     }
 
     private void RestoreMaskAfterCancelledTest(string savedMask, CorePickerDialog dialog)
@@ -1275,7 +1276,7 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(savedMask))
         {
-            NativePlaybackWarmup.QueueWarmUpForPrecision(runtimePrecisionSettings.Precision, "");
+            NativePlaybackWarmup.QueueWarmUpForPrecision(runtimePrecisionSettings.Precision, "", runtimePrecisionSettings.Generation);
             return;
         }
 
@@ -2488,7 +2489,7 @@ public partial class MainWindow : Window
             {
                 if (string.IsNullOrWhiteSpace(runtimePrecisionSettings.AffinityMask))
                 {
-                    NativePlaybackWarmup.QueueWarmUpForPrecision(runtimePrecisionSettings.Precision, "");
+                    NativePlaybackWarmup.QueueWarmUpForPrecision(runtimePrecisionSettings.Precision, "", runtimePrecisionSettings.Generation);
                 }
                 else
                 {

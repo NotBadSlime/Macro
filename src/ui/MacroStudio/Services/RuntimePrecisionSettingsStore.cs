@@ -13,6 +13,38 @@ public enum CloseButtonBehavior
     Exit
 }
 
+/// <summary>
+/// Reads a precision generation by name and falls back to the latest for a name this build does not know (for example one
+/// saved by a newer build). Without it the unknown name would fail the whole settings file and the user would lose every
+/// other setting along with it.
+/// </summary>
+public sealed class LenientPrecisionGenerationConverter : JsonConverter<PrecisionGeneration>
+{
+    public override PrecisionGeneration Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String
+            && Enum.TryParse<PrecisionGeneration>(reader.GetString(), ignoreCase: true, out var named)
+            && Enum.IsDefined(named))
+        {
+            return named;
+        }
+
+        if (reader.TokenType == JsonTokenType.StartObject || reader.TokenType == JsonTokenType.StartArray)
+        {
+            reader.Skip();
+        }
+
+        return PrecisionGeneration.Latest;
+    }
+
+    public override void Write(Utf8JsonWriter writer, PrecisionGeneration value, JsonSerializerOptions options)
+    {
+        // Camel case by name, the same shape the other enums in this file use.
+        var name = PrecisionGenerations.Normalize(value).ToString();
+        writer.WriteStringValue(char.ToLowerInvariant(name[0]) + name[1..]);
+    }
+}
+
 public sealed record RuntimePrecisionSettings(
     PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback,
     string AffinityMask = "",
@@ -22,7 +54,9 @@ public sealed record RuntimePrecisionSettings(
     long ZeroGapHoldMicroseconds = InputPressTiming.DefaultZeroGapMicroseconds,
     long ModifierChordHoldMicroseconds = InputPressTiming.DefaultModifierChordMicroseconds,
     string ForceStopHotkey = "",
-    CloseButtonBehavior CloseButton = CloseButtonBehavior.Ask)
+    CloseButtonBehavior CloseButton = CloseButtonBehavior.Ask,
+    [property: JsonConverter(typeof(LenientPrecisionGenerationConverter))]
+    PrecisionGeneration Generation = PrecisionGeneration.Latest)
 {
     public static RuntimePrecisionSettings Default { get; } = new(ColorSampleHotkey: CoreHotkeys.DefaultColorSampleText);
 
@@ -30,7 +64,9 @@ public sealed record RuntimePrecisionSettings(
 
     public HotkeyGesture? ForceStopGesture => TryParseHotkey(ForceStopHotkey);
 
-    public InputPressFloor PressFloor => InputPressFloor.FromMicroseconds(ZeroGapHoldMicroseconds, ModifierChordHoldMicroseconds);
+    /// <summary>The floor the engine runs with, carrying the selected precision generation (latest unless the user picked another).</summary>
+    public InputPressFloor PressFloor => InputPressFloor.FromMicroseconds(ZeroGapHoldMicroseconds, ModifierChordHoldMicroseconds)
+        with { Generation = PrecisionGenerations.Normalize(Generation) };
 
     private static HotkeyGesture? TryParseHotkey(string? text)
     {
@@ -65,11 +101,13 @@ public static class RuntimePrecisionSettingsStore
         Options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     }
 
-    public static RuntimePrecisionSettings Load()
+    public static RuntimePrecisionSettings Load() => Load(GetSettingsPath());
+
+    /// <summary>Loads from an explicit path. An older file without <c>generation</c>, or with an unknown value, yields the latest.</summary>
+    public static RuntimePrecisionSettings Load(string path)
     {
         try
         {
-            var path = GetSettingsPath();
             if (!File.Exists(path))
             {
                 return RuntimePrecisionSettings.Default;
@@ -85,9 +123,10 @@ public static class RuntimePrecisionSettingsStore
         }
     }
 
-    public static void Save(RuntimePrecisionSettings settings)
+    public static void Save(RuntimePrecisionSettings settings) => Save(settings, GetSettingsPath());
+
+    public static void Save(RuntimePrecisionSettings settings, string path)
     {
-        var path = GetSettingsPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(Normalize(settings), Options));
     }
@@ -102,7 +141,8 @@ public static class RuntimePrecisionSettingsStore
             BackgroundProcess = NormalizeProcessName(settings.BackgroundProcess),
             ZeroGapHoldMicroseconds = ClampMicroseconds(settings.ZeroGapHoldMicroseconds),
             ModifierChordHoldMicroseconds = ClampMicroseconds(settings.ModifierChordHoldMicroseconds),
-            ForceStopHotkey = NormalizeForceStop(settings.ForceStopHotkey)
+            ForceStopHotkey = NormalizeForceStop(settings.ForceStopHotkey),
+            Generation = PrecisionGenerations.Normalize(settings.Generation)
         };
     }
 

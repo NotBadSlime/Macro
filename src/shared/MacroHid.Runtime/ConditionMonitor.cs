@@ -462,8 +462,8 @@ public sealed class ConditionMonitor : IDisposable
         {
             var prepared = ConditionActionPlanCache.GetNative(plan);
             bool ranNative = prepared is not null
-                ? NativePlaybackEngine.TryRunPrepared(prepared, precision, cancellationToken, out _, out _, enableCpuScan: NativePlaybackWarmup.CpuScanReady)
-                : NativePlaybackEngine.TryRun(plan, precision, cancellationToken, out _, out _, enableCpuScan: NativePlaybackWarmup.CpuScanReady, engineMode: NativePlaybackEngineMode.Inline);
+                ? NativePlaybackEngine.TryRunPrepared(prepared, precision, cancellationToken, out _, out _, enableCpuScan: NativePlaybackWarmup.CpuScanReady, generation: pressFloor.Generation)
+                : NativePlaybackEngine.TryRun(plan, precision, cancellationToken, out _, out _, enableCpuScan: NativePlaybackWarmup.CpuScanReady, engineMode: NativePlaybackEngineMode.Inline, generation: pressFloor.Generation);
             if (ranNative) return;
         }
 

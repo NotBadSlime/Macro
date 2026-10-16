@@ -45,6 +45,8 @@ internal struct MhpRunOptions
     public int NativeEngineMode;
     public IntPtr OutlierEvents;
     public uint OutlierEventCapacity;
+    // PrecisionGeneration as a number (0 latest, 1 = 2.0.0/2.0.1, 2 = 1.6.0, 3 = 2.0.2). Fills the padding after OutlierEventCapacity: still 48 bytes.
+    public uint Generation;
 }
 
 [StructLayout(LayoutKind.Sequential)]

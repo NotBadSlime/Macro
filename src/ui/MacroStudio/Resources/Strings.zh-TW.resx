@@ -606,4 +606,14 @@
   <data name="LibraryPathNotFound" xml:space="preserve"><value>找不到這條巨集路徑。</value></data>
   <data name="ListeningColorSampleConflict" xml:space="preserve"><value>以下巨集與取色快捷鍵衝突，未啟動監聽：{0}</value></data>
   <data name="OpenLogs" xml:space="preserve"><value>開啟日誌</value></data>
+  <data name="PrecisionGeneration" xml:space="preserve"><value>精度版本</value></data>
+  <data name="PrecisionGenerationLatest" xml:space="preserve"><value>最新（建議）</value></data>
+  <data name="PrecisionGenerationV20" xml:space="preserve"><value>2.0.x（上一代）</value></data>
+  <data name="PrecisionGenerationV16" xml:space="preserve"><value>1.6.0（舊排程引擎）</value></data>
+  <data name="PrecisionGenerationHelp" xml:space="preserve"><value>選擇使用哪一代定時行為。建議最新；舊版本用於對比或回退。僅影響下一次執行。</value></data>
+  <data name="PrecisionGenerationDescLatest" xml:space="preserve"><value>最新：按鍵時長從發出時刻起算；按鍵下限只推遲它自己的釋放；迴圈按你所寫的週期重複。</value></data>
+  <data name="PrecisionGenerationDesc20" xml:space="preserve"><value>2.0.x：按鍵時長從傳送呼叫返回起算（約多 0.05 至 0.65 毫秒）；按鍵下限會推遲後續時間線；帶尾部等待且無條件的迴圈約每 10 毫秒重複一次。</value></data>
+  <data name="PrecisionGenerationDesc16" xml:space="preserve"><value>1.6.0：包含 2.0.x 的全部行為，並使用舊的待命/內嵌引擎。</value></data>
+  <data name="PrecisionGenerationV202" xml:space="preserve"><value>2.0.2（正式版）</value></data>
+  <data name="PrecisionGenerationDesc202" xml:space="preserve"><value>2.0.2：包含時間線修復（按鍵下限只推遲它自己的釋放；迴圈按你所寫的週期重複），按鍵時長仍從傳送呼叫返回起算，與 2.0.x 相同。</value></data>
 </root>

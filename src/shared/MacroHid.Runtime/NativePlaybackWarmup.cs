@@ -36,12 +36,17 @@ public static class NativePlaybackWarmup
     public static bool CpuScanReady => Volatile.Read(ref cpuScanReady) != 0;
     public static void TryWarmUp() => TryWarmUp(false);
     public static void TryWarmUp(bool scanCpu) => Prepare(scanCpu, "", out _);
-    public static void QueueWarmUpForPrecision(PrecisionMode precision, string? affinityMask)
-        => _ = Task.Run(() => TryWarmUpForPrecision(precision, affinityMask));
-    public static void TryWarmUpForPrecision(PrecisionMode precision, string? affinityMask)
-        => PrepareForPrecision(precision, affinityMask);
-    public static bool PrepareForPrecision(PrecisionMode precision, string? affinityMask)
+    // The generation the engine is prepared for. Prepare() has no other way to know it: it is also reached from the core
+    // picker and the affinity-mask paths, which do not carry run options. Set whenever a precision warm-up is requested.
+    private static int preparedGeneration;
+    public static PrecisionGeneration Generation => (PrecisionGeneration)Volatile.Read(ref preparedGeneration);
+    public static void QueueWarmUpForPrecision(PrecisionMode precision, string? affinityMask, PrecisionGeneration generation = PrecisionGeneration.Latest)
+        => _ = Task.Run(() => TryWarmUpForPrecision(precision, affinityMask, generation));
+    public static void TryWarmUpForPrecision(PrecisionMode precision, string? affinityMask, PrecisionGeneration generation = PrecisionGeneration.Latest)
+        => PrepareForPrecision(precision, affinityMask, generation);
+    public static bool PrepareForPrecision(PrecisionMode precision, string? affinityMask, PrecisionGeneration generation = PrecisionGeneration.Latest)
     {
+        Volatile.Write(ref preparedGeneration, (int)PrecisionGenerations.Normalize(generation));
         QpcPlaybackDelayStrategy.Prepare(precision);
         if (!PlaybackPerformancePolicy.For(precision).PreferNative)
         {
@@ -60,13 +65,15 @@ public static class NativePlaybackWarmup
             {
                 PlaybackAffinityMask.TryParse(PlaybackAffinityMask.NormalizeOrThrow(maskText), out var mask);
                 var options = new MhpRunOptions { PrecisionMode = 2, EnableCpuScan = scan ? 1 : 0,
-                    QpcFrequency = System.Diagnostics.Stopwatch.Frequency, NativeEngineMode = (int)NativeEngineMode.Standby };
+                    QpcFrequency = System.Diagnostics.Stopwatch.Frequency, NativeEngineMode = (int)NativeEngineMode.Standby,
+                    Generation = (uint)Generation };
                 var status = NativePlaybackInterop.MhpPrepareEngine(ref options, mask, out stats);
                 bool measured = CoreMeasureResult.From(stats, status == MhpStatus.Ok).Measured;
                 Volatile.Write(ref cpuScanReady, measured ? 1 : 0);
                 string reason = status != MhpStatus.Ok ? NativePlaybackInterop.GetLastErrorText()
                     : scan && !measured ? "测核尚未完成；正在运行的宏不受影响" : "";
-                PlaybackRuntimeStatus.SetPreparation(new(false, status == MhpStatus.Ok, status == MhpStatus.Ok ? "native-shared" : "managed", reason));
+                PlaybackRuntimeStatus.SetPreparation(new(false, status == MhpStatus.Ok,
+                    status != MhpStatus.Ok ? "managed" : PrecisionGenerations.UsesLegacyNativeEngine(Generation) ? "native-standby" : "native-shared", reason));
                 return status == MhpStatus.Ok;
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or FormatException)

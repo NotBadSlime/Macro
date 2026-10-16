@@ -153,7 +153,12 @@ class SharedPlaybackScheduler
         {
             if (!run.trace.firstSubmit) run.trace.firstSubmit = actual;
             run.trace.lastSubmit = actual;
-            run.submittedAt[index] = submitted;
+            // The release dependency counts the hold from when this batch STARTED (actual), not from when its SendInput returned.
+            // The hold the user wrote is the distance between the two planned times; if the press call itself takes a while
+            // (measured 0.05 to 0.65 ms here), starting the clock at its return added that time to every hold and pushed every
+            // release late by the same amount. actual is taken just before the call, so the hold is never shorter than written.
+            // Only generation 0 (latest) counts from the start. Generations 1 (2.0.x), 2 (1.6.0) and 3 (2.0.2) keep the return time.
+            run.submittedAt[index] = run.options.generation == 0 ? actual : submitted;
             run.late.push_back(lateUs);
             if (run.batchTrace.capacity() && run.batchTrace.size() < run.batchTrace.capacity())
                 run.batchTrace.push_back({static_cast<uint32_t>(index), batch.inputCount, sent, cpu, worker, static_cast<int32_t>(error), nominalDue, effectiveDue, actual, submitted});
@@ -453,8 +458,11 @@ public:
 };
 SharedPlaybackScheduler g_sharedScheduler;
 
-bool LegacyPlaybackEnabled()
+bool LegacyPlaybackEnabled(const MhpRunOptions* options = nullptr)
 {
+    // Generation 2 (MacroHID 1.6.0) selects the older standby/inline engine per run. The environment variable stays as a
+    // process-wide override for diagnostics.
+    if (options != nullptr && options->generation == 2) return true;
     wchar_t value[8]{};
     return GetEnvironmentVariableW(L"MACROHID_LEGACY_PLAYBACK", value, 8) > 0 && value[0] == L'1';
 }

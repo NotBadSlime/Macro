@@ -1,3 +1,4 @@
+using MacroStudio.Services;
 using MacroHid.Core;
 using MacroHid.Converter;
 using MacroHid.Runtime;
@@ -161,6 +162,17 @@ var tests = new (string Name, Action Body)[]
     ("Press floor delays only its own release", PressFloorDelaysOnlyItsOwnRelease),
     ("Press floor keeps each key's own order", PressFloorKeepsEachKeysOwnOrder),
     ("Press floor does not extend a trailing-wait total", PressFloorTotalDoesNotGrowWithTrailingWait),
+    ("Precision generation defaults to the latest", PrecisionGenerationDefaultsToLatest),
+    ("Precision dialog offers every generation, saves the choice and describes it", PrecisionDialogOffersEveryGeneration),
+    ("Every precision generation is wired from settings to warm-up and to the engine", PrecisionGenerationIsWiredEndToEnd),
+    ("Precision generation strings exist in every language", PrecisionGenerationStringsExistInEveryLanguage),
+    ("Settings without a generation load as the latest and keep every other setting", SettingsWithoutGenerationLoadAsLatest),
+    ("Settings round trip a chosen generation and hand it to the engine", SettingsRoundTripAGeneration),
+    ("An unknown generation in the settings file keeps the other settings", UnknownGenerationKeepsTheOtherSettings),
+    ("Earlier generations keep the old total duration for every macro shape", EarlierGenerationsKeepTheOldTotalDuration),
+    ("Earlier generations repeat a trailing-wait loop at the old period, the latest at the written one", EarlierGenerationsKeepTheOldLoopPeriod),
+    ("Earlier precision generations keep the old press-floor timeline", EarlierGenerationsKeepTheOldPressFloorTimeline),
+    ("Precision generation never changes a press below the floor into a shorter hold", EarlierGenerationsStillHonourTheHoldFloor),
     ("Relative mouse moves spread across their duration", RelativeMouseMovesSpreadAcrossTheirDuration),
     ("Playback executor keeps conditions active until iteration end", PlaybackExecutorKeepsConditionsActiveUntilIterationEnd),
     ("Playback executor runs condition then actions during long single step", PlaybackExecutorRunsConditionThenActionsDuringLongSingleStep),
@@ -222,7 +234,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 2.0.1", MacroHidReleaseVersionIsTwoZeroOne),
+    ("MacroHID release version is 2.0.2", MacroHidReleaseVersionIsTwoZeroTwo),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -265,6 +277,7 @@ var tests = new (string Name, Action Body)[]
     ("Delay batch adjustment shifts every delay card and keeps undo", DelayBatchAdjustmentShiftsEveryDelayCardAndKeepsUndo),
     ("MacroStudio exposes core color sample hotkey and library path navigation", MacroStudioExposesCoreColorSampleHotkeyAndLibraryPathNavigation),
     ("MacroStudio keeps precision as a global runtime setting", MacroStudioKeepsPrecisionAsGlobalRuntimeSetting),
+    ("MacroStudio basic control confirm keeps every dialog field", MacroStudioBasicControlConfirmKeepsEveryDialogField),
     ("MacroStudio trigger capture is read-only and supports multi-key capture", MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture),
     ("MacroStudio supports multiple hotkey listeners and library trigger summaries", MacroStudioSupportsMultipleHotkeyListenersAndLibraryTriggerSummaries),
     ("MacroStudio exposes library listen-all controls and conflict status", MacroStudioExposesLibraryListenAllControlsAndConflictStatus),
@@ -683,7 +696,7 @@ static void PlaybackRuntimePhaseLocksLoopIterations()
 
 // Loop timing, measured with a recording sink on the real clock. The macro is "A down, A up, wait" in three orders; every
 // order must repeat at the total duration the user wrote (the 10 ms zero-gap hold may delay one release, never the period).
-static List<double> LoopStartIntervalsMs(string shape, int waitMs, int iterations, PrecisionMode precision)
+static List<double> LoopStartIntervalsMs(string shape, int waitMs, int iterations, PrecisionMode precision, PrecisionGeneration generation = PrecisionGeneration.Latest)
 {
     string steps = shape switch
     {
@@ -695,7 +708,8 @@ static List<double> LoopStartIntervalsMs(string shape, int waitMs, int iteration
     var document = McrxParser.Parse($"{{\"steps\":[{steps}]}}");
     var sink = new TimestampedInputSink();
     var executor = new MacroPlaybackExecutor(sink);
-    executor.RunAsync(document, new PlaybackExecutionOptions(PlaybackMode.FixedCount, iterations, PixelEvaluationMode.Skip, false, precision),
+    executor.RunAsync(document, new PlaybackExecutionOptions(PlaybackMode.FixedCount, iterations, PixelEvaluationMode.Skip, false, precision)
+        { PressFloor = InputPressFloor.Factory with { Generation = generation } },
         CancellationToken.None).GetAwaiter().GetResult();
     var downs = sink.Downs;
     if (downs.Count != iterations) throw new InvalidOperationException($"expected {iterations} key-downs, got {downs.Count}");
@@ -771,6 +785,243 @@ static void PressFloorDelaysOnlyItsOwnRelease()
     var b = CompileDues("{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"},{\"type\":\"key.down\",\"key\":\"B\"},{\"type\":\"key.up\",\"key\":\"B\"}]}");
     Assert.Equal(0L, b[2].Due);
     Assert.Equal(10_000L, b[3].Due);
+}
+
+static void PrecisionGenerationDefaultsToLatest()
+{
+    Assert.Equal(PrecisionGeneration.Latest, default(PrecisionGeneration));
+    Assert.Equal(PrecisionGeneration.Latest, InputPressFloor.Factory.Generation);
+    Assert.Equal(PrecisionGeneration.Latest, InputPressFloor.FromMicroseconds(10_000, 30_000).Generation);
+    // A stored value this build does not know falls back to the latest, not to an arbitrary old behaviour.
+    Assert.Equal(PrecisionGeneration.Latest, PrecisionGenerations.Normalize((PrecisionGeneration)99));
+    Assert.Equal(PrecisionGeneration.V1_6, PrecisionGenerations.Normalize(PrecisionGeneration.V1_6));
+    Assert.True(!PrecisionGenerations.UsesEarlierTimeline(PrecisionGeneration.Latest));
+    Assert.True(PrecisionGenerations.UsesEarlierTimeline(PrecisionGeneration.V2_0));
+    Assert.True(PrecisionGenerations.UsesEarlierTimeline(PrecisionGeneration.V1_6));
+    Assert.True(PrecisionGenerations.UsesLegacyNativeEngine(PrecisionGeneration.V1_6));
+    Assert.True(!PrecisionGenerations.UsesLegacyNativeEngine(PrecisionGeneration.V2_0));
+    // The full table. 2.0.2 has the timeline fixes but still counts a hold from SendInput's return; only the latest counts from the start.
+    var table = new (PrecisionGeneration G, bool EarlierTimeline, bool LegacyEngine, bool HoldFromStart)[]
+    {
+        (PrecisionGeneration.Latest, false, false, true),
+        (PrecisionGeneration.V2_0_2, false, false, false),
+        (PrecisionGeneration.V2_0,   true,  false, false),
+        (PrecisionGeneration.V1_6,   true,  true,  false),
+    };
+    Assert.Equal(Enum.GetValues<PrecisionGeneration>().Length, table.Length);
+    foreach (var row in table)
+    {
+        Assert.Equal(row.EarlierTimeline, PrecisionGenerations.UsesEarlierTimeline(row.G));
+        Assert.Equal(row.LegacyEngine, PrecisionGenerations.UsesLegacyNativeEngine(row.G));
+        Assert.Equal(row.HoldFromStart, PrecisionGenerations.CountsHoldFromSendStart(row.G));
+    }
+    // The numbers cross into native code and the settings file; they must never change.
+    Assert.Equal(0, (int)PrecisionGeneration.Latest); Assert.Equal(1, (int)PrecisionGeneration.V2_0);
+    Assert.Equal(2, (int)PrecisionGeneration.V1_6); Assert.Equal(3, (int)PrecisionGeneration.V2_0_2);
+}
+
+static void EarlierGenerationsKeepTheOldLoopPeriod()
+{
+    // "A down, A up, wait 100", 4 iterations. Latest repeats every ~100 ms (the written period). The earlier generations dropped
+    // the trailing wait when no condition monitor existed, so they repeated at about the 10 ms press floor.
+    var latest = LoopStartIntervalsMs("tail", 100, 4, PrecisionMode.UltraLowJitter, PrecisionGeneration.Latest);
+    Assert.True(latest.All(ms => ms > 95 && ms < 110));
+    var shipped = LoopStartIntervalsMs("tail", 100, 4, PrecisionMode.UltraLowJitter, PrecisionGeneration.V2_0_2);
+    Assert.True(shipped.All(ms => ms > 95 && ms < 110));
+    foreach (var generation in new[] { PrecisionGeneration.V2_0, PrecisionGeneration.V1_6 })
+    {
+        var old = LoopStartIntervalsMs("tail", 100, 4, PrecisionMode.UltraLowJitter, generation);
+        Assert.True(old.All(ms => ms >= 9 && ms < 40));
+    }
+}
+
+static void EarlierGenerationsKeepTheOldTotalDuration()
+{
+    // The old total was the cursor after the press floor had moved it. For each shape the earlier generations must give exactly
+    // that, and must never be shorter than the last action (the latest rule guards the same thing separately).
+    var shapes = new[]
+    {
+        "{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"}]}",                                              // bare tap
+        "{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"},{\"type\":\"wait\",\"ms\":40}]}",                 // tap + trailing wait
+        "{\"steps\":[{\"type\":\"wait\",\"ms\":30},{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"}]}",                 // leading wait
+        "{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"wait\",\"ms\":5},{\"type\":\"key.up\",\"key\":\"A\"}]}",                  // hold shorter than the floor
+    };
+    foreach (var json in shapes)
+    {
+        foreach (var generation in new[] { PrecisionGeneration.V2_0, PrecisionGeneration.V1_6 })
+        {
+            var floor = InputPressFloor.Factory with { Generation = generation };
+            var timeline = InputActionCompiler.CompileWithTimeline(McrxParser.Parse(json), 0, 1_000_000, pressFloor: floor);
+            var lastDue = timeline.Actions.Count == 0 ? 0 : timeline.Actions.Max(a => a.DueTick);
+            Assert.True(timeline.DurationTicks >= lastDue);
+            // With the cursor following every delayed release, the written total and the compiled total are the same number.
+            Assert.Equal(timeline.WrittenTicks, timeline.DurationTicks);
+        }
+    }
+}
+
+static string SettingsTempPath() => Path.Combine(Path.GetTempPath(), "macrohid-settings-" + Guid.NewGuid().ToString("N") + ".json");
+
+static void SettingsWithoutGenerationLoadAsLatest()
+{
+    // A settings file written before this feature has no "generation". It must load as the latest, with everything else intact.
+    var path = SettingsTempPath();
+    try
+    {
+        File.WriteAllText(path, "{\"Precision\":\"ultraLowJitter\",\"AffinityMask\":\"0xF\",\"ZeroGapHoldMicroseconds\":8000}");
+        var loaded = RuntimePrecisionSettingsStore.Load(path);
+        Assert.Equal(PrecisionGeneration.Latest, loaded.Generation);
+        Assert.Equal(PrecisionMode.UltraLowJitter, loaded.Precision);
+        Assert.Equal(8000L, loaded.ZeroGapHoldMicroseconds);
+        Assert.Equal(PrecisionGeneration.Latest, loaded.PressFloor.Generation);
+    }
+    finally { File.Delete(path); }
+    // No file at all: the default is the latest.
+    Assert.Equal(PrecisionGeneration.Latest, RuntimePrecisionSettingsStore.Load(SettingsTempPath()).Generation);
+    Assert.Equal(PrecisionGeneration.Latest, RuntimePrecisionSettings.Default.Generation);
+}
+
+static void SettingsRoundTripAGeneration()
+{
+    var path = SettingsTempPath();
+    try
+    {
+        foreach (var generation in Enum.GetValues<PrecisionGeneration>())
+        {
+            RuntimePrecisionSettingsStore.Save(RuntimePrecisionSettings.Default with { Generation = generation, ZeroGapHoldMicroseconds = 7000 }, path);
+            var loaded = RuntimePrecisionSettingsStore.Load(path);
+            Assert.Equal(generation, loaded.Generation);
+            Assert.Equal(7000L, loaded.ZeroGapHoldMicroseconds);
+            // The engine sees the same generation through the press floor it already receives.
+            Assert.Equal(generation, loaded.PressFloor.Generation);
+            Assert.Equal(7000L, (long)loaded.PressFloor.ZeroGapHold.TotalMicroseconds);
+        }
+    }
+    finally { File.Delete(path); }
+}
+
+static void UnknownGenerationKeepsTheOtherSettings()
+{
+    // A newer build may save a generation this build does not know. Falling back to Default would silently drop the user's
+    // core mask, hotkeys and everything else; only the generation may fall back, and to the latest.
+    var path = SettingsTempPath();
+    try
+    {
+        File.WriteAllText(path, "{\"Precision\":\"balanced\",\"AffinityMask\":\"0xF\",\"Generation\":\"v9_9\",\"ZeroGapHoldMicroseconds\":8000}");
+        var loaded = RuntimePrecisionSettingsStore.Load(path);
+        Assert.Equal(PrecisionGeneration.Latest, loaded.Generation);
+        Assert.Equal(PrecisionMode.Balanced, loaded.Precision);
+        Assert.Equal(8000L, loaded.ZeroGapHoldMicroseconds);
+    }
+    finally { File.Delete(path); }
+}
+
+static void PrecisionDialogOffersEveryGeneration()
+{
+    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
+    var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml.cs"));
+    // One dropdown item per enum value, and the first (the one shown when nothing else applies) is the latest.
+    Assert.Contains("x:Name=\"PrecisionGenerationBox\"", xaml);
+    var items = System.Text.RegularExpressions.Regex.Matches(xaml, "<ComboBoxItem Tag=\"(latest|v2_0_2|v2_0|v1_6)\"").Select(m => m.Groups[1].Value).ToList();
+    Assert.Equal(Enum.GetValues<PrecisionGeneration>().Length, items.Count);
+    Assert.Equal("latest", items[0]);
+    foreach (var generation in Enum.GetValues<PrecisionGeneration>())
+    {
+        var tag = generation switch { PrecisionGeneration.Latest => "latest", PrecisionGeneration.V2_0_2 => "v2_0_2", PrecisionGeneration.V2_0 => "v2_0", _ => "v1_6" };
+        Assert.Contains($"Tag=\"{tag}\"", xaml);
+    }
+    // The choice is read back into the settings the dialog returns, and a description follows the selection.
+    Assert.Contains("Generation = SelectedGeneration()", code);
+    Assert.Contains("PrecisionGenerationBox.SelectionChanged", code);
+    Assert.Contains("PrecisionGenerations.Normalize(settings.Generation)", code);
+}
+
+static void PrecisionGenerationIsWiredEndToEnd()
+{
+    string Read(params string[] parts) => File.ReadAllText(Path.Combine(parts));
+    var executor = Read("src", "shared", "MacroHid.Runtime", "MacroPlaybackExecutor.cs");
+    var engine = Read("src", "shared", "MacroHid.Runtime", "NativePlaybackEngine.cs");
+    var warmup = Read("src", "shared", "MacroHid.Runtime", "NativePlaybackWarmup.cs");
+    var monitor = Read("src", "shared", "MacroHid.Runtime", "ConditionMonitor.cs");
+    var mainWindow = Read("src", "ui", "MacroStudio", "MainWindow.xaml.cs");
+    var app = Read("src", "ui", "MacroStudio", "App.xaml.cs");
+    var interop = Read("src", "shared", "MacroHid.Runtime", "NativePlaybackInterop.cs");
+    var header = Read("src", "native", "MacroHid.NativePlayback", "NativePlayback.h");
+    var scheduler = Read("src", "native", "MacroHid.NativePlayback", "SharedPlaybackScheduler.inl");
+
+    // Settings -> run options -> every native entry the executor and the condition monitor use.
+    Assert.Contains("PressFloor = runtimePrecisionSettings.PressFloor", mainWindow);
+    Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(executor, "generation: options\\.PressFloor\\.Generation").Count);
+    Assert.Contains("generation: pressFloor.Generation", executor);
+    Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(monitor, "generation: pressFloor\\.Generation").Count);
+    Assert.Contains("PrepareForPrecision(options.Precision, options.AffinityMask, options.PressFloor.Generation)", executor);
+    // Every precision warm-up passes the generation, so the engine that is prepared is the engine that runs.
+    Assert.Contains("runtimePrecision.Generation", app);
+    Assert.Equal(0, System.Text.RegularExpressions.Regex.Matches(mainWindow, "QueueWarmUpForPrecision\\(runtimePrecisionSettings\\.Precision, \"\"\\)").Count);
+    Assert.Contains("Generation = (uint)Generation", warmup);
+    // The managed and native option structs carry the same trailing field, and the engine picks the legacy path from it.
+    Assert.Contains("public uint Generation;", interop);
+    Assert.Contains("uint32_t generation;", header);
+    Assert.Contains("Generation = (uint)generation", engine);
+    Assert.Contains("UsesLegacyNativeEngine(generation)", engine);
+    Assert.Contains("options->generation == 2", scheduler);
+}
+
+static void PrecisionGenerationStringsExistInEveryLanguage()
+{
+    var keys = new[] { "PrecisionGeneration", "PrecisionGenerationLatest", "PrecisionGenerationV202", "PrecisionGenerationV20", "PrecisionGenerationV16", "PrecisionGenerationHelp",
+                       "PrecisionGenerationDescLatest", "PrecisionGenerationDesc202", "PrecisionGenerationDesc20", "PrecisionGenerationDesc16" };
+    foreach (var file in new[] { "Strings.resx", "Strings.zh-CN.resx", "Strings.zh-TW.resx" })
+    {
+        var xml = System.Xml.Linq.XDocument.Load(Path.Combine("src", "ui", "MacroStudio", "Resources", file));
+        var names = xml.Descendants("data").ToDictionary(d => (string)d.Attribute("name")!, d => (string?)d.Element("value") ?? "");
+        foreach (var key in keys)
+        {
+            Assert.True(names.TryGetValue(key, out var value) && value.Trim().Length > 0);
+        }
+    }
+}
+
+static List<(long Due, string What)> CompileDuesFor(string json, PrecisionGeneration generation)
+{
+    var floor = InputPressFloor.Factory with { Generation = generation };
+    var actions = InputActionCompiler.Compile(McrxParser.Parse(json), startTick: 0, qpcFrequency: 1_000_000, pressFloor: floor);
+    return actions.Select(a => (a.DueTick, a.Action switch
+    {
+        KeyInputAction k => $"{k.Key}.{k.Kind}",
+        MouseButtonInputAction m => $"{m.Button}.{m.Kind}",
+        _ => a.Action.GetType().Name
+    })).ToList();
+}
+
+const string ClickWaitClick = "{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"},{\"type\":\"wait\",\"ms\":50},{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"}]}";
+
+static void EarlierGenerationsKeepTheOldPressFloorTimeline()
+{
+    // Latest: the second press stays at the written 50 ms (only the first release is delayed by the 10 ms floor).
+    var latest = CompileDuesFor(ClickWaitClick, PrecisionGeneration.Latest);
+    Assert.Equal(0L, latest[0].Due); Assert.Equal(10_000L, latest[1].Due); Assert.Equal(50_000L, latest[2].Due); Assert.Equal(60_000L, latest[3].Due);
+    // Earlier generations: the floor moved the whole timeline, so the wait counted from the delayed release: 10 + 50 = 60 ms.
+    // 2.0.2 shipped the timeline fix: the same times as the latest.
+    var shipped = CompileDuesFor(ClickWaitClick, PrecisionGeneration.V2_0_2);
+    Assert.Equal(50_000L, shipped[2].Due); Assert.Equal(60_000L, shipped[3].Due);
+    foreach (var generation in new[] { PrecisionGeneration.V2_0, PrecisionGeneration.V1_6 })
+    {
+        var old = CompileDuesFor(ClickWaitClick, generation);
+        Assert.Equal(0L, old[0].Due); Assert.Equal(10_000L, old[1].Due);
+        Assert.Equal(60_000L, old[2].Due);
+        Assert.Equal(70_000L, old[3].Due);
+    }
+}
+
+static void EarlierGenerationsStillHonourTheHoldFloor()
+{
+    // Whatever the generation, a press and its release are never closer than the floor.
+    foreach (var generation in Enum.GetValues<PrecisionGeneration>())
+    {
+        var a = CompileDuesFor("{\"steps\":[{\"type\":\"key.down\",\"key\":\"A\"},{\"type\":\"key.up\",\"key\":\"A\"}]}", generation);
+        Assert.True(a[1].Due - a[0].Due >= 10_000L);
+    }
 }
 
 static void PressFloorKeepsEachKeysOwnOrder()
@@ -3952,22 +4203,22 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsTwoZeroOne()
+static void MacroHidReleaseVersionIsTwoZeroTwo()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.1.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.2.md"));
 
-    Assert.Contains("<Version>2.0.1</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>2.0.1.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>2.0.1.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>2.0.2</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>2.0.2.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>2.0.2.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"2.0.1\"", installer);
-    Assert.Contains("[string]$Version = \"2.0.1\"", installerBuild);
-    Assert.Contains("当前正式版是 **2.0.0**，最新测试版是 **2.0.1**", readme);
-    Assert.Contains("MacroHID 2.0.1 测试版", releaseNotes);
+    Assert.Contains("#define AppVersion \"2.0.2\"", installer);
+    Assert.Contains("[string]$Version = \"2.0.2\"", installerBuild);
+    Assert.Contains("当前正式版是 **2.0.2**", readme);
+    Assert.Contains("MacroHID 2.0.2 正式版", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -5112,6 +5363,24 @@ static void MacroStudioKeepsPrecisionAsGlobalRuntimeSetting()
     Assert.Contains("runtimePrecisionSettings.AffinityMask", mainWindowCode);
     Assert.DoesNotContain("document.Playback.Precision,", mainWindowCode);
     Assert.DoesNotContain("document.Playback.AffinityMask)", mainWindowCode);
+}
+
+static void MacroStudioBasicControlConfirmKeepsEveryDialogField()
+{
+    // 回归：确定后 OnPrecisionSettingsEdited 会从面板重读设置。若重读时只拼出部分字段，
+    // 默认间隔、组合键间隔、强制停止键、关闭按钮会被默认值覆盖并写盘，表现为"点确定不生效"。
+    var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
+
+    var start = mainWindowCode.IndexOf("private RuntimePrecisionSettings ReadRuntimePrecisionSettingsFromPanel()", StringComparison.Ordinal);
+    Assert.True(start >= 0);
+    var end = mainWindowCode.IndexOf("private void WarmUpRuntimePrecision()", start, StringComparison.Ordinal);
+    Assert.True(end > start);
+    var readMethod = mainWindowCode[start..end];
+
+    Assert.DoesNotContain("new RuntimePrecisionSettings(", readMethod);
+    Assert.Contains("LibraryPanel.RuntimeSettings", readMethod);
+    Assert.Contains("public RuntimePrecisionSettings RuntimeSettings => runtimeSettings;", libraryCode);
 }
 
 static void MacroStudioTriggerCaptureIsReadOnlyAndSupportsMultiKeyCapture()

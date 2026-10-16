@@ -905,4 +905,34 @@
   <data name="AddFufuFpsStartHint" xml:space="preserve"><value>进入游戏后修改 Fufu 解帧器目标值</value></data>
   <data name="AddFufuFpsStopHint" xml:space="preserve"><value>恢复解帧器原目标值</value></data>
   <data name="OpenLogs" xml:space="preserve"><value>Open logs</value></data>
+  <data name="PrecisionGeneration" xml:space="preserve">
+    <value>Precision version</value>
+  </data>
+  <data name="PrecisionGenerationLatest" xml:space="preserve">
+    <value>Latest (recommended)</value>
+  </data>
+  <data name="PrecisionGenerationV20" xml:space="preserve">
+    <value>2.0.x</value>
+  </data>
+  <data name="PrecisionGenerationV16" xml:space="preserve">
+    <value>1.6.0</value>
+  </data>
+  <data name="PrecisionGenerationHelp" xml:space="preserve">
+    <value>Picks which version of the timing behaviour runs. Latest is recommended; older versions are for comparing or falling back. Takes effect on the next run.</value>
+  </data>
+  <data name="PrecisionGenerationDescLatest" xml:space="preserve">
+    <value>Latest: the hold of a key is counted from when it is sent, a key press delays only its own release, and loops repeat at the period you wrote.</value>
+  </data>
+  <data name="PrecisionGenerationDesc20" xml:space="preserve">
+    <value>2.0.x: the hold is counted from when the send call returns (about 0.05 to 0.65 ms longer), the press floor delays the rest of the timeline, and a loop with a trailing wait and no conditions repeats at about 10 ms.</value>
+  </data>
+  <data name="PrecisionGenerationDesc16" xml:space="preserve">
+    <value>1.6.0: everything in 2.0.x, on the older standby and inline engine.</value>
+  </data>
+  <data name="PrecisionGenerationV202" xml:space="preserve">
+    <value>2.0.2</value>
+  </data>
+  <data name="PrecisionGenerationDesc202" xml:space="preserve">
+    <value>2.0.2: the timeline fixes (a key press delays only its own release, loops repeat at the period you wrote), but the hold of a key is still counted from when the send call returns, as in 2.0.x.</value>
+  </data>
 </root>

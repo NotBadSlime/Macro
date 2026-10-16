@@ -6,6 +6,10 @@
 #include <fstream>
 
 void Check(bool ok, const char* text) { if (!ok) throw std::runtime_error(text); }
+// A release is timed from the START of its press call, so the hold seen inside the calls can differ from the written one by
+// the call-entry skew between the two calls (measured at 0.1 to 0.2 us here). The slack allows that and nothing more:
+// the old bug lengthened holds by a whole SendInput call, hundreds of microseconds.
+constexpr int64_t kHoldSlackUs = 20;
 // Match the managed playback session's timer request without using legacy
 // PrecisionScope (which changes process priority).
 struct ProbeTimerResolution
@@ -19,10 +23,18 @@ struct ProbeTimerResolution
 std::atomic<int> calls{0}, inputsSent{0}, partial{0};
 std::array<std::atomic<int64_t>, 2> firstCalls{};
 std::atomic<bool> blockSubmit{false}, insideSubmit{false};
+std::atomic<int> slowFirstCallUs{0}; // when > 0, the first call of a run takes this long, like a slow SendInput
 UINT FakeInput(UINT count, INPUT*)
 {
     int call = calls.fetch_add(1); if (call < 2) firstCalls[call] = QueryCounter();
     insideSubmit = true;
+    if (call == 0 && slowFirstCallUs > 0)
+    {
+        // Spin, do not Sleep: Sleep(2) often lasts 10+ ms, and a press call longer than the hold would legitimately
+        // delay the release (a run submits strictly one batch at a time), which would make the test measure the wrong thing.
+        const int64_t until = QueryCounter() + QueryFrequency() * slowFirstCallUs / 1000000;
+        while (QueryCounter() < until) YieldProcessor();
+    }
     while (blockSubmit) Sleep(1);
     const UINT sent = partial ? count - 1 : count;
     inputsSent += sent;
@@ -207,8 +219,93 @@ int main(int argc, char** argv)
                 Check(WaitForSingleObject(done, 2000) == WAIT_OBJECT_0, "retained single completion");
                 MhpRunStats stats{};
                 Check(MhpGetRunResult(handle, &stats) == MhpOk && stats.batchesSubmitted == 2
-                    && firstCalls[1] - firstCalls[0] >= ms(3), "retained single hold shortened");
+                    && ToMicroseconds(firstCalls[1] - firstCalls[0], options.qpcFrequency) >= 3000 - kHoldSlackUs, "retained single hold shortened");
                 MhpReleaseRun(handle);
+            }
+            MhpDestroyPlan(plan);
+        }
+        {
+            // A slow press call must not delay the release. The release is due 5 ms after the press STARTED; the hold the
+            // user wrote is measured from there, not from when the press call returned. (The release dependency used to
+            // start at the press's return, so a SendInput that took 2 ms made a 5 ms hold 7 ms.)
+            // The press call must stay shorter than the hold: a run submits one batch at a time, so a longer call
+            // legitimately delays the release.
+            INPUT inputs[2]{};
+            for (auto& input : inputs) { input.type = INPUT_KEYBOARD; input.ki.wVk = 'A'; }
+            inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            MhpBatch batches[]{{0,0,1,1},{ms(5),1,1,1}};
+            void* plan = nullptr;
+            Check(MhpCreatePlan(inputs, 2, batches, 2, &plan) == MhpOk, "slow press plan");
+            for (int slowUs : {0, 600, 2000, 3500}) // all well inside the 5 ms hold; 600 us is the measured real key-down cost
+            {
+                slowFirstCallUs = slowUs;
+                calls = 0;
+                void* handle = nullptr; HANDLE done = nullptr;
+                Check(MhpSubmitPlan(plan, &options, nullptr, &handle, &done) == MhpOk, "slow press submit");
+                Check(WaitForSingleObject(done, 2000) == WAIT_OBJECT_0, "slow press completion");
+                MhpRunStats stats{};
+                Check(MhpGetRunResult(handle, &stats) == MhpOk && stats.batchesSubmitted == 2, "slow press run");
+                MhpReleaseRun(handle);
+                const auto between = ToMicroseconds(firstCalls[1] - firstCalls[0], options.qpcFrequency);
+                std::cout << "slow_press_us=" << slowUs << " press_start_to_release_start_us=" << between << "\n";
+                Check(between >= 5000 - kHoldSlackUs, "written hold shortened by a slow press");        // the guarantee that must stay
+                Check(between < 5000 + 800, "slow press pushed the release later than written"); // the point of the change
+            }
+            slowFirstCallUs = 0;
+            MhpDestroyPlan(plan);
+        }
+        {
+            // The earlier generations (2.0.x) count the hold from when the press call RETURNED, so a slow press pushes the
+            // release later by exactly its own duration. The default generation (0, latest) must not. Same plan, same slow call.
+            static_assert(sizeof(MhpRunOptions) == 48, "MhpRunOptions must keep its size: generation fills the existing tail padding");
+            INPUT inputs[2]{};
+            for (auto& input : inputs) { input.type = INPUT_KEYBOARD; input.ki.wVk = 'A'; }
+            inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            MhpBatch batches[]{{0,0,1,1},{ms(5),1,1,1}};
+            void* plan = nullptr;
+            Check(MhpCreatePlan(inputs, 2, batches, 2, &plan) == MhpOk, "generation plan");
+            for (int generation : {0, 1, 3})
+            {
+                slowFirstCallUs = 2000;
+                calls = 0;
+                auto generationOptions = options; generationOptions.generation = static_cast<uint32_t>(generation);
+                void* handle = nullptr; HANDLE done = nullptr;
+                Check(MhpSubmitPlan(plan, &generationOptions, nullptr, &handle, &done) == MhpOk, "generation submit");
+                Check(WaitForSingleObject(done, 2000) == WAIT_OBJECT_0, "generation completion");
+                MhpRunStats stats{};
+                Check(MhpGetRunResult(handle, &stats) == MhpOk && stats.batchesSubmitted == 2, "generation run");
+                MhpReleaseRun(handle);
+                const auto between = ToMicroseconds(firstCalls[1] - firstCalls[0], options.qpcFrequency);
+                std::cout << "generation=" << generation << " slow_press_us=2000 press_start_to_release_start_us=" << between << "\n";
+                if (generation == 0) Check(between < 5000 + 800, "latest generation let a slow press delay the release");
+                else Check(between >= 5000 + 1500, "earlier generation no longer counts the hold from the press return");
+            }
+            slowFirstCallUs = 0;
+            MhpDestroyPlan(plan);
+        }
+        {
+            // Generation 2 (MacroHID 1.6.0) runs the plan on the older standby/inline engine through the synchronous entry point,
+            // and never touches the shared scheduler. Fake input only: nothing reaches the desktop.
+            INPUT inputs[2]{};
+            for (auto& input : inputs) { input.type = INPUT_KEYBOARD; input.ki.wVk = 'A'; }
+            inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            MhpBatch batches[]{{0,0,1,1},{ms(5),1,1,1}};
+            void* plan = nullptr;
+            Check(MhpCreatePlan(inputs, 2, batches, 2, &plan) == MhpOk, "legacy plan");
+            slowFirstCallUs = 0;
+            for (int generation : {2, 0, 2})
+            {
+                calls = 0;
+                auto legacyOptions = options; legacyOptions.generation = static_cast<uint32_t>(generation);
+                legacyOptions.nativeEngineMode = MhpNativeEngineInline; // no standby threads needed: inline runs on the calling thread
+                volatile long cancel = 0;
+                MhpRunStats stats{};
+                const auto status = MhpRunPlan(plan, &legacyOptions, &cancel, &stats);
+                const auto between = ToMicroseconds(firstCalls[1] - firstCalls[0], options.qpcFrequency);
+                std::cout << "run_generation=" << generation << " status=" << status << " batches=" << stats.batchesSubmitted << " between_us=" << between << "\n";
+                Check(status == MhpOk && stats.batchesSubmitted == 2 && calls == 2, "plan did not run to completion");
+                Check(between >= 5000 - kHoldSlackUs, "written interval shortened");
+                Check(between < 5000 + 1500, "interval far longer than written");
             }
             MhpDestroyPlan(plan);
         }
@@ -237,7 +334,7 @@ int main(int argc, char** argv)
             calls = 0;
             Run late({{0,0,1,1},{ms(10),1,1,1}}, options, nullptr, 2, QueryCounter() - ms(50), true);
             auto stats = late.Wait();
-            Check(firstCalls[1] - firstCalls[0] >= ms(10), "late start shortened key hold");
+            Check(ToMicroseconds(firstCalls[1] - firstCalls[0], options.qpcFrequency) >= 10000 - kHoldSlackUs, "late start shortened key hold");
             Check(stats.maxLateUs >= 50000, "timeline reset hid preparation/queue delay");
         }
         {

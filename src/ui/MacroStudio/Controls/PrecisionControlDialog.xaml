@@ -18,6 +18,18 @@
         </ComboBox>
 
         <TextBlock x:Name="ProfileDescription" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+        <TextBlock x:Name="PrecisionGenerationLabelText"
+                   Text="精度版本"
+                   Style="{StaticResource FieldLabel}" />
+        <ComboBox x:Name="PrecisionGenerationBox" Height="30" Margin="0,0,0,6" AutomationProperties.AutomationId="PrecisionGenerationBox">
+            <ComboBoxItem Tag="latest" Content="最新（推荐）" />
+            <ComboBoxItem Tag="v2_0_2" Content="2.0.2" />
+            <ComboBoxItem Tag="v2_0" Content="2.0.x" />
+            <ComboBoxItem Tag="v1_6" Content="1.6.0" />
+        </ComboBox>
+        <TextBlock x:Name="PrecisionGenerationDescription" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,4" Foreground="{DynamicResource SecondaryText}" />
+        <TextBlock x:Name="PrecisionGenerationHelpText" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,12" Foreground="{DynamicResource SecondaryText}" />
         <TextBlock Text="仅影响下一次运行；响应数值为预热后 1–2 个并发宏的待验证目标。条件轮询间隔保持原配置。" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource SecondaryText}" />
         <TextBlock x:Name="AffinityMaskLabelText"
                    Text="极限核心掩码"

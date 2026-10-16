@@ -17,6 +17,7 @@ public partial class PrecisionControlDialog : Window
         PickCores = pickCores;
         ApplyLocalization();
         PrecisionModeBox.SelectionChanged += (_, _) => UpdateProfileDescription();
+        PrecisionGenerationBox.SelectionChanged += (_, _) => UpdateGenerationDescription();
         AffinityMaskBox.Text = settings.AffinityMask;
         foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
         {
@@ -26,7 +27,44 @@ public partial class PrecisionControlDialog : Window
                 break;
             }
         }
+
+        // Always lands on an item: an unknown or missing value is already the latest after Normalize.
+        var generationTag = ToGenerationTag(PrecisionGenerations.Normalize(settings.Generation));
+        PrecisionGenerationBox.SelectedItem = PrecisionGenerationBox.Items.OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), generationTag, StringComparison.Ordinal))
+            ?? PrecisionGenerationBox.Items[0];
+        UpdateGenerationDescription();
     }
+
+    private void UpdateGenerationDescription()
+    {
+        PrecisionGenerationDescription.Text = SelectedGeneration() switch
+        {
+            PrecisionGeneration.V2_0_2 => L("PrecisionGenerationDesc202"),
+            PrecisionGeneration.V2_0 => L("PrecisionGenerationDesc20"),
+            PrecisionGeneration.V1_6 => L("PrecisionGenerationDesc16"),
+            _ => L("PrecisionGenerationDescLatest")
+        };
+    }
+
+    private PrecisionGeneration SelectedGeneration()
+    {
+        return (PrecisionGenerationBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() switch
+        {
+            "v2_0_2" => PrecisionGeneration.V2_0_2,
+            "v2_0" => PrecisionGeneration.V2_0,
+            "v1_6" => PrecisionGeneration.V1_6,
+            _ => PrecisionGeneration.Latest
+        };
+    }
+
+    private static string ToGenerationTag(PrecisionGeneration generation) => generation switch
+    {
+        PrecisionGeneration.V2_0_2 => "v2_0_2",
+        PrecisionGeneration.V2_0 => "v2_0",
+        PrecisionGeneration.V1_6 => "v1_6",
+        _ => "latest"
+    };
 
     private void UpdateProfileDescription()
     {
@@ -47,6 +85,20 @@ public partial class PrecisionControlDialog : Window
     {
         Title = L("PrecisionControl");
         PrecisionModeLabelText.Text = L("PrecisionMode");
+        PrecisionGenerationLabelText.Text = L("PrecisionGeneration");
+        PrecisionGenerationHelpText.Text = L("PrecisionGenerationHelp");
+        PrecisionGenerationBox.ToolTip = L("PrecisionGenerationHelp");
+        foreach (var item in PrecisionGenerationBox.Items.OfType<ComboBoxItem>())
+        {
+            item.Content = item.Tag?.ToString() switch
+            {
+                "latest" => L("PrecisionGenerationLatest"),
+                "v2_0_2" => L("PrecisionGenerationV202"),
+                "v2_0" => L("PrecisionGenerationV20"),
+                "v1_6" => L("PrecisionGenerationV16"),
+                _ => item.Content
+            };
+        }
         AffinityMaskLabelText.Text = L("AffinityMask");
         AffinityMaskHelpText.Text = L("AffinityMaskHelp");
         AffinityMaskBox.ToolTip = L("AffinityMaskHelp");
@@ -82,6 +134,7 @@ public partial class PrecisionControlDialog : Window
             Settings = source with
             {
                 Precision = SelectedPrecision(),
+                Generation = SelectedGeneration(),
                 AffinityMask = mask
             };
             DialogResult = true;
