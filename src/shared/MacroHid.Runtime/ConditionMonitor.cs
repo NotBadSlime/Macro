@@ -91,9 +91,14 @@ public sealed class ConditionMonitor : IDisposable
         this.pressFloor = pressFloor ?? InputPressFloor.Factory;
         this.activationIntervals = activationIntervals
             ?? BuildLegacyIntervals(directive);
-        delayStrategy = new QpcPlaybackDelayStrategy(clock, precision);
-        pollingDelayStrategy = new QpcPlaybackDelayStrategy(clock, PrecisionMode.Balanced);
+        v16 = PrecisionGenerations.UsesLegacyNativeEngine(PrecisionGenerations.Normalize(this.pressFloor.Generation));
+        delayStrategy = new QpcPlaybackDelayStrategy(clock, precision, this.pressFloor.Generation);
+        // 1.6.0 polled with the run's own precision; later releases poll at 均衡.
+        pollingDelayStrategy = v16 ? delayStrategy : new QpcPlaybackDelayStrategy(clock, PrecisionMode.Balanced);
     }
+
+    // MacroHID 1.6.0 timing: Highest polling thread inside the run's precision context, no skipped polls.
+    private readonly bool v16;
 
     private static IReadOnlyList<ConditionTimeInterval> BuildLegacyIntervals(ConditionalDirective directive)
     {
@@ -139,7 +144,7 @@ public sealed class ConditionMonitor : IDisposable
         monitorThread = new Thread(() => PollLoop(cts.Token))
         {
             IsBackground = true,
-            Priority = ThreadPriority.AboveNormal,
+            Priority = v16 ? ThreadPriority.Highest : ThreadPriority.AboveNormal,
             Name = $"MacroHID-Condition-{directive.Id}"
         };
         monitorThread.Start();
@@ -184,8 +189,10 @@ public sealed class ConditionMonitor : IDisposable
 
     private void PollCore(CancellationToken cancellationToken)
     {
-        // Expensive recognition must not compete with input timing at time-critical priority.
-        using var precisionContext = PrecisionPlaybackContext.Enter(PrecisionMode.Balanced);
+        // Expensive recognition must not compete with input timing at time-critical priority (1.6.0 did, see v16).
+        using var precisionContext = v16
+            ? PrecisionPlaybackContext.Enter(precision, pressFloor.Generation)
+            : PrecisionPlaybackContext.Enter(PrecisionMode.Balanced);
         var frequency = EffectiveFrequency();
         var pollTicks = Math.Max(1, (long)Math.Round(directive.EffectivePollInterval.TotalSeconds * frequency, MidpointRounding.AwayFromZero));
         var nextPollTick = clock.GetTimestamp();
@@ -214,7 +221,7 @@ public sealed class ConditionMonitor : IDisposable
                     nextPollTick += pollTicks;
                     // Skip missed polls instead of repeatedly running expensive OCR to catch up.
                     var now = clock.GetTimestamp();
-                    if (nextPollTick <= now) nextPollTick = now + pollTicks;
+                    if (!v16 && nextPollTick <= now) nextPollTick = now + pollTicks;
                     pollingDelayStrategy.WaitUntil(nextPollTick, frequency, cancellationToken, noWait: false);
                 }
                 catch (OperationCanceledException)
@@ -412,7 +419,8 @@ public sealed class ConditionMonitor : IDisposable
     private void ExecuteThenSteps(CancellationToken cancellationToken)
     {
         if (directive.ThenSteps.Count == 0) return;
-        using var actionPrecision = PrecisionPlaybackContext.Enter(precision);
+        // 1.6.0: the polling thread is already inside the run's precision context (see PollCore).
+        using var actionPrecision = v16 ? null : PrecisionPlaybackContext.Enter(precision);
 
         var qpcFrequency = EffectiveFrequency();
         var document = new MacroDocument(1, "_condition_then", PlaybackSettings.Default, directive.ThenSteps, null);
@@ -461,9 +469,11 @@ public sealed class ConditionMonitor : IDisposable
         if (precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter && inputSink is SendInputMacroSink)
         {
             var prepared = ConditionActionPlanCache.GetNative(plan);
+            // 1.6.0 ran condition actions on the inline engine without the core scan.
+            var cpuScan = !v16 && NativePlaybackWarmup.CpuScanReady;
             bool ranNative = prepared is not null
-                ? NativePlaybackEngine.TryRunPrepared(prepared, precision, cancellationToken, out _, out _, enableCpuScan: NativePlaybackWarmup.CpuScanReady, generation: pressFloor.Generation)
-                : NativePlaybackEngine.TryRun(plan, precision, cancellationToken, out _, out _, enableCpuScan: NativePlaybackWarmup.CpuScanReady, engineMode: NativePlaybackEngineMode.Inline, generation: pressFloor.Generation);
+                ? NativePlaybackEngine.TryRunPrepared(prepared, precision, cancellationToken, out _, out _, enableCpuScan: cpuScan, engineMode: v16 ? NativePlaybackEngineMode.Inline : NativePlaybackEngineMode.Auto, generation: pressFloor.Generation)
+                : NativePlaybackEngine.TryRun(plan, precision, cancellationToken, out _, out _, enableCpuScan: cpuScan, engineMode: NativePlaybackEngineMode.Inline, generation: pressFloor.Generation);
             if (ranNative) return;
         }
 

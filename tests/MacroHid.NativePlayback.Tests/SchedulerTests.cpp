@@ -429,6 +429,28 @@ int main(int argc, char** argv)
             }
             MhpDestroyPlan(plan);
         }
+        {
+            // 1.6.0 submitted a batch one INPUT per call; later engines inject the batch in one call.
+            INPUT inputs[3]{};
+            for (auto& input : inputs) { input.type = INPUT_KEYBOARD; input.ki.wVk = 'A'; }
+            inputs[1].ki.wVk = 'B'; inputs[2].ki.wVk = 'C';
+            MhpBatch batches[]{{0,0,3,3}};
+            void* plan = nullptr;
+            Check(MhpCreatePlan(inputs, 3, batches, 1, &plan) == MhpOk, "chord plan");
+            calls = 0;
+            auto legacyOptions = options; legacyOptions.generation = 2; legacyOptions.nativeEngineMode = MhpNativeEngineInline;
+            volatile long cancel = 0;
+            MhpRunStats stats{};
+            Check(MhpRunPlan(plan, &legacyOptions, &cancel, &stats) == MhpOk && stats.nativeInputsSubmitted == 3, "1.6.0 chord run");
+            std::cout << "v1_6_chord_calls=" << calls << "\n";
+            Check(calls == 3, "1.6.0 engine must submit one INPUT per SendInput call");
+            calls = 0;
+            Run latest({{0,0,3,3}}, options, nullptr, 3);
+            Check(latest.Wait().batchesSubmitted == 1, "latest chord run");
+            std::cout << "latest_chord_calls=" << calls << "\n";
+            Check(calls == 1, "shared scheduler must submit a key batch in one call");
+            MhpDestroyPlan(plan);
+        }
         const bool strict = GetEnvironmentVariableW(L"MACROHID_PERF_GATES", nullptr, 0) > 0;
         for (int mode : {1, 2})
         {

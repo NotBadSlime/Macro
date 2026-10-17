@@ -122,6 +122,105 @@ public sealed class PrecisionPlaybackContext : IDisposable
         lock (ProcessStateGate) return EnterCore(mode);
     }
 
+    /// <summary>
+    /// <paramref name="generation"/> 1.6.0 also applies what that release did on the playback thread and was removed in
+    /// 2.0.0: time-critical thread priority, High (极致: RealTime) process priority with priority boost off, MMCSS Pro Audio,
+    /// pinning 极致 to the lowest-jitter core, and a no-GC region.
+    /// </summary>
+    public static PrecisionPlaybackContext Enter(PrecisionMode mode, PrecisionGeneration generation)
+    {
+        lock (ProcessStateGate)
+        {
+            var context = EnterCore(mode);
+            if (PrecisionGenerations.UsesLegacyNativeEngine(PrecisionGenerations.Normalize(generation)))
+                context.ApplyV1_6();
+            return context;
+        }
+    }
+
+    // State applied by ApplyV1_6, restored by this context alone (as 1.6.0 did per run).
+    private bool v16Applied;
+    private ProcessPriorityClass? v16ProcessPriority;
+    private bool v16ProcessBoostCaptured;
+    private bool v16PreviousProcessBoostDisabled;
+    private IDisposable? v16Mmcss;
+    private UIntPtr v16PreviousAffinity;
+    private bool v16NoGcRegion;
+
+    private void ApplyV1_6()
+    {
+        if (mode is not (PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter) || !OperatingSystem.IsWindows())
+            return;
+        v16Applied = true;
+        try
+        {
+            RuntimeNativeMethods.SetThreadPriority(RuntimeNativeMethods.GetCurrentThread(), RuntimeNativeMethods.ThreadPriorityTimeCritical);
+        }
+        catch { }
+
+        try
+        {
+            using var process = Process.GetCurrentProcess();
+            v16ProcessPriority = process.PriorityClass;
+            process.PriorityClass = mode == PrecisionMode.UltraLowJitter ? ProcessPriorityClass.RealTime : ProcessPriorityClass.High;
+            if (RuntimeNativeMethods.GetProcessPriorityBoost(RuntimeNativeMethods.GetCurrentProcess(), out v16PreviousProcessBoostDisabled))
+                v16ProcessBoostCaptured = true;
+            RuntimeNativeMethods.SetProcessPriorityBoost(RuntimeNativeMethods.GetCurrentProcess(), true);
+        }
+        catch { }
+
+        try
+        {
+            var threadHandle = RuntimeNativeMethods.GetCurrentThread();
+            v16Mmcss = MmcssScope.TryBegin();
+            if (mode == PrecisionMode.UltraLowJitter)
+            {
+                var selectedProcessorMask = SelectLowestJitterProcessorMask();
+                if (selectedProcessorMask != UIntPtr.Zero)
+                {
+                    v16PreviousAffinity = RuntimeNativeMethods.SetThreadAffinityMask(threadHandle, selectedProcessorMask);
+                    var idealProcessor = GetFirstProcessorIndex(selectedProcessorMask);
+                    if (idealProcessor >= 0)
+                        RuntimeNativeMethods.SetThreadIdealProcessor(threadHandle, (uint)idealProcessor);
+                }
+            }
+        }
+        catch { }
+
+        try { v16NoGcRegion = GC.TryStartNoGCRegion(4 * 1024 * 1024, disallowFullBlockingGC: false); }
+        catch { v16NoGcRegion = false; }
+    }
+
+    private void RevertV1_6()
+    {
+        if (!v16Applied) return;
+        v16Applied = false;
+        if (v16NoGcRegion)
+        {
+            try { GC.EndNoGCRegion(); } catch { }
+        }
+
+        try
+        {
+            if (v16PreviousAffinity != UIntPtr.Zero)
+                RuntimeNativeMethods.SetThreadAffinityMask(RuntimeNativeMethods.GetCurrentThread(), v16PreviousAffinity);
+            if (v16ProcessBoostCaptured)
+                RuntimeNativeMethods.SetProcessPriorityBoost(RuntimeNativeMethods.GetCurrentProcess(), v16PreviousProcessBoostDisabled);
+        }
+        catch { }
+
+        v16Mmcss?.Dispose();
+        if (v16ProcessPriority is { } processPriority)
+        {
+            try
+            {
+                using var process = Process.GetCurrentProcess();
+                process.PriorityClass = processPriority;
+            }
+            catch { }
+        }
+    }
+
     private static PrecisionPlaybackContext EnterCore(PrecisionMode mode)
     {
         var thread = Thread.CurrentThread;
@@ -237,6 +336,7 @@ public sealed class PrecisionPlaybackContext : IDisposable
         }
 
         disposed = true;
+        RevertV1_6();
 
         var owner = mode is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter
             && --preciseUsers == 0 ? processOwner : null;

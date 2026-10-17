@@ -60,6 +60,8 @@ namespace
         int64_t p999LateUs = std::numeric_limits<int64_t>::max();
         int64_t meanLateUs = std::numeric_limits<int64_t>::max();
         int64_t score = std::numeric_limits<int64_t>::max();
+        // The 1.6.0 score: deadline lateness only, without the stall penalty (used by the older standby/inline engine).
+        int64_t lateScore = std::numeric_limits<int64_t>::max();
         // Stall probe: periods the spinning thread did not run at all (ISR/DPC/SMI/preemption) during the scan window.
         int64_t maxStallUs = 0;
         uint32_t stallsOver50Us = 0;
@@ -419,6 +421,37 @@ namespace
 
         return SubmitSplittingRelativeMoves(count, inputs,
             [](UINT n, INPUT* p) { return SendInput(n, p, sizeof(INPUT)); }, RecenterCursorIfNeeded);
+    }
+
+    // MacroHID 1.6.0 submission, used only by the older standby/inline engine: one SendInput call per INPUT, so the
+    // keys of a batch reach the target as separate events a few microseconds apart (later releases inject a batch whole).
+    UINT SubmitPlaybackInputV1_6(UINT count, INPUT* inputs)
+    {
+        if (count == 0 || inputs == nullptr)
+        {
+            return 0;
+        }
+
+        UINT sent = 0;
+        for (UINT i = 0; i < count; i++)
+        {
+            #ifndef MACROHID_PLAYBACK_TEST
+            if (IsRelativeMouseInput(inputs[i]))
+            {
+                RecenterCursorIfNeeded(inputs[i].mi.dx, inputs[i].mi.dy);
+            }
+            const UINT one = SendInput(1, inputs + i, sizeof(INPUT));
+            #else
+            const UINT one = g_testSubmit(1, inputs + i);
+            #endif
+            sent += one;
+            if (one != 1)
+            {
+                break;
+            }
+        }
+
+        return sent;
     }
 
     struct PlaybackControl
@@ -800,6 +833,7 @@ namespace
         choice.processorNumber = ProcessorNumberFromMask(mask);
         choice.maxLateUs = choice.p99LateUs = choice.p999LateUs = choice.meanLateUs = 0;
         choice.score = static_cast<int64_t>(logicalIndex);
+        choice.lateScore = choice.score;
         choice.physicalCoreId = physicalCoreId;
         choice.efficiencyClass = efficiencyClass;
         return choice;
@@ -983,14 +1017,14 @@ namespace
         choice.p99LateUs = PercentileOfSorted(lateSamples, 0.99);
         choice.p999LateUs = PercentileOfSorted(lateSamples, 0.999);
         choice.meanLateUs = sumLate / std::max<int64_t>(1, static_cast<int64_t>(lateSamples.size()));
-        choice.score = CoreChoiceScore(
+        choice.lateScore = CoreChoiceScore(
             choice.maxLateUs,
             choice.p999LateUs,
             choice.p99LateUs,
             choice.meanLateUs,
             choice.index,
-            allowedProcessorCount)
-            + StallPenalty(choice);
+            allowedProcessorCount);
+        choice.score = choice.lateScore + StallPenalty(choice);
         return choice;
     }
 
@@ -1122,10 +1156,86 @@ namespace
         return choices;
     }
 
+    // The 1.6.0 ranking, used by the older standby/inline engine: efficiency class, then deadline lateness only. The stall
+    // probe and the noisy-core exclusion came with 2.0.x's shared scheduler.
+    std::vector<CoreChoice> OrderByLatenessV1_6(std::vector<CoreChoice> choices)
+    {
+        for (auto& choice : choices)
+        {
+            choice.score = choice.lateScore;
+        }
+        std::sort(
+            choices.begin(),
+            choices.end(),
+            [](const CoreChoice& left, const CoreChoice& right)
+            {
+                if (left.efficiencyClass != right.efficiencyClass)
+                {
+                    return left.efficiencyClass < right.efficiencyClass;
+                }
+
+                return CoreChoiceBetter(left, right);
+            });
+        return choices;
+    }
+
+    // Only the older inline engine pins with this (1.6.0 behaviour, see OrderByLatenessV1_6).
     CoreChoice SelectLowestJitterCore(bool enableCpuScan)
     {
-        const auto choices = ScanEligibleCores(enableCpuScan);
+        const auto choices = OrderByLatenessV1_6(ScanEligibleCores(enableCpuScan));
         return choices.empty() ? CoreChoice{} : choices.front();
+    }
+
+    // The 1.6.0 standby worker selection: distinct physical cores, CPU 0 last, no noisy-core exclusion.
+    std::vector<CoreChoice> SelectLowestJitterCoresV1_6(int requestedCount, bool enableCpuScan)
+    {
+        std::vector<CoreChoice> selected;
+        if (requestedCount <= 0)
+        {
+            return selected;
+        }
+
+        const auto choices = OrderByLatenessV1_6(ScanEligibleCores(enableCpuScan));
+        selected.reserve(std::min<int>(requestedCount, static_cast<int>(choices.size())));
+        std::vector<uint32_t> usedPhysicalCores;
+        for (const auto& choice : choices)
+        {
+            if (choice.processorNumber == 0 && static_cast<int>(choices.size()) > requestedCount)
+            {
+                continue;
+            }
+
+            if (std::find(usedPhysicalCores.begin(), usedPhysicalCores.end(), choice.physicalCoreId) != usedPhysicalCores.end())
+            {
+                continue;
+            }
+
+            usedPhysicalCores.push_back(choice.physicalCoreId);
+            selected.push_back(choice);
+            if (static_cast<int>(selected.size()) >= requestedCount)
+            {
+                break;
+            }
+        }
+
+        if (static_cast<int>(selected.size()) < requestedCount)
+        {
+            for (const auto& choice : choices)
+            {
+                if (std::any_of(selected.begin(), selected.end(), [&](const CoreChoice& existing) { return existing.mask == choice.mask; }))
+                {
+                    continue;
+                }
+
+                selected.push_back(choice);
+                if (static_cast<int>(selected.size()) >= requestedCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        return selected;
     }
 
     std::vector<CoreChoice> SelectLowestJitterCores(int requestedCount, bool enableCpuScan, DWORD_PTR allowedMask = 0)
@@ -1342,7 +1452,7 @@ namespace
         {
             auto* inputPointer = const_cast<INPUT*>(state.plan->inputs.data() + batch->inputOffset);
             const int64_t submitStart = QueryCounter();
-            sent = SubmitPlaybackInput(batch->inputCount, inputPointer);
+            sent = SubmitPlaybackInputV1_6(batch->inputCount, inputPointer);
             const int64_t submitEnd = QueryCounter();
             submitDurationUs = ToMicroseconds(submitEnd - submitStart, state.frequency);
             if (sent != batch->inputCount)
@@ -1465,9 +1575,11 @@ namespace
                 }
             }
 
+            // The older engine runs MacroHID 1.6.0's timing, which used the realtime class for 极致 (the process is elevated,
+            // see app.manifest). Later releases cap at High; their shared scheduler does not go through this scope.
             if (options.precisionMode == MhpUltraLowJitter)
             {
-                if (SetPriorityClass(process, HIGH_PRIORITY_CLASS) != FALSE)
+                if (SetPriorityClass(process, REALTIME_PRIORITY_CLASS) != FALSE)
                 {
                     stats.processPriorityApplied++;
                 }
@@ -1886,7 +1998,7 @@ namespace
             }
             else
             {
-                const auto selectedCores = SelectLowestJitterCores(StandbyWorkerCount, true);
+                const auto selectedCores = SelectLowestJitterCoresV1_6(StandbyWorkerCount, true);
                 for (int i = 0; i < StandbyWorkerCount; i++)
                 {
                     workerCores[i] = i < static_cast<int>(selectedCores.size())
@@ -2184,7 +2296,7 @@ namespace
             {
                 auto* inputPointer = const_cast<INPUT*>(context.plan->inputs.data() + batch.inputOffset);
                 const int64_t submitStart = QueryCounter();
-                result.sent = SubmitPlaybackInput(batch.inputCount, inputPointer);
+                result.sent = SubmitPlaybackInputV1_6(batch.inputCount, inputPointer);
                 const int64_t submitEnd = QueryCounter();
                 result.submitDurationUs = ToMicroseconds(submitEnd - submitStart, context.frequency);
                 if (result.sent != batch.inputCount)
@@ -2876,7 +2988,7 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
                 {
                     auto* inputPointer = nativePlan->inputs.data() + batch.inputOffset;
                     const int64_t submitStart = QueryCounter();
-                    sent = SubmitPlaybackInput(batch.inputCount, inputPointer);
+                    sent = SubmitPlaybackInputV1_6(batch.inputCount, inputPointer);
                     const int64_t submitEnd = QueryCounter();
                     submitDurationUs = ToMicroseconds(submitEnd - submitStart, frequency);
                     if (sent != batch.inputCount)

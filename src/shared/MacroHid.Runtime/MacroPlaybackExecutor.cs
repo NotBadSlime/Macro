@@ -15,8 +15,55 @@ public sealed record PlaybackDelayProfile(
     long AggressiveSpinThresholdUs,
     long FinalSpinWindowUs,
     bool UseHighResolutionWaitableTimer,
-    bool NoSleepForSubTwoMillisecond)
+    bool NoSleepForSubTwoMillisecond,
+    // The waitable timer is used only while more than FinalSpinWindowUs + this remains. 1.6.0 used 750.
+    long TimerGuardUs = 50,
+    // 1.6.0 measured the spin count on the playback thread whenever a strategy was created.
+    bool CalibrateOnCreate = false)
 {
+    public static PlaybackDelayProfile ForPrecisionMode(PrecisionMode mode, PrecisionGeneration generation) =>
+        PrecisionGenerations.UsesLegacyNativeEngine(PrecisionGenerations.Normalize(generation))
+            ? ForPrecisionModeV1_6(mode)
+            : ForPrecisionMode(mode);
+
+    /// <summary>The MacroHID 1.6.0 constants (final spin 250/800/2000 us, timer guard 750 us, 极致 spins the last 2 ms).</summary>
+    public static PlaybackDelayProfile ForPrecisionModeV1_6(PrecisionMode mode)
+    {
+        return mode switch
+        {
+            PrecisionMode.Balanced => new PlaybackDelayProfile(
+                mode,
+                SleepOneThresholdUs: 4_000,
+                YieldThresholdUs: 750,
+                AggressiveSpinThresholdUs: 150,
+                FinalSpinWindowUs: 250,
+                UseHighResolutionWaitableTimer: true,
+                NoSleepForSubTwoMillisecond: false,
+                TimerGuardUs: 750,
+                CalibrateOnCreate: true),
+            PrecisionMode.UltraLowJitter => new PlaybackDelayProfile(
+                mode,
+                SleepOneThresholdUs: 20_000,
+                YieldThresholdUs: 2_500,
+                AggressiveSpinThresholdUs: 2_000,
+                FinalSpinWindowUs: 2_000,
+                UseHighResolutionWaitableTimer: true,
+                NoSleepForSubTwoMillisecond: true,
+                TimerGuardUs: 750,
+                CalibrateOnCreate: true),
+            _ => new PlaybackDelayProfile(
+                PrecisionMode.ExtremeDuringPlayback,
+                SleepOneThresholdUs: 8_000,
+                YieldThresholdUs: 1_500,
+                AggressiveSpinThresholdUs: 350,
+                FinalSpinWindowUs: 800,
+                UseHighResolutionWaitableTimer: true,
+                NoSleepForSubTwoMillisecond: false,
+                TimerGuardUs: 750,
+                CalibrateOnCreate: true)
+        };
+    }
+
     public static PlaybackDelayProfile ForPrecisionMode(PrecisionMode mode)
     {
         return mode switch
@@ -80,14 +127,22 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
     {
     }
 
+    public QpcPlaybackDelayStrategy(IHighResolutionClock? clock, PrecisionMode precision, PrecisionGeneration generation)
+        : this(clock, PlaybackDelayProfile.ForPrecisionMode(precision, generation))
+    {
+    }
+
     public QpcPlaybackDelayStrategy(IHighResolutionClock? clock, PlaybackDelayProfile profile)
     {
         this.clock = clock ?? new QpcHighResolutionClock();
         this.profile = profile;
-        // Never calibrate on a trigger. Custom clocks retain their deterministic test behavior.
-        calibratedSpinIterations = this.clock is QpcHighResolutionClock
-            ? Calibration.GetValueOrDefault((profile.Precision, CurrentClass()), 16)
-            : 16;
+        // Never calibrate on a trigger (except the 1.6.0 profile, which did). Custom clocks retain their deterministic
+        // test behavior.
+        calibratedSpinIterations = this.clock is not QpcHighResolutionClock
+            ? 16
+            : profile.CalibrateOnCreate
+                ? CalibrateSpinCount()
+                : Calibration.GetValueOrDefault((profile.Precision, CurrentClass()), 16);
     }
 
     public void WaitUntil(long dueTick, long qpcFrequency, CancellationToken cancellationToken, bool noWait)
@@ -109,7 +164,7 @@ public sealed class QpcPlaybackDelayStrategy : IPlaybackDelayStrategy
 
             var remainingUs = ToMicroseconds(remainingTicks, qpcFrequency);
             if (profile.UseHighResolutionWaitableTimer
-                && remainingUs > profile.FinalSpinWindowUs + 50
+                && remainingUs > profile.FinalSpinWindowUs + profile.TimerGuardUs
                 && TryWaitWithHighResolutionWaitableTimer(
                     Math.Min(remainingUs - profile.FinalSpinWindowUs, CancellationPollChunkUs), cancellationToken))
             {
@@ -358,10 +413,14 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         PlaybackTrace.Mark(PlaybackTraceStage.WorkerStart);
         var thread = Thread.CurrentThread;
         var previousPriority = thread.Priority;
+        var generation = PrecisionGenerations.Normalize(options.PressFloor.Generation);
+        var v16 = PrecisionGenerations.UsesLegacyNativeEngine(generation);
         try
         {
-            thread.Priority = PlaybackPerformancePolicy.For(options.Precision).ExecutionThreadPriority;
-            using var precisionContext = PrecisionPlaybackContext.Enter(options.Precision);
+            // 1.6.0 ran every playback on a dedicated Highest thread inside the user's process core mask.
+            thread.Priority = v16 ? ThreadPriority.Highest : PlaybackPerformancePolicy.For(options.Precision).ExecutionThreadPriority;
+            using var affinityScope = v16 ? ProcessAffinityScope.TryEnter(options.AffinityMask) : null;
+            using var precisionContext = PrecisionPlaybackContext.Enter(options.Precision, generation);
             PlaybackTrace.Mark(PlaybackTraceStage.PrecisionEntered);
             PlaybackRuntimeStatus.ReportBackend("managed");
             return Run(document, options, cancellationToken);
@@ -387,6 +446,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         if (inputSink is SendInputMacroSink sendInput)
         {
             sendInput.ModifierChordHold = options.PressFloor.ModifierChordHold;
+            sendInput.HighResolutionChordWait = PrecisionGenerations.Normalize(options.PressFloor.Generation) == PrecisionGeneration.Latest;
         }
 
         using var backgroundScope = BackgroundWindowSession.BeginScope(options);
@@ -421,7 +481,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         }
 
         var qpcFrequency = clock.Frequency;
-        var delayStrategy = configuredDelayStrategy ?? new QpcPlaybackDelayStrategy(clock, options.Precision);
+        var delayStrategy = configuredDelayStrategy ?? new QpcPlaybackDelayStrategy(clock, options.Precision, options.PressFloor.Generation);
         var iterationsTarget = options.Mode == PlaybackMode.FixedCount ? options.Count : int.MaxValue;
         var iterationsCompleted = 0;
         var actionsSubmitted = 0;
@@ -864,7 +924,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private bool CanAttemptNativeIteration(PlaybackExecutionOptions options)
     {
-        return nativePreparationAvailable && !options.BackgroundWindow
+        return NativeAllowedByPreparation(options) && !options.BackgroundWindow
             && CanUseNativePrecision(options.Precision)
             && !options.NoWait
             && configuredDelayStrategy is null
@@ -947,7 +1007,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private bool CanUseNativePreparedPlan(MacroDocument document, PlaybackExecutionOptions options)
     {
-        return nativePreparationAvailable && !options.BackgroundWindow
+        return NativeAllowedByPreparation(options) && !options.BackgroundWindow
             && CanUseNativePrecision(options.Precision)
             && !options.NoWait
             && configuredDelayStrategy is null
@@ -959,6 +1019,12 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     {
         return precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter;
     }
+
+    // Later generations use native only after a successful Prepare. 1.6.0 tried native on every run (falling back to managed
+    // per run), so a skipped or failed preparation does not keep that generation on the managed path.
+    private bool NativeAllowedByPreparation(PlaybackExecutionOptions options) =>
+        nativePreparationAvailable
+        || PrecisionGenerations.UsesLegacyNativeEngine(PrecisionGenerations.Normalize(options.PressFloor.Generation));
 
     private static bool ContainsPixelWhen(IReadOnlyList<MacroStep> steps)
     {
@@ -1042,7 +1108,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         IReadOnlyList<InputAction> emergencyReleaseActions)
     {
         var qpcFrequency = clock.Frequency;
-        var delayStrategy = configuredDelayStrategy ?? new QpcPlaybackDelayStrategy(clock, options.Precision);
+        var delayStrategy = configuredDelayStrategy ?? new QpcPlaybackDelayStrategy(clock, options.Precision, options.PressFloor.Generation);
         var iterationsTarget = options.Mode == PlaybackMode.FixedCount ? options.Count : int.MaxValue;
         var iterationsCompleted = 0;
         var actionsSubmitted = 0;

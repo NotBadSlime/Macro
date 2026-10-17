@@ -8,7 +8,7 @@ MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。目的是把各大�
 
 源码一键打包：双击根目录的 `打包.cmd`，默认同时生成安装包、便携包、免安装本地运行版，安装包与便携包固定放在 `artifacts/packages`，本地运行版固定放在 `artifacts/local-run`，并更新桌面 `Start Item` 目录中的“MacroHID 本地版”快捷方式。详见 [打包说明](docs/packaging.md)。
 
-当前正式版是 **2.0.2**（[发布说明](docs/releases/2.0.2.md)）。安装文件在 GitHub [Releases](https://github.com/NotBadSlime/Macro/releases/tag/v2.0.2)：
+当前正式版是 **2.0.2**（[发布说明](docs/releases/2.0.2.md)），最新测试版是 **2.0.3**（[测试版说明](docs/releases/2.0.3.md)）。安装文件在 GitHub [Releases](https://github.com/NotBadSlime/Macro/releases)：
 
 - `MacroHID-Setup-x64.exe`：安装包。从浏览器下载后，请先右键该文件 → 属性 → 勾选「解除锁定」→ 确定，再双击安装。若弹出「无法在临时目录中执行文件 / Error 4551」或 Windows 安全中心提示「无法确认发布者」，按 [安装说明里的解除拦截步骤](docs/installer.md#从网上下载后被拦截) 处理，或改下便携包。
 - `MacroHID-Portable-x64.zip`：解压后得到与安装版相同的 `MacroHID` 目录，双击根目录里的 `MacroStudio.cmd` 即可。zip 同样先解除锁定再解压。

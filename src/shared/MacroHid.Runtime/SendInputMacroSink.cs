@@ -95,6 +95,12 @@ public sealed class SendInputMacroSink : IMacroInputSink
     private string priorityState = string.Empty;
     private readonly ModifierChordClock modifierChord = new();
     public TimeSpan ModifierChordHold { get; set; } = InputPressTiming.ModifierChordHold;
+
+    /// <summary>
+    /// Chord waits use the high-resolution timer (added after 2.0.2). Off for the older precision generations, which
+    /// waited with Sleep(1) down to 2 ms and then spun.
+    /// </summary>
+    public bool HighResolutionChordWait { get; set; } = true;
     private bool splittingModifierChord;
 
     public bool IsAvailable => OperatingSystem.IsWindows();
@@ -217,7 +223,7 @@ public sealed class SendInputMacroSink : IMacroInputSink
             prepared.Actions,
             submitQpc,
             InputPressTiming.HoldTicks(ModifierChordHold, frequency));
-        WaitUntilTick(chordDue);
+        WaitUntilTick(chordDue, HighResolutionChordWait);
         RuntimeNativeMethods.QueryPerformanceCounter(out submitQpc);
 
         if (prepared.NativeInputCount == 0)
@@ -267,7 +273,7 @@ public sealed class SendInputMacroSink : IMacroInputSink
     // Leave the last stretch of a chord wait to a spin; the timer wakes within this margin of its due time.
     private const long ChordSpinWindowUs = 300;
 
-    private static void WaitUntilTick(long dueTick)
+    private static void WaitUntilTick(long dueTick, bool highResolution)
     {
         var frequency = QpcFrequency;
         if (frequency <= 0)
@@ -285,7 +291,8 @@ public sealed class SendInputMacroSink : IMacroInputSink
 
             // Thread.Sleep(1) could overshoot a 30ms chord hold by a timer tick; the high-resolution timer does not.
             var remainingUs = (dueTick - now) * 1_000_000 / frequency;
-            if (remainingUs > ChordSpinWindowUs + 50
+            if (highResolution
+                && remainingUs > ChordSpinWindowUs + 50
                 && QpcPlaybackDelayStrategy.TryHighResolutionSleep(remainingUs - ChordSpinWindowUs))
             {
                 continue;

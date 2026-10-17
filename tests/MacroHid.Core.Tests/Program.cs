@@ -163,6 +163,7 @@ var tests = new (string Name, Action Body)[]
     ("Press floor keeps each key's own order", PressFloorKeepsEachKeysOwnOrder),
     ("Press floor does not extend a trailing-wait total", PressFloorTotalDoesNotGrowWithTrailingWait),
     ("Precision generation defaults to the latest", PrecisionGenerationDefaultsToLatest),
+    ("Precision generation 1.6.0 uses the 1.6.0 wait profile", V1_6GenerationUsesThe16WaitProfile),
     ("Precision dialog offers every generation, saves the choice and describes it", PrecisionDialogOffersEveryGeneration),
     ("Every precision generation is wired from settings to warm-up and to the engine", PrecisionGenerationIsWiredEndToEnd),
     ("Precision generation strings exist in every language", PrecisionGenerationStringsExistInEveryLanguage),
@@ -234,7 +235,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 2.0.2", MacroHidReleaseVersionIsTwoZeroTwo),
+    ("MacroHID release version is 2.0.3", MacroHidReleaseVersionIsTwoZeroTwo),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -655,7 +656,7 @@ static void PlaybackRuntimeExposesPrecisionContextCompiledPlansAndJitterStats()
 
     Assert.Contains("PrecisionMode Precision", optionsCode);
     Assert.Contains("PrecisionMode.ExtremeDuringPlayback", optionsCode);
-    Assert.Contains("PrecisionPlaybackContext.Enter(options.Precision)", playbackCode);
+    Assert.Contains("PrecisionPlaybackContext.Enter(options.Precision, generation)", playbackCode);
     Assert.Contains("CompiledPlaybackPlan.Create", playbackCode);
     Assert.Contains("plan.RequiresResampling", playbackCode);
     Assert.Contains("PlaybackTimingStats", playbackCode);
@@ -666,16 +667,22 @@ static void PlaybackRuntimeExposesPrecisionContextCompiledPlansAndJitterStats()
     Assert.Contains("RequiresResampling", planCode);
     Assert.Contains("Resample", planCode);
 
-    Assert.DoesNotContain("ThreadPriorityTimeCritical", precisionCode);
+    // Time-critical priority, High/RealTime process class and the no-GC region exist only in the 1.6.0 generation's path.
+    var v16Start = precisionCode.IndexOf("private void ApplyV1_6()", StringComparison.Ordinal);
+    var v16End = precisionCode.IndexOf("private void RevertV1_6()", StringComparison.Ordinal);
+    Assert.True(v16Start > 0 && v16End > v16Start);
+    var outsideV16 = precisionCode[..v16Start] + precisionCode[v16End..];
+    Assert.Contains("ThreadPriorityTimeCritical", precisionCode[v16Start..v16End]);
+    Assert.DoesNotContain("ThreadPriorityTimeCritical", outsideV16);
     Assert.Contains("SetThreadPriority", precisionCode);
     Assert.Contains("SetThreadPriorityBoost", nativeCode);
     Assert.Contains("GetThreadPriorityBoost", nativeCode);
     Assert.Contains("SetThreadPriorityBoost(RuntimeNativeMethods.GetCurrentThread(), true)", precisionCode);
     Assert.Contains("previousThreadPriorityBoostDisabled", precisionCode);
-    Assert.DoesNotContain("ProcessPriorityClass.High", precisionCode);
+    Assert.DoesNotContain("ProcessPriorityClass.High", outsideV16);
     Assert.Contains("PrecisionMode.UltraLowJitter", precisionCode);
-    Assert.DoesNotContain("ProcessPriorityClass.RealTime", precisionCode);
-    Assert.DoesNotContain("GC.TryStartNoGCRegion", precisionCode);
+    Assert.DoesNotContain("ProcessPriorityClass.RealTime", outsideV16);
+    Assert.DoesNotContain("GC.TryStartNoGCRegion", outsideV16);
     Assert.Contains("SelectLowestJitterProcessorMask", precisionCode);
     Assert.DoesNotContain("new UIntPtr(2)", precisionCode);
     Assert.Contains("ProcessPowerThrottling", precisionCode);
@@ -824,6 +831,28 @@ static void PrecisionGenerationDefaultsToLatest()
     // The numbers cross into native code and the settings file; they must never change.
     Assert.Equal(0, (int)PrecisionGeneration.Latest); Assert.Equal(1, (int)PrecisionGeneration.V2_0);
     Assert.Equal(2, (int)PrecisionGeneration.V1_6); Assert.Equal(3, (int)PrecisionGeneration.V2_0_2);
+}
+
+static void V1_6GenerationUsesThe16WaitProfile()
+{
+    // 1.6.0's managed waits: final spin 250/800/2000 us, timer only while more than spin + 750 us remain, 极致 spins the
+    // last 2 ms. Selecting 1.6.0 must give exactly those, every other generation keeps the current profile.
+    var expected = new (PrecisionMode Mode, long FinalSpin, bool NoSleepUnder2Ms)[]
+    {
+        (PrecisionMode.Balanced, 250, false),
+        (PrecisionMode.ExtremeDuringPlayback, 800, false),
+        (PrecisionMode.UltraLowJitter, 2_000, true),
+    };
+    foreach (var row in expected)
+    {
+        var v16 = PlaybackDelayProfile.ForPrecisionMode(row.Mode, PrecisionGeneration.V1_6);
+        Assert.Equal(row.FinalSpin, v16.FinalSpinWindowUs);
+        Assert.Equal(750L, v16.TimerGuardUs);
+        Assert.Equal(row.NoSleepUnder2Ms, v16.NoSleepForSubTwoMillisecond);
+        Assert.True(v16.CalibrateOnCreate);
+        foreach (var generation in new[] { PrecisionGeneration.Latest, PrecisionGeneration.V2_0_2, PrecisionGeneration.V2_0 })
+            Assert.Equal(PlaybackDelayProfile.ForPrecisionMode(row.Mode), PlaybackDelayProfile.ForPrecisionMode(row.Mode, generation));
+    }
 }
 
 static void EarlierGenerationsKeepTheOldLoopPeriod()
@@ -4215,16 +4244,17 @@ static void MacroHidReleaseVersionIsTwoZeroTwo()
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.2.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.3.md"));
 
-    Assert.Contains("<Version>2.0.2</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>2.0.2.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>2.0.2.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>2.0.3</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>2.0.3.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>2.0.3.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"2.0.2\"", installer);
-    Assert.Contains("[string]$Version = \"2.0.2\"", installerBuild);
+    Assert.Contains("#define AppVersion \"2.0.3\"", installer);
+    Assert.Contains("[string]$Version = \"2.0.3\"", installerBuild);
     Assert.Contains("当前正式版是 **2.0.2**", readme);
-    Assert.Contains("MacroHID 2.0.2 正式版", releaseNotes);
+    Assert.Contains("最新测试版是 **2.0.3**", readme);
+    Assert.Contains("MacroHID 2.0.3 测试版", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -5400,8 +5430,11 @@ static void StartupPathWarmupRunsTheNativeBranch()
     Assert.Contains("[new WaitStep(TimeSpan.FromMilliseconds(1))]", warmup);
     Assert.Contains("new MacroPlaybackExecutor(new SendInputMacroSink())", warmup);
     Assert.Contains("PlaybackPathWarmup.QueueRun(\n                runtimePrecision.Precision", app.Replace("\r\n", "\n"));
-    // Workers are warmed for the selected profile, not always for 极限.
-    Assert.DoesNotContain("PrecisionMode = 2,", warmupNative);
+    // Workers are warmed for the selected profile, not always for 极限. Only the 1.6.0 generation keeps 1.6.0's fixed 极限 warm-up.
+    var fixedProfile = warmupNative.IndexOf("PrecisionMode = 2,", StringComparison.Ordinal);
+    Assert.True(fixedProfile < 0 || (fixedProfile > warmupNative.IndexOf("private static bool PrepareV1_6(", StringComparison.Ordinal)
+        && warmupNative.IndexOf("private static bool PrepareV1_6(", StringComparison.Ordinal) > 0
+        && warmupNative.LastIndexOf("PrecisionMode = 2,", StringComparison.Ordinal) == fixedProfile));
     Assert.Contains("PrecisionMode = Volatile.Read(ref preparedNativePrecision)", warmupNative);
     // 低占用 has no native branch to warm.
     Assert.Equal(0, PlaybackPathWarmup.RunNative(PrecisionMode.Balanced, "", PrecisionGeneration.Latest));
@@ -7003,7 +7036,8 @@ static void ConditionMonitorUsesPrecisionThreadAndPreparedThenActions()
     var conditionCode = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ConditionMonitor.cs"));
 
     Assert.Contains("new Thread(() => PollLoop", conditionCode);
-    Assert.Contains("Priority = ThreadPriority.AboveNormal", conditionCode);
+    // AboveNormal polling; only the 1.6.0 generation restores its Highest polling thread.
+    Assert.Contains("Priority = v16 ? ThreadPriority.Highest : ThreadPriority.AboveNormal", conditionCode);
     Assert.Contains("PrecisionPlaybackContext.Enter(precision)", conditionCode);
     Assert.Contains("CompiledPlaybackPlan.Create", conditionCode);
     Assert.Contains("NativePlaybackEngine.TryRun", conditionCode);
@@ -7109,7 +7143,10 @@ static void NativePlaybackProjectExposesStableCAbi()
     Assert.Contains("ResolveCpuSetIdForLogicalProcessor", implementation);
     Assert.Contains("SetThreadSelectedCpuSets(thread, &cpuSetId, 1)", implementation);
     Assert.DoesNotContain("SetThreadSelectedCpuSets(thread, &cpuSetIndex", implementation);
-    Assert.DoesNotContain("REALTIME_PRIORITY_CLASS", implementation);
+    // The realtime class only in the older engine's PrecisionScope (the 1.6.0 generation), never in the shared scheduler.
+    Assert.Equal(1, implementation.Split("REALTIME_PRIORITY_CLASS").Length - 1);
+    Assert.Contains("which used the realtime class for 极致", implementation);
+    Assert.DoesNotContain("REALTIME_PRIORITY_CLASS", File.ReadAllText(Path.Combine(nativeDir, "SharedPlaybackScheduler.inl")));
     Assert.Contains("THREAD_PRIORITY_TIME_CRITICAL", implementation);
     Assert.Contains("AvSetMmThreadCharacteristicsW", implementation);
     Assert.Contains("_mm_pause", implementation);
@@ -7247,7 +7284,7 @@ static void NativePlaybackUsesDelayedRescueFastLaneForDenseUltraTimelines()
     Assert.Contains("helperRescueDelayTicks", implementation);
     Assert.Contains("ScanEligibleCores", implementation);
     Assert.Contains("SelectLowestJitterCores", implementation);
-    Assert.Contains("const auto selectedCores = SelectLowestJitterCores(StandbyWorkerCount, true)", implementation);
+    Assert.Contains("const auto selectedCores = SelectLowestJitterCoresV1_6(StandbyWorkerCount, true)", implementation);
     Assert.DoesNotContain("SelectLowestJitterCoreExcluding", implementation);
     Assert.Contains("targetTick = helper ? state.dueTick + state.helperRescueDelayTicks : state.dueTick", implementation);
     Assert.Contains("activeWorkerCount", implementation);
@@ -7549,8 +7586,12 @@ static void RuntimeAppliesConfiguredUltraAffinityMask()
     Assert.Contains("PlaybackAffinityMask", coreModel);
     Assert.Contains("string AffinityMask", controller);
     Assert.Contains("runtimePrecisionSettings.AffinityMask", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
-    Assert.DoesNotContain("ProcessAffinityScope.TryEnter(options.AffinityMask)", executor);
-    Assert.DoesNotContain("ProcessAffinityScope.TryEnter", warmup);
+    // Only the 1.6.0 generation applies the process core mask around a run and its masked warm-up, as 1.6.0 did.
+    Assert.Contains("v16 ? ProcessAffinityScope.TryEnter(options.AffinityMask) : null", executor);
+    Assert.Equal(1, executor.Split("ProcessAffinityScope.TryEnter").Length - 1);
+    Assert.Equal(1, warmup.Split("ProcessAffinityScope.TryEnter").Length - 1);
+    Assert.True(warmup.IndexOf("ProcessAffinityScope.TryEnter", StringComparison.Ordinal)
+        > warmup.IndexOf("private static bool PrepareV1_6(", StringComparison.Ordinal));
     Assert.Contains("MhpPrepareEngine(ref options, mask", warmup);
     Assert.Contains("PlaybackAffinityMask.TryParse", affinityScope);
     Assert.Contains("ProcessorAffinity", affinityScope);

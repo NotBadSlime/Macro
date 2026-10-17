@@ -923,7 +923,7 @@
     <value>2.0.x: the hold is counted from when the send call returns (about 0.05 to 0.65 ms longer), the press floor delays the rest of the timeline, and a loop with a trailing wait and no conditions repeats at about 10 ms.</value>
   </data>
   <data name="PrecisionGenerationDesc16" xml:space="preserve">
-    <value>1.6.0: everything in 2.0.x, on the older standby and inline engine.</value>
+    <value>1.6.0: restores 1.6.0's timing - the older standby and inline engine, higher thread and process priority, one key per send, that release's wait settings and core-mask handling. Uses more CPU and can affect other programs when the system is busy.</value>
   </data>
   <data name="PrecisionGenerationV202" xml:space="preserve">
     <value>2.0.2</value>

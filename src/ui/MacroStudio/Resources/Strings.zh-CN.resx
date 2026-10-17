@@ -628,7 +628,7 @@
   <data name="PrecisionGenerationHelp" xml:space="preserve"><value>选择使用哪一代定时行为。推荐最新；旧版本用于对比或回退。仅影响下一次运行。</value></data>
   <data name="PrecisionGenerationDescLatest" xml:space="preserve"><value>最新：按键时长从发出时刻起算；按键下限只推迟它自己的释放；循环按你所写的周期重复。</value></data>
   <data name="PrecisionGenerationDesc20" xml:space="preserve"><value>2.0.x：按键时长从发送调用返回起算（约多 0.05 至 0.65 毫秒）；按键下限会推迟后续时间线；带尾部等待且无条件的循环约每 10 毫秒重复一次。</value></data>
-  <data name="PrecisionGenerationDesc16" xml:space="preserve"><value>1.6.0：包含 2.0.x 的全部行为，并使用旧的待命/内联引擎。</value></data>
+  <data name="PrecisionGenerationDesc16" xml:space="preserve"><value>1.6.0：还原 1.6.0 的定时方式——旧的待命/内联引擎、更高的线程与进程优先级、逐键发送、当时的等待参数与核心掩码处理。占用更高，系统繁忙时可能影响其他程序。</value></data>
   <data name="PrecisionGenerationV202" xml:space="preserve"><value>2.0.2（正式版）</value></data>
   <data name="PrecisionGenerationDesc202" xml:space="preserve"><value>2.0.2：包含时间线修复（按键下限只推迟它自己的释放；循环按你所写的周期重复），按键时长仍从发送调用返回起算，与 2.0.x 相同。</value></data>
   <data name="PrecisionImpactLow" xml:space="preserve"><value>CPU 占用最低，适合 CPU 紧张或普通自动化。托管代码执行。</value></data>
