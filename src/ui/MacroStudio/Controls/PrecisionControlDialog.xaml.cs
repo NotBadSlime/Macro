@@ -18,7 +18,6 @@ public partial class PrecisionControlDialog : Window
         PickCores = pickCores;
         ApplyLocalization();
         PrecisionModeBox.SelectionChanged += (_, _) => UpdateProfileDescription();
-        PrecisionGenerationBox.SelectionChanged += (_, _) => UpdateGenerationDescription();
         AffinityMaskBox.Text = settings.AffinityMask;
         AffinityMaskBox.TextChanged += (_, _) => ValidateAffinityMask();
         StartLeadBox.Text = settings.StartLeadMicroseconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -35,27 +34,11 @@ public partial class PrecisionControlDialog : Window
             }
         }
 
-        // Always lands on an item: an unknown or missing version is already the current one after Normalize.
-        var versionId = settings.Version.Id;
-        PrecisionGenerationBox.SelectedItem = PrecisionGenerationBox.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), versionId, StringComparison.Ordinal))
-            ?? PrecisionGenerationBox.Items[0];
-        UpdateGenerationDescription();
         UpdateProfileDescription();
         ValidateAffinityMask();
+        // Short screens: keep the dialog inside the work area; the cards scroll.
+        BodyScroll.MaxHeight = Math.Max(320, SystemParameters.WorkArea.Height - 200);
     }
-
-    private void UpdateGenerationDescription()
-    {
-        var version = SelectedVersion();
-        var notes = L(version.NotesKey);
-        PrecisionGenerationDescription.Text = version.Folder is not null && !MacroHid.Runtime.LegacyPlaybackRuntimes.IsAvailable(version)
-            ? notes + "\n" + L("PlaybackVersionMissing")
-            : notes;
-    }
-
-    private PlaybackVersionInfo SelectedVersion() =>
-        PlaybackVersions.Resolve((PrecisionGenerationBox.SelectedItem as ComboBoxItem)?.Tag?.ToString());
 
     private void UpdateProfileDescription()
     {
@@ -99,17 +82,8 @@ public partial class PrecisionControlDialog : Window
     {
         Title = L("PrecisionControl");
         PrecisionModeLabelText.Text = L("PrecisionMode");
-        PrecisionGenerationLabelText.Text = L("PlaybackVersion");
-        PrecisionGenerationHelpText.Text = L("PlaybackVersionHelp");
-        PrecisionGenerationBox.Items.Clear();
-        foreach (var version in PlaybackVersions.All)
-        {
-            PrecisionGenerationBox.Items.Add(new ComboBoxItem
-            {
-                Tag = version.Id,
-                Content = version.Folder is null ? LocalizationService.Format("PlaybackVersionCurrent", version.Label) : version.Label
-            });
-        }
+        HotkeySectionTitle.Text = L("PrecisionHotkeySection");
+        CoreSectionTitle.Text = L("PrecisionCoreSection");
         AffinityMaskLabelText.Text = L("AffinityMask");
         AffinityMaskHelpText.Text = L("AffinityMaskHelp");
         PrecisionNextRunNoteText.Text = L("PrecisionNextRunNote");
@@ -172,9 +146,6 @@ public partial class PrecisionControlDialog : Window
         Settings = source with
         {
             Precision = SelectedPrecision(),
-            // The current engine runs its own latest timing; earlier releases run their own code, not a generation.
-            Generation = PrecisionGeneration.Latest,
-            PlaybackVersion = SelectedVersion().Id,
             AffinityMask = mask,
             StartLeadMicroseconds = lead,
             CompensateSendInputCost = CompensateSendInputCheck.IsChecked == true,

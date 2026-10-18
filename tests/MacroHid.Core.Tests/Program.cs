@@ -975,13 +975,19 @@ static void UnknownGenerationKeepsTheOtherSettings()
 
 static void PrecisionDialogOffersEveryGeneration()
 {
-    var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml.cs"));
-    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
-    // The dropdown is filled from PlaybackVersions (1.2.0 ... 2.0.3), the current one first; every entry has notes in every language.
-    Assert.Contains("x:Name=\"PrecisionGenerationBox\"", xaml);
+    var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackVersionDialog.xaml.cs"));
+    var precision = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
+    var library = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
+    // The playback version has its own dialog (opened from 全局运行), listing PlaybackVersions (2.0.4 ... 1.2.0) with notes;
+    // 精度控制 no longer carries it.
+    Assert.Contains("x:Name=\"PlaybackVersionButton\"", library);
+    Assert.DoesNotContain("PrecisionGenerationBox", precision);
     Assert.Contains("foreach (var version in PlaybackVersions.All)", code);
-    Assert.Contains("PlaybackVersion = SelectedVersion().Id", code);
-    Assert.Contains("PrecisionGenerationBox.SelectionChanged", code);
+    Assert.Contains("PlaybackVersion = Selected.Id", code);
+    Assert.Contains("VersionList.SelectionChanged", code);
+    // Notes split into one line per change, without the "x.y.z：" prefix.
+    var changes = MacroStudio.Controls.PlaybackVersionDialog.Changes(PlaybackVersions.Resolve("2.0.2"));
+    Assert.True(changes.Count >= 2 && !changes[0].StartsWith("2.0.2", StringComparison.Ordinal));
     Assert.Equal(PlaybackVersions.Current, PlaybackVersions.All[0].Id);
     Assert.True(PlaybackVersions.All[0].Folder is null);
     var ids = PlaybackVersions.All.Select(v => v.Id).ToArray();

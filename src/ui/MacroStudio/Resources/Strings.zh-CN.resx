@@ -71,7 +71,7 @@
   <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次结果：已捕获 {0}</value></data>
   <data name="ProcessFilter" xml:space="preserve"><value>进程筛选</value></data>
   <data name="AffinityMask" xml:space="preserve"><value>极限核心掩码</value></data>
-  <data name="AffinityMaskHelp" xml:space="preserve"><value>仅极限模式生效：限制极限模式播放线程和原生引擎使用这些 CPU，减少线程迁移抖动。留空则自动选择。示例：0x1F。</value></data>
+  <data name="AffinityMaskHelp" xml:space="preserve"><value>仅极限模式生效：限制极限模式播放线程和原生引擎使用这些 CPU。留空则自动选择。示例：0x1F。</value></data>
   <data name="ChooseCores" xml:space="preserve"><value>选择核心</value></data>
   <data name="ChooseCoresTitle" xml:space="preserve"><value>选择核心</value></data>
   <data name="ChooseCoresHelp" xml:space="preserve"><value>勾选要测量的逻辑核。默认勾选性能核，不含逻辑核 0。点「测试」会测量勾选的核心并显示结果；点确定后写入掩码。</value></data>
@@ -635,7 +635,7 @@
   <data name="PrecisionImpactBalanced" xml:space="preserve"><value>CPU 占用中等，适合大多数游戏和混合宏。原生引擎执行。</value></data>
   <data name="PrecisionImpactExtreme" xml:space="preserve"><value>CPU 占用最高，适合 1–2 毫秒的节奏。两个原生常驻线程互相兜底。</value></data>
   <data name="PrecisionProfileTargets" xml:space="preserve"><value>目标：首次输入 P99 ≤ {0} µs，迟到 P99.9 ≤ {1} µs。最终自旋 {2} µs，空闲时事件等待。</value></data>
-  <data name="PrecisionNextRunNote" xml:space="preserve"><value>从下一次运行开始生效。数值是预热后 1–2 个并发宏的目标；条件轮询间隔不变。</value></data>
+  <data name="PrecisionNextRunNote" xml:space="preserve"><value>从下一次运行开始生效。数值为预热后的目标值。</value></data>
   <data name="BasicSectionTarget" xml:space="preserve"><value>运行目标</value></data>
   <data name="BasicSectionHotkeys" xml:space="preserve"><value>快捷键</value></data>
   <data name="BasicSectionTiming" xml:space="preserve"><value>按键时间</value></data>
@@ -652,16 +652,16 @@
   <data name="ClosePanel" xml:space="preserve"><value>关闭面板</value></data>
   <data name="StatusErrorPrefix" xml:space="preserve"><value>操作失败：{0}</value></data>
   <data name="StartLead" xml:space="preserve"><value>热键启动对齐</value></data>
-  <data name="StartLeadHelp" xml:space="preserve"><value>0 表示准备好就开始（每次会差几十到几百微秒）。填 400 之类的值，每次热键都在按下后正好这么久开始，启动延迟恒定，可以在宏里预先扣除。来不及准备好的那次会立即开始。</value></data>
+  <data name="StartLeadHelp" xml:space="preserve"><value>0 = 准备好就开始（每次相差几十到几百微秒）。填 400 之类的值，每次都在按下后正好这么久开始，启动延迟恒定。</value></data>
   <data name="StartLeadInvalid" xml:space="preserve"><value>请填 0 到 {0} 的整数。</value></data>
   <data name="CompensateSendInput" xml:space="preserve"><value>按 SendInput 耗时提前提交</value></data>
-  <data name="CompensateSendInputHelp" xml:space="preserve"><value>播放时分别学习按键和鼠标的典型发送耗时（按键要先经过系统里所有键盘钩子），提前这么多发送，使输入平均落在写下的时刻。仅最新精度版本生效。</value></data>
+  <data name="CompensateSendInputHelp" xml:space="preserve"><value>学习按键与鼠标的典型发送耗时并提前这么多发送，使输入落在写下的时刻。仅当前版本生效。</value></data>
   <data name="RawInputHotkeys" xml:space="preserve"><value>用 Raw Input 检测热键</value></data>
-  <data name="RawInputHotkeysHelp" xml:space="preserve"><value>让 MacroStudio 退出键盘钩子链，它发出的每个按键（以及你自己打的字）都不再被它拖慢：实测按键 SendInput 中位 249 → 188 微秒、P99 1280 → 976 微秒。代价是热键本身被察觉得更晚（约 +190 微秒），因为 Raw Input 要等其他程序的钩子都处理完才到。取色键无法占用时自动改用低级钩子。</value></data>
+  <data name="RawInputHotkeysHelp" xml:space="preserve"><value>让 MacroStudio 退出键盘钩子链，发出的按键更快（中位 249 → 188 微秒）；代价是热键本身晚约 190 微秒被察觉。</value></data>
   <data name="LatencyCheck" xml:space="preserve"><value>系统延迟检查</value></data>
   <data name="LatencyCheckRun" xml:space="preserve"><value>检查…</value></data>
   <data name="LatencyCheckNotRun" xml:space="preserve"><value>尚未检查。</value></data>
-  <data name="LatencyCheckHelp" xml:space="preserve"><value>找出被中断频繁占用的 CPU 核心（偶发延迟最大值的常见来源），并让播放避开它们。</value></data>
+  <data name="LatencyCheckHelp" xml:space="preserve"><value>找出被中断频繁占用的核心（偶发迟到的常见原因），让播放避开它们。</value></data>
   <data name="LatencyCheckIntro" xml:space="preserve"><value>依次短暂占用每个 CPU 核心，记录系统让 MacroStudio 无法运行的时长（设备中断、DPC、固件）。不修改任何系统设置。耗时 2–30 秒，期间尽量不要做重负载操作。</value></data>
   <data name="LatencyCheckWindow" xml:space="preserve"><value>每核检测时长</value></data>
   <data name="LatencyCheckStart" xml:space="preserve"><value>开始检查</value></data>
@@ -686,10 +686,10 @@
   <data name="LatencyCheckAvoidNoisyHelp" xml:space="preserve"><value>启动几秒后也会自动做一次简短检查。均衡档在安静核心之间浮动，极限档固定在其中两个上。低占用档走托管代码，不受限制。</value></data>
   <data name="LatencyCheckAdviceNotYet" xml:space="preserve"><value>• 暂未避开：一个核心在最近 3 次检查中有 2 次嘈杂才会被避开。可再检查一次确认。</value></data>
   <data name="PlaybackVersion" xml:space="preserve"><value>播放版本</value></data>
-  <data name="PlaybackVersionHelp" xml:space="preserve"><value>选择用哪个发行版的播放代码。旧版本运行当时的原始代码（包括当时的问题），只有它之后才加入的效果卡片（断网、锁帧等）由当前版本代为执行。测核与系统延迟检查始终使用当前版本，选出的核心掩码按所选版本当时的方式使用。下次开始监听或运行时生效。</value></data>
+  <data name="PlaybackVersionHelp" xml:space="preserve"><value>选择用哪个发行版的代码播放宏。旧版本运行当时的原始代码，当时的问题也会保留；它之后才加入的效果卡片（断网、锁帧等）由当前版本代为执行。测核与系统延迟检查始终使用当前版本。</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（当前，推荐）</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安装缺少该版本的引擎文件，播放会失败，请重新安装完整安装包。</value></data>
-  <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（当前，即 2.0.3 引擎）：新增版本切换器；移除并行卡片，同一时间只运行一个宏。2.0.3 本身：缩短启动延迟（冷启动首次热键从约 2 毫秒降到约 250 微秒）；按键时长从 SendInput 开始时起算；SendInput 耗时补偿；可选热键启动对齐与 Raw Input 热键；测核避开中断密集的核心；系统延迟检查。</value></data>
+  <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（当前）：新增版本切换器；移除并行卡片，同一时间只运行一个宏；引擎同 2.0.3：冷启动首次热键从约 2 毫秒降到约 250 微秒；按键时长从 SendInput 开始时起算；SendInput 耗时补偿；可选热键启动对齐与 Raw Input 热键；测核避开中断密集的核心；系统延迟检查。</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：循环末尾的等待不再被丢弃，周期等于写下的总时长；默认间隔只推迟这一次抬起，不再推迟整条时间线；修复「宏基础控制」确定后设置不生效。</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（测试版）：热键入口与启动预热——启动时预热播放路径，低抖动热键待命时保持计时器分辨率；增加诊断追踪。播放时间线与 2.0.0 相同。</value></data>
   <data name="PlaybackVersionNotes200" xml:space="preserve"><value>2.0.0：播放改为共享批次调度器，一批按键一次 SendInput 发出；播放线程不再提到 TimeCritical/RealTime、不再绑核；等待参数缩短；调用带条件的子宏会运行子宏自己的条件；图片模板匹配开始真正生效；新增 YSR/KY3/Fufu 帧率卡片与运行日志。循环末尾的等待仍被丢弃（约每 10ms 一轮）。</value></data>
@@ -700,4 +700,12 @@
   <data name="PlaybackVersionNotes120" xml:space="preserve"><value>1.2.0：最早可选的版本，支持按键、鼠标、等待、重复、调用宏与像素条件，原生精准播放。没有 OCR、窗口激活和注释卡片。之后的效果卡片（断网、锁帧等）由当前版本代为执行；等文字卡片无法使用。</value></data>
   <data name="ParallelCardRemoved" xml:space="preserve"><value>并行卡片已移除（同一时间只允许运行一个宏）。请先删除宏「{0}」里的并行卡片再播放。</value></data>
   <data name="OneMacroAtATime" xml:space="preserve"><value>另一个宏正在运行。同一时间只允许运行一个宏，请先停止它。</value></data>
+  <data name="PlaybackVersionNextRun" xml:space="preserve"><value>下次开始监听或运行时生效；正在监听的宏会用所选版本重建。</value></data>
+  <data name="PlaybackVersionChanges" xml:space="preserve"><value>这一版改了什么</value></data>
+  <data name="PlaybackVersionCurrentBadge" xml:space="preserve"><value>当前</value></data>
+  <data name="PlaybackVersionEngineCurrent" xml:space="preserve"><value>当前引擎，推荐使用。</value></data>
+  <data name="PlaybackVersionEngineLegacy" xml:space="preserve"><value>运行该版本当时的原始播放代码。</value></data>
+  <data name="PlaybackVersionApplied" xml:space="preserve"><value>播放版本：{0}</value></data>
+  <data name="PrecisionHotkeySection" xml:space="preserve"><value>热键与发送</value></data>
+  <data name="PrecisionCoreSection" xml:space="preserve"><value>CPU 核心</value></data>
 </root>

@@ -503,6 +503,72 @@
         <Setter Property="Margin" Value="0,6,-8,0" />
     </Style>
 
+    <!-- DialogCard: a raised group of related fields inside a dialog. -->
+    <Style x:Key="DialogCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource PanelRaised}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="14,12,14,4" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+
+    <!-- DialogCardTitle: heading of a DialogCard, with an optional icon glyph run before it. -->
+    <Style x:Key="DialogCardTitle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+
+    <!-- CardHelpText: FieldHelpText for the last line of a card or under a checkbox (indented to the box's text). -->
+    <Style x:Key="CardHelpText" TargetType="TextBlock" BasedOn="{StaticResource FieldHelpText}">
+        <Setter Property="Margin" Value="2,4,0,10" />
+    </Style>
+    <Style x:Key="CheckBoxHelpText" TargetType="TextBlock" BasedOn="{StaticResource FieldHelpText}">
+        <Setter Property="Margin" Value="26,2,0,10" />
+    </Style>
+
+    <!-- SmallBadge: a pill next to a title ("当前", "测试版"). -->
+    <Style x:Key="SmallBadge" TargetType="Border">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="7,1,7,2" />
+        <Setter Property="Margin" Value="6,0,0,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource BadgeBlue}" />
+    </Style>
+
+    <!-- VersionListItem: one release in the playback version list; selected = accent border and selection fill. -->
+    <Style x:Key="VersionListItem" TargetType="ListBoxItem">
+        <Setter Property="Margin" Value="0,0,0,6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Root"
+                            Background="{DynamicResource PanelRaised}"
+                            BorderBrush="{DynamicResource PanelBorder}"
+                            BorderThickness="1"
+                            CornerRadius="9"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Selection}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Unit suffix next to a numeric box (ms, us). -->
     <Style x:Key="FieldUnitText" TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
         <Setter Property="VerticalAlignment" Value="Center" />

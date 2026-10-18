@@ -84,6 +84,7 @@ public partial class MacroLibraryPanel : UserControl
 #pragma warning restore CS0067
     public event Action? BasicControlRequested;
     public event Action? PrecisionControlRequested;
+    public event Action? PlaybackVersionRequested;
     public event Action? LibraryStructureEdited;
 
     public MacroLibraryPanel()
@@ -121,6 +122,7 @@ public partial class MacroLibraryPanel : UserControl
         GlobalRuntimeTitleText.Text = L("GlobalRuntime");
         BasicControlButton.Content = L("MacroBasicControl");
         PrecisionControlButton.Content = L("PrecisionControl");
+        PlaybackVersionButtonText.Text = L("PlaybackVersion");
         ListeningTitleText.Text = L("Listening");
         StopEveryListeningButton.Content = L("StopListeningAll");
         RenameMenuItem.Header = L("Rename");
@@ -242,6 +244,12 @@ public partial class MacroLibraryPanel : UserControl
     public void SetRuntimePrecisionControls(RuntimePrecisionSettings settings)
     {
         runtimeSettings = settings;
+        // The button shows the release that plays macros; an earlier one stands out (it is not the default).
+        var version = settings.Version;
+        PlaybackVersionValueText.Text = version.Label;
+        PlaybackVersionValueText.SetResourceReference(TextBlock.ForegroundProperty, version.Folder is null ? "Accent" : "AccentOrange");
+        if (PlaybackVersionValueText.Parent is Border badge)
+            badge.SetResourceReference(Border.BackgroundProperty, version.Folder is null ? "BadgeBlue" : "BadgeAmber");
     }
 
     public bool BackgroundProcessChoiceRequired(string processText)
@@ -744,6 +752,8 @@ public partial class MacroLibraryPanel : UserControl
     private void BasicControlButton_Click(object sender, RoutedEventArgs e) => BasicControlRequested?.Invoke();
 
     private void PrecisionControlButton_Click(object sender, RoutedEventArgs e) => PrecisionControlRequested?.Invoke();
+
+    private void PlaybackVersionButton_Click(object sender, RoutedEventArgs e) => PlaybackVersionRequested?.Invoke();
 
     private MacroLibraryGroup? FindContextGroup()
     {

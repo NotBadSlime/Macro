@@ -142,6 +142,7 @@ public partial class MainWindow : Window
         LibraryPanel.PrecisionSettingsEdited += OnPrecisionSettingsEdited;
         LibraryPanel.BasicControlRequested += OnBasicControlRequested;
         LibraryPanel.PrecisionControlRequested += OnPrecisionControlRequested;
+        LibraryPanel.PlaybackVersionRequested += OnPlaybackVersionRequested;
         LibraryPanel.LibraryStructureEdited += OnLibraryStructureEdited;
 
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
@@ -2462,6 +2463,15 @@ public partial class MainWindow : Window
 
         LibraryPanel.SetRuntimePrecisionControls(dialog.Settings);
         OnPrecisionSettingsEdited();
+    }
+
+    private void OnPlaybackVersionRequested()
+    {
+        var dialog = new PlaybackVersionDialog(runtimePrecisionSettings);
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
+        LibraryPanel.SetRuntimePrecisionControls(dialog.Settings);
+        OnPrecisionSettingsEdited();
+        SetStatus(LocalizationService.Format("PlaybackVersionApplied", dialog.Settings.Version.Label));
     }
 
     private void OnPrecisionControlRequested()

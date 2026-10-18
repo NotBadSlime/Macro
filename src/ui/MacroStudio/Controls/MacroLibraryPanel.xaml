@@ -573,9 +573,23 @@
                                 Click="BasicControlButton_Click" />
                         <Button x:Name="PrecisionControlButton"
                                 MinWidth="0"
-                                Margin="0,0,0,10"
+                                Margin="0,0,0,8"
                                 Content="精度控制"
                                 Click="PrecisionControlButton_Click" />
+                        <Button x:Name="PlaybackVersionButton"
+                                MinWidth="0"
+                                Margin="0,0,0,10"
+                                HorizontalContentAlignment="Stretch"
+                                Click="PlaybackVersionButton_Click"
+                                AutomationProperties.AutomationId="PlaybackVersionButton">
+                            <DockPanel LastChildFill="False">
+                                <TextBlock x:Name="PlaybackVersionButtonText" Text="播放版本" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                                <Border DockPanel.Dock="Right" Style="{StaticResource SmallBadge}" Margin="8,0,0,0">
+                                    <TextBlock x:Name="PlaybackVersionValueText" Text="2.0.4" FontSize="11"
+                                               Foreground="{DynamicResource Accent}" />
+                                </Border>
+                            </DockPanel>
+                        </Button>
                         <Border Height="1"
                                 Margin="0,2,0,10"
                                 Background="{DynamicResource PanelBorder}" />

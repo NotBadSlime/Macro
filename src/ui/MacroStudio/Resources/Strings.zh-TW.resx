@@ -71,7 +71,7 @@
   <data name="LastResultCapturedTrigger" xml:space="preserve"><value>上次結果：已擷取 {0}</value></data>
   <data name="ProcessFilter" xml:space="preserve"><value>行程篩選</value></data>
   <data name="AffinityMask" xml:space="preserve"><value>極限核心遮罩</value></data>
-  <data name="AffinityMaskHelp" xml:space="preserve"><value>僅極限模式生效：限制極限模式播放執行緒和原生引擎使用這些 CPU，減少執行緒遷移抖動。留空則自動選擇。範例：0x1F。</value></data>
+  <data name="AffinityMaskHelp" xml:space="preserve"><value>僅極限模式生效：限制極限模式播放執行緒和原生引擎使用這些 CPU。留空則自動選擇。範例：0x1F。</value></data>
   <data name="ChooseCores" xml:space="preserve"><value>選擇核心</value></data>
   <data name="ChooseCoresTitle" xml:space="preserve"><value>選擇核心</value></data>
   <data name="ChooseCoresHelp" xml:space="preserve"><value>勾選要測量的邏輯核。預設勾選效能核，不含邏輯核 0。點「測試」會測量勾選的核心並顯示結果；點確定後寫入遮罩。</value></data>
@@ -620,7 +620,7 @@
   <data name="PrecisionImpactBalanced" xml:space="preserve"><value>CPU 佔用中等，適合大多數遊戲和混合巨集。原生引擎執行。</value></data>
   <data name="PrecisionImpactExtreme" xml:space="preserve"><value>CPU 佔用最高，適合 1–2 毫秒的節奏。兩個原生常駐執行緒互相兜底。</value></data>
   <data name="PrecisionProfileTargets" xml:space="preserve"><value>目標：首次輸入 P99 ≤ {0} µs，遲到 P99.9 ≤ {1} µs。最終自旋 {2} µs，閒置時事件等待。</value></data>
-  <data name="PrecisionNextRunNote" xml:space="preserve"><value>從下一次執行開始生效。數值是預熱後 1–2 個並行巨集的目標；條件輪詢間隔不變。</value></data>
+  <data name="PrecisionNextRunNote" xml:space="preserve"><value>從下一次執行開始生效。數值為預熱後的目標值。</value></data>
   <data name="BasicSectionTarget" xml:space="preserve"><value>執行目標</value></data>
   <data name="BasicSectionHotkeys" xml:space="preserve"><value>快捷鍵</value></data>
   <data name="BasicSectionTiming" xml:space="preserve"><value>按鍵時間</value></data>
@@ -652,16 +652,16 @@
   <data name="AddFufuFpsStartHint" xml:space="preserve"><value>進入遊戲後修改 Fufu 解幀器目標值</value></data>
   <data name="AddFufuFpsStopHint" xml:space="preserve"><value>恢復解幀器原目標值</value></data>
   <data name="StartLead" xml:space="preserve"><value>熱鍵啟動對齊</value></data>
-  <data name="StartLeadHelp" xml:space="preserve"><value>0 表示準備好就開始（每次會差幾十到幾百微秒）。填 400 之類的值，每次熱鍵都在按下後正好這麼久開始，啟動延遲恆定，可以在巨集裡預先扣除。來不及準備好的那次會立即開始。</value></data>
+  <data name="StartLeadHelp" xml:space="preserve"><value>0 = 準備好就開始（每次相差幾十到幾百微秒）。填 400 之類的值，每次都在按下後正好這麼久開始，啟動延遲恆定。</value></data>
   <data name="StartLeadInvalid" xml:space="preserve"><value>請填 0 到 {0} 的整數。</value></data>
   <data name="CompensateSendInput" xml:space="preserve"><value>依 SendInput 耗時提前送出</value></data>
-  <data name="CompensateSendInputHelp" xml:space="preserve"><value>播放時分別學習按鍵和滑鼠的典型送出耗時（按鍵要先經過系統裡所有鍵盤鉤子），提前這麼多送出，使輸入平均落在寫下的時刻。僅最新精度版本生效。</value></data>
+  <data name="CompensateSendInputHelp" xml:space="preserve"><value>學習按鍵與滑鼠的典型傳送耗時並提前這麼多傳送，使輸入落在寫下的時刻。僅目前版本生效。</value></data>
   <data name="RawInputHotkeys" xml:space="preserve"><value>用 Raw Input 偵測熱鍵</value></data>
-  <data name="RawInputHotkeysHelp" xml:space="preserve"><value>讓 MacroStudio 退出鍵盤鉤子鏈，它送出的每個按鍵（以及你自己打的字）都不再被它拖慢：實測按鍵 SendInput 中位 249 → 188 微秒、P99 1280 → 976 微秒。代價是熱鍵本身被察覺得更晚（約 +190 微秒），因為 Raw Input 要等其他程式的鉤子都處理完才到。取色鍵無法佔用時自動改用低階鉤子。</value></data>
+  <data name="RawInputHotkeysHelp" xml:space="preserve"><value>讓 MacroStudio 退出鍵盤鉤子鏈，送出的按鍵更快（中位 249 → 188 微秒）；代價是熱鍵本身晚約 190 微秒被察覺。</value></data>
   <data name="LatencyCheck" xml:space="preserve"><value>系統延遲檢查</value></data>
   <data name="LatencyCheckRun" xml:space="preserve"><value>檢查…</value></data>
   <data name="LatencyCheckNotRun" xml:space="preserve"><value>尚未檢查。</value></data>
-  <data name="LatencyCheckHelp" xml:space="preserve"><value>找出被中斷頻繁佔用的 CPU 核心（偶發延遲最大值的常見來源），並讓播放避開它們。</value></data>
+  <data name="LatencyCheckHelp" xml:space="preserve"><value>找出被中斷頻繁佔用的核心（偶發遲到的常見原因），讓播放避開它們。</value></data>
   <data name="LatencyCheckIntro" xml:space="preserve"><value>依次短暫佔用每個 CPU 核心，記錄系統讓 MacroStudio 無法執行的時長（裝置中斷、DPC、韌體）。不修改任何系統設定。耗時 2–30 秒，期間盡量不要做重負載操作。</value></data>
   <data name="LatencyCheckWindow" xml:space="preserve"><value>每核偵測時長</value></data>
   <data name="LatencyCheckStart" xml:space="preserve"><value>開始檢查</value></data>
@@ -686,10 +686,10 @@
   <data name="LatencyCheckAvoidNoisyHelp" xml:space="preserve"><value>啟動幾秒後也會自動做一次簡短檢查。均衡檔在安靜核心之間浮動，極限檔固定在其中兩個上。低佔用檔走託管程式碼，不受限制。</value></data>
   <data name="LatencyCheckAdviceNotYet" xml:space="preserve"><value>• 暫未避開：一個核心在最近 3 次檢查中有 2 次嘈雜才會被避開。可再檢查一次確認。</value></data>
   <data name="PlaybackVersion" xml:space="preserve"><value>播放版本</value></data>
-  <data name="PlaybackVersionHelp" xml:space="preserve"><value>選擇用哪個發行版的播放程式碼。舊版本執行當時的原始程式碼（包括當時的問題），只有它之後才加入的效果卡片（斷網、鎖幀等）由目前版本代為執行。測核與系統延遲檢查始終使用目前版本，選出的核心遮罩按所選版本當時的方式使用。下次開始監聽或執行時生效。</value></data>
+  <data name="PlaybackVersionHelp" xml:space="preserve"><value>選擇用哪個發行版的程式碼播放巨集。舊版本執行當時的原始程式碼，當時的問題也會保留；它之後才加入的效果卡片（斷網、鎖幀等）由目前版本代為執行。測核與系統延遲檢查始終使用目前版本。</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（目前，推薦）</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安裝缺少該版本的引擎檔案，播放會失敗，請重新安裝完整安裝包。</value></data>
-  <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（目前，即 2.0.3 引擎）：新增版本切換器；移除並行卡片，同一時間只執行一個巨集。2.0.3 本身：縮短啟動延遲（冷啟動首次熱鍵從約 2 毫秒降到約 250 微秒）；按鍵時長從 SendInput 開始時起算；SendInput 耗時補償；可選熱鍵啟動對齊與 Raw Input 熱鍵；測核避開中斷密集的核心；系統延遲檢查。</value></data>
+  <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（目前）：新增版本切換器；移除並行卡片，同一時間只執行一個巨集；引擎同 2.0.3：冷啟動首次熱鍵從約 2 毫秒降到約 250 微秒；按鍵時長從 SendInput 開始時起算；SendInput 耗時補償；可選熱鍵啟動對齊與 Raw Input 熱鍵；測核避開中斷密集的核心；系統延遲檢查。</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：迴圈末尾的等待不再被丟棄，週期等於寫下的總時長；預設間隔只推遲這一次放開，不再推遲整條時間線；修復「巨集基礎控制」確定後設定不生效。</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（測試版）：熱鍵入口與啟動預熱——啟動時預熱播放路徑，低抖動熱鍵待命時保持計時器解析度；增加診斷追蹤。播放時間線與 2.0.0 相同。</value></data>
   <data name="PlaybackVersionNotes200" xml:space="preserve"><value>2.0.0：播放改為共享批次排程器，一批按鍵一次 SendInput 送出；播放執行緒不再提到 TimeCritical/RealTime、不再綁核；等待參數縮短；呼叫帶條件的子巨集會執行子巨集自己的條件；圖片範本比對開始真正生效；新增 YSR/KY3/Fufu 幀率卡片與執行日誌。迴圈末尾的等待仍被丟棄（約每 10ms 一輪）。</value></data>
@@ -700,4 +700,12 @@
   <data name="PlaybackVersionNotes120" xml:space="preserve"><value>1.2.0：最早可選的版本，支援按鍵、滑鼠、等待、重複、呼叫巨集與像素條件，原生精準播放。沒有 OCR、視窗啟用和註解卡片。之後的效果卡片（斷網、鎖幀等）由目前版本代為執行；等文字卡片無法使用。</value></data>
   <data name="ParallelCardRemoved" xml:space="preserve"><value>並行卡片已移除（同一時間只允許執行一個巨集）。請先刪除巨集「{0}」裡的並行卡片再播放。</value></data>
   <data name="OneMacroAtATime" xml:space="preserve"><value>另一個巨集正在執行。同一時間只允許執行一個巨集，請先停止它。</value></data>
+  <data name="PlaybackVersionNextRun" xml:space="preserve"><value>下次開始監聽或執行時生效；正在監聽的巨集會用所選版本重建。</value></data>
+  <data name="PlaybackVersionChanges" xml:space="preserve"><value>這一版改了什麼</value></data>
+  <data name="PlaybackVersionCurrentBadge" xml:space="preserve"><value>目前</value></data>
+  <data name="PlaybackVersionEngineCurrent" xml:space="preserve"><value>目前引擎，推薦使用。</value></data>
+  <data name="PlaybackVersionEngineLegacy" xml:space="preserve"><value>執行該版本當時的原始播放程式碼。</value></data>
+  <data name="PlaybackVersionApplied" xml:space="preserve"><value>播放版本：{0}</value></data>
+  <data name="PrecisionHotkeySection" xml:space="preserve"><value>熱鍵與傳送</value></data>
+  <data name="PrecisionCoreSection" xml:space="preserve"><value>CPU 核心</value></data>
 </root>

@@ -3,91 +3,93 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MacroStudio.Controls"
         Title="精度控制"
-        Width="480"
+        Width="500"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
-    <StackPanel>
-        <TextBlock x:Name="PrecisionModeLabelText"
-                   Text="精度模式"
-                   Style="{StaticResource FieldLabel}" />
-        <ComboBox x:Name="PrecisionModeBox" Height="32">
-            <ComboBoxItem Tag="balanced" Content="低占用" />
-            <ComboBoxItem Tag="extremeDuringPlayback" Content="均衡（推荐）" />
-            <ComboBoxItem Tag="ultraLowJitter" Content="极限" />
-        </ComboBox>
-        <TextBlock x:Name="ProfileDescription" Style="{StaticResource FieldHelpText}" />
-
-        <TextBlock x:Name="PrecisionGenerationLabelText"
-                   Text="精度版本"
-                   Style="{StaticResource FieldLabel}" />
-        <ComboBox x:Name="PrecisionGenerationBox" Height="32" AutomationProperties.AutomationId="PlaybackVersionBox" />
-        <TextBlock x:Name="PrecisionGenerationDescription" Style="{StaticResource FieldHelpText}" Margin="2,4,0,2"
-                   TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left" />
-        <TextBlock x:Name="PrecisionGenerationHelpText" Style="{StaticResource FieldHelpText}" />
-
-        <Border Style="{StaticResource DialogSectionDivider}" />
-
-        <TextBlock x:Name="StartLeadLabelText"
-                   Text="热键启动对齐"
-                   Style="{StaticResource FieldLabel}" />
-        <DockPanel LastChildFill="True">
-            <TextBlock x:Name="StartLeadUnitText" DockPanel.Dock="Right" Style="{StaticResource FieldUnitText}" Text="微秒" />
-            <TextBox x:Name="StartLeadBox" Height="32" />
-        </DockPanel>
-        <TextBlock x:Name="StartLeadErrorText" Style="{StaticResource FieldErrorText}" />
-        <TextBlock x:Name="StartLeadHelpText" Style="{StaticResource FieldHelpText}" />
-        <CheckBox x:Name="CompensateSendInputCheck" Content="按 SendInput 耗时提前提交" Margin="0,0,0,2" />
-        <TextBlock x:Name="CompensateSendInputHelpText" Style="{StaticResource FieldHelpText}" />
-        <CheckBox x:Name="RawInputHotkeysCheck" Content="用 Raw Input 检测热键" Margin="0,0,0,2" />
-        <TextBlock x:Name="RawInputHotkeysHelpText" Style="{StaticResource FieldHelpText}" />
-
-        <Border Style="{StaticResource DialogSectionDivider}" />
-
-        <TextBlock x:Name="LatencyCheckLabelText" Text="系统延迟检查" Style="{StaticResource FieldLabel}" />
-        <DockPanel LastChildFill="True">
-            <Button x:Name="RunLatencyCheckButton"
-                    DockPanel.Dock="Right"
-                    MinWidth="96"
-                    Height="32"
-                    Margin="8,0,0,0"
-                    Content="检查"
-                    Click="RunLatencyCheckButton_Click" />
-            <TextBlock x:Name="LatencyCheckSummaryText" Style="{StaticResource FieldHelpText}" Margin="2,0,0,0" VerticalAlignment="Center" />
-        </DockPanel>
-        <TextBlock x:Name="LatencyCheckHelpText" Style="{StaticResource FieldHelpText}" />
-
-        <Border Style="{StaticResource DialogSectionDivider}" />
-
-        <TextBlock x:Name="AffinityMaskLabelText"
-                   Text="极限核心掩码"
-                   Style="{StaticResource FieldLabel}" />
-        <DockPanel LastChildFill="True">
-            <Button x:Name="ChooseCoresButton"
-                    DockPanel.Dock="Right"
-                    MinWidth="96"
-                    Height="32"
-                    Margin="8,0,0,0"
-                    Content="选择核心"
-                    Click="ChooseCoresButton_Click" />
-            <TextBox x:Name="AffinityMaskBox" Height="32" />
-        </DockPanel>
-        <TextBlock x:Name="AffinityMaskErrorText" Style="{StaticResource FieldErrorText}" />
-        <TextBlock x:Name="AffinityMaskHelpText" Style="{StaticResource FieldHelpText}" />
-
-        <TextBlock x:Name="PrecisionNextRunNoteText"
-                   Text="仅影响下一次运行；响应数值为预热后 1–2 个并发宏的待验证目标。条件轮询间隔保持原配置。"
-                   Style="{StaticResource FieldHelpText}"
-                   Margin="2,0,0,14" />
-
-        <StackPanel Style="{StaticResource DialogButtonRow}">
-            <Button x:Name="CancelButton" MinWidth="82" IsCancel="True" Content="取消" />
-            <Button x:Name="ConfirmButton"
-                    MinWidth="82"
-                    Style="{StaticResource PrimaryButton}"
-                    IsDefault="True"
-                    Content="确定"
-                    Click="ConfirmButton_Click" />
+    <DockPanel x:Name="DialogBody">
+        <StackPanel DockPanel.Dock="Bottom">
+            <TextBlock x:Name="PrecisionNextRunNoteText"
+                       Text="仅影响下一次运行；响应数值为预热后 1–2 个并发宏的待验证目标。条件轮询间隔保持原配置。"
+                       Style="{StaticResource FieldHelpText}"
+                       Margin="2,0,0,10" />
+            <StackPanel Style="{StaticResource DialogButtonRow}">
+                <Button x:Name="CancelButton" MinWidth="82" IsCancel="True" Content="取消" />
+                <Button x:Name="ConfirmButton"
+                        MinWidth="82"
+                        Style="{StaticResource PrimaryButton}"
+                        IsDefault="True"
+                        Content="确定"
+                        Click="ConfirmButton_Click" />
+            </StackPanel>
         </StackPanel>
-    </StackPanel>
+
+        <ScrollViewer x:Name="BodyScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,2,0">
+            <StackPanel>
+                <!-- 精度模式 -->
+                <Border Style="{StaticResource DialogCard}">
+                    <StackPanel>
+                        <TextBlock x:Name="PrecisionModeLabelText" Text="精度模式" Style="{StaticResource DialogCardTitle}" />
+                        <ComboBox x:Name="PrecisionModeBox" Height="32">
+                            <ComboBoxItem Tag="balanced" Content="低占用" />
+                            <ComboBoxItem Tag="extremeDuringPlayback" Content="均衡（推荐）" />
+                            <ComboBoxItem Tag="ultraLowJitter" Content="极限" />
+                        </ComboBox>
+                        <TextBlock x:Name="ProfileDescription" Style="{StaticResource CardHelpText}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 热键与发送 -->
+                <Border Style="{StaticResource DialogCard}">
+                    <StackPanel>
+                        <TextBlock x:Name="HotkeySectionTitle" Text="热键与发送" Style="{StaticResource DialogCardTitle}" />
+                        <TextBlock x:Name="StartLeadLabelText" Text="热键启动对齐" Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="StartLeadUnitText" DockPanel.Dock="Right" Style="{StaticResource FieldUnitText}" Text="微秒" />
+                            <TextBox x:Name="StartLeadBox" Height="32" />
+                        </DockPanel>
+                        <TextBlock x:Name="StartLeadErrorText" Style="{StaticResource FieldErrorText}" />
+                        <TextBlock x:Name="StartLeadHelpText" Style="{StaticResource CardHelpText}" />
+                        <CheckBox x:Name="CompensateSendInputCheck" Content="按 SendInput 耗时提前提交" />
+                        <TextBlock x:Name="CompensateSendInputHelpText" Style="{StaticResource CheckBoxHelpText}" />
+                        <CheckBox x:Name="RawInputHotkeysCheck" Content="用 Raw Input 检测热键" />
+                        <TextBlock x:Name="RawInputHotkeysHelpText" Style="{StaticResource CheckBoxHelpText}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 核心 -->
+                <Border Style="{StaticResource DialogCard}">
+                    <StackPanel>
+                        <TextBlock x:Name="CoreSectionTitle" Text="CPU 核心" Style="{StaticResource DialogCardTitle}" />
+                        <TextBlock x:Name="LatencyCheckLabelText" Text="系统延迟检查" Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <Button x:Name="RunLatencyCheckButton"
+                                    DockPanel.Dock="Right"
+                                    MinWidth="96"
+                                    Height="32"
+                                    Margin="8,0,0,0"
+                                    Content="检查"
+                                    Click="RunLatencyCheckButton_Click" />
+                            <TextBlock x:Name="LatencyCheckSummaryText" Style="{StaticResource FieldHelpText}" Margin="2,0,0,0" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock x:Name="LatencyCheckHelpText" Style="{StaticResource CardHelpText}" />
+
+                        <TextBlock x:Name="AffinityMaskLabelText" Text="极限核心掩码" Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <Button x:Name="ChooseCoresButton"
+                                    DockPanel.Dock="Right"
+                                    MinWidth="96"
+                                    Height="32"
+                                    Margin="8,0,0,0"
+                                    Content="选择核心"
+                                    Click="ChooseCoresButton_Click" />
+                            <TextBox x:Name="AffinityMaskBox" Height="32" />
+                        </DockPanel>
+                        <TextBlock x:Name="AffinityMaskErrorText" Style="{StaticResource FieldErrorText}" />
+                        <TextBlock x:Name="AffinityMaskHelpText" Style="{StaticResource CardHelpText}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </Window>

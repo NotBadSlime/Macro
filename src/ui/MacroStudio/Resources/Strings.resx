@@ -94,7 +94,7 @@
   <data name="AffinityMask" xml:space="preserve">
     <value>Ultra affinity mask</value>
   </data>
-  <data name="AffinityMaskHelp" xml:space="preserve"><value>Extreme only: restricts the Extreme playback threads and native engine to these CPUs to reduce migration jitter. Leave empty to pick automatically. Example: 0x1F.</value></data>
+  <data name="AffinityMaskHelp" xml:space="preserve"><value>Extreme only: restricts the Extreme playback threads and native engine to these CPUs. Leave empty to pick automatically. Example: 0x1F.</value></data>
   <data name="ChooseCores" xml:space="preserve">
     <value>Choose cores</value>
   </data>
@@ -935,7 +935,7 @@
   <data name="PrecisionImpactBalanced" xml:space="preserve"><value>Moderate CPU use; suits most games and mixed macros. Runs on the native engine.</value></data>
   <data name="PrecisionImpactExtreme" xml:space="preserve"><value>Highest CPU use; for 1–2 ms rhythms. Two resident native threads back each other up.</value></data>
   <data name="PrecisionProfileTargets" xml:space="preserve"><value>Targets: first input P99 ≤ {0} µs, lateness P99.9 ≤ {1} µs. Final spin {2} µs, event wait when idle.</value></data>
-  <data name="PrecisionNextRunNote" xml:space="preserve"><value>Applies from the next run. The figures are targets for 1–2 concurrent macros after warm-up; condition polling intervals are unchanged.</value></data>
+  <data name="PrecisionNextRunNote" xml:space="preserve"><value>Applies from the next run. Figures are targets after warm-up.</value></data>
   <data name="BasicSectionTarget" xml:space="preserve"><value>Target</value></data>
   <data name="BasicSectionHotkeys" xml:space="preserve"><value>Hotkeys</value></data>
   <data name="BasicSectionTiming" xml:space="preserve"><value>Key timing</value></data>
@@ -952,16 +952,16 @@
   <data name="ClosePanel" xml:space="preserve"><value>Close panel</value></data>
   <data name="StatusErrorPrefix" xml:space="preserve"><value>Failed: {0}</value></data>
   <data name="StartLead" xml:space="preserve"><value>Hotkey start alignment</value></data>
-  <data name="StartLeadHelp" xml:space="preserve"><value>0 starts as soon as ready (varies by tens to hundreds of µs). A value such as 400 starts every hotkey run exactly that long after the key, so the start delay is constant and can be compensated in the macro. Runs not ready in time start immediately.</value></data>
+  <data name="StartLeadHelp" xml:space="preserve"><value>0 = start as soon as ready (varies by tens to hundreds of µs). A value such as 400 starts every hotkey run exactly that long after the key, so the delay is constant.</value></data>
   <data name="StartLeadInvalid" xml:space="preserve"><value>Enter a whole number from 0 to {0}.</value></data>
   <data name="CompensateSendInput" xml:space="preserve"><value>Submit early by the SendInput cost</value></data>
-  <data name="CompensateSendInputHelp" xml:space="preserve"><value>Learns the typical send cost for keys and for mouse input while macros run (keys pass every keyboard hook on the system first) and sends that much earlier, so input arrives on the written time on average. Latest precision version only.</value></data>
+  <data name="CompensateSendInputHelp" xml:space="preserve"><value>Learns the typical send cost of keys and mouse input and sends that much earlier, so input lands on the written time. Current version only.</value></data>
   <data name="RawInputHotkeys" xml:space="preserve"><value>Detect hotkeys with Raw Input</value></data>
-  <data name="RawInputHotkeysHelp" xml:space="preserve"><value>Takes MacroStudio out of the keyboard hook chain, so every key it sends (and every key you type) is not slowed by it: measured key SendInput p50 249 → 188 µs, p99 1280 → 976 µs. The hotkey itself is seen later (about +190 µs), because Raw Input arrives after all other programs&apos; hooks. If the colour-sample key cannot be reserved, the low-level hook is used.</value></data>
+  <data name="RawInputHotkeysHelp" xml:space="preserve"><value>Keeps MacroStudio out of the keyboard hook chain so the keys it sends are faster (p50 249 → 188 µs); the hotkey itself is seen about 190 µs later.</value></data>
   <data name="LatencyCheck" xml:space="preserve"><value>System latency check</value></data>
   <data name="LatencyCheckRun" xml:space="preserve"><value>Check…</value></data>
   <data name="LatencyCheckNotRun" xml:space="preserve"><value>Not checked yet.</value></data>
-  <data name="LatencyCheckHelp" xml:space="preserve"><value>Finds the CPU cores that interrupts keep busy — the usual source of rare late inputs — and keeps playback off them.</value></data>
+  <data name="LatencyCheckHelp" xml:space="preserve"><value>Finds the cores interrupts keep busy (the usual cause of rare late inputs) and keeps playback off them.</value></data>
   <data name="LatencyCheckIntro" xml:space="preserve"><value>Briefly occupies each CPU core in turn and records how long the system kept MacroStudio off it (device interrupts, DPCs, firmware). Changes no system setting. Takes 2–30 s; avoid heavy work meanwhile.</value></data>
   <data name="LatencyCheckWindow" xml:space="preserve"><value>Time per core</value></data>
   <data name="LatencyCheckStart" xml:space="preserve"><value>Start</value></data>
@@ -986,10 +986,10 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="LatencyCheckAvoidNoisyHelp" xml:space="preserve"><value>Also runs briefly a few seconds after start-up. Balanced floats over the quiet cores, Extreme pins to two of them. Low runs in managed code and is not restricted.</value></data>
   <data name="LatencyCheckAdviceNotYet" xml:space="preserve"><value>• Not avoided yet: a core is avoided once it is noisy in 2 of the last 3 checks. Run the check again to confirm.</value></data>
   <data name="PlaybackVersion" xml:space="preserve"><value>Playback version</value></data>
-  <data name="PlaybackVersionHelp" xml:space="preserve"><value>Which release plays your macros. An earlier release runs its own original code, including its known problems; only effect cards added after it (network cut, frame lock, ...) are run by the current version. Core testing and the latency check always use the current version, and the chosen core mask is used the way the selected release used it. Applies from the next listening start or run.</value></data>
+  <data name="PlaybackVersionHelp" xml:space="preserve"><value>Choose which release&apos;s code plays your macros. An earlier release runs its original code, known problems included; effect cards added after it (network cut, frame lock, ...) are run by the current version. Core testing and the latency check always use the current version.</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0} (current, recommended)</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>This installation does not include that release&apos;s engine files; playback will fail. Reinstall the full package.</value></data>
-  <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4 (current, the 2.0.3 engine): version switcher; the parallel card is removed and only one macro runs at a time. 2.0.3 itself: shorter start delay (cold first hotkey from about 2 ms to a quarter of a millisecond), key holds counted from the start of SendInput, SendInput cost compensation, optional hotkey start alignment and Raw Input hotkeys, core selection avoids interrupt-heavy cores, system latency check.</value></data>
+  <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4 (current): new version switcher; parallel card removed, one macro runs at a time; engine as in 2.0.3: cold first hotkey from about 2 ms down to a quarter of a millisecond; key holds counted from the start of SendInput; SendInput cost compensation; optional hotkey start alignment and Raw Input hotkeys; core selection avoids interrupt-heavy cores; system latency check.</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2: the trailing wait of a loop is no longer dropped (the period equals the written total); the default hold delays only that release instead of the whole timeline; fixed basic-control settings not applying after OK.</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1 (test build): hotkey entry and start-up warm-up — the playback path is warmed at start-up and the timer resolution is kept up while a precise hotkey waits; diagnostics. The playback timeline is the same as 2.0.0.</value></data>
   <data name="PlaybackVersionNotes200" xml:space="preserve"><value>2.0.0: new shared batch scheduler (a key batch goes out in one SendInput); playback threads no longer raised to time-critical / realtime or pinned; shorter wait settings; calling a macro with conditions now runs its conditions; image templates actually match; YSR/KY3/Fufu frame-rate cards and run logs. A loop&apos;s trailing wait is still dropped (about one pass per 10 ms).</value></data>
@@ -1000,4 +1000,12 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="PlaybackVersionNotes120" xml:space="preserve"><value>1.2.0: the earliest selectable release — keys, mouse, waits, repeat, macro calls and pixel conditions with precise native playback. No OCR, window activation or comment cards. Later effect cards (network cut, frame lock, ...) are run by the current version; wait-for-text cannot be used.</value></data>
   <data name="ParallelCardRemoved" xml:space="preserve"><value>The parallel card has been removed (only one macro runs at a time). Delete the parallel card in macro &quot;{0}&quot; before playing it.</value></data>
   <data name="OneMacroAtATime" xml:space="preserve"><value>Another macro is running. Only one macro runs at a time; stop it first.</value></data>
+  <data name="PlaybackVersionNextRun" xml:space="preserve"><value>Applies from the next listening start or run; listening macros are rebuilt with the chosen release.</value></data>
+  <data name="PlaybackVersionChanges" xml:space="preserve"><value>What changed in this release</value></data>
+  <data name="PlaybackVersionCurrentBadge" xml:space="preserve"><value>Current</value></data>
+  <data name="PlaybackVersionEngineCurrent" xml:space="preserve"><value>Current engine, recommended.</value></data>
+  <data name="PlaybackVersionEngineLegacy" xml:space="preserve"><value>Runs that release&apos;s original playback code.</value></data>
+  <data name="PlaybackVersionApplied" xml:space="preserve"><value>Playback version: {0}</value></data>
+  <data name="PrecisionHotkeySection" xml:space="preserve"><value>Hotkey and sending</value></data>
+  <data name="PrecisionCoreSection" xml:space="preserve"><value>CPU cores</value></data>
 </root>
