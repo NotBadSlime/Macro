@@ -85,7 +85,7 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
     private static long nextRunId;
     private long runId;
     private volatile PlaybackStatus status;
-    public PlaybackStatus Status => status;
+    public PlaybackStatus Status => legacy is { } route ? ParseLegacyStatus(route.Controller.Status) : status;
     public long RunId => Interlocked.Read(ref runId);
     public PrecisionMode Precision { get { lock (gate) return executionOptions.Precision; } }
     public Exception? LastError { get; private set; }
@@ -97,9 +97,81 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
         this.executor = executor;
         this.executionOptions = executionOptions ?? new(document.Playback.Mode, document.Playback.Count,
             PixelEvaluationMode.Live, false, document.Playback.Precision, document.Playback.AffinityMask);
+        if (executor is LegacyPreparedExecutor prepared) legacy = new LegacyRoute(prepared);
+    }
+
+    // An earlier release's macro: its own MacroPlaybackController decides start/stop/hold/toggle, as it did in that release.
+    private LegacyRoute? legacy;
+    private sealed class LegacyRoute(LegacyPreparedExecutor prepared)
+    {
+        public readonly LegacyPreparedExecutor Prepared = prepared;
+        public readonly MacroHid.LegacyContract.ILegacyController Controller = prepared.TakeController();
+        public Task<PlaybackRunResult>? Observed;
+    }
+
+    private static PlaybackStatus ParseLegacyStatus(string status) =>
+        Enum.TryParse<PlaybackStatus>(status, out var parsed) ? parsed : PlaybackStatus.Error;
+
+    // Turns one legacy run into the current result type and a new RunId, so the UI observes it like any other run.
+    private void ObserveLegacyRun(LegacyRoute route, PlaybackStatus before)
+    {
+        if (before is PlaybackStatus.Running or PlaybackStatus.Stopping) return;
+        if (ParseLegacyStatus(route.Controller.Status) is not (PlaybackStatus.Running or PlaybackStatus.Stopping)) return;
+        Interlocked.Exchange(ref runId, Interlocked.Increment(ref nextRunId));
+        PlaybackRuntimeStatus.RunStarted();
+        route.Observed = ObserveLegacyAsync(route);
+    }
+
+    private async Task<PlaybackRunResult> ObserveLegacyAsync(LegacyRoute route)
+    {
+        var result = await route.Controller.WhenIdleAsync().ConfigureAwait(false);
+        PlaybackRuntimeStatus.RunFinished();
+        lock (gate) LastError = route.Controller.LastError;
+        var status = Enum.TryParse<PlaybackRunStatus>(result.Status, out var parsed) ? parsed : PlaybackRunStatus.Failed;
+        AppLog.Info("Playback", $"End macro={document.Name}; engine={route.Prepared.Version.Label}; status={status}; cancelled={result.Cancelled}; actions={result.ActionsSubmitted}");
+        return new PlaybackRunResult(status, result.IterationsCompleted, result.ActionsSubmitted, result.Cancelled, null);
     }
 
     public void UpdateDefinition(MacroDocument next, IMacroPlaybackExecutor nextExecutor, PlaybackExecutionOptions options)
+    {
+        LegacyRoute? retiredLegacy;
+        IMacroPlaybackExecutor? retiredCurrent = null;
+        lock (gate)
+        {
+            if (legacy is null && nextExecutor is not LegacyPreparedExecutor)
+            {
+                retiredLegacy = null;
+            }
+            else
+            {
+                if (disposed) { (nextExecutor as IDisposable)?.Dispose(); return; }
+                // Engine or definition changed: the earlier release's controller finishes its run, then is released.
+                retiredLegacy = legacy;
+                legacy = nextExecutor is LegacyPreparedExecutor prepared ? new LegacyRoute(prepared) : null;
+                if (legacy is not null)
+                {
+                    if (executor is not LegacyPreparedExecutor && !ReferenceEquals(executor, runningExecutor)) retiredCurrent = executor;
+                    document = next;
+                    executor = nextExecutor;
+                    executionOptions = options;
+                }
+            }
+        }
+        if (retiredLegacy is not null) _ = RetireLegacyAsync(retiredLegacy);
+        (retiredCurrent as IDisposable)?.Dispose();
+        lock (gate) if (legacy is not null) return;
+        UpdateCurrentDefinition(next, nextExecutor, options);
+    }
+
+    private static async Task RetireLegacyAsync(LegacyRoute route)
+    {
+        route.Controller.Stop();
+        try { await route.Controller.WhenIdleAsync().ConfigureAwait(false); } catch { }
+        route.Controller.Dispose();
+        route.Prepared.Dispose();
+    }
+
+    private void UpdateCurrentDefinition(MacroDocument next, IMacroPlaybackExecutor nextExecutor, PlaybackExecutionOptions options)
     {
         IMacroPlaybackExecutor? release;
         lock (gate)
@@ -120,6 +192,14 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
     {
         lock (gate)
         {
+            if (legacy is { } route)
+            {
+                if (disposed) return Task.CompletedTask;
+                var before = ParseLegacyStatus(route.Controller.Status);
+                var pressed = route.Controller.TriggerPressedAsync();
+                ObserveLegacyRun(route, before);
+                return pressed;
+            }
             if (disposed || status == PlaybackStatus.Stopping) return Task.CompletedTask;
             if (status == PlaybackStatus.Running) StopCore();
             else StartRunCore(callbackQpc);
@@ -128,24 +208,47 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
     }
     public void TriggerReleased()
     {
-        lock (gate) if (activeMode == PlaybackMode.HoldLoop && status == PlaybackStatus.Running) StopCore();
+        lock (gate)
+        {
+            if (legacy is { } route) { route.Controller.TriggerReleased(); return; }
+            if (activeMode == PlaybackMode.HoldLoop && status == PlaybackStatus.Running) StopCore();
+        }
     }
     public Task RunNowAsync()
     {
         lock (gate)
         {
+            if (legacy is { } route)
+            {
+                if (disposed) return Task.CompletedTask;
+                var before = ParseLegacyStatus(route.Controller.Status);
+                var started = route.Controller.RunNowAsync();
+                ObserveLegacyRun(route, before);
+                return started;
+            }
             if (!disposed && status is not (PlaybackStatus.Running or PlaybackStatus.Stopping)) StartRunCore();
             return Task.CompletedTask;
         }
     }
-    public void Stop() { lock (gate) StopCore(); }
+    public void Stop() { lock (gate) { if (legacy is { } route) route.Controller.Stop(); else StopCore(); } }
     public Task StopAsync()
     {
-        lock (gate) { StopCore(); return activeRun ?? Task.CompletedTask; }
+        lock (gate)
+        {
+            if (legacy is { } route) { route.Controller.Stop(); return route.Observed ?? Task.CompletedTask; }
+            StopCore(); return activeRun ?? Task.CompletedTask;
+        }
     }
     public Task<PlaybackRunResult> WhenIdleAsync()
     {
-        lock (gate) return activeRun ?? Task.FromResult(new PlaybackRunResult(PlaybackRunStatus.Completed, 0, 0, false, null));
+        lock (gate)
+        {
+            if (legacy is { } route)
+                return route.Observed is { IsCompleted: false } observed
+                    ? observed
+                    : Task.FromResult(route.Observed is { } done ? done.Result : new PlaybackRunResult(PlaybackRunStatus.Completed, 0, 0, false, null));
+            return activeRun ?? Task.FromResult(new PlaybackRunResult(PlaybackRunStatus.Completed, 0, 0, false, null));
+        }
     }
     private void StartRunCore(long callbackQpc = 0)
     {
@@ -226,6 +329,12 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
         {
             if (disposal is not null) return new(disposal);
             disposed = true;
+            if (legacy is { } route)
+            {
+                legacy = null;
+                disposal = RetireLegacyAsync(route);
+                return new(disposal);
+            }
             StopCore();
             disposal = ReleaseAsync(activeRun, executor);
             return new(disposal);

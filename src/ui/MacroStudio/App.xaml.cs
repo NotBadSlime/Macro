@@ -36,14 +36,8 @@ public partial class App : Application
             ThemeService.Initialize();
             Log("ThemeService OK");
             var runtimePrecision = RuntimePrecisionSettingsStore.Load();
-            NativePlaybackWarmup.QueueWarmUpForPrecision(
-                runtimePrecision.Precision,
-                runtimePrecision.AffinityMask,
-                runtimePrecision.Generation);
-            PlaybackPathWarmup.QueueRun(
-                runtimePrecision.Precision,
-                runtimePrecision.AffinityMask,
-                runtimePrecision.Generation);
+            // The selected release's own start-up warm-up (the current engine: native + path warm-up).
+            PlaybackEngineHost.Activate(runtimePrecision);
             // Short per-core stall check a few seconds in; playback then keeps off interrupt-heavy cores.
             if (runtimePrecision.AvoidNoisyCores) SystemLatencyCheck.QueueStartupCheck();
         }
@@ -62,7 +56,7 @@ public partial class App : Application
         Log($"=== App Exiting ({e.ApplicationExitCode}) ===");
         RestoreUnlockerTargets();
         PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
-        NativePlaybackWarmup.Shutdown();
+        PlaybackEngineHost.Shutdown();
         AppLog.Flush(TimeSpan.FromSeconds(2));
         base.OnExit(e);
     }

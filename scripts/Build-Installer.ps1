@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "2.0.3",
+    [string]$Version = "2.0.4",
 
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
@@ -103,8 +103,17 @@ function Copy-WindowsOcrServer([string]$SourceRoot, [string]$DestinationRoot) {
     }
 }
 
-function Assert-WindowsOcrServerCopied([string]$DestinationRoot) {
-    foreach ($component in @("MacroStudio", "MacroRunner")) {
+function Assert-LegacyRuntimes([string]$StudioRoot) {
+    . (Join-Path $PSScriptRoot "Legacy-Versions.ps1")
+    foreach ($version in $LegacyVersions) {
+        $dir = Join-Path $StudioRoot (Join-Path "legacy" $version.Folder)
+        foreach ($file in @("MacroHid.Legacy.$($version.Folder).dll", "MacroHid.NativePlayback.$($version.Suffix).dll")) {
+            if (-not (Test-Path (Join-Path $dir $file))) { throw "Legacy runtime file missing: $dir\$file" }
+        }
+    }
+}
+
+function Assert-WindowsOcrServerCopied([string]$DestinationRoot) {    foreach ($component in @("MacroStudio", "MacroRunner")) {
         $exe = Join-Path (Join-Path $DestinationRoot $component) "ocr\WindowsOcrServer.exe"
         if (-not (Test-Path $exe)) {
             throw "WindowsOcrServer.exe was not copied for ${component}: $exe"
@@ -193,6 +202,9 @@ Push-Location $repoRoot
 try {
     Confirm-StopBuildProcesses @((Join-Path $repoRoot "src"), $fixedLocalRoot, $packageRoot)
     $nativeDll = & (Join-Path $PSScriptRoot "Build-NativePlayback.ps1") -Configuration $Configuration | Select-Object -Last 1
+    # Earlier releases' native playback DLLs for the version switcher (published under MacroStudio\legacy\<V>\).
+    & (Join-Path $PSScriptRoot "Build-LegacyNative.ps1") | Out-Host
+    if (-not $?) { throw "legacy native build failed" }
 
     Publish-Checked "src\ui\MacroStudio\MacroStudio.csproj" (Join-Path $inputRoot "MacroStudio") $false
     Publish-Checked "src\tools\MacroRunner\MacroRunner.csproj" (Join-Path $inputRoot "MacroRunner") $false
@@ -202,6 +214,7 @@ try {
     Copy-NativePlaybackDll $nativeDll $inputRoot
     Copy-WindowsOcrServer $ocrServerOutput $inputRoot
     Assert-WindowsOcrServerCopied $inputRoot
+    Assert-LegacyRuntimes (Join-Path $inputRoot "MacroStudio")
 
     Copy-DirectoryIfExists (Join-Path $repoRoot "scripts") (Join-Path $inputRoot "scripts")
     Copy-DirectoryIfExists (Join-Path $repoRoot "samples") (Join-Path $inputRoot "samples")
@@ -253,6 +266,7 @@ try {
     Publish-Checked "src\ui\MacroStudio\MacroStudio.csproj" $localStudio $true
     Publish-Checked "src\tools\WindowsOcrServer\WindowsOcrServer.csproj" (Join-Path $localStudio "ocr") $true
     Copy-Item -LiteralPath $nativeDll -Destination (Join-Path $localStudio "MacroHid.NativePlayback.dll") -Force
+    Assert-LegacyRuntimes $localStudio
     $localExe = Join-Path $localStudio "MacroStudio.exe"
     if (-not (Test-Path -LiteralPath $localExe)) { throw "Standalone executable missing: $localExe" }
     # Recheck after publishing in case a user started the old build meanwhile.

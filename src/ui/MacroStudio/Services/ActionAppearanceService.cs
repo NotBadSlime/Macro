@@ -63,7 +63,6 @@ public static class ActionAppearanceService
         MacroActionTemplateKind.WeakNetStop,
         MacroActionTemplateKind.FrameLockStart,
         MacroActionTemplateKind.FrameLockStop,
-        MacroActionTemplateKind.Parallel,
         MacroActionTemplateKind.StopCurrent,
         MacroActionTemplateKind.StopIteration,
         MacroActionTemplateKind.StopAll

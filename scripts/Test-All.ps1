@@ -9,6 +9,8 @@ Push-Location $repoRoot
 try {
     & .\scripts\Build-NativePlayback.ps1 -Configuration Release *> $null
     if ($LASTEXITCODE -ne 0) { throw "native build failed" }
+    & .\scripts\Build-LegacyNative.ps1 *> $null
+    if (-not $?) { throw "legacy native build failed" }
     $build = dotnet build MacroHID.sln -c Release -v q 2>&1
     $errors = $build | Select-String " error " | ForEach-Object { $_.Line } | Sort-Object -Unique
     if ($errors -and ($errors -match "MSB3248|MSB3026|MSB3027|being used by another process")) {

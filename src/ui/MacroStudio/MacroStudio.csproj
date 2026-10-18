@@ -8,7 +8,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Version>2.0.3</Version>
+    <Version>2.0.4</Version>
     <TargetFramework>net8.0-windows</TargetFramework>
     <NeutralLanguage>en-US</NeutralLanguage>
     <Nullable>enable</Nullable>
@@ -31,5 +31,8 @@
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
   </ItemGroup>
+
+  <!-- Earlier releases' playback code for the version switcher (legacy\<V>\ next to the app). -->
+  <Import Project="..\..\legacy\LegacySnapshots.targets" />
 
 </Project>

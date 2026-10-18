@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows;
 using MacroHid.Core;
 using MacroHid.Runtime;
+using MacroStudio.Services;
 
 namespace MacroStudio;
 
@@ -48,10 +49,9 @@ public partial class MainWindow
     {
         var needed = !PrecisionWarmDisabled && !shutdownStarted && Volatile.Read(ref hotkeyRoutes).Values
             .Any(route => route.Controller.Precision is PrecisionMode.ExtremeDuringPlayback or PrecisionMode.UltraLowJitter);
-        if (needed && precisionWarmLease is null) precisionWarmLease = PrecisionPlaybackContext.AcquireWarmLease();
-        else if (!needed && precisionWarmLease is not null) { precisionWarmLease.Dispose(); precisionWarmLease = null; }
+        precisionWarmLease = PlaybackEngineHost.UpdateListeningWarm(needed, precisionWarmLease);
     }
-    private sealed record PreparedDefinition(string Fingerprint, MacroPlaybackExecutor Executor);
+    private sealed record PreparedDefinition(string Fingerprint, IMacroPlaybackExecutor Executor);
 
     private (Func<string, MacroDocument?> Resolver, string Fingerprint) CaptureResolver(MacroDocument root, string? rootId)
     {
@@ -96,21 +96,22 @@ public partial class MainWindow
         Dictionary<string, string> known)
     {
         var prepared = new Dictionary<string, PreparedDefinition>();
+        var version = runtimePrecisionSettings.Version;
         try
         {
             foreach (var candidate in candidates)
             {
                 var captured = CaptureResolver(candidate.Document, candidate.Item.Id);
-                string fingerprint = captured.Fingerprint + options[candidate.Item.Id];
+                // The engine is part of the definition: switching the release rebuilds every listening macro.
+                string fingerprint = captured.Fingerprint + options[candidate.Item.Id] + version.Id;
                 if (known.GetValueOrDefault(candidate.Item.Id) == fingerprint) continue;
-                var executor = new MacroPlaybackExecutor(inputSink, macroResolver: captured.Resolver);
-                try { executor.Prepare(candidate.Document, options[candidate.Item.Id]); }
-                catch { executor.Dispose(); throw; }
+                var executor = PlaybackEngineHost.Prepare(inputSink, candidate.Document, captured.Resolver,
+                    options[candidate.Item.Id], immediate: false, version);
                 prepared.Add(candidate.Item.Id, new(fingerprint, executor));
             }
             return prepared;
         }
-        catch { foreach (var update in prepared.Values) update.Executor.Dispose(); throw; }
+        catch { foreach (var update in prepared.Values) (update.Executor as IDisposable)?.Dispose(); throw; }
     }
 
     private void RetireController(MacroPlaybackController controller)

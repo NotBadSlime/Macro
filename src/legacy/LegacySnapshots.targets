@@ -1,0 +1,30 @@
+<Project>
+  <!-- Builds the earlier releases' playback snapshots (src/legacy/V*) and copies each into $(OutDir)legacy\<V>\ (and the
+       publish folder), where LegacyPlaybackRuntimes loads them. Import from an executable project. -->
+  <ItemGroup>
+    <LegacySnapshotProject Include="$(MSBuildThisFileDirectory)V*\MacroHid.Legacy.V*.csproj" />
+  </ItemGroup>
+
+  <Target Name="BuildLegacySnapshots" AfterTargets="Build" Condition="'@(LegacySnapshotProject)' != ''">
+    <MSBuild Projects="@(LegacySnapshotProject)" Targets="Restore"
+             Properties="Configuration=$(Configuration);_LegacyRestore=1"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishDir;OutputPath;OutDir;_IsPublishing;Platform;PlatformTarget" />
+    <MSBuild Projects="@(LegacySnapshotProject)" Targets="Build" BuildInParallel="true"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishDir;OutputPath;OutDir;_IsPublishing;Platform;PlatformTarget">
+      <Output TaskParameter="TargetOutputs" ItemName="_LegacySnapshotAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <_LegacySnapshotFile Include="%(_LegacySnapshotAssembly.RootDir)%(_LegacySnapshotAssembly.Directory)**\*.*">
+        <Snapshot>$([System.String]::Copy('%(_LegacySnapshotAssembly.Filename)').Replace('MacroHid.Legacy.', ''))</Snapshot>
+      </_LegacySnapshotFile>
+    </ItemGroup>
+    <Copy SourceFiles="@(_LegacySnapshotFile)" DestinationFiles="$(OutDir)legacy\%(_LegacySnapshotFile.Snapshot)\%(RecursiveDir)%(Filename)%(Extension)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PublishLegacySnapshots" AfterTargets="Publish" DependsOnTargets="BuildLegacySnapshots" Condition="'@(LegacySnapshotProject)' != ''">
+    <Copy SourceFiles="@(_LegacySnapshotFile)" DestinationFiles="$(PublishDir)legacy\%(_LegacySnapshotFile.Snapshot)\%(RecursiveDir)%(Filename)%(Extension)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

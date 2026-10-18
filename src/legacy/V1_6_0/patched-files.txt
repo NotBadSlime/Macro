@@ -1,0 +1,3 @@
+Core/McrxParser.cs
+Runtime/ManagedMacroControlFlowRunner.cs
+Runtime/WeakNet/Native/WinDivert64.sys (added: not tracked in git at v1.6.0, same driver as v2.0.0)

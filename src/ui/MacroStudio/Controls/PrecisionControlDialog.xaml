@@ -21,13 +21,9 @@
         <TextBlock x:Name="PrecisionGenerationLabelText"
                    Text="精度版本"
                    Style="{StaticResource FieldLabel}" />
-        <ComboBox x:Name="PrecisionGenerationBox" Height="32" AutomationProperties.AutomationId="PrecisionGenerationBox">
-            <ComboBoxItem Tag="latest" Content="最新（推荐）" />
-            <ComboBoxItem Tag="v2_0_2" Content="2.0.2" />
-            <ComboBoxItem Tag="v2_0" Content="2.0.x" />
-            <ComboBoxItem Tag="v1_6" Content="1.6.0" />
-        </ComboBox>
-        <TextBlock x:Name="PrecisionGenerationDescription" Style="{StaticResource FieldHelpText}" Margin="2,4,0,2" />
+        <ComboBox x:Name="PrecisionGenerationBox" Height="32" AutomationProperties.AutomationId="PlaybackVersionBox" />
+        <TextBlock x:Name="PrecisionGenerationDescription" Style="{StaticResource FieldHelpText}" Margin="2,4,0,2"
+                   TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left" />
         <TextBlock x:Name="PrecisionGenerationHelpText" Style="{StaticResource FieldHelpText}" />
 
         <Border Style="{StaticResource DialogSectionDivider}" />

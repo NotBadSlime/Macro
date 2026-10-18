@@ -1,0 +1,313 @@
+namespace MacroHid.Core;
+
+public sealed record ScheduledInputAction(InputAction Action, long DueTick, MacroStep SourceStep);
+
+public abstract record InputAction;
+
+public sealed record KeyInputAction(
+    KeyActionKind Kind,
+    HidKey Key,
+    HidModifier Modifiers) : InputAction;
+
+public sealed record TextInputAction(string Text) : InputAction;
+
+public sealed record MouseMoveInputAction(
+    MouseMoveMode Mode,
+    int X,
+    int Y,
+    MouseButton Buttons = MouseButton.None) : InputAction;
+
+public sealed record MouseButtonInputAction(
+    MouseButton Button,
+    ButtonActionKind Kind) : InputAction;
+
+public sealed record MouseWheelInputAction(
+    int Vertical,
+    int Horizontal,
+    MouseButton Buttons = MouseButton.None) : InputAction;
+
+public sealed record ConsumerInputAction(
+    ConsumerControl Control,
+    ButtonActionKind Kind) : InputAction;
+
+public static class InputActionCompiler
+{
+    public static IReadOnlyList<ScheduledInputAction> Compile(
+        MacroDocument document,
+        long startTick,
+        long qpcFrequency,
+        Func<PixelCondition, bool>? pixelEvaluator = null,
+        Func<string, MacroDocument?>? macroResolver = null,
+        Func<WaitStep, TimeSpan>? waitDurationSampler = null,
+        InputPressFloor? pressFloor = null)
+    {
+        return CompileWithDuration(
+            document,
+            startTick,
+            qpcFrequency,
+            pixelEvaluator,
+            macroResolver,
+            waitDurationSampler,
+            pressFloor).Actions;
+    }
+
+    public static (IReadOnlyList<ScheduledInputAction> Actions, long DurationTicks) CompileWithDuration(
+        MacroDocument document,
+        long startTick,
+        long qpcFrequency,
+        Func<PixelCondition, bool>? pixelEvaluator = null,
+        Func<string, MacroDocument?>? macroResolver = null,
+        Func<WaitStep, TimeSpan>? waitDurationSampler = null,
+        InputPressFloor? pressFloor = null)
+    {
+        if (qpcFrequency <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(qpcFrequency), "QPC frequency must be positive.");
+        }
+
+        var actions = new List<ScheduledInputAction>();
+        var elapsedTicks = 0L;
+        var pressGaps = new PressReleaseGapTracker(qpcFrequency, pressFloor);
+        CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, pressGaps, ref elapsedTicks, depth: 0);
+        return (actions, Math.Max(0, elapsedTicks));
+    }
+
+    private static void CompileSteps(
+        IReadOnlyList<MacroStep> steps,
+        List<ScheduledInputAction> actions,
+        long startTick,
+        long qpcFrequency,
+        Func<PixelCondition, bool>? pixelEvaluator,
+        Func<string, MacroDocument?>? macroResolver,
+        Func<WaitStep, TimeSpan>? waitDurationSampler,
+        PressReleaseGapTracker pressGaps,
+        ref long elapsedTicks,
+        int depth)
+    {
+        if (depth > 16)
+        {
+            throw new InvalidOperationException("Macro call nesting is too deep.");
+        }
+
+        foreach (var step in steps)
+        {
+            switch (step)
+            {
+                case WaitStep wait:
+                    elapsedTicks += ToTicks(SampleWait(wait, waitDurationSampler), qpcFrequency);
+                    break;
+                case RepeatStep repeat:
+                    for (var i = 0; i < repeat.Count; i++)
+                    {
+                        CompileSteps(repeat.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, pressGaps, ref elapsedTicks, depth);
+                    }
+
+                    break;
+                case MacroCallStep macro:
+                    if (macroResolver is null)
+                    {
+                        throw new InvalidOperationException($"Macro call '{macro.Macro}' cannot be resolved without a macro resolver.");
+                    }
+
+                    var document = macroResolver(macro.Macro)
+                        ?? throw new InvalidOperationException($"Macro call target '{macro.Macro}' was not found.");
+                    CompileSteps(document.Steps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, pressGaps, ref elapsedTicks, depth + 1);
+                    break;
+                case PixelWhenStep pixel:
+                    if (pixel.WindowStart is { } windowStart)
+                    {
+                        var windowStartTicks = ToTicks(windowStart, qpcFrequency);
+                        if (elapsedTicks < windowStartTicks)
+                        {
+                            elapsedTicks = windowStartTicks;
+                        }
+                    }
+
+                    if (pixelEvaluator?.Invoke(pixel.Condition) == true)
+                    {
+                        CompileSteps(pixel.ThenSteps, actions, startTick, qpcFrequency, pixelEvaluator, macroResolver, waitDurationSampler, pressGaps, ref elapsedTicks, depth);
+                    }
+                    else if (pixel.WindowEnd is { } windowEnd)
+                    {
+                        var windowEndTicks = ToTicks(windowEnd, qpcFrequency);
+                        if (elapsedTicks < windowEndTicks)
+                        {
+                            elapsedTicks = windowEndTicks;
+                        }
+                    }
+
+                    break;
+                case KeyStep key:
+                    CompileKey(key, actions, startTick, qpcFrequency, pressGaps, ref elapsedTicks);
+                    break;
+                case CommentStep:
+                    break;
+                case TextStep text:
+                    Schedule(pressGaps, actions, new TextInputAction(text.Text), startTick, text, ref elapsedTicks);
+                    break;
+                case MouseButtonStep button:
+                    CompileMouseButton(button, actions, startTick, qpcFrequency, pressGaps, ref elapsedTicks);
+                    break;
+                case MouseMoveStep move:
+                    CompileMouseMove(move, actions, startTick, qpcFrequency, pressGaps, ref elapsedTicks);
+                    break;
+                case MouseWheelStep wheel:
+                    Schedule(pressGaps, actions, new MouseWheelInputAction(wheel.Vertical, wheel.Horizontal, wheel.Buttons), startTick, wheel, ref elapsedTicks);
+                    break;
+                case ConsumerStep consumer:
+                    CompileConsumer(consumer, actions, startTick, qpcFrequency, pressGaps, ref elapsedTicks);
+                    break;
+                default:
+                    throw new NotSupportedException($"Unsupported macro step '{step.GetType().Name}'.");
+            }
+        }
+    }
+
+    private static void CompileMouseMove(
+        MouseMoveStep step,
+        List<ScheduledInputAction> actions,
+        long startTick,
+        long qpcFrequency,
+        PressReleaseGapTracker pressGaps,
+        ref long elapsedTicks)
+    {
+        var origin = elapsedTicks;
+        foreach (var slice in MouseMoveSmoothing.Split(step.Mode, step.X, step.Y, step.Duration))
+        {
+            var sliceTicks = ToTicks(slice.Offset, qpcFrequency);
+            if (elapsedTicks < origin + sliceTicks)
+            {
+                elapsedTicks = origin + sliceTicks;
+            }
+
+            Schedule(
+                pressGaps,
+                actions,
+                new MouseMoveInputAction(slice.Mode, slice.X, slice.Y, step.Buttons),
+                startTick,
+                step,
+                ref elapsedTicks);
+        }
+
+        var endTicks = origin + ToTicks(step.Duration, qpcFrequency);
+        if (elapsedTicks < endTicks)
+        {
+            elapsedTicks = endTicks;
+        }
+    }
+
+    private static void CompileKey(
+        KeyStep step,
+        List<ScheduledInputAction> actions,
+        long startTick,
+        long qpcFrequency,
+        PressReleaseGapTracker pressGaps,
+        ref long elapsedTicks)
+    {
+        if (step.Kind == KeyActionKind.Tap)
+        {
+            Schedule(pressGaps, actions, new KeyInputAction(KeyActionKind.Down, step.Key, step.Modifiers), startTick, step, ref elapsedTicks);
+            elapsedTicks += ToTicks(step.Hold, qpcFrequency);
+            Schedule(pressGaps, actions, new KeyInputAction(KeyActionKind.Up, step.Key, step.Modifiers), startTick, step, ref elapsedTicks);
+            return;
+        }
+
+        Schedule(pressGaps, actions, new KeyInputAction(step.Kind, step.Key, step.Modifiers), startTick, step, ref elapsedTicks);
+        elapsedTicks += ToTicks(step.Hold, qpcFrequency);
+    }
+
+    private static void CompileMouseButton(
+        MouseButtonStep step,
+        List<ScheduledInputAction> actions,
+        long startTick,
+        long qpcFrequency,
+        PressReleaseGapTracker pressGaps,
+        ref long elapsedTicks)
+    {
+        AddMouseButtonCoordinateAction(step, actions, startTick + elapsedTicks);
+
+        if (step.Kind == ButtonActionKind.Click)
+        {
+            Schedule(pressGaps, actions, new MouseButtonInputAction(step.Button, ButtonActionKind.Down), startTick, step, ref elapsedTicks);
+            elapsedTicks += ToTicks(step.Hold, qpcFrequency);
+            Schedule(pressGaps, actions, new MouseButtonInputAction(step.Button, ButtonActionKind.Up), startTick, step, ref elapsedTicks);
+            return;
+        }
+
+        Schedule(pressGaps, actions, new MouseButtonInputAction(step.Button, step.Kind), startTick, step, ref elapsedTicks);
+        elapsedTicks += ToTicks(step.Hold, qpcFrequency);
+    }
+
+    private static void AddMouseButtonCoordinateAction(
+        MouseButtonStep step,
+        List<ScheduledInputAction> actions,
+        long dueTick)
+    {
+        if (!step.HasCoordinate)
+        {
+            return;
+        }
+
+        actions.Add(new ScheduledInputAction(
+            new MouseMoveInputAction(step.CoordinateMode ?? MouseMoveMode.Absolute, step.X!.Value, step.Y!.Value),
+            dueTick,
+            step));
+    }
+
+    private static void CompileConsumer(
+        ConsumerStep step,
+        List<ScheduledInputAction> actions,
+        long startTick,
+        long qpcFrequency,
+        PressReleaseGapTracker pressGaps,
+        ref long elapsedTicks)
+    {
+        if (step.Kind == ButtonActionKind.Click)
+        {
+            Schedule(pressGaps, actions, new ConsumerInputAction(step.Control, ButtonActionKind.Down), startTick, step, ref elapsedTicks);
+            elapsedTicks += ToTicks(step.Hold, qpcFrequency);
+            Schedule(pressGaps, actions, new ConsumerInputAction(step.Control, ButtonActionKind.Up), startTick, step, ref elapsedTicks);
+            return;
+        }
+
+        Schedule(pressGaps, actions, new ConsumerInputAction(step.Control, step.Kind), startTick, step, ref elapsedTicks);
+        elapsedTicks += ToTicks(step.Hold, qpcFrequency);
+    }
+
+    private static void Schedule(
+        PressReleaseGapTracker pressGaps,
+        List<ScheduledInputAction> actions,
+        InputAction action,
+        long startTick,
+        MacroStep sourceStep,
+        ref long elapsedTicks)
+    {
+        var dueTick = pressGaps.AdjustDueTick(action, startTick + elapsedTicks);
+        elapsedTicks = Math.Max(elapsedTicks, dueTick - startTick);
+        actions.Add(new ScheduledInputAction(action, dueTick, sourceStep));
+    }
+
+    private static TimeSpan SampleWait(WaitStep wait, Func<WaitStep, TimeSpan>? waitDurationSampler)
+    {
+        var sampled = waitDurationSampler?.Invoke(wait) ?? wait.Sample(Random.Shared);
+        if (wait.IsRandom && wait.MaxDuration is { } max)
+        {
+            if (sampled < wait.MinDuration)
+            {
+                return wait.MinDuration;
+            }
+
+            if (sampled > max)
+            {
+                return max;
+            }
+        }
+
+        return sampled < TimeSpan.Zero ? TimeSpan.Zero : sampled;
+    }
+
+    private static long ToTicks(TimeSpan duration, long qpcFrequency)
+    {
+        return (long)Math.Round(duration.TotalSeconds * qpcFrequency, MidpointRounding.AwayFromZero);
+    }
+}

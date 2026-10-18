@@ -1259,13 +1259,7 @@ public partial class MainWindow : Window
         };
     }
 
-    private void WarmUpRuntimePrecision()
-    {
-        NativePlaybackWarmup.QueueWarmUpForPrecision(
-            runtimePrecisionSettings.Precision,
-            runtimePrecisionSettings.AffinityMask,
-            runtimePrecisionSettings.Generation);
-    }
+    private void WarmUpRuntimePrecision() => PlaybackEngineHost.PrecisionChanged(runtimePrecisionSettings);
 
     private void RestoreMaskAfterCancelledTest(string savedMask, CorePickerDialog dialog)
     {
@@ -1275,13 +1269,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(savedMask))
-        {
-            NativePlaybackWarmup.QueueWarmUpForPrecision(runtimePrecisionSettings.Precision, "", runtimePrecisionSettings.Generation);
-            return;
-        }
-
-        NativePlaybackWarmup.QueueWarmUpForAffinityMask(savedMask, force: true);
+        PlaybackEngineHost.AffinityMaskApplied(runtimePrecisionSettings, savedMask);
     }
 
     private void PollAutomaticCoreSelection()
@@ -1350,7 +1338,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        NativePlaybackWarmup.QueueWarmUpForAffinityMask(mask, force: true);
+        PlaybackEngineHost.AffinityMaskApplied(runtimePrecisionSettings, mask);
     }
 
     private bool IsCoreSelectionBlocked()
@@ -2126,7 +2114,7 @@ public partial class MainWindow : Window
         var prepared = await Task.Run(() => PrepareListeningDefinitions(resolved, optionsById, known));
         if (revision != listeningUpdateGeneration || shutdownStarted)
         {
-            foreach (var update in prepared.Values) update.Executor.Dispose();
+            foreach (var update in prepared.Values) (update.Executor as IDisposable)?.Dispose();
             return listeningControllers.Count;
         }
         var conflictMessage = FormatReservedHotkeyConflict(colorConflicts, stopConflicts);
@@ -2494,14 +2482,7 @@ public partial class MainWindow : Window
             if (pickedMask is not null
                 && !string.Equals(pickedMask, runtimePrecisionSettings.AffinityMask, StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(runtimePrecisionSettings.AffinityMask))
-                {
-                    NativePlaybackWarmup.QueueWarmUpForPrecision(runtimePrecisionSettings.Precision, "", runtimePrecisionSettings.Generation);
-                }
-                else
-                {
-                    NativePlaybackWarmup.QueueWarmUpForAffinityMask(runtimePrecisionSettings.AffinityMask, force: true);
-                }
+                PlaybackEngineHost.AffinityMaskApplied(runtimePrecisionSettings, runtimePrecisionSettings.AffinityMask);
             }
 
             return;
@@ -2537,7 +2518,7 @@ public partial class MainWindow : Window
             && string.Equals(dialog.LastMeasuredMask, dialog.SelectedMask, StringComparison.OrdinalIgnoreCase);
         if (!alreadyMeasured)
         {
-            NativePlaybackWarmup.QueueWarmUpForAffinityMask(dialog.SelectedMask, force: true);
+            PlaybackEngineHost.AffinityMaskApplied(runtimePrecisionSettings, dialog.SelectedMask);
         }
 
         SetStatus(string.IsNullOrWhiteSpace(dialog.LastResultText) ? L("CoreSelectionStarted") : dialog.LastResultText);
@@ -2590,7 +2571,7 @@ public partial class MainWindow : Window
         { SetStatus(L("PlaybackStatusStopping")); return; }
         using var preparation = TrackPreparation();
         preparingImmediate = true;
-        MacroPlaybackExecutor? prepared = null;
+        IMacroPlaybackExecutor? prepared = null;
         long epoch = Interlocked.Read(ref stopEpoch);
         try
         {
@@ -2601,16 +2582,21 @@ public partial class MainWindow : Window
             runNowEmergencyStopArmed = true;
             RefreshKeyboardHook();
             if (immediateController is not null) await immediateController.DisposeAsync();
+            var version = runtimePrecisionSettings.Version;
             prepared = await Task.Run(() => {
                 var frozen = CaptureResolver(document, id);
-                var executor = new MacroPlaybackExecutor(inputSink, macroResolver: frozen.Resolver);
-                try { executor.Prepare(document, options); return executor; }
-                catch { executor.Dispose(); throw; }
+                return PlaybackEngineHost.Prepare(inputSink, document, frozen.Resolver, options, immediate: true, version);
             });
             if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) { DisarmRunNowEmergencyStop(); return; }
             lock (triggerGate)
             {
                 if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) return;
+                if (OtherMacroIsActive(null))
+                {
+                    DisarmRunNowEmergencyStop();
+                    SetStatus(L("OneMacroAtATime"), StatusLevel.Warning);
+                    return;
+                }
                 playbackController = immediateController = new(document, prepared, options);
                 prepared = null;
                 _ = playbackController.RunNowAsync();
@@ -2626,7 +2612,7 @@ public partial class MainWindow : Window
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
         }
-        finally { prepared?.Dispose(); preparingImmediate = false; }
+        finally { (prepared as IDisposable)?.Dispose(); preparingImmediate = false; }
     }
 
     private void DisarmRunNowEmergencyStop()
@@ -3025,6 +3011,9 @@ public partial class MainWindow : Window
         lock (triggerGate)
         {
             if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) return;
+            // One macro at a time: while any other macro is running or stopping, its hotkey is ignored. The running macro's
+            // own hotkey still reaches it (toggle stop, hold release).
+            if (OtherMacroIsActive(route.Controller)) return;
             route.Controller.TriggerPressedAsync(e.CallbackQpc);
             heldControllers[e.Id] = route.Controller;
         }
@@ -3042,6 +3031,16 @@ public partial class MainWindow : Window
     private void KeyboardHook_TriggerReleased(object? sender, HotkeyTriggeredEventArgs e)
     {
         if (heldControllers.TryRemove(e.Id, out var controller)) controller.TriggerReleased();
+    }
+
+    // Under triggerGate. True when a macro other than this one is running or stopping (listening macros and "run now").
+    private bool OtherMacroIsActive(MacroPlaybackController? self)
+    {
+        static bool Active(MacroPlaybackController? c) => c?.Status is PlaybackStatus.Running or PlaybackStatus.Stopping;
+        foreach (var other in Volatile.Read(ref hotkeyRoutes).Values)
+            if (!ReferenceEquals(other.Controller, self) && Active(other.Controller)) return true;
+        var immediate = Volatile.Read(ref immediateController);
+        return !ReferenceEquals(immediate, self) && Active(immediate);
     }
 
     private void ObservePlayback(MacroPlaybackController controller, long run, Task<PlaybackRunResult> completion)

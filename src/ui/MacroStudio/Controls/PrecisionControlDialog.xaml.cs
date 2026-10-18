@@ -35,10 +35,10 @@ public partial class PrecisionControlDialog : Window
             }
         }
 
-        // Always lands on an item: an unknown or missing value is already the latest after Normalize.
-        var generationTag = ToGenerationTag(PrecisionGenerations.Normalize(settings.Generation));
+        // Always lands on an item: an unknown or missing version is already the current one after Normalize.
+        var versionId = settings.Version.Id;
         PrecisionGenerationBox.SelectedItem = PrecisionGenerationBox.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), generationTag, StringComparison.Ordinal))
+            .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), versionId, StringComparison.Ordinal))
             ?? PrecisionGenerationBox.Items[0];
         UpdateGenerationDescription();
         UpdateProfileDescription();
@@ -47,33 +47,15 @@ public partial class PrecisionControlDialog : Window
 
     private void UpdateGenerationDescription()
     {
-        PrecisionGenerationDescription.Text = SelectedGeneration() switch
-        {
-            PrecisionGeneration.V2_0_2 => L("PrecisionGenerationDesc202"),
-            PrecisionGeneration.V2_0 => L("PrecisionGenerationDesc20"),
-            PrecisionGeneration.V1_6 => L("PrecisionGenerationDesc16"),
-            _ => L("PrecisionGenerationDescLatest")
-        };
+        var version = SelectedVersion();
+        var notes = L(version.NotesKey);
+        PrecisionGenerationDescription.Text = version.Folder is not null && !MacroHid.Runtime.LegacyPlaybackRuntimes.IsAvailable(version)
+            ? notes + "\n" + L("PlaybackVersionMissing")
+            : notes;
     }
 
-    private PrecisionGeneration SelectedGeneration()
-    {
-        return (PrecisionGenerationBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() switch
-        {
-            "v2_0_2" => PrecisionGeneration.V2_0_2,
-            "v2_0" => PrecisionGeneration.V2_0,
-            "v1_6" => PrecisionGeneration.V1_6,
-            _ => PrecisionGeneration.Latest
-        };
-    }
-
-    private static string ToGenerationTag(PrecisionGeneration generation) => generation switch
-    {
-        PrecisionGeneration.V2_0_2 => "v2_0_2",
-        PrecisionGeneration.V2_0 => "v2_0",
-        PrecisionGeneration.V1_6 => "v1_6",
-        _ => "latest"
-    };
+    private PlaybackVersionInfo SelectedVersion() =>
+        PlaybackVersions.Resolve((PrecisionGenerationBox.SelectedItem as ComboBoxItem)?.Tag?.ToString());
 
     private void UpdateProfileDescription()
     {
@@ -117,18 +99,16 @@ public partial class PrecisionControlDialog : Window
     {
         Title = L("PrecisionControl");
         PrecisionModeLabelText.Text = L("PrecisionMode");
-        PrecisionGenerationLabelText.Text = L("PrecisionGeneration");
-        PrecisionGenerationHelpText.Text = L("PrecisionGenerationHelp");
-        foreach (var item in PrecisionGenerationBox.Items.OfType<ComboBoxItem>())
+        PrecisionGenerationLabelText.Text = L("PlaybackVersion");
+        PrecisionGenerationHelpText.Text = L("PlaybackVersionHelp");
+        PrecisionGenerationBox.Items.Clear();
+        foreach (var version in PlaybackVersions.All)
         {
-            item.Content = item.Tag?.ToString() switch
+            PrecisionGenerationBox.Items.Add(new ComboBoxItem
             {
-                "latest" => L("PrecisionGenerationLatest"),
-                "v2_0_2" => L("PrecisionGenerationV202"),
-                "v2_0" => L("PrecisionGenerationV20"),
-                "v1_6" => L("PrecisionGenerationV16"),
-                _ => item.Content
-            };
+                Tag = version.Id,
+                Content = version.Folder is null ? LocalizationService.Format("PlaybackVersionCurrent", version.Label) : version.Label
+            });
         }
         AffinityMaskLabelText.Text = L("AffinityMask");
         AffinityMaskHelpText.Text = L("AffinityMaskHelp");
@@ -192,7 +172,9 @@ public partial class PrecisionControlDialog : Window
         Settings = source with
         {
             Precision = SelectedPrecision(),
-            Generation = SelectedGeneration(),
+            // The current engine runs its own latest timing; earlier releases run their own code, not a generation.
+            Generation = PrecisionGeneration.Latest,
+            PlaybackVersion = SelectedVersion().Id,
             AffinityMask = mask,
             StartLeadMicroseconds = lead,
             CompensateSendInputCost = CompensateSendInputCheck.IsChecked == true,

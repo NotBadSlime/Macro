@@ -685,4 +685,19 @@
   <data name="LatencyCheckAvoidNoisy" xml:space="preserve"><value>自动避开嘈杂核心</value></data>
   <data name="LatencyCheckAvoidNoisyHelp" xml:space="preserve"><value>启动几秒后也会自动做一次简短检查。均衡档在安静核心之间浮动，极限档固定在其中两个上。低占用档走托管代码，不受限制。</value></data>
   <data name="LatencyCheckAdviceNotYet" xml:space="preserve"><value>• 暂未避开：一个核心在最近 3 次检查中有 2 次嘈杂才会被避开。可再检查一次确认。</value></data>
+  <data name="PlaybackVersion" xml:space="preserve"><value>播放版本</value></data>
+  <data name="PlaybackVersionHelp" xml:space="preserve"><value>选择用哪个发行版的播放代码。旧版本运行当时的原始代码（包括当时的问题），只有它之后才加入的效果卡片（断网、锁帧等）由当前版本代为执行。测核与系统延迟检查始终使用当前版本，选出的核心掩码按所选版本当时的方式使用。下次开始监听或运行时生效。</value></data>
+  <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（当前，推荐）</value></data>
+  <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安装缺少该版本的引擎文件，播放会失败，请重新安装完整安装包。</value></data>
+  <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（当前，即 2.0.3 引擎）：新增版本切换器；移除并行卡片，同一时间只运行一个宏。2.0.3 本身：缩短启动延迟（冷启动首次热键从约 2 毫秒降到约 250 微秒）；按键时长从 SendInput 开始时起算；SendInput 耗时补偿；可选热键启动对齐与 Raw Input 热键；测核避开中断密集的核心；系统延迟检查。</value></data>
+  <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：循环末尾的等待不再被丢弃，周期等于写下的总时长；默认间隔只推迟这一次抬起，不再推迟整条时间线；修复「宏基础控制」确定后设置不生效。</value></data>
+  <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（测试版）：热键入口与启动预热——启动时预热播放路径，低抖动热键待命时保持计时器分辨率；增加诊断追踪。播放时间线与 2.0.0 相同。</value></data>
+  <data name="PlaybackVersionNotes200" xml:space="preserve"><value>2.0.0：播放改为共享批次调度器，一批按键一次 SendInput 发出；播放线程不再提到 TimeCritical/RealTime、不再绑核；等待参数缩短；调用带条件的子宏会运行子宏自己的条件；图片模板匹配开始真正生效；新增 YSR/KY3/Fufu 帧率卡片与运行日志。循环末尾的等待仍被丢弃（约每 10ms 一轮）。</value></data>
+  <data name="PlaybackVersionNotes160" xml:space="preserve"><value>1.6.0：新增断网、内置弱网、NetLimiter 限速、RTSS 锁帧、时间偏移与等文字卡片；后台窗口输入；默认间隔与组合键间隔设置；播放输入释放与强制停止保护。原生为待命/内联引擎，逐键发送，极致档使用 RealTime 优先级。</value></data>
+  <data name="PlaybackVersionNotes150" xml:space="preserve"><value>1.5.0：测核显示每个核心的延迟，并自动选出延迟最低的核心；核心选择器按结果排序。其余播放与 1.4.1 相同。</value></data>
+  <data name="PlaybackVersionNotes141" xml:space="preserve"><value>1.4.1：极致档在测试核心选择、程序启动或过滤进程启动时测量核心，并把待命线程绑到测得的核心上。</value></data>
+  <data name="PlaybackVersionNotes140" xml:space="preserve"><value>1.3.0 / 1.4.0（播放代码相同）：新增条件包、时间基准与启动门控条件；OCR 点击与取字、窗口激活、注释卡片；同一按键按下与抬起之间没有等待时自动保持 10ms；原生等待可随时取消。1.4.0 只改了界面与导出。</value></data>
+  <data name="PlaybackVersionNotes120" xml:space="preserve"><value>1.2.0：最早可选的版本，支持按键、鼠标、等待、重复、调用宏与像素条件，原生精准播放。没有 OCR、窗口激活和注释卡片。之后的效果卡片（断网、锁帧等）由当前版本代为执行；等文字卡片无法使用。</value></data>
+  <data name="ParallelCardRemoved" xml:space="preserve"><value>并行卡片已移除（同一时间只允许运行一个宏）。请先删除宏「{0}」里的并行卡片再播放。</value></data>
+  <data name="OneMacroAtATime" xml:space="preserve"><value>另一个宏正在运行。同一时间只允许运行一个宏，请先停止它。</value></data>
 </root>

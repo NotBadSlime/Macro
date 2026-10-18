@@ -64,7 +64,9 @@ public sealed record RuntimePrecisionSettings(
     // How hotkeys are detected. RawInput keeps this process out of the synchronous keyboard hook chain.
     HotkeyInputMode HotkeyInput = HotkeyInputMode.LowLevelHook,
     // Keep native playback workers off cores the system latency check found interrupt-heavy (also checked at start-up).
-    bool AvoidNoisyCores = true)
+    bool AvoidNoisyCores = true,
+    // Which release plays macros (PlaybackVersions.All). Empty = derived from Generation (settings from before the switcher).
+    string PlaybackVersion = "")
 {
     public const int MaxStartLeadMicroseconds = 5000;
     public static RuntimePrecisionSettings Default { get; } = new(ColorSampleHotkey: CoreHotkeys.DefaultColorSampleText);
@@ -72,6 +74,9 @@ public sealed record RuntimePrecisionSettings(
     public HotkeyGesture ColorSampleGesture => CoreHotkeys.ParseOrDefault(ColorSampleHotkey);
 
     public HotkeyGesture? ForceStopGesture => TryParseHotkey(ForceStopHotkey);
+
+    /// <summary>The selected release; the current engine when nothing (or an unknown id) is stored.</summary>
+    public PlaybackVersionInfo Version => PlaybackVersions.Resolve(PlaybackVersion);
 
     /// <summary>The floor the engine runs with, carrying the selected precision generation (latest unless the user picked another).</summary>
     public InputPressFloor PressFloor => InputPressFloor.FromMicroseconds(ZeroGapHoldMicroseconds, ModifierChordHoldMicroseconds)
@@ -151,7 +156,12 @@ public static class RuntimePrecisionSettingsStore
             ZeroGapHoldMicroseconds = ClampMicroseconds(settings.ZeroGapHoldMicroseconds),
             ModifierChordHoldMicroseconds = ClampMicroseconds(settings.ModifierChordHoldMicroseconds),
             ForceStopHotkey = NormalizeForceStop(settings.ForceStopHotkey),
-            Generation = PrecisionGenerations.Normalize(settings.Generation),
+            // The switcher replaced precision generations: an old file's generation picks the release, the current engine
+            // then runs its own (latest) timing.
+            Generation = PrecisionGeneration.Latest,
+            PlaybackVersion = string.IsNullOrWhiteSpace(settings.PlaybackVersion)
+                ? PlaybackVersions.FromGeneration(settings.Generation)
+                : PlaybackVersions.Resolve(settings.PlaybackVersion).Id,
             StartLeadMicroseconds = Math.Clamp(settings.StartLeadMicroseconds, 0, RuntimePrecisionSettings.MaxStartLeadMicroseconds)
         };
     }

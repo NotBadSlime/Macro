@@ -41,6 +41,8 @@ internal static class UiSnapshot
                     Render(invalid, Path.Combine(directory, $"basic-invalid-{suffix}.png"));
                     Render(new PrecisionControlDialog(settings with { Precision = MacroHid.Core.PrecisionMode.UltraLowJitter }),
                         Path.Combine(directory, $"precision-{suffix}.png"));
+                    Render(new PrecisionControlDialog(settings with { PlaybackVersion = "1.4.0" }),
+                        Path.Combine(directory, $"precision-legacy-{suffix}.png"));
                     Render(ThemedMessageDialog.Create(null, LocalizationService.Get("SnapshotSampleMessage"),
                             LocalizationService.Get("MacroBasicControl"), MessageBoxButton.OKCancel, MessageBoxImage.Warning),
                         Path.Combine(directory, $"message-{suffix}.png"));

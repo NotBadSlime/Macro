@@ -58,7 +58,6 @@ public partial class ActionPalettePanel : UserControl
         AddFufuFpsStartText.Text = L("AddFufuFpsStart");
         AddKy3FpsStopText.Text = L("AddKy3FpsStop");
         AddFufuFpsStopText.Text = L("AddFufuFpsStop");
-        AddParallelText.Text = L("AddParallel");
         AddLoopText.Text = L("AddLoop");
         AddStopCurrentText.Text = L("AddStopCurrent");
         AddStopIterationText.Text = L("AddStopIteration");
@@ -92,7 +91,6 @@ public partial class ActionPalettePanel : UserControl
         AddFufuFpsStartHintText.Text = L("AddFufuFpsStartHint");
         AddKy3FpsStopHintText.Text = L("AddKy3FpsStopHint");
         AddFufuFpsStopHintText.Text = L("AddFufuFpsStopHint");
-        AddParallelHintText.Text = L("AddParallelHint");
         AddLoopHintText.Text = L("AddLoopHint");
         AddStopCurrentHintText.Text = L("AddStopCurrentHint");
         AddStopIterationHintText.Text = L("AddStopIterationHint");
@@ -233,7 +231,6 @@ public partial class ActionPalettePanel : UserControl
         ApplyButtonAppearance(AddFufuFpsStartButton, MacroActionTemplateKind.FufuFpsStart);
         ApplyButtonAppearance(AddKy3FpsStopButton, MacroActionTemplateKind.Ky3FpsStop);
         ApplyButtonAppearance(AddFufuFpsStopButton, MacroActionTemplateKind.FufuFpsStop);
-        ApplyButtonAppearance(AddParallelButton, MacroActionTemplateKind.Parallel);
         ApplyButtonAppearance(AddLoopButton, MacroActionTemplateKind.Loop);
         ApplyButtonAppearance(AddStopCurrentButton, MacroActionTemplateKind.StopCurrent);
         ApplyButtonAppearance(AddStopIterationButton, MacroActionTemplateKind.StopIteration);

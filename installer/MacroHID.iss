@@ -7,7 +7,7 @@
 #endif
 
 #ifndef AppVersion
-#define AppVersion "2.0.3"
+#define AppVersion "2.0.4"
 #endif
 
 #define AppName "MacroHID"

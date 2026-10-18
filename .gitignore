@@ -25,3 +25,4 @@ TestResults/
 /docs/unlocker-target-cards.md
 /docs/fufu-target-analysis.md
 !src/shared/MacroHid.Runtime/WeakNet/Native/WinDivert64.sys
+!src/legacy/*/Runtime/WeakNet/Native/WinDivert64.sys

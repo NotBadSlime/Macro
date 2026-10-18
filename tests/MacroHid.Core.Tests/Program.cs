@@ -165,6 +165,9 @@ var tests = new (string Name, Action Body)[]
     ("Precision generation defaults to the latest", PrecisionGenerationDefaultsToLatest),
     ("Precision generation 1.6.0 uses the 1.6.0 wait profile", V1_6GenerationUsesThe16WaitProfile),
     ("Precision dialog offers every generation, saves the choice and describes it", PrecisionDialogOffersEveryGeneration),
+    ("Earlier releases are snapshots of their own sources", LegacySnapshotsAreTheReleasesSources),
+    ("Card support follows each earlier release", LegacyCardSupportFollowsEachRelease),
+    ("Earlier releases run through the current controller and engine host", LegacyEnginesRunThroughTheCurrentController),
     ("Every precision generation is wired from settings to warm-up and to the engine", PrecisionGenerationIsWiredEndToEnd),
     ("Precision generation strings exist in every language", PrecisionGenerationStringsExistInEveryLanguage),
     ("Settings without a generation load as the latest and keep every other setting", SettingsWithoutGenerationLoadAsLatest),
@@ -235,7 +238,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 2.0.3", MacroHidReleaseVersionIsTwoZeroTwo),
+    ("MacroHID release version is 2.0.4", MacroHidReleaseVersionIsTwoZeroTwo),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -897,6 +900,9 @@ static void EarlierGenerationsKeepTheOldTotalDuration()
 
 static string SettingsTempPath() => Path.Combine(Path.GetTempPath(), "macrohid-settings-" + Guid.NewGuid().ToString("N") + ".json");
 
+// The UI's engine calls (warm-up, mask re-warm, prepare) live in one place so the version switcher can route them.
+static string EngineHostSource() => File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Services", "PlaybackEngineHost.cs"));
+
 static void SettingsWithoutGenerationLoadAsLatest()
 {
     // A settings file written before this feature has no "generation". It must load as the latest, with everything else intact.
@@ -918,19 +924,35 @@ static void SettingsWithoutGenerationLoadAsLatest()
 
 static void SettingsRoundTripAGeneration()
 {
+    // The switcher replaced generations: a file from before it maps its generation to the matching release, then the current
+    // engine runs its own (latest) timing. A chosen version round-trips.
     var path = SettingsTempPath();
     try
     {
-        foreach (var generation in Enum.GetValues<PrecisionGeneration>())
+        foreach (var (generation, version) in new[] { (PrecisionGeneration.Latest, "2.0.4"), (PrecisionGeneration.V2_0_2, "2.0.2"),
+                     (PrecisionGeneration.V2_0, "2.0.1"), (PrecisionGeneration.V1_6, "1.6.0") })
         {
-            RuntimePrecisionSettingsStore.Save(RuntimePrecisionSettings.Default with { Generation = generation, ZeroGapHoldMicroseconds = 7000 }, path);
+            File.WriteAllText(path, $"{{\"Generation\":\"{char.ToLowerInvariant(generation.ToString()[0]) + generation.ToString()[1..]}\",\"ZeroGapHoldMicroseconds\":7000}}");
+            var migrated = RuntimePrecisionSettingsStore.Load(path);
+            Assert.Equal(version, migrated.PlaybackVersion);
+            Assert.Equal(PrecisionGeneration.Latest, migrated.Generation);
+            Assert.Equal(7000L, migrated.ZeroGapHoldMicroseconds);
+        }
+        foreach (var version in PlaybackVersions.All)
+        {
+            RuntimePrecisionSettingsStore.Save(RuntimePrecisionSettings.Default with { PlaybackVersion = version.Id, ZeroGapHoldMicroseconds = 7000 }, path);
             var loaded = RuntimePrecisionSettingsStore.Load(path);
-            Assert.Equal(generation, loaded.Generation);
-            Assert.Equal(7000L, loaded.ZeroGapHoldMicroseconds);
-            // The engine sees the same generation through the press floor it already receives.
-            Assert.Equal(generation, loaded.PressFloor.Generation);
+            Assert.Equal(version.Id, loaded.PlaybackVersion);
+            Assert.True(ReferenceEquals(version, loaded.Version));
             Assert.Equal(7000L, (long)loaded.PressFloor.ZeroGapHold.TotalMicroseconds);
         }
+        // An id this build does not know (saved by a newer one) falls back to the current engine, nothing else changes.
+        File.WriteAllText(path, "{\"PlaybackVersion\":\"9.9.9\",\"Precision\":\"balanced\"}");
+        var unknown = RuntimePrecisionSettingsStore.Load(path);
+        Assert.Equal(PlaybackVersions.Current, unknown.PlaybackVersion);
+        Assert.Equal(PrecisionMode.Balanced, unknown.Precision);
+        // 1.3.0 and 1.4.0 share one engine.
+        Assert.True(ReferenceEquals(PlaybackVersions.Resolve("1.4.0"), PlaybackVersions.Resolve("1.3.0")));
     }
     finally { File.Delete(path); }
 }
@@ -953,22 +975,76 @@ static void UnknownGenerationKeepsTheOtherSettings()
 
 static void PrecisionDialogOffersEveryGeneration()
 {
-    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
     var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml.cs"));
-    // One dropdown item per enum value, and the first (the one shown when nothing else applies) is the latest.
+    var xaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
+    // The dropdown is filled from PlaybackVersions (1.2.0 ... 2.0.3), the current one first; every entry has notes in every language.
     Assert.Contains("x:Name=\"PrecisionGenerationBox\"", xaml);
-    var items = System.Text.RegularExpressions.Regex.Matches(xaml, "<ComboBoxItem Tag=\"(latest|v2_0_2|v2_0|v1_6)\"").Select(m => m.Groups[1].Value).ToList();
-    Assert.Equal(Enum.GetValues<PrecisionGeneration>().Length, items.Count);
-    Assert.Equal("latest", items[0]);
-    foreach (var generation in Enum.GetValues<PrecisionGeneration>())
-    {
-        var tag = generation switch { PrecisionGeneration.Latest => "latest", PrecisionGeneration.V2_0_2 => "v2_0_2", PrecisionGeneration.V2_0 => "v2_0", _ => "v1_6" };
-        Assert.Contains($"Tag=\"{tag}\"", xaml);
-    }
-    // The choice is read back into the settings the dialog returns, and a description follows the selection.
-    Assert.Contains("Generation = SelectedGeneration()", code);
+    Assert.Contains("foreach (var version in PlaybackVersions.All)", code);
+    Assert.Contains("PlaybackVersion = SelectedVersion().Id", code);
     Assert.Contains("PrecisionGenerationBox.SelectionChanged", code);
-    Assert.Contains("PrecisionGenerations.Normalize(settings.Generation)", code);
+    Assert.Equal(PlaybackVersions.Current, PlaybackVersions.All[0].Id);
+    Assert.True(PlaybackVersions.All[0].Folder is null);
+    var ids = PlaybackVersions.All.Select(v => v.Id).ToArray();
+    Assert.Equal("2.0.4,2.0.2,2.0.1,2.0.0,1.6.0,1.5.0,1.4.1,1.4.0,1.2.0", string.Join(",", ids));
+    foreach (var file in new[] { "Strings.resx", "Strings.zh-CN.resx", "Strings.zh-TW.resx" })
+    {
+        var resx = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", file));
+        foreach (var version in PlaybackVersions.All) Assert.Contains($"name=\"{version.NotesKey}\"", resx);
+    }
+}
+
+static void LegacySnapshotsAreTheReleasesSources()
+{
+    // Each earlier release is its own snapshot with its own project; the projects compile the release's sources, and the only
+    // edits are listed per snapshot (the external-card hook in 1.2.0 - 1.6.0). scripts/Test-LegacySnapshots.ps1 compares every
+    // file with the tag byte for byte.
+    foreach (var version in PlaybackVersions.All.Where(v => v.Folder is not null))
+    {
+        var folder = Path.Combine("src", "legacy", version.Folder!);
+        Assert.True(File.Exists(Path.Combine(folder, $"MacroHid.Legacy.{version.Folder}.csproj")));
+        Assert.True(File.Exists(Path.Combine(folder, "Runtime", "MacroPlaybackExecutor.cs")));
+        Assert.True(File.Exists(Path.Combine(folder, "Native", "NativePlayback.cpp")));
+        var patched = Path.Combine(folder, "patched-files.txt");
+        var before16 = new Version(version.Id) <= new Version(1, 6, 0);
+        Assert.Equal(before16, File.Exists(patched));
+        if (before16)
+        {
+            var parser = File.ReadAllText(Path.Combine(folder, "Core", "McrxParser.cs"));
+            var runner = File.ReadAllText(Path.Combine(folder, "Runtime", "ManagedMacroControlFlowRunner.cs"));
+            Assert.Equal(1, parser.Split("External-card hook").Length - 1);
+            Assert.Equal(2, runner.Split("External-card hook").Length - 1);
+        }
+    }
+}
+
+static void LegacyCardSupportFollowsEachRelease()
+{
+    // Cards each release parses itself, cards it can run through the current app, and cards it cannot run at all.
+    var parallel = McrxParser.Parse("{\"version\":1,\"name\":\"p\",\"steps\":[{\"type\":\"parallel\",\"branches\":[{\"type\":\"parallel.branch\",\"name\":\"a\",\"steps\":[{\"type\":\"wait\",\"ms\":1}]},{\"type\":\"parallel.branch\",\"name\":\"b\",\"steps\":[]}]}]}");
+    var types = LegacyMacroJson.StepTypes(parallel);
+    Assert.True(types.Contains("parallel") && types.Contains("parallel.branch") && types.Contains("wait"));
+    var weakNet = McrxParser.Parse("{\"version\":1,\"name\":\"n\",\"steps\":[{\"type\":\"repeat\",\"count\":2,\"steps\":[{\"type\":\"weak.net\",\"action\":\"stop\"}]}]}");
+    Assert.True(LegacyMacroJson.StepTypes(weakNet).Contains("weak.net"));
+    Assert.True(MacroHid.LegacyContract.LegacyExternalCards.EffectTypes.Contains("weak.net") && !MacroHid.LegacyContract.LegacyExternalCards.EffectTypes.Contains("parallel"));
+    Assert.True(!MacroHid.LegacyContract.LegacyExternalCards.EffectTypes.Contains("key.tap") && !MacroHid.LegacyContract.LegacyExternalCards.EffectTypes.Contains("text.when"));
+}
+
+static void LegacyEnginesRunThroughTheCurrentController()
+{
+    // The selected release's own controller decides start/stop/hold; the current controller only forwards and reports.
+    var controller = File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "MacroPlaybackController.cs"));
+    var scheduling = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.Scheduling.cs"));
+    var main = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var app = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "App.xaml.cs"));
+    Assert.Contains("if (executor is LegacyPreparedExecutor prepared) legacy = new LegacyRoute(prepared);", controller);
+    Assert.Contains("route.Controller.TriggerPressedAsync()", controller);
+    Assert.Contains("route.Controller.TriggerReleased()", controller);
+    Assert.Contains("PlaybackEngineHost.Prepare(inputSink, candidate.Document", scheduling);
+    Assert.Contains("+ version.Id", scheduling);
+    Assert.Contains("PlaybackEngineHost.Prepare(inputSink, document, frozen.Resolver, options, immediate: true, version)", main);
+    Assert.Contains("PlaybackEngineHost.Activate(runtimePrecision)", app);
+    Assert.Contains("PlaybackEngineHost.Shutdown()", app);
+    Assert.DoesNotContain("NativePlaybackWarmup.", main);
 }
 
 static void PrecisionGenerationIsWiredEndToEnd()
@@ -991,7 +1067,7 @@ static void PrecisionGenerationIsWiredEndToEnd()
     Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(monitor, "generation: pressFloor\\.Generation").Count);
     Assert.Contains("PrepareForPrecision(options.Precision, options.AffinityMask, options.PressFloor.Generation)", executor);
     // Every precision warm-up passes the generation, so the engine that is prepared is the engine that runs.
-    Assert.Contains("runtimePrecision.Generation", app);
+    Assert.Contains("settings.Generation", EngineHostSource()); // the engine host warms the current engine with it
     Assert.Equal(0, System.Text.RegularExpressions.Regex.Matches(mainWindow, "QueueWarmUpForPrecision\\(runtimePrecisionSettings\\.Precision, \"\"\\)").Count);
     Assert.Contains("Generation = (uint)Generation", warmup);
     // The managed and native option structs carry the same trailing field, and the engine picks the legacy path from it.
@@ -4244,17 +4320,17 @@ static void MacroHidReleaseVersionIsTwoZeroTwo()
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.3.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.4.md"));
 
-    Assert.Contains("<Version>2.0.3</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>2.0.3.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>2.0.3.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>2.0.4</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>2.0.4.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>2.0.4.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"2.0.3\"", installer);
-    Assert.Contains("[string]$Version = \"2.0.3\"", installerBuild);
+    Assert.Contains("#define AppVersion \"2.0.4\"", installer);
+    Assert.Contains("[string]$Version = \"2.0.4\"", installerBuild);
     Assert.Contains("当前正式版是 **2.0.2**", readme);
-    Assert.Contains("最新测试版是 **2.0.3**", readme);
-    Assert.Contains("MacroHID 2.0.3 测试版", releaseNotes);
+    Assert.Contains("最新测试版是 **2.0.4**", readme);
+    Assert.Contains("MacroHID 2.0.4 测试版", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -5135,7 +5211,7 @@ static void MacroStudioExposesUltraAffinityMaskControl()
     Assert.Contains("AffinityMaskHelpText.Text = L(\"AffinityMaskHelp\")", precisionCode);
     Assert.Contains("PlaybackAffinityMask.NormalizeOrThrow", mainWindowCode);
     Assert.DoesNotContain("[\"affinityMask\"] = affinityMask", mainWindowCode);
-    Assert.Contains("NativePlaybackWarmup.QueueWarmUpForPrecision", mainWindowCode);
+    Assert.Contains("NativePlaybackWarmup.QueueWarmUpForPrecision", EngineHostSource());
     Assert.Contains("name=\"AffinityMask\"", english);
     Assert.Contains("name=\"AffinityMaskHelp\"", english);
     Assert.Contains("<value>Ultra affinity mask</value>", english);
@@ -5224,7 +5300,8 @@ static void CoreSelectionSkipsScanningWhilePlaybackIsActive()
     Assert.Contains("TryWarmUp(false)", warmup);
     Assert.Contains("PlaybackStatus.Running or PlaybackStatus.Stopping", mainWindow);
     Assert.Contains("CoreSelectionBusy", mainWindow);
-    Assert.Contains("QueueWarmUpForAffinityMask(runtimePrecisionSettings.AffinityMask, force: true)", mainWindow);
+    Assert.Contains("PlaybackEngineHost.AffinityMaskApplied(runtimePrecisionSettings, runtimePrecisionSettings.AffinityMask)", mainWindow);
+    Assert.Contains("NativePlaybackWarmup.QueueWarmUpForAffinityMask(mask, force: true)", EngineHostSource());
     Assert.Contains("coreSelectionSchedule.TryConsumeAutomatic", mainWindow);
 }
 
@@ -5429,7 +5506,8 @@ static void StartupPathWarmupRunsTheNativeBranch()
     Assert.Contains("public static int RunNative(", warmup);
     Assert.Contains("[new WaitStep(TimeSpan.FromMilliseconds(1))]", warmup);
     Assert.Contains("new MacroPlaybackExecutor(new SendInputMacroSink())", warmup);
-    Assert.Contains("PlaybackPathWarmup.QueueRun(\n                runtimePrecision.Precision", app.Replace("\r\n", "\n"));
+    Assert.Contains("PlaybackPathWarmup.QueueRun(settings.Precision, settings.AffinityMask, settings.Generation)", EngineHostSource());
+    Assert.Contains("PlaybackEngineHost.Activate(runtimePrecision)", app);
     // Workers are warmed for the selected profile, not always for 极限. Only the 1.6.0 generation keeps 1.6.0's fixed 极限 warm-up.
     var fixedProfile = warmupNative.IndexOf("PrecisionMode = 2,", StringComparison.Ordinal);
     Assert.True(fixedProfile < 0 || (fixedProfile > warmupNative.IndexOf("private static bool PrepareV1_6(", StringComparison.Ordinal)
@@ -5876,7 +5954,13 @@ static void MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel()
     Assert.Contains("Tag=\"TextWhen\"", actionPaletteXaml);
     Assert.Contains("Tag=\"WeakNetStart\"", actionPaletteXaml);
     Assert.Contains("Tag=\"WeakNetStop\"", actionPaletteXaml);
-    Assert.Contains("Tag=\"Parallel\"", actionPaletteXaml);
+    // The parallel card was removed from the palette (one macro at a time); existing ones refuse to play.
+    Assert.DoesNotContain("Tag=\"Parallel\"", actionPaletteXaml);
+    Assert.DoesNotContain("AddParallel", actionPaletteCode);
+    Assert.Contains("ParallelCards.FindIn(document, resolver)", EngineHostSource());
+    Assert.Contains("if (OtherMacroIsActive(route.Controller)) return;", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
+    Assert.True(ParallelCards.Contains([new RepeatStep(1, [new ParallelStep(new ParallelBranchStep("a", []), new ParallelBranchStep("b", []))])]));
+    Assert.True(!ParallelCards.Contains([new WaitStep(TimeSpan.FromMilliseconds(1))]));
     Assert.Contains("AddConditionButton", conditionXaml);
     Assert.Contains("ConditionLibraryMenuButton", conditionXaml);
     Assert.Contains("InsertLibraryConditionMacroMenuItem", conditionXaml);
@@ -7470,7 +7554,8 @@ static void MacroStudioWarmsNativePlaybackBeforeFirstTrigger()
     Assert.Contains("Prepare(true,", warmupCode);
     Assert.Contains("QueueWarmUpForPrecision", warmupCode);
     Assert.Contains("RuntimePrecisionSettingsStore.Load", appCode);
-    Assert.Contains("QueueWarmUpForPrecision", appCode);
+    Assert.Contains("PlaybackEngineHost.Activate(runtimePrecision)", appCode);
+    Assert.Contains("QueueWarmUpForPrecision", EngineHostSource());
     Assert.DoesNotContain("NativePlaybackWarmup.CpuScanReady", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "NativePlaybackEngine.cs")));
     Assert.DoesNotContain("Task.Run(NativePlaybackWarmup.TryWarmUp)", appCode);
 }
@@ -7565,7 +7650,7 @@ static void RuntimePrecreatesNativePlaybackPlansOffTriggerHotPath()
     Assert.Contains("NativePlaybackPreparedPlan?", executor);
     Assert.Contains("public void Prepare", executor);
     Assert.Contains("cachedNativePlan", executor);
-    Assert.Contains("executor.Prepare(document", mainWindow);
+    Assert.Contains("executor.Prepare(document", EngineHostSource());
     Assert.Contains("--precreate-native-plan", probe);
     Assert.Contains("TryCreatePreparedPlan", probe);
     Assert.Contains("TryRunPrepared", probe);

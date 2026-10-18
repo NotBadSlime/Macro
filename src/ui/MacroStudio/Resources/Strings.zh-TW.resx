@@ -685,4 +685,19 @@
   <data name="LatencyCheckAvoidNoisy" xml:space="preserve"><value>自動避開嘈雜核心</value></data>
   <data name="LatencyCheckAvoidNoisyHelp" xml:space="preserve"><value>啟動幾秒後也會自動做一次簡短檢查。均衡檔在安靜核心之間浮動，極限檔固定在其中兩個上。低佔用檔走託管程式碼，不受限制。</value></data>
   <data name="LatencyCheckAdviceNotYet" xml:space="preserve"><value>• 暫未避開：一個核心在最近 3 次檢查中有 2 次嘈雜才會被避開。可再檢查一次確認。</value></data>
+  <data name="PlaybackVersion" xml:space="preserve"><value>播放版本</value></data>
+  <data name="PlaybackVersionHelp" xml:space="preserve"><value>選擇用哪個發行版的播放程式碼。舊版本執行當時的原始程式碼（包括當時的問題），只有它之後才加入的效果卡片（斷網、鎖幀等）由目前版本代為執行。測核與系統延遲檢查始終使用目前版本，選出的核心遮罩按所選版本當時的方式使用。下次開始監聽或執行時生效。</value></data>
+  <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（目前，推薦）</value></data>
+  <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安裝缺少該版本的引擎檔案，播放會失敗，請重新安裝完整安裝包。</value></data>
+  <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（目前，即 2.0.3 引擎）：新增版本切換器；移除並行卡片，同一時間只執行一個巨集。2.0.3 本身：縮短啟動延遲（冷啟動首次熱鍵從約 2 毫秒降到約 250 微秒）；按鍵時長從 SendInput 開始時起算；SendInput 耗時補償；可選熱鍵啟動對齊與 Raw Input 熱鍵；測核避開中斷密集的核心；系統延遲檢查。</value></data>
+  <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：迴圈末尾的等待不再被丟棄，週期等於寫下的總時長；預設間隔只推遲這一次放開，不再推遲整條時間線；修復「巨集基礎控制」確定後設定不生效。</value></data>
+  <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（測試版）：熱鍵入口與啟動預熱——啟動時預熱播放路徑，低抖動熱鍵待命時保持計時器解析度；增加診斷追蹤。播放時間線與 2.0.0 相同。</value></data>
+  <data name="PlaybackVersionNotes200" xml:space="preserve"><value>2.0.0：播放改為共享批次排程器，一批按鍵一次 SendInput 送出；播放執行緒不再提到 TimeCritical/RealTime、不再綁核；等待參數縮短；呼叫帶條件的子巨集會執行子巨集自己的條件；圖片範本比對開始真正生效；新增 YSR/KY3/Fufu 幀率卡片與執行日誌。迴圈末尾的等待仍被丟棄（約每 10ms 一輪）。</value></data>
+  <data name="PlaybackVersionNotes160" xml:space="preserve"><value>1.6.0：新增斷網、內建弱網、NetLimiter 限速、RTSS 鎖幀、時間偏移與等文字卡片；背景視窗輸入；預設間隔與組合鍵間隔設定；播放輸入釋放與強制停止保護。原生為待命/內嵌引擎，逐鍵送出，極致檔使用 RealTime 優先級。</value></data>
+  <data name="PlaybackVersionNotes150" xml:space="preserve"><value>1.5.0：測核顯示每個核心的延遲，並自動選出延遲最低的核心；核心選擇器按結果排序。其餘播放與 1.4.1 相同。</value></data>
+  <data name="PlaybackVersionNotes141" xml:space="preserve"><value>1.4.1：極致檔在測試核心選擇、程式啟動或過濾行程啟動時測量核心，並把待命執行緒綁到測得的核心上。</value></data>
+  <data name="PlaybackVersionNotes140" xml:space="preserve"><value>1.3.0 / 1.4.0（播放程式碼相同）：新增條件包、時間基準與啟動門控條件；OCR 點擊與取字、視窗啟用、註解卡片；同一按鍵按下與放開之間沒有等待時自動保持 10ms；原生等待可隨時取消。1.4.0 只改了介面與匯出。</value></data>
+  <data name="PlaybackVersionNotes120" xml:space="preserve"><value>1.2.0：最早可選的版本，支援按鍵、滑鼠、等待、重複、呼叫巨集與像素條件，原生精準播放。沒有 OCR、視窗啟用和註解卡片。之後的效果卡片（斷網、鎖幀等）由目前版本代為執行；等文字卡片無法使用。</value></data>
+  <data name="ParallelCardRemoved" xml:space="preserve"><value>並行卡片已移除（同一時間只允許執行一個巨集）。請先刪除巨集「{0}」裡的並行卡片再播放。</value></data>
+  <data name="OneMacroAtATime" xml:space="preserve"><value>另一個巨集正在執行。同一時間只允許執行一個巨集，請先停止它。</value></data>
 </root>

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MacroHid.Core\MacroHid.Core.csproj" />
+    <ProjectReference Include="..\..\legacy\MacroHid.LegacyContract\MacroHid.LegacyContract.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
