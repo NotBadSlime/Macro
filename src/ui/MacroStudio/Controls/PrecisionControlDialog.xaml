@@ -34,8 +34,13 @@
                             <ComboBoxItem Tag="balanced" Content="低占用" />
                             <ComboBoxItem Tag="extremeDuringPlayback" Content="均衡（推荐）" />
                             <ComboBoxItem Tag="ultraLowJitter" Content="极限" />
+                            <ComboBoxItem Tag="max" Content="Max（抢占）" />
                         </ComboBox>
                         <TextBlock x:Name="ProfileDescription" Style="{StaticResource CardHelpText}" />
+                        <Border x:Name="MaxWarning" Background="{DynamicResource DangerHover}" CornerRadius="8"
+                                Padding="10,8" Margin="0,0,0,10" Visibility="Collapsed">
+                            <TextBlock x:Name="MaxWarningText" TextWrapping="Wrap" Foreground="{DynamicResource Danger}" FontSize="12" />
+                        </Border>
                     </StackPanel>
                 </Border>
 

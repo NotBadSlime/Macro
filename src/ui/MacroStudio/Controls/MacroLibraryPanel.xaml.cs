@@ -83,6 +83,7 @@ public partial class MacroLibraryPanel : UserControl
     public event Action? PrecisionSettingsEdited;
 #pragma warning restore CS0067
     public event Action? BasicControlRequested;
+    public event Action? AdvancedSettingsRequested;
     public event Action? PrecisionControlRequested;
     public event Action? PlaybackVersionRequested;
     public event Action? LibraryStructureEdited;
@@ -121,6 +122,7 @@ public partial class MacroLibraryPanel : UserControl
         ApplyGroupButton.Content = L("Apply");
         GlobalRuntimeTitleText.Text = L("GlobalRuntime");
         BasicControlButton.Content = L("MacroBasicControl");
+        AdvancedSettingsButton.Content = L("AdvancedSettings");
         PrecisionControlButton.Content = L("PrecisionControl");
         PlaybackVersionButtonText.Text = L("PlaybackVersion");
         ListeningTitleText.Text = L("Listening");
@@ -750,6 +752,7 @@ public partial class MacroLibraryPanel : UserControl
     }
 
     private void BasicControlButton_Click(object sender, RoutedEventArgs e) => BasicControlRequested?.Invoke();
+    private void AdvancedSettingsButton_Click(object sender, RoutedEventArgs e) => AdvancedSettingsRequested?.Invoke();
 
     private void PrecisionControlButton_Click(object sender, RoutedEventArgs e) => PrecisionControlRequested?.Invoke();
 

@@ -258,7 +258,8 @@ public sealed class PrecisionPlaybackContext : IDisposable
                     RuntimeNativeMethods.SetThreadPriorityBoost(RuntimeNativeMethods.GetCurrentThread(), true);
                     RuntimeNativeMethods.SetThreadPriority(
                         RuntimeNativeMethods.GetCurrentThread(),
-                        2); // THREAD_PRIORITY_HIGHEST; never time critical
+                        // THREAD_PRIORITY_HIGHEST; Max (2.1) runs 极限 managed playback time-critical as well.
+                        mode == PrecisionMode.UltraLowJitter && MaxPreemption.Live ? RuntimeNativeMethods.ThreadPriorityTimeCritical : 2);
                 }
             }
             catch { }

@@ -495,6 +495,66 @@ int main(int argc, char** argv)
         }
         calls = 0; inputsSent = 0;
         {
+            // Max (2.1) lock-free race: both workers race every batch; each must be submitted exactly once, also when a second
+            // run arrives mid-race (race closes, locked path continues) and when a run is cancelled mid-race.
+            MhpRunOptions maxOptions = options; maxOptions.flags = MhpFlagMaxPreemption;
+            Check(MhpWarmEngine(&maxOptions, nullptr) == MhpOk, "max warm");
+            std::vector<MhpBatch> dense;
+            for (int i = 0; i < 2000; i++) dense.push_back({i * options.qpcFrequency / 50000,0,1,1}); // every 20 us
+            {
+                Run solo(dense, maxOptions);
+                const auto stats = solo.Wait();
+                std::cout << "max_race batches=" << stats.batchesSubmitted << " helperWins=" << stats.helperWorkerWins
+                          << " primaryWins=" << stats.primaryWorkerWins << " maxLateUs=" << stats.maxLateUs << "\n";
+                Check(stats.batchesSubmitted == 2000 && calls == 2000 && inputsSent == 2000, "max race lost or duplicated a batch");
+            }
+            calls = 0; inputsSent = 0;
+            {
+                Run first(dense, maxOptions);
+                Sleep(10);
+                Run second(dense, maxOptions);
+                Check(first.Wait().batchesSubmitted == 2000 && second.Wait().batchesSubmitted == 2000, "max race with a second run");
+                Check(calls == 4000 && inputsSent == 4000, "max race handover duplicated or lost a batch");
+            }
+            calls = 0;
+            {
+                Run cancelled(dense, maxOptions);
+                Sleep(10);
+                MhpCancelRun(cancelled.handle);
+                const auto stats = cancelled.Wait(MhpCancelled);
+                Check(stats.batchesSubmitted == static_cast<uint32_t>(calls.load()) && stats.batchesSubmitted < 2000, "max race cancel");
+            }
+            calls = 0; inputsSent = 0;
+            {
+                // Power guard: display off (or standby) drops Max to 极限 behaviour and restores it after the settle period.
+                const DWORD maxClass = GetPriorityClass(GetCurrentProcess());
+                g_sharedScheduler.SetPowerSettleMs(100);
+                g_sharedScheduler.OnPowerDisplay(true);
+                Check(MhpGetPowerHold() == 1, "power hold on display off");
+                Check(GetPriorityClass(GetCurrentProcess()) != REALTIME_PRIORITY_CLASS, "realtime class kept during power hold");
+                Check(MhpSetHotStandby(1) == MhpOk, "hot standby request during hold");
+                Run held(dense, maxOptions);
+                const auto stats = held.Wait();
+                Check(stats.batchesSubmitted == 2000 && calls == 2000 && inputsSent == 2000, "max run during power hold");
+                MhpSetHotStandby(0);
+                g_sharedScheduler.OnPowerDisplay(false);
+                Check(MhpGetPowerHold() == 1, "power hold released before settle");
+                for (int i = 0; i < 100 && MhpGetPowerHold(); i++) Sleep(10);
+                Check(MhpGetPowerHold() == 0, "power hold not released after settle");
+                Check(GetPriorityClass(GetCurrentProcess()) == maxClass, "process class not restored after power hold");
+                g_sharedScheduler.OnPowerSuspend(true);
+                Check(MhpGetPowerHold() == 1, "power hold on suspend");
+                g_sharedScheduler.SetPowerSettleMs(0);
+                g_sharedScheduler.OnPowerSuspend(false);
+                Check(MhpGetPowerHold() == 0 && GetPriorityClass(GetCurrentProcess()) == maxClass, "power hold after resume");
+                g_sharedScheduler.SetPowerSettleMs(120000);
+                std::cout << "max_power_guard ok class=" << maxClass << "\n";
+            }
+            calls = 0; inputsSent = 0;
+            Check(MhpWarmEngine(&options, nullptr) == MhpOk, "back to ultra");
+        }
+        calls = 0; inputsSent = 0;
+        {
             std::vector<MhpBatch> batches;
             for (int i = 0; i < 1000; i++) batches.push_back({i * options.qpcFrequency / 100000,0,1,1});
             std::vector<std::unique_ptr<Run>> stress;

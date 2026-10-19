@@ -941,6 +941,23 @@
   <data name="BasicSectionTiming" xml:space="preserve"><value>Key timing</value></data>
   <data name="Milliseconds" xml:space="preserve"><value>ms</value></data>
   <data name="HoldMillisecondsInvalid" xml:space="preserve"><value>Enter 0 to {0} ms, up to 3 decimals.</value></data>
+  <data name="BasicSectionNoGc" xml:space="preserve"><value>No garbage collection during playback</value></data>
+  <data name="NoGcMaxIterationSeconds" xml:space="preserve"><value>One pass up to</value></data>
+  <data name="Seconds" xml:space="preserve"><value>s</value></data>
+  <data name="NoGcMaxIterationSecondsHelp" xml:space="preserve"><value>A macro whose single pass is written as at most this many seconds plays without garbage collection; longer macros collect as usual. 0 turns it off.</value></data>
+  <data name="NoGcSecondsInvalid" xml:space="preserve"><value>Enter a whole number of seconds from 0 to {0}.</value></data>
+  <data name="AdvancedSettings" xml:space="preserve"><value>Advanced settings</value></data>
+  <data name="AdvancedSectionNoGc" xml:space="preserve"><value>No garbage collection during playback</value></data>
+  <data name="AdvancedSectionNoGcRenew" xml:space="preserve"><value>Collect between loop passes</value></data>
+  <data name="NoGcIntro" xml:space="preserve"><value>Applies to Extreme and Ultra (including Max) on the current engine. The no-GC state starts after the first input is handed off, so it never delays the hotkey's first input. The native threads that send input are never paused by a collection; this protects the hotkey hand-off, loop hand-offs and condition monitors.</value></data>
+  <data name="NoGcBudget" xml:space="preserve"><value>Reserved memory</value></data>
+  <data name="NoGcBudgetHelp" xml:space="preserve"><value>Memory that may be allocated while no-GC holds; it stays committed. If a pass uses more, .NET leaves the no-GC state and collects as usual, so memory cannot run away. A larger reserve makes the collection on entry slower (64 MB cold measured about 30 ms).</value></data>
+  <data name="NoGcRenewSlack" xml:space="preserve"><value>At least this long before the next pass</value></data>
+  <data name="NoGcRenewPercent" xml:space="preserve"><value>Reserve used</value></data>
+  <data name="NoGcRenewAfterLoss" xml:space="preserve"><value>Re-enter between passes after the no-GC state was lost</value></data>
+  <data name="NoGcRenewWhileConditions" xml:space="preserve"><value>Also collect while condition monitors run</value></data>
+  <data name="NoGcRenewHelp" xml:space="preserve"><value>While looping, a collection runs only after a pass's last input and before the next pass, then no-GC starts again: when at least the time above is left and the reserve share above is used (or the no-GC state was lost and re-entering is on). Without the condition option, the collection is skipped while a condition runs.</value></data>
+  <data name="RangeIntInvalid" xml:space="preserve"><value>Enter a whole number from {0} to {1}.</value></data>
   <data name="DialogYes" xml:space="preserve"><value>Yes</value></data>
   <data name="DialogNo" xml:space="preserve"><value>No</value></data>
   <data name="SnapshotSampleMessage" xml:space="preserve"><value>The target process is not running. Start it first, then press the hotkey again.</value></data>
@@ -989,6 +1006,7 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="PlaybackVersionHelp" xml:space="preserve"><value>Choose which release&apos;s code plays your macros. An earlier release runs its original code, known problems included; effect cards added after it (network cut, frame lock, ...) are run by the current version. Core testing and the latency check always use the current version.</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0} (current, recommended)</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>This installation does not include that release&apos;s engine files; playback will fail. Reinstall the full package.</value></data>
+  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0 (current): new Max (preemption) precision; Max falls back to Extreme around display off, sleep and standby; short macros play without .NET garbage collection, a loop collects only between passes; new Advanced settings to tune these rules; otherwise as 2.0.4: version switcher, one macro at a time, cold first hotkey about a quarter millisecond, SendInput cost compensation, core selection avoids interrupt-heavy cores.</value></data>
   <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4 (current): new version switcher; parallel card removed, one macro runs at a time; engine as in 2.0.3: cold first hotkey from about 2 ms down to a quarter of a millisecond; key holds counted from the start of SendInput; SendInput cost compensation; optional hotkey start alignment and Raw Input hotkeys; core selection avoids interrupt-heavy cores; system latency check.</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2: the trailing wait of a loop is no longer dropped (the period equals the written total); the default hold delays only that release instead of the whole timeline; fixed basic-control settings not applying after OK.</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1 (test build): hotkey entry and start-up warm-up — the playback path is warmed at start-up and the timer resolution is kept up while a precise hotkey waits; diagnostics. The playback timeline is the same as 2.0.0.</value></data>
@@ -1008,4 +1026,8 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="PlaybackVersionApplied" xml:space="preserve"><value>Playback version: {0}</value></data>
   <data name="PrecisionHotkeySection" xml:space="preserve"><value>Hotkey and sending</value></data>
   <data name="PrecisionCoreSection" xml:space="preserve"><value>CPU cores</value></data>
+  <data name="PrecisionMax" xml:space="preserve"><value>Max (preemption)</value></data>
+  <data name="PrecisionMaxDescription" xml:space="preserve"><value>Extreme plus preemption: the two playback threads run time-critical in a realtime-priority process with MMCSS critical, pinned to the two quietest cores, and spin through every wait instead of sleeping on a timer. While a Max hotkey listens they keep spinning, so the first input does not wait for a thread to wake.</value></data>
+  <data name="PrecisionMaxWarning" xml:space="preserve"><value>Takes two CPU cores at 100% while listening and playing. Game frame rate can drop and other programs on those cores may stutter. While the display is off or dimmed, during sleep and Modern Standby, and for 2 minutes after waking, Max runs as Extreme and restores the process priority. Turn off when not needed.</value></data>
+  <data name="PrecisionMaxLegacyVersion" xml:space="preserve"><value>Max works only with the current playback version; an earlier release plays with its own Extreme.</value></data>
 </root>

@@ -155,6 +155,12 @@ internal static partial class NativePlaybackInterop
     internal static extern MhpStatus MhpSetQuietCores(ulong mask);
 
     [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern MhpStatus MhpSetHotStandby(int enabled);
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int MhpGetPowerHold();
+
+    [DllImport(LibraryName, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
     internal static extern ulong MhpGetQuietCores();
 
     private const uint Infinite = 0xFFFFFFFF;
@@ -168,6 +174,8 @@ internal static partial class NativePlaybackInterop
         token.ThrowIfCancellationRequested();
         var status = MhpSubmitPlanAt(plan, ref options, control, timelineStart, out var run, out var completion);
         if (status != MhpStatus.Ok) return status;
+        // The native workers own the batches now; a collection while entering the no-GC region cannot delay them.
+        PlaybackGcPause.AfterFirstSubmit();
         try
         {
             using var registration = token.Register(() => MhpCancelRun(run));

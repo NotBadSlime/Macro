@@ -30,7 +30,10 @@ extern "C"
 
     enum MhpRunFlags : uint32_t
     {
-        MhpFlagCompensateSendInput = 1
+        MhpFlagCompensateSendInput = 1,
+        // Max (2.1): 极限 plus preemption. Workers run time-critical in a realtime-class process with MMCSS critical,
+        // never sleep while a Max profile is warm (hot spin on their pinned cores) and spin through every wait.
+        MhpFlagMaxPreemption = 2
     };
 
     enum MhpNativeEngineMode : int32_t
@@ -205,6 +208,10 @@ extern "C"
     __declspec(dllexport) MhpStatus __cdecl MhpScanCoreStalls(uint64_t mask, uint32_t windowMs, MhpCoreStall* results, uint32_t capacity, uint32_t* written, MhpCoreProgressFn progress);
     __declspec(dllexport) MhpStatus __cdecl MhpSetQuietCores(uint64_t mask);
     __declspec(dllexport) uint64_t __cdecl MhpGetQuietCores();
+    __declspec(dllexport) MhpStatus __cdecl MhpSetHotStandby(int32_t enabled);
+    // Max power guard: non-zero while Windows suspends, enters (Modern) Standby or turns the display off, and for 30 s after
+    // it returns. Max then runs like 极限: no spinning, no hot standby, the process class is restored.
+    __declspec(dllexport) int32_t __cdecl MhpGetPowerHold();
     __declspec(dllexport) MhpStatus __cdecl MhpSubmitPlanAt(void* plan, const MhpRunOptions* options, void* control, int64_t timelineStart, void** run, HANDLE* completion);
     __declspec(dllexport) MhpStatus __cdecl MhpGetRunTrace(void* run, MhpRunTrace* trace);
     // Retains plan/control. Options' outlier buffer must remain alive until completion.

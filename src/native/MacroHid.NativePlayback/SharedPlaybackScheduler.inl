@@ -99,6 +99,11 @@ struct ScheduledRun
     std::vector<int64_t> submittedAt;
     int scratchSlot = -1;
     unsigned priorityWorkers = 0, mmcssWorkers = 0;
+    // Max lock-free race: published = batches fully submitted (release after the winner finishes one), claimed = batches
+    // taken. A worker claims batch i by moving claimed from i to i + 1; only then does it submit.
+    std::atomic<size_t> published{0};
+    std::atomic<size_t> claimed{0};
+    int racers = 0; // under the scheduler gate
     ScheduledRun(NativePlan* p, const MhpRunOptions& o, PlaybackControl* c, volatile long* flag, int64_t origin)
         : plan(p), options(o), control(c), externalCancel(flag), start(0),
           frequency(o.qpcFrequency > 0 ? o.qpcFrequency : QueryFrequency())
@@ -164,8 +169,164 @@ class SharedPlaybackScheduler
     // Precision the idle workers keep configured (MMCSS/affinity). Updated by every Warm() so a profile change
     // is applied while idle instead of in front of the next run's first SendInput.
     std::atomic<int> warmPrecision{1};
+    // Max (2.1): warm profile is 极限 with preemption; hot standby = idle workers keep spinning while a Max hotkey listens.
+    std::atomic<bool> warmMax{false};
+    std::atomic<bool> hotStandby{false};
+    DWORD previousPriorityClass = 0;
+    bool realtimeApplied = false;
     DWORD_PTR preparedMask = 0;
     unsigned nextOwner = 0;
+    static bool IsMax(const ScheduledRun& run) { return (run.options.flags & MhpFlagMaxPreemption) != 0; }
+    // Max power guard. On 2026-10-19 this machine bug-checked 0x9F (amdacpbus.sys never finished a power IRP) 67 s after
+    // leaving Modern Standby while priority-31 threads spun on its cores. While Windows suspends, enters standby or the
+    // display is off/dimmed, and for a settle period after it returns, Max behaves like 极限: no spinning through waits, no
+    // dual race, no hot standby, no SMT parkers, HIGHEST instead of TIME_CRITICAL, and the process priority class restored.
+    std::atomic<bool> powerHeld{false};
+    std::mutex powerGate;
+    bool powerSuspended = false, powerDisplayOff = false, powerRegistered = false;
+    HPOWERNOTIFY suspendNotify = nullptr, displayNotify = nullptr;
+    PTP_TIMER powerSettleTimer = nullptr;
+    DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS powerSubscription{};
+    int64_t powerSettleMs = 120000;
+    bool MaxLive(const ScheduledRun& run) const { return IsMax(run) && !PowerHeld(); }
+    static ULONG CALLBACK OnPowerNotification(PVOID context, ULONG type, PVOID setting)
+    {
+        auto self = static_cast<SharedPlaybackScheduler*>(context);
+        if (type == PBT_APMSUSPEND) self->OnPowerSuspend(true);
+        else if (type == PBT_APMRESUMEAUTOMATIC || type == PBT_APMRESUMESUSPEND) self->OnPowerSuspend(false);
+        else if (type == PBT_POWERSETTINGCHANGE && setting)
+        {
+            // GUID_CONSOLE_DISPLAY_STATE: 0 off, 1 on, 2 dimmed. Dimmed already means idle; hold from there.
+            const auto broadcast = static_cast<const POWERBROADCAST_SETTING*>(setting);
+            if (broadcast->DataLength >= sizeof(DWORD))
+                self->OnPowerDisplay(*reinterpret_cast<const DWORD*>(broadcast->Data) != 1);
+        }
+        return ERROR_SUCCESS;
+    }
+    static VOID CALLBACK OnPowerSettled(PTP_CALLBACK_INSTANCE, PVOID context, PTP_TIMER)
+    {
+        auto self = static_cast<SharedPlaybackScheduler*>(context);
+        {
+            std::lock_guard<std::mutex> lock(self->powerGate);
+            if (self->powerSuspended || self->powerDisplayOff) return;
+            self->powerHeld.store(false, std::memory_order_release);
+        }
+        self->ApplyPowerState();
+    }
+    void RegisterPower()
+    {
+        {
+            std::lock_guard<std::mutex> lock(powerGate);
+            if (powerRegistered) return;
+            powerRegistered = true;
+            powerSettleTimer = CreateThreadpoolTimer(OnPowerSettled, this, nullptr);
+            powerSubscription.Callback = OnPowerNotification;
+            powerSubscription.Context = this;
+        }
+        // Outside powerGate: the display registration may report the current state on this thread.
+        HPOWERNOTIFY suspend = nullptr, display = nullptr;
+        PowerRegisterSuspendResumeNotification(DEVICE_NOTIFY_CALLBACK, &powerSubscription, &suspend);
+        // {6FE69556-704A-47A0-8F24-C28D936FDA47} GUID_CONSOLE_DISPLAY_STATE. Reports the current state at once.
+        static const GUID consoleDisplayState{0x6fe69556, 0x704a, 0x47a0, {0x8f, 0x24, 0xc2, 0x8d, 0x93, 0x6f, 0xda, 0x47}};
+        PowerSettingRegisterNotification(&consoleDisplayState, DEVICE_NOTIFY_CALLBACK, &powerSubscription, &display);
+        std::lock_guard<std::mutex> lock(powerGate);
+        suspendNotify = suspend; displayNotify = display;
+    }
+    void UnregisterPower()
+    {
+        HPOWERNOTIFY suspend, display; PTP_TIMER timer;
+        { std::lock_guard<std::mutex> lock(powerGate);
+          if (!powerRegistered) return;
+          suspend = suspendNotify; display = displayNotify; timer = powerSettleTimer;
+          suspendNotify = displayNotify = nullptr; }
+        if (suspend) PowerUnregisterSuspendResumeNotification(suspend);
+        if (display) PowerSettingUnregisterNotification(display);
+        { std::lock_guard<std::mutex> lock(powerGate);
+          powerRegistered = false; powerSettleTimer = nullptr; powerSuspended = powerDisplayOff = false;
+          powerHeld.store(false, std::memory_order_release); }
+        if (timer) { SetThreadpoolTimer(timer, nullptr, 0, 0); WaitForThreadpoolTimerCallbacks(timer, TRUE); CloseThreadpoolTimer(timer); }
+    }
+    void UpdatePowerHold()
+    {
+        {
+            std::lock_guard<std::mutex> lock(powerGate);
+            if (powerSuspended || powerDisplayOff)
+            {
+                if (powerSettleTimer) SetThreadpoolTimer(powerSettleTimer, nullptr, 0, 0);
+                powerHeld.store(true, std::memory_order_release);
+            }
+            else if (PowerHeld())
+            {
+                // Back from standby / display on: drivers are still finishing their power transitions. Stay held a while.
+                if (powerSettleMs <= 0 || !powerSettleTimer) powerHeld.store(false, std::memory_order_release);
+                else
+                {
+                    ULARGE_INTEGER relative{}; relative.QuadPart = static_cast<ULONGLONG>(-powerSettleMs * 10000);
+                    FILETIME due{relative.LowPart, relative.HighPart};
+                    SetThreadpoolTimer(powerSettleTimer, &due, 0, 100);
+                }
+            }
+        }
+        ApplyPowerState();
+    }
+    void ApplyPowerState()
+    {
+        { std::lock_guard<std::mutex> lock(gate); ApplyProcessClass(warmMax.load(std::memory_order_acquire) && !PowerHeld()); }
+        Notify(); // spinning workers and parkers re-check; idle workers re-configure their priority
+    }
+public:
+    bool PowerHeld() const { return powerHeld.load(std::memory_order_acquire); }
+    void OnPowerSuspend(bool suspended) { { std::lock_guard<std::mutex> lock(powerGate); powerSuspended = suspended; } UpdatePowerHold(); }
+    void OnPowerDisplay(bool off) { { std::lock_guard<std::mutex> lock(powerGate); powerDisplayOff = off; } UpdatePowerHold(); }
+    void SetPowerSettleMs(int64_t ms) { std::lock_guard<std::mutex> lock(powerGate); powerSettleMs = ms; }
+private:
+    // Diagnostics for the Max A/B: MACROHID_MAX_NOSPIN=1 keeps the timer sleeps, MACROHID_MAX_NORT=1 keeps the process class.
+    static bool MaxEnv(const wchar_t* name) { wchar_t v[4]{}; return GetEnvironmentVariableW(name, v, 4) == 1 && v[0] == L'1'; }
+    static bool MaxPureSpin() { static const bool on = !MaxEnv(L"MACROHID_MAX_NOSPIN"); return on; }
+    static bool MaxRealtime() { static const bool on = !MaxEnv(L"MACROHID_MAX_NORT"); return on; }
+    bool SpinsThrough(const ScheduledRun& run) const { return MaxLive(run) && MaxPureSpin(); }
+    // Max dual race: both workers spin to every deadline on their own cores and the first to arrive submits (claim under the
+    // queue lock, so a batch is sent once). A core held by an interrupt/DPC no longer makes the batch late. MACROHID_MAX_NORACE=1 off.
+    static bool MaxRace() { static const bool on = !MaxEnv(L"MACROHID_MAX_NORACE"); return on; }
+    bool Races(const ScheduledRun& run) const { return SpinsThrough(run) && MaxRace(); }
+    // Realtime class for the whole process while a Max profile is warm (1.6.0 did this for 极致 per run); restored otherwise.
+    void ApplyProcessClass(bool max)
+    {
+        HANDLE process = GetCurrentProcess();
+        if (max && !realtimeApplied && MaxRealtime())
+        {
+            previousPriorityClass = GetPriorityClass(process);
+            realtimeApplied = SetPriorityClass(process, REALTIME_PRIORITY_CLASS) != FALSE;
+        }
+        else if (!max && realtimeApplied)
+        {
+            SetPriorityClass(process, previousPriorityClass ? previousPriorityClass : NORMAL_PRIORITY_CLASS);
+            realtimeApplied = false;
+        }
+    }
+    // A priority-31 thread that never yields starves the kernel's per-processor worker threads on its core, which can stall
+    // the whole system. Max spins through every wait but, after 50 ms of uninterrupted spinning, rests 0.5 ms on the timer
+    // when the next deadline is more than 3 ms away, so no deadline is moved.
+    struct Breather
+    {
+        int64_t frequency, spinStart;
+        explicit Breather(int64_t f) : frequency(f), spinStart(QueryCounter()) {}
+        bool Due(int64_t now, int64_t remaining) const
+        {
+            return now - spinStart > frequency / 20 && remaining > frequency * 3 / 1000;
+        }
+        void Rest(HANDLE timer, HANDLE wake)
+        {
+            LARGE_INTEGER due{}; due.QuadPart = -5000; // 0.5 ms
+            if (timer && SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE))
+            {
+                if (wake) { HANDLE handles[]{wake, timer}; WaitForMultipleObjects(2, handles, FALSE, 5); }
+                else WaitForSingleObject(timer, 5);
+            }
+            else Sleep(1);
+            spinStart = QueryCounter();
+        }
+    };
 
     void Finish(ScheduledRun& run, MhpStatus status)
     {
@@ -183,20 +344,24 @@ class SharedPlaybackScheduler
         if (!batch.inputCount) return 0;
         return SendCosts().Lead(BatchKind(run.plan->inputs.data() + batch.inputOffset, batch.inputCount), run.frequency);
     }
-    int64_t Due(ScheduledRun& run)
+    int64_t Due(ScheduledRun& run) { return DueAt(run, run.next); }
+    int64_t DueAt(ScheduledRun& run, size_t index)
     {
-        const auto& batch = run.plan->batches[run.next];
+        const auto& batch = run.plan->batches[index];
         // The lead moves only the written time. Release dependencies and chord holds are applied after it, from the
         // measured start of the press, so a compensated hold is never shorter than written.
-        int64_t due = run.start + batch.dueTicks + TotalPausedTicks(run.control) - SendLead(run, run.next);
-        for (const auto& dependency : run.plan->releaseDependencies[run.next])
+        int64_t due = run.start + batch.dueTicks + TotalPausedTicks(run.control) - SendLead(run, index);
+        for (const auto& dependency : run.plan->releaseDependencies[index])
             due = std::max(due, run.submittedAt[dependency.first] + dependency.second);
         return run.chord.AdjustDue(due,
-            run.plan->chordEdges[run.next], ModifierChordHoldTicks(run.frequency));
+            run.plan->chordEdges[index], ModifierChordHoldTicks(run.frequency));
     }
     bool CanPumpSingleRun(ScheduledRun& run)
     {
         if (!singleRunFastPath) return false;
+        // Max spins to every deadline on the owner's pinned core, so there is no timer wake to rescue.
+        if (Races(run)) return false;
+        if (SpinsThrough(run)) return true;
         if (run.options.precisionMode != MhpUltraLowJitter) return true;
         // Retain deadline rescue for spaced ultra events. A single owner was
         // cheaper but measurably worsened their tail latency; only dense bursts
@@ -270,18 +435,84 @@ class SharedPlaybackScheduler
             if (run.status != MhpOk || run.next == run.plan->batches.size()) Finish(run, run.status);
         }
     }
-    void PumpSingleRun(ScheduledRun& run, int worker, HANDLE timer, bool priorityApplied, bool mmcss, uint64_t seen)
+    // Max lock-free race (single run): both workers spin to the next deadline on their own cores; the first to get there takes
+    // the batch with one compare-exchange and submits it, without the queue lock, so an interrupt on one core cannot delay the
+    // batch and neither worker ever waits on the other. Ends when the run is done, stopped or paused, or another run is queued
+    // (CloseRace leaves run.next consistent for the locked path).
+    std::atomic<size_t> runCount{0};
+    static constexpr size_t RaceClosed = SIZE_MAX;
+    static void CloseRace(ScheduledRun& run)
     {
-        const int64_t baseSpinTicks = run.frequency * (run.options.precisionMode == MhpUltraLowJitter ? 1000 : 300) / 1000000;
+        while (true)
+        {
+            size_t c = run.claimed.load(std::memory_order_acquire);
+            if (c == RaceClosed) return;
+            // Only close between batches: an in-flight submission publishes first.
+            if (run.published.load(std::memory_order_acquire) == c
+                && run.claimed.compare_exchange_strong(c, RaceClosed, std::memory_order_acq_rel)) return;
+            PauseProcessor();
+        }
+    }
+    bool RaceShouldEnd(ScheduledRun& run, size_t index)
+    {
+        return index >= run.plan->batches.size() || run.status != MhpOk || run.IsStopped() || IsPaused(run.control)
+            || stopping || runCount.load(std::memory_order_acquire) > 1 || PowerHeld();
+    }
+    void RaceSingleRun(ScheduledRun& run, int worker, HANDLE timer, bool priorityApplied, bool mmcss)
+    {
+        Breather breather(run.frequency);
+        while (true)
+        {
+            const size_t i = run.published.load(std::memory_order_acquire);
+            const size_t c = run.claimed.load(std::memory_order_acquire);
+            if (c == RaceClosed) return;
+            if (RaceShouldEnd(run, i)) { CloseRace(run); return; }
+            if (c != i) { PauseProcessor(); continue; } // the other worker is submitting batch i
+            const int64_t target = DueAt(run, i);
+            int64_t now = QueryCounter();
+            bool moved = false;
+            while (now < target)
+            {
+                if (run.claimed.load(std::memory_order_acquire) != i || RaceShouldEnd(run, i)) { moved = true; break; }
+                if (breather.Due(now, target - now)) breather.Rest(timer, nullptr);
+                else PauseProcessor();
+                now = QueryCounter();
+            }
+            if (moved) continue;
+            size_t expected = i;
+            if (!run.claimed.compare_exchange_strong(expected, i + 1, std::memory_order_acq_rel)) continue;
+            run.next = i;
+            SubmitClaimedBatch(run, worker, priorityApplied, mmcss, true, target);
+            run.published.store(i + 1, std::memory_order_release);
+        }
+    }
+    void PumpSingleRun(ScheduledRun& run, int worker, HANDLE timer, bool priorityApplied, bool mmcss, uint64_t seen)
+    {        const int64_t baseSpinTicks = run.frequency * (run.options.precisionMode == MhpUltraLowJitter ? 1000 : 300) / 1000000;
         int64_t spinTicks = baseSpinTicks;
         const int64_t maximumSpinTicks = run.frequency * (run.options.precisionMode == MhpUltraLowJitter ? 1000 : 800) / 1000000;
         const int64_t timerMargin = run.frequency * 50 / 1000000;
+        const bool max = SpinsThrough(run);
+        Breather breather(run.frequency);
         while (run.next < run.plan->batches.size() && run.status == MhpOk)
         {
             if (generation.load(std::memory_order_acquire) != seen || run.IsStopped() || IsPaused(run.control)) break;
             if (!CanPumpSingleRun(run)) break;
             const int64_t target = Due(run);
             const int64_t remaining = target - QueryCounter();
+            if (max)
+            {
+                // Max: no timer sleep (its wake-up error is the jitter being removed); spin to every deadline.
+                int64_t now = QueryCounter();
+                while (now < target && generation.load(std::memory_order_acquire) == seen && !run.IsStopped())
+                {
+                    if (breather.Due(now, target - now)) breather.Rest(timer, changed[worker]);
+                    else PauseProcessor();
+                    now = QueryCounter();
+                }
+                if (generation.load(std::memory_order_acquire) != seen || run.IsStopped() || IsPaused(run.control)) break;
+                SubmitClaimedBatch(run, worker, priorityApplied, mmcss, true, target);
+                continue;
+            }
             // The first batch of a hotkey-anchored run is at most the start lead away: spin up to 1 ms instead of a timer
             // sleep, whose wake-up error (~100 us here) would break the constant start delay the anchor provides.
             const int64_t spinLimit = run.next == 0 ? std::max(spinTicks, run.frequency / 1000) : spinTicks;
@@ -327,32 +558,36 @@ class SharedPlaybackScheduler
         HANDLE mmcss = nullptr;
         DWORD_PTR oldAffinity = 0;
         int lastMode = -1;
+        bool lastMax = false;
         DWORD_PTR lastMask = 0;
-        auto configure = [&](int mode, DWORD_PTR mask)
+        auto configure = [&](int mode, DWORD_PTR mask, bool max)
         {
+            max = max && !PowerHeld(); // power guard: no TIME_CRITICAL / MMCSS CRITICAL around standby
             // 极限 pins each worker to its selected core. Other profiles float, but only over the quiet set measured by the
             // stall probe (interrupt-heavy cores excluded) when one is known: a soft restriction, not a single-core pin.
             const DWORD_PTR effective = mode == MhpUltraLowJitter ? mask : g_quietCoreMask.load(std::memory_order_acquire);
-            if (lastMode != mode)
+            if (lastMode != mode || lastMax != max)
             {
                 if (mmcss) { AvRevertMmThreadCharacteristics(mmcss); mmcss = nullptr; }
+                // Max: time-critical (31 in the realtime class). Others: HIGHEST.
+                SetThreadPriority(GetCurrentThread(), max ? THREAD_PRIORITY_TIME_CRITICAL : THREAD_PRIORITY_HIGHEST);
             }
             if (mode == MhpUltraLowJitter && !mmcss)
             {
                 DWORD task = 0;
                 mmcss = AvSetMmThreadCharacteristicsW(L"Pro Audio", &task);
-                if (mmcss) AvSetMmThreadPriority(mmcss, AVRT_PRIORITY_HIGH);
+                if (mmcss) AvSetMmThreadPriority(mmcss, max ? AVRT_PRIORITY_CRITICAL : AVRT_PRIORITY_HIGH);
             }
             if (lastMode != mode || lastMask != effective)
             {
                 if (oldAffinity) { SetThreadAffinityMask(GetCurrentThread(), oldAffinity); oldAffinity = 0; }
                 if (effective) oldAffinity = SetThreadAffinityMask(GetCurrentThread(), effective);
             }
-            lastMode = mode; lastMask = effective;
+            lastMode = mode; lastMask = effective; lastMax = max;
         };
         // Prepared means timer, priority, MMCSS and affinity are ready before
         // the first deadline, not just that the std::thread has been created.
-        configure(warmPrecision.load(std::memory_order_acquire), cores[worker].mask);
+        configure(warmPrecision.load(std::memory_order_acquire), cores[worker].mask, warmMax.load(std::memory_order_acquire));
         { std::lock_guard<std::mutex> lock(gate); initializedWorkers++; }
         initialized.notify_one();
         while (true)
@@ -363,19 +598,22 @@ class SharedPlaybackScheduler
             int64_t target = INT64_MAX;
             uint64_t seen;
             bool exclusive = false;
+            bool race = false;
             {
                 std::lock_guard<std::mutex> lock(gate);
                 if (stopping && runs.empty()) break;
                 for (auto& run : runs)
                 {
-                    if (run->done || run->inFlight) continue;
+                    // A run being raced is in flight for the locked path, but the other worker may still join the race.
+                    if (run->done || (run->inFlight && !(run->racers > 0 && runs.size() == 1))) continue;
+                    if (run->racers > 0) { picked = run; target = 0; break; }
                     if (stopping || run->IsStopped()) { Finish(*run, MhpCancelled); continue; }
                     if (run->next == run->plan->batches.size()) { Finish(*run, MhpOk); continue; }
                     if (IsPaused(run->control)) continue;
                     if (runs.size() == 1 && CanPumpSingleRun(*run) && run->owner != worker) continue;
                     if (run->options.precisionMode != MhpUltraLowJitter && run->owner != worker) continue;
                     int64_t due = Due(*run);
-                    if (run->owner != worker) due += std::max<int64_t>(1, run->frequency * 2 / 1000000);
+                    if (run->owner != worker && !Races(*run)) due += std::max<int64_t>(1, run->frequency * 2 / 1000000);
                     if (due < target) { target = due; picked = run; }
                 }
                 for (auto it = runs.begin(); it != runs.end() && retiredCount < retired.size(); )
@@ -384,11 +622,42 @@ class SharedPlaybackScheduler
                     else ++it;
                 }
                 if (stopping && runs.empty()) break;
+                runCount.store(runs.size(), std::memory_order_release);
                 seen = generation.load(std::memory_order_acquire);
-                exclusive = runs.size() == 1 && picked && CanPumpSingleRun(*picked) && picked->owner == worker;
+                race = runs.size() == 1 && picked && Races(*picked) && !picked->done && !picked->IsStopped() && !IsPaused(picked->control)
+                    && picked->next < picked->plan->batches.size() && (picked->racers > 0 || !picked->inFlight);
+                if (race)
+                {
+                    if (picked->racers++ == 0)
+                    {
+                        // First racer: the race starts from the locked path's position.
+                        picked->inFlight = true;
+                        picked->published.store(picked->next, std::memory_order_release);
+                        picked->claimed.store(picked->next, std::memory_order_release);
+                    }
+                }
+                exclusive = !race && runs.size() == 1 && picked && CanPumpSingleRun(*picked) && picked->owner == worker;
                 if (exclusive) picked->inFlight = true;
             }
             for (size_t i = 0; i < retiredCount; i++) retired[i].reset();
+            if (race)
+            {
+                configure(picked->options.precisionMode, picked->cores[worker].mask, true);
+                RaceSingleRun(*picked, worker, timer, priorityApplied, mmcss != nullptr);
+                {
+                    std::lock_guard<std::mutex> lock(gate);
+                    if (--picked->racers == 0)
+                    {
+                        picked->next = picked->published.load(std::memory_order_acquire);
+                        picked->inFlight = false;
+                        if (picked->status != MhpOk) Finish(*picked, picked->status);
+                        else if (picked->IsStopped() || stopping) Finish(*picked, MhpCancelled);
+                        else if (picked->next == picked->plan->batches.size()) Finish(*picked, MhpOk);
+                    }
+                }
+                Notify();
+                continue;
+            }
             if (picked && picked->IsStopped() && !exclusive) continue;
             if (!picked)
             {
@@ -397,12 +666,24 @@ class SharedPlaybackScheduler
                 // MMCSS/affinity on every isolated hotkey is avoidable startup
                 // work; mode changes and shutdown restore it below. A warm-up
                 // for another profile wakes the workers so it is applied here.
-                configure(warmPrecision.load(std::memory_order_acquire), cores[worker].mask);
+                configure(warmPrecision.load(std::memory_order_acquire), cores[worker].mask, warmMax.load(std::memory_order_acquire));
+                if (hotStandby.load(std::memory_order_acquire) && !PowerHeld())
+                {
+                    // Max hot standby: the owner of the next run is already running on its core, so a hotkey's first
+                    // batch does not wait for the scheduler to wake this thread. Polls the generation; rests briefly.
+                    Breather breather(QueryFrequency());
+                    while (generation.load(std::memory_order_acquire) == seen && hotStandby.load(std::memory_order_acquire) && !PowerHeld())
+                    {
+                        if (breather.Due(QueryCounter(), INT64_MAX)) breather.Rest(timer, changed[worker]);
+                        else PauseProcessor();
+                    }
+                    continue;
+                }
                 WaitForSingleObject(changed[worker], INFINITE);
                 continue;
             }
             const auto mask = picked->cores[worker].mask;
-            configure(picked->options.precisionMode, mask);
+            configure(picked->options.precisionMode, mask, IsMax(*picked));
             if (exclusive)
             {
                 PumpSingleRun(*picked, worker, timer, priorityApplied, mmcss != nullptr, seen);
@@ -410,7 +691,7 @@ class SharedPlaybackScheduler
             }
             const int64_t spinUs = picked->next == 0 ? 1000 : picked->options.precisionMode == MhpUltraLowJitter ? 1000 : 300;
             int64_t remaining = target - QueryCounter();
-            if (remaining > picked->frequency * (spinUs + 50) / 1000000)
+            if (!SpinsThrough(*picked) && remaining > picked->frequency * (spinUs + 50) / 1000000)
             {
                 const int64_t waitUs = std::min<int64_t>(10000, remaining * 1000000 / picked->frequency - spinUs);
                 LARGE_INTEGER due{}; due.QuadPart = -std::max<int64_t>(1, waitUs * 10);
@@ -422,14 +703,24 @@ class SharedPlaybackScheduler
                 else WaitForSingleObject(changed[worker], 1);
                 continue;
             }
-            while (QueryCounter() < target && generation.load(std::memory_order_acquire) == seen && !picked->IsStopped()) PauseProcessor();
+            {
+                Breather breather(picked->frequency);
+                const bool max = SpinsThrough(*picked);
+                int64_t now = QueryCounter();
+                while (now < target && generation.load(std::memory_order_acquire) == seen && !picked->IsStopped())
+                {
+                    if (max && breather.Due(now, target - now)) breather.Rest(timer, changed[worker]);
+                    else PauseProcessor();
+                    now = QueryCounter();
+                }
+            }
             if (generation.load(std::memory_order_acquire) != seen) continue;
             int64_t due;
             {
                 std::lock_guard<std::mutex> lock(gate);
                 if (picked->done || picked->inFlight || picked->IsStopped() || IsPaused(picked->control)) continue;
                 due = Due(*picked);
-                const auto claimDue = due + (worker == picked->owner ? 0 : std::max<int64_t>(1, picked->frequency * 2 / 1000000));
+                const auto claimDue = due + (worker == picked->owner || Races(*picked) ? 0 : std::max<int64_t>(1, picked->frequency * 2 / 1000000));
                 if (QueryCounter() < claimDue) continue;
                 picked->inFlight = true;
             }
@@ -440,8 +731,61 @@ class SharedPlaybackScheduler
         if (oldAffinity) SetThreadAffinityMask(GetCurrentThread(), oldAffinity);
         if (timer) CloseHandle(timer);
     }
+    // Max SMT parking: a time-critical pause loop on the hyper-threading sibling of each worker core, while Max is warm and a
+    // Max hotkey listens or a run is active, so no other thread (the game) shares the physical core with a worker.
+    // MACROHID_MAX_PARK=1 enables it (off by default: in the A/B it lowered some maxima but raised P99.9 at 1 ms spacing).
+    std::vector<std::thread> parkers;
+    std::atomic<bool> parkersStop{false};
+    static bool MaxPark() { static const bool on = MaxEnv(L"MACROHID_MAX_PARK"); return on; }
+    void StartParkers()
+    {
+        if (!parkers.empty() || !MaxPark()) return;
+        std::vector<uint32_t> siblings;
+        for (const auto& core : cores)
+        {
+            if (!core.mask) continue;
+            for (uint32_t bit = 0; bit < sizeof(DWORD_PTR) * 8; bit++)
+            {
+                const DWORD_PTR mask = static_cast<DWORD_PTR>(1) << bit;
+                if (mask == core.mask) continue;
+                DWORD_PTR process = 0, system = 0;
+                if (!GetProcessAffinityMask(GetCurrentProcess(), &process, &system) || !(process & mask)) continue;
+                if (LookupLogicalCore(bit).physicalCoreId == core.physicalCoreId) siblings.push_back(bit);
+            }
+        }
+        parkersStop.store(false, std::memory_order_release);
+        for (auto bit : siblings)
+        {
+            parkers.emplace_back([this, bit]
+            {
+                SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(1) << bit);
+                SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+                HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+                Breather breather(QueryFrequency());
+                while (!parkersStop.load(std::memory_order_acquire))
+                {
+                    if (PowerHeld() || (!hotStandby.load(std::memory_order_acquire) && g_playbackActive.load(std::memory_order_acquire) == 0))
+                    {
+                        Sleep(2);
+                        breather = Breather(QueryFrequency());
+                        continue;
+                    }
+                    if (breather.Due(QueryCounter(), INT64_MAX)) breather.Rest(timer, nullptr);
+                    else PauseProcessor();
+                }
+                if (timer) CloseHandle(timer);
+            });
+        }
+    }
+    void StopParkers()
+    {
+        parkersStop.store(true, std::memory_order_release);
+        for (auto& parker : parkers) if (parker.joinable()) parker.join();
+        parkers.clear();
+    }
 public:
-    ~SharedPlaybackScheduler() { Shutdown(); }
+    // Process exit / DLL detach: no power unregistration under the loader lock (waiting for a timer callback could deadlock).
+    ~SharedPlaybackScheduler() { Shutdown(false); }
     std::array<CoreChoice, 2> PreparedCores()
     {
         std::lock_guard<std::mutex> lock(gate);
@@ -463,13 +807,27 @@ public:
     }
     MhpStatus Warm(const MhpRunOptions* options, MhpRunStats* stats, DWORD_PTR allowedMask = 0)
     {
+        const auto status = WarmCore(options, stats, allowedMask);
+        // Parkers follow the warm Max profile and its pinned cores (restarted when the cores change).
+        std::lock_guard<std::mutex> life(lifecycle);
+        StopParkers();
+        if (status == MhpOk && warmMax.load(std::memory_order_acquire) && ready) StartParkers();
+        return status;
+    }
+    MhpStatus WarmCore(const MhpRunOptions* options, MhpRunStats* stats, DWORD_PTR allowedMask)
+    {
         std::lock_guard<std::mutex> life(lifecycle);
         if (stats) *stats = {};
+        RegisterPower();
         const int requestedPrecision = options ? options->precisionMode : 1;
+        const bool requestedMax = options && (options->flags & MhpFlagMaxPreemption) && requestedPrecision == MhpUltraLowJitter;
         bool alreadyReady;
         bool precisionChanged = false;
         { std::lock_guard<std::mutex> lock(gate); alreadyReady = ready;
-          if (ready) precisionChanged = warmPrecision.exchange(requestedPrecision, std::memory_order_acq_rel) != requestedPrecision; }
+          ApplyProcessClass(requestedMax && !PowerHeld());
+          if (!requestedMax) hotStandby.store(false, std::memory_order_release);
+          const bool maxChanged = warmMax.exchange(requestedMax, std::memory_order_acq_rel) != requestedMax;
+          if (ready) precisionChanged = warmPrecision.exchange(requestedPrecision, std::memory_order_acq_rel) != requestedPrecision || maxChanged; }
         if (precisionChanged) Notify();
         { std::lock_guard<std::mutex> lock(gate);
           if (ready && preparedMask == allowedMask && (!(options && options->enableCpuScan) || measured)) { CopyCoreStats(stats); return MhpOk; }
@@ -523,7 +881,7 @@ public:
         run->trace.queued = entry;
         { std::lock_guard<std::mutex> lock(gate); if (!ready || stopping) return {}; run->owner = nextOwner++ % 2; run->cores = plan->configuredCores;
           run->stats.selectedWorker0 = run->cores[0].processorNumber; run->stats.selectedWorker1 = run->cores[1].processorNumber;
-          run->stats.selectedWorker0MaxLateUs = run->cores[0].maxLateUs; run->stats.selectedWorker1MaxLateUs = run->cores[1].maxLateUs; runs.push_back(run); g_playbackActive.fetch_add(1, std::memory_order_acq_rel); }
+          run->stats.selectedWorker0MaxLateUs = run->cores[0].maxLateUs; run->stats.selectedWorker1MaxLateUs = run->cores[1].maxLateUs; runs.push_back(run); runCount.store(runs.size(), std::memory_order_release); g_playbackActive.fetch_add(1, std::memory_order_acq_rel); }
         // Only 极限 lets the non-owner worker take a batch, so other profiles wake just the owner. The generation still
         // advances, so a worker spinning for another run still re-scans and sees this one.
         if (options.precisionMode == MhpUltraLowJitter) Notify();
@@ -535,6 +893,14 @@ public:
         generation.fetch_add(1, std::memory_order_release);
         std::lock_guard<std::mutex> lock(eventGate);
         if (changed[worker]) SetEvent(changed[worker]);
+    }
+    // Max hot standby on/off (only while a Max profile is warm). Turning it off wakes the spinning workers to sleep.
+    bool SetHotStandby(bool on)
+    {
+        if (on && !warmMax.load(std::memory_order_acquire)) return false;
+        hotStandby.store(on, std::memory_order_release);
+        Notify();
+        return true;
     }
     MhpStatus Run(NativePlan* plan, const MhpRunOptions& options, PlaybackControl* control, volatile long* cancel, MhpRunStats& stats)
     {
@@ -551,10 +917,13 @@ public:
         }
         catch (...) { SetLastErrorText(L"shared scheduler allocation failed before submission"); return MhpInvalidArgument; }
     }
-    void Shutdown()
+    void Shutdown(bool unregisterPower = true)
     {
+        if (unregisterPower) UnregisterPower();
         std::lock_guard<std::mutex> life(lifecycle);
-        { std::lock_guard<std::mutex> lock(gate); ready = false; stopping = true; }
+        StopParkers();
+        hotStandby.store(false, std::memory_order_release);
+        { std::lock_guard<std::mutex> lock(gate); ready = false; stopping = true; ApplyProcessClass(false); warmMax.store(false); }
         Notify();
         for (auto& worker : workers) if (worker.joinable()) worker.join();
         std::lock_guard<std::mutex> events(eventGate);

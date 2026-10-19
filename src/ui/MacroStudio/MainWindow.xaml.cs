@@ -141,6 +141,7 @@ public partial class MainWindow : Window
         LibraryPanel.StopListeningAllRequested += OnStopListeningAll;
         LibraryPanel.PrecisionSettingsEdited += OnPrecisionSettingsEdited;
         LibraryPanel.BasicControlRequested += OnBasicControlRequested;
+        LibraryPanel.AdvancedSettingsRequested += OnAdvancedSettingsRequested;
         LibraryPanel.PrecisionControlRequested += OnPrecisionControlRequested;
         LibraryPanel.PlaybackVersionRequested += OnPlaybackVersionRequested;
         LibraryPanel.LibraryStructureEdited += OnLibraryStructureEdited;
@@ -2461,6 +2462,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        LibraryPanel.SetRuntimePrecisionControls(dialog.Settings);
+        OnPrecisionSettingsEdited();
+    }
+
+    private void OnAdvancedSettingsRequested()
+    {
+        var dialog = new AdvancedSettingsDialog(runtimePrecisionSettings);
+        if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
         LibraryPanel.SetRuntimePrecisionControls(dialog.Settings);
         OnPrecisionSettingsEdited();
     }

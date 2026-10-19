@@ -9,11 +9,11 @@ public sealed record PlaybackVersionInfo(string Id, string Label, string? Folder
 /// </summary>
 public static class PlaybackVersions
 {
-    public const string Current = "2.0.4";
+    public const string Current = "2.1.0";
 
     public static IReadOnlyList<PlaybackVersionInfo> All { get; } =
     [
-        new(Current, "2.0.4", null, "PlaybackVersionNotes203"),
+        new(Current, "2.1.0", null, "PlaybackVersionNotes210"),
         new("2.0.2", "2.0.2", "V2_0_2", "PlaybackVersionNotes202"),
         new("2.0.1", "2.0.1", "V2_0_1", "PlaybackVersionNotes201"),
         new("2.0.0", "2.0.0", "V2_0_0", "PlaybackVersionNotes200"),
@@ -29,8 +29,8 @@ public static class PlaybackVersions
     {
         var trimmed = id?.Trim();
         if (trimmed is "1.3.0") trimmed = "1.4.0";
-        // 2.0.4 plays with the 2.0.3 engine; a 2.0.3 setting means the current engine.
-        if (trimmed is "2.0.3") trimmed = Current;
+        // 2.0.3 and 2.0.4 played with the engine that 2.1.0 extends; their saved setting means the current engine.
+        if (trimmed is "2.0.3" or "2.0.4") trimmed = Current;
         return All.FirstOrDefault(v => string.Equals(v.Id, trimmed, StringComparison.Ordinal)) ?? All[0];
     }
 

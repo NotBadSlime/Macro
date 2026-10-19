@@ -626,6 +626,23 @@
   <data name="BasicSectionTiming" xml:space="preserve"><value>按鍵時間</value></data>
   <data name="Milliseconds" xml:space="preserve"><value>毫秒</value></data>
   <data name="HoldMillisecondsInvalid" xml:space="preserve"><value>請填 0 到 {0} 毫秒，最多 3 位小數。</value></data>
+  <data name="BasicSectionNoGc" xml:space="preserve"><value>播放期間禁止記憶體回收</value></data>
+  <data name="NoGcMaxIterationSeconds" xml:space="preserve"><value>單輪不超過</value></data>
+  <data name="Seconds" xml:space="preserve"><value>秒</value></data>
+  <data name="NoGcMaxIterationSecondsHelp" xml:space="preserve"><value>單輪寫下的時長不超過這個秒數的巨集，播放時不做記憶體回收；更長的巨集照常回收。填 0 關閉。</value></data>
+  <data name="NoGcSecondsInvalid" xml:space="preserve"><value>請填 0 到 {0} 的整數秒。</value></data>
+  <data name="AdvancedSettings" xml:space="preserve"><value>進階設定</value></data>
+  <data name="AdvancedSectionNoGc" xml:space="preserve"><value>播放期間禁止記憶體回收</value></data>
+  <data name="AdvancedSectionNoGcRenew" xml:space="preserve"><value>循環時在兩輪之間回收</value></data>
+  <data name="NoGcIntro" xml:space="preserve"><value>只對極致、極限（含 Max）檔、目前播放引擎生效。第一批按鍵交出之後才進入禁止狀態，所以不會擋在按熱鍵到第一下之前。發鍵的原生執行緒本來就不受記憶體回收影響，這裡保護的是熱鍵交接、循環銜接和條件監控。</value></data>
+  <data name="NoGcBudget" xml:space="preserve"><value>預留記憶體</value></data>
+  <data name="NoGcBudgetHelp" xml:space="preserve"><value>禁止期間可分配的記憶體，會一直佔著。一輪用超了，.NET 會自己退出禁止狀態並照常回收，不會撐爆記憶體。預留越大，進入時那次回收越慢（冷啟動 64MB 測到約 30ms）。</value></data>
+  <data name="NoGcRenewSlack" xml:space="preserve"><value>離下一輪至少還有</value></data>
+  <data name="NoGcRenewPercent" xml:space="preserve"><value>預留記憶體用掉</value></data>
+  <data name="NoGcRenewAfterLoss" xml:space="preserve"><value>禁止狀態失效後，在兩輪之間重新進入</value></data>
+  <data name="NoGcRenewWhileConditions" xml:space="preserve"><value>條件監控執行時也允許回收</value></data>
+  <data name="NoGcRenewHelp" xml:space="preserve"><value>循環播放時，只在一輪最後一批之後、下一輪開始之前回收一次，再重新進入禁止狀態：離下一輪的時間不少於上面的毫秒數，並且預留記憶體已用掉上面的百分比（或禁止狀態已失效且勾選了重新進入）。不勾選「條件監控」時，有條件在執行就跳過這一次。</value></data>
+  <data name="RangeIntInvalid" xml:space="preserve"><value>請填 {0} 到 {1} 的整數。</value></data>
   <data name="DialogYes" xml:space="preserve"><value>是</value></data>
   <data name="DialogNo" xml:space="preserve"><value>否</value></data>
   <data name="SnapshotSampleMessage" xml:space="preserve"><value>目標程序沒有執行。請先開啟目標程式，再按一次快捷鍵。</value></data>
@@ -689,6 +706,7 @@
   <data name="PlaybackVersionHelp" xml:space="preserve"><value>選擇用哪個發行版的程式碼播放巨集。舊版本執行當時的原始程式碼，當時的問題也會保留；它之後才加入的效果卡片（斷網、鎖幀等）由目前版本代為執行。測核與系統延遲檢查始終使用目前版本。</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（目前，推薦）</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安裝缺少該版本的引擎檔案，播放會失敗，請重新安裝完整安裝包。</value></data>
+  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0（目前）：新增 Max（搶佔）精度檔；Max 在螢幕關閉、睡眠和待機前後自動退回極限檔；短巨集播放期間禁止 .NET 記憶體回收，循環時只在兩輪之間回收；新增「進階設定」，可調這些規則；其餘同 2.0.4：版本切換器，同一時間只執行一個巨集，冷啟動首次熱鍵約 250 微秒，SendInput 耗時補償，測核避開中斷密集的核心。</value></data>
   <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（目前）：新增版本切換器；移除並行卡片，同一時間只執行一個巨集；引擎同 2.0.3：冷啟動首次熱鍵從約 2 毫秒降到約 250 微秒；按鍵時長從 SendInput 開始時起算；SendInput 耗時補償；可選熱鍵啟動對齊與 Raw Input 熱鍵；測核避開中斷密集的核心；系統延遲檢查。</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：迴圈末尾的等待不再被丟棄，週期等於寫下的總時長；預設間隔只推遲這一次放開，不再推遲整條時間線；修復「巨集基礎控制」確定後設定不生效。</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（測試版）：熱鍵入口與啟動預熱——啟動時預熱播放路徑，低抖動熱鍵待命時保持計時器解析度；增加診斷追蹤。播放時間線與 2.0.0 相同。</value></data>
@@ -708,4 +726,8 @@
   <data name="PlaybackVersionApplied" xml:space="preserve"><value>播放版本：{0}</value></data>
   <data name="PrecisionHotkeySection" xml:space="preserve"><value>熱鍵與傳送</value></data>
   <data name="PrecisionCoreSection" xml:space="preserve"><value>CPU 核心</value></data>
+  <data name="PrecisionMax" xml:space="preserve"><value>Max（搶佔）</value></data>
+  <data name="PrecisionMaxDescription" xml:space="preserve"><value>極限 + 搶佔：兩個播放執行緒以 TimeCritical 執行在 RealTime 優先級行程中，並啟用 MMCSS 關鍵級，綁定到最安靜的兩個核心；所有等待都改為純自旋，不再用計時器睡眠。Max 熱鍵待命時執行緒也保持自旋，首個輸入不必等執行緒喚醒。</value></data>
+  <data name="PrecisionMaxWarning" xml:space="preserve"><value>監聽和播放期間會佔滿兩個 CPU 核心。遊戲幀率可能下降，這兩個核心上的其他程式可能卡頓。螢幕關閉或變暗、睡眠和新式待機期間，以及喚醒後 2 分鐘內，Max 自動按極限檔執行並恢復行程優先級。不需要時請關閉。</value></data>
+  <data name="PrecisionMaxLegacyVersion" xml:space="preserve"><value>Max 只在目前播放版本下生效；舊版本按它自己的極限檔播放。</value></data>
 </root>

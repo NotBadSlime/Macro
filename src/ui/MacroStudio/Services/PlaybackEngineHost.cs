@@ -20,6 +20,8 @@ internal static class PlaybackEngineHost
     /// <summary>The release's start-up (App.OnStartup) warm-up. Called once at start-up and whenever the version changes.</summary>
     public static void Activate(RuntimePrecisionSettings settings)
     {
+        MaxPreemption.Set(settings.MaxActive);
+        PlaybackGcPause.Options = settings.NoGc;
         var version = settings.Version;
         if (!ReferenceEquals(version, active) && activeLegacy is not null)
         {
@@ -51,6 +53,9 @@ internal static class PlaybackEngineHost
     public static void PrecisionChanged(RuntimePrecisionSettings settings)
     {
         if (!ReferenceEquals(settings.Version, active)) { Activate(settings); return; }
+        MaxPreemption.Set(settings.MaxActive);
+        PlaybackGcPause.Options = settings.NoGc;
+        if (!settings.MaxActive) MaxPreemption.SetHotStandby(false);
         if (activeLegacy is { } legacy) legacy.PrecisionChanged(settings.Precision.ToString(), settings.AffinityMask);
         else NativePlaybackWarmup.QueueWarmUpForPrecision(settings.Precision, settings.AffinityMask, settings.Generation);
     }
@@ -72,6 +77,8 @@ internal static class PlaybackEngineHost
             legacy.SetListeningWarm(needed);
             return null;
         }
+        // Max: idle workers keep spinning on their cores while a 极限 hotkey listens (hot standby).
+        MaxPreemption.SetHotStandby(needed && MaxPreemption.Enabled);
         if (needed && lease is null) return PrecisionPlaybackContext.AcquireWarmLease();
         if (!needed && lease is not null) { lease.Dispose(); return null; }
         return lease;
@@ -79,6 +86,8 @@ internal static class PlaybackEngineHost
 
     public static void Shutdown()
     {
+        MaxPreemption.SetHotStandby(false);
+        MaxPreemption.Set(false);
         if (activeLegacy is { } legacy)
         {
             try { legacy.Shutdown(); } catch (Exception ex) { AppLog.Error("Playback", "Legacy shutdown failed", ex); }

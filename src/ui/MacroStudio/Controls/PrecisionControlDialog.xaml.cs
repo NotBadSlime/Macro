@@ -27,7 +27,8 @@ public partial class PrecisionControlDialog : Window
         avoidNoisyCores = settings.AvoidNoisyCores;
         foreach (var item in PrecisionModeBox.Items.OfType<ComboBoxItem>())
         {
-            if (string.Equals(item.Tag?.ToString(), ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
+            if (string.Equals(item.Tag?.ToString(), settings.MaxPreemption && settings.Precision == PrecisionMode.UltraLowJitter
+                    ? "max" : ToPrecisionModeText(settings.Precision), StringComparison.Ordinal))
             {
                 PrecisionModeBox.SelectedItem = item;
                 break;
@@ -43,13 +44,18 @@ public partial class PrecisionControlDialog : Window
     private void UpdateProfileDescription()
     {
         var mode = SelectedPrecision();
+        var max = SelectedMax();
         var policy = PlaybackPerformancePolicy.For(mode);
         var impact = mode switch {
             PrecisionMode.Balanced => L("PrecisionImpactLow"),
             PrecisionMode.UltraLowJitter => L("PrecisionImpactExtreme"),
             _ => L("PrecisionImpactBalanced") };
-        ProfileDescription.Text = LocalizationService.Format("PrecisionProfileTargets",
-            policy.TargetStartupMicroseconds, policy.TargetJitterMicroseconds, policy.FinalSpinMicroseconds) + "\n" + impact;
+        ProfileDescription.Text = max
+            ? L("PrecisionMaxDescription")
+            : LocalizationService.Format("PrecisionProfileTargets",
+                policy.TargetStartupMicroseconds, policy.TargetJitterMicroseconds, policy.FinalSpinMicroseconds) + "\n" + impact;
+        MaxWarning.Visibility = max ? Visibility.Visible : Visibility.Collapsed;
+        MaxWarningText.Text = source.Version.Folder is null ? L("PrecisionMaxWarning") : L("PrecisionMaxLegacyVersion");
         // The core mask only applies to 极限; dim it for the other profiles instead of hiding it.
         var extreme = mode == PrecisionMode.UltraLowJitter;
         AffinityMaskBox.IsEnabled = extreme;
@@ -108,6 +114,7 @@ public partial class PrecisionControlDialog : Window
                 "balanced" => L("PrecisionBalanced"),
                 "extremeDuringPlayback" => L("PrecisionExtremeDuringPlayback"),
                 "ultraLowJitter" => L("PrecisionUltraLowJitter"),
+                "max" => L("PrecisionMax"),
                 _ => item.Content
             };
         }
@@ -150,10 +157,14 @@ public partial class PrecisionControlDialog : Window
             StartLeadMicroseconds = lead,
             CompensateSendInputCost = CompensateSendInputCheck.IsChecked == true,
             HotkeyInput = RawInputHotkeysCheck.IsChecked == true ? HotkeyInputMode.RawInput : HotkeyInputMode.LowLevelHook,
-            AvoidNoisyCores = avoidNoisyCores
+            AvoidNoisyCores = avoidNoisyCores,
+            MaxPreemption = SelectedMax()
         };
         DialogResult = true;
     }
+
+    // Max is stored as 极限 + MaxPreemption, so the persisted PrecisionMode values stay unchanged.
+    private bool SelectedMax() => (PrecisionModeBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() == "max";
 
     private PrecisionMode SelectedPrecision()
     {
@@ -161,7 +172,7 @@ public partial class PrecisionControlDialog : Window
         return value switch
         {
             "balanced" => PrecisionMode.Balanced,
-            "ultraLowJitter" => PrecisionMode.UltraLowJitter,
+            "ultraLowJitter" or "max" => PrecisionMode.UltraLowJitter,
             _ => PrecisionMode.ExtremeDuringPlayback
         };
     }

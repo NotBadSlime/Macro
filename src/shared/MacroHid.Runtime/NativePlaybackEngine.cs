@@ -279,7 +279,7 @@ internal static class NativePlaybackEngine
                     : IntPtr.Zero,
                 OutlierEventCapacity = checked((uint)outlierEventCapacity),
                 Generation = (uint)generation,
-                Flags = compensateSendInput ? 1u : 0u
+                Flags = (compensateSendInput ? 1u : 0u) | MaxPreemption.Flags(precision)
             };
 
             var modes = effectiveEngineMode == NativePlaybackEngineMode.Inline ? InlineOnly : StandbyThenInline;

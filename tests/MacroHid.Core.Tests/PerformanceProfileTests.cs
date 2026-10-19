@@ -105,6 +105,58 @@ internal static class PerformanceProfileTests
         var throwing = new MacroStudio.Services.ForegroundProcessNameCache(() => throw new InvalidOperationException(), _ => "x");
         Check(throwing.Get() == null, "query failure returns null");
     }
+    internal static void PlaybackGcPauseLifecycle()
+    {
+        var f = Stopwatch.Frequency;
+        var u = PrecisionMode.UltraLowJitter; var latest = PrecisionGeneration.Latest;
+        Check(PlaybackGcPause.Options == PlaybackGcOptions.Default && PlaybackGcOptions.Default.MaxIterationSeconds == 120, "default 120 s");
+        var clamped = new PlaybackGcOptions(-5, 99999, double.NaN, 0).Normalize();
+        Check(clamped.MaxIterationSeconds == 0 && clamped.BudgetMegabytes == PlaybackGcOptions.MaxBudgetMegabytes
+              && clamped.RenewSlackMilliseconds == PlaybackGcOptions.DefaultRenewSlackMilliseconds && clamped.RenewAtBudgetPercent == 1, "normalize");
+        try
+        {
+            PlaybackGcPause.Options = PlaybackGcOptions.Default with { MaxIterationSeconds = 0 };
+            Check(PlaybackGcPause.Begin(u, latest, f / 10, f) is null, "0 s must turn it off");
+            PlaybackGcPause.Options = PlaybackGcOptions.Default with { MaxIterationSeconds = 5 };
+            Check(PlaybackGcPause.Begin(u, latest, f * 6, f) is null, "6 s macro over a 5 s threshold");
+            PlaybackGcPause.Begin(u, latest, f * 5, f)?.Dispose();
+            PlaybackGcPause.Options = PlaybackGcOptions.Default with { BudgetMegabytes = 16 };
+            Check(PlaybackGcPause.Begin(PrecisionMode.Balanced, latest, f, f) is null, "balanced must not hold a no-GC region");
+            Check(PlaybackGcPause.Begin(u, latest, f * 121, f) is null, "long macro must keep normal GC");
+            var before = PlaybackGcPause.Counters;
+            using (var scope = PlaybackGcPause.Begin(u, latest, f / 10, f))
+            {
+                Check(scope is not null, "short 极限 macro must want a region");
+                Check(!PlaybackGcPause.Holding, "region must not be entered before the first input");
+                PlaybackGcPause.AfterFirstSubmit();
+                Check(PlaybackGcPause.Holding, "region not entered after the first input");
+                var gen0 = GC.CollectionCount(0);
+                for (var i = 0; i < 2000; i++) _ = new byte[1024]; // 2 MB of the 16 MB budget
+                Check(GC.CollectionCount(0) == gen0, "a collection ran inside the region");
+                Check(!PlaybackGcPause.RenewAtIterationEnd(f, f, conditionsRunning: false), "renewed although 12% of the budget was used");
+                // User threshold: renew at 10 % used.
+                PlaybackGcPause.Options = PlaybackGcPause.Options with { RenewAtBudgetPercent = 10 };
+                Check(PlaybackGcPause.RenewAtIterationEnd(f, f, conditionsRunning: false), "not renewed past the user's 10 %");
+                // Overrun the budget: the runtime ends the region by itself; the iteration boundary re-enters it.
+                var junk = new List<byte[]>();
+                for (var i = 0; i < (16 << 20) / 4096 + 4096; i++) junk.Add(new byte[4096]);
+                junk.Clear();
+                Check(!PlaybackGcPause.RenewAtIterationEnd(f / 1000, f, conditionsRunning: false), "renewed without the default 3 ms slack");
+                PlaybackGcPause.Options = PlaybackGcPause.Options with { RenewSlackMilliseconds = 0.5 };
+                Check(!PlaybackGcPause.RenewAtIterationEnd(f, f, conditionsRunning: true), "renewed while conditions run");
+                PlaybackGcPause.Options = PlaybackGcPause.Options with { RenewAfterLoss = false };
+                Check(!PlaybackGcPause.RenewAtIterationEnd(f, f, conditionsRunning: false), "re-entered although the user turned it off");
+                PlaybackGcPause.Options = PlaybackGcPause.Options with { RenewAfterLoss = true, RenewWhileConditionsRun = true };
+                Check(PlaybackGcPause.RenewAtIterationEnd(f / 1000, f, conditionsRunning: true), "1 ms slack with 0.5 ms setting and conditions allowed");
+                Check(PlaybackGcPause.Holding, "region not held after renewal");
+            }
+            Check(!PlaybackGcPause.Holding && System.Runtime.GCSettings.LatencyMode != System.Runtime.GCLatencyMode.NoGCRegion, "region outlived the run");
+            var after = PlaybackGcPause.Counters;
+            Check(after.Entries - before.Entries == 3 && after.Losses - before.Losses == 1, $"counters {before} -> {after}");
+        }
+        finally { PlaybackGcPause.Options = PlaybackGcOptions.Default; }
+    }
+
     internal static void PrecisionWarmLease()
     {
         Check(PrecisionPlaybackContext.ActiveUsers == 0, "no users at start");

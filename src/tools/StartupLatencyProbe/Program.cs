@@ -31,7 +31,12 @@ var policy = PlaybackPerformancePolicy.For(precision);
 
 using var listener = new StageListener();
 var setup = Stopwatch.StartNew();
+// --max: Max (2.1) on top of 极限, with hot standby while the probe "listens". By reflection for older revisions (A/B runs).
+bool max = args.Contains("--max");
+var maxType = typeof(NativePlaybackWarmup).Assembly.GetType("MacroHid.Runtime.MaxPreemption");
+if (max) maxType?.GetMethod("Set")?.Invoke(null, [true]);
 NativePlaybackWarmup.TryWarmUpForPrecision(precision, "", PrecisionGeneration.Latest);
+if (max) maxType?.GetMethod("SetHotStandby")?.Invoke(null, [true]);
 PlaybackPathWarmup.Run();
 bool nativePathWarmup = !args.Contains("--no-native-path-warmup");
 // Looked up by reflection so the probe also builds against revisions before the native path warm-up existed (A/B runs).

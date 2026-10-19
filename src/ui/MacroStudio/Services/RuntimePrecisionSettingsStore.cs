@@ -66,8 +66,17 @@ public sealed record RuntimePrecisionSettings(
     // Keep native playback workers off cores the system latency check found interrupt-heavy (also checked at start-up).
     bool AvoidNoisyCores = true,
     // Which release plays macros (PlaybackVersions.All). Empty = derived from Generation (settings from before the switcher).
-    string PlaybackVersion = "")
+    string PlaybackVersion = "",
+    // Max (2.1): 极限 plus preemption (time-critical workers, realtime process, no timer sleeps, hot standby). Only with
+    // Precision = UltraLowJitter on the current engine; game frame rate may drop.
+    bool MaxPreemption = false,
+    // No-GC playback (2.1), 高级设置: which 极致/极限 macros play inside a .NET no-GC region and when a loop may collect.
+    MacroHid.Runtime.PlaybackGcOptions? NoGcPlayback = null)
 {
+    /// <summary>No-GC playback rules in effect (defaults when the file has none).</summary>
+    public MacroHid.Runtime.PlaybackGcOptions NoGc => (NoGcPlayback ?? MacroHid.Runtime.PlaybackGcOptions.Default).Normalize();
+    /// <summary>Max is in effect: the setting, the 极限 profile and the current engine.</summary>
+    public bool MaxActive => MaxPreemption && Precision == PrecisionMode.UltraLowJitter && Version.Folder is null;
     public const int MaxStartLeadMicroseconds = 5000;
     public static RuntimePrecisionSettings Default { get; } = new(ColorSampleHotkey: CoreHotkeys.DefaultColorSampleText);
 
@@ -162,7 +171,8 @@ public static class RuntimePrecisionSettingsStore
             PlaybackVersion = string.IsNullOrWhiteSpace(settings.PlaybackVersion)
                 ? PlaybackVersions.FromGeneration(settings.Generation)
                 : PlaybackVersions.Resolve(settings.PlaybackVersion).Id,
-            StartLeadMicroseconds = Math.Clamp(settings.StartLeadMicroseconds, 0, RuntimePrecisionSettings.MaxStartLeadMicroseconds)
+            StartLeadMicroseconds = Math.Clamp(settings.StartLeadMicroseconds, 0, RuntimePrecisionSettings.MaxStartLeadMicroseconds),
+            NoGcPlayback = settings.NoGc
         };
     }
 

@@ -47,6 +47,7 @@ var tests = new (string Name, Action Body)[]
     ("Playback trace retains raw QPC timestamps and run identity", PerformanceProfileTests.TraceEvents),
     ("Foreground process name is cached per window and process id and never serves failures", PerformanceProfileTests.ForegroundNameCache),
     ("Precision warm lease keeps shared scopes across runs without touching thread state", PerformanceProfileTests.PrecisionWarmLease),
+    ("Short precise macros play inside a no-GC region renewed only between iterations", PerformanceProfileTests.PlaybackGcPauseLifecycle),
     ("Controller exposes the precision of its current definition", PerformanceProfileTests.ControllerExposesPrecision),
     ("Prepared executors reuse the safety plan and still release held keys on cancel", PerformanceProfileTests.PreparedSafetyPlanIsReused),
     ("Path warm-up completes without touching reported runtime status", PerformanceProfileTests.PathWarmupLeavesRuntimeStatusAlone),
@@ -238,7 +239,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 2.0.4", MacroHidReleaseVersionIsTwoZeroTwo),
+    ("MacroHID release version is 2.1.0", MacroHidReleaseVersionIsTwoZeroTwo),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -676,7 +677,9 @@ static void PlaybackRuntimeExposesPrecisionContextCompiledPlansAndJitterStats()
     Assert.True(v16Start > 0 && v16End > v16Start);
     var outsideV16 = precisionCode[..v16Start] + precisionCode[v16End..];
     Assert.Contains("ThreadPriorityTimeCritical", precisionCode[v16Start..v16End]);
-    Assert.DoesNotContain("ThreadPriorityTimeCritical", outsideV16);
+    // Outside 1.6.0, time-critical only for Max (2.1), the opt-in preemption profile.
+    Assert.Equal(1, outsideV16.Split("ThreadPriorityTimeCritical").Length - 1);
+    Assert.Contains("mode == PrecisionMode.UltraLowJitter && MaxPreemption.Live ? RuntimeNativeMethods.ThreadPriorityTimeCritical", outsideV16);
     Assert.Contains("SetThreadPriority", precisionCode);
     Assert.Contains("SetThreadPriorityBoost", nativeCode);
     Assert.Contains("GetThreadPriorityBoost", nativeCode);
@@ -920,6 +923,21 @@ static void SettingsWithoutGenerationLoadAsLatest()
     // No file at all: the default is the latest.
     Assert.Equal(PrecisionGeneration.Latest, RuntimePrecisionSettingsStore.Load(SettingsTempPath()).Generation);
     Assert.Equal(PrecisionGeneration.Latest, RuntimePrecisionSettings.Default.Generation);
+    // No-GC playback (高级设置): an old file gets the defaults; edited rules round-trip; out-of-range values are clamped.
+    Assert.Equal(PlaybackGcOptions.Default, RuntimePrecisionSettings.Default.NoGc);
+    path = SettingsTempPath();
+    try
+    {
+        var rules = new PlaybackGcOptions(45, 64, 1.5, 75, RenewAfterLoss: false, RenewWhileConditionsRun: true);
+        RuntimePrecisionSettingsStore.Save(RuntimePrecisionSettings.Default with { NoGcPlayback = rules }, path);
+        Assert.Equal(rules, RuntimePrecisionSettingsStore.Load(path).NoGc);
+        File.WriteAllText(path, "{\"NoGcPlayback\":{\"MaxIterationSeconds\":99999,\"BudgetMegabytes\":1}}");
+        var clamped = RuntimePrecisionSettingsStore.Load(path).NoGc;
+        Assert.Equal(PlaybackGcOptions.UpperMaxIterationSeconds, clamped.MaxIterationSeconds);
+        Assert.Equal(PlaybackGcOptions.MinBudgetMegabytes, clamped.BudgetMegabytes);
+        Assert.Equal(PlaybackGcOptions.DefaultRenewAtBudgetPercent, clamped.RenewAtBudgetPercent);
+    }
+    finally { File.Delete(path); }
 }
 
 static void SettingsRoundTripAGeneration()
@@ -929,7 +947,7 @@ static void SettingsRoundTripAGeneration()
     var path = SettingsTempPath();
     try
     {
-        foreach (var (generation, version) in new[] { (PrecisionGeneration.Latest, "2.0.4"), (PrecisionGeneration.V2_0_2, "2.0.2"),
+        foreach (var (generation, version) in new[] { (PrecisionGeneration.Latest, "2.1.0"), (PrecisionGeneration.V2_0_2, "2.0.2"),
                      (PrecisionGeneration.V2_0, "2.0.1"), (PrecisionGeneration.V1_6, "1.6.0") })
         {
             File.WriteAllText(path, $"{{\"Generation\":\"{char.ToLowerInvariant(generation.ToString()[0]) + generation.ToString()[1..]}\",\"ZeroGapHoldMicroseconds\":7000}}");
@@ -978,7 +996,7 @@ static void PrecisionDialogOffersEveryGeneration()
     var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackVersionDialog.xaml.cs"));
     var precision = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
     var library = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
-    // The playback version has its own dialog (opened from 全局运行), listing PlaybackVersions (2.0.4 ... 1.2.0) with notes;
+    // The playback version has its own dialog (opened from 全局运行), listing PlaybackVersions (2.1.0 ... 1.2.0) with notes;
     // 精度控制 no longer carries it.
     Assert.Contains("x:Name=\"PlaybackVersionButton\"", library);
     Assert.DoesNotContain("PrecisionGenerationBox", precision);
@@ -991,7 +1009,8 @@ static void PrecisionDialogOffersEveryGeneration()
     Assert.Equal(PlaybackVersions.Current, PlaybackVersions.All[0].Id);
     Assert.True(PlaybackVersions.All[0].Folder is null);
     var ids = PlaybackVersions.All.Select(v => v.Id).ToArray();
-    Assert.Equal("2.0.4,2.0.2,2.0.1,2.0.0,1.6.0,1.5.0,1.4.1,1.4.0,1.2.0", string.Join(",", ids));
+    Assert.Equal("2.1.0,2.0.2,2.0.1,2.0.0,1.6.0,1.5.0,1.4.1,1.4.0,1.2.0", string.Join(",", ids));
+    Assert.Equal(PlaybackVersions.Current, PlaybackVersions.Resolve("2.0.4").Id); // a 2.0.4 setting means the current engine
     foreach (var file in new[] { "Strings.resx", "Strings.zh-CN.resx", "Strings.zh-TW.resx" })
     {
         var resx = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", file));
@@ -4326,17 +4345,17 @@ static void MacroHidReleaseVersionIsTwoZeroTwo()
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.0.4.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.1.0.md"));
 
-    Assert.Contains("<Version>2.0.4</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>2.0.4.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>2.0.4.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>2.1.0</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>2.1.0.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>2.1.0.0</FileVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"2.0.4\"", installer);
-    Assert.Contains("[string]$Version = \"2.0.4\"", installerBuild);
+    Assert.Contains("#define AppVersion \"2.1.0\"", installer);
+    Assert.Contains("[string]$Version = \"2.1.0\"", installerBuild);
     Assert.Contains("当前正式版是 **2.0.2**", readme);
-    Assert.Contains("最新测试版是 **2.0.4**", readme);
-    Assert.Contains("MacroHID 2.0.4 测试版", releaseNotes);
+    Assert.Contains("最新测试版是 **2.1.0**", readme);
+    Assert.Contains("MacroHID 2.1.0 测试版", releaseNotes);
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -7233,10 +7252,14 @@ static void NativePlaybackProjectExposesStableCAbi()
     Assert.Contains("ResolveCpuSetIdForLogicalProcessor", implementation);
     Assert.Contains("SetThreadSelectedCpuSets(thread, &cpuSetId, 1)", implementation);
     Assert.DoesNotContain("SetThreadSelectedCpuSets(thread, &cpuSetIndex", implementation);
-    // The realtime class only in the older engine's PrecisionScope (the 1.6.0 generation), never in the shared scheduler.
+    // The realtime class only in the older engine's PrecisionScope (the 1.6.0 generation) and, in the shared scheduler, only
+    // while a Max (2.1) profile is warm (ApplyProcessClass).
     Assert.Equal(1, implementation.Split("REALTIME_PRIORITY_CLASS").Length - 1);
     Assert.Contains("which used the realtime class for 极致", implementation);
-    Assert.DoesNotContain("REALTIME_PRIORITY_CLASS", File.ReadAllText(Path.Combine(nativeDir, "SharedPlaybackScheduler.inl")));
+    var scheduler = File.ReadAllText(Path.Combine(nativeDir, "SharedPlaybackScheduler.inl"));
+    Assert.Equal(1, scheduler.Split("REALTIME_PRIORITY_CLASS").Length - 1);
+    Assert.Contains("void ApplyProcessClass(bool max)", scheduler);
+    Assert.Contains("MhpFlagMaxPreemption = 2", File.ReadAllText(Path.Combine(nativeDir, "NativePlayback.h")));
     Assert.Contains("THREAD_PRIORITY_TIME_CRITICAL", implementation);
     Assert.Contains("AvSetMmThreadCharacteristicsW", implementation);
     Assert.Contains("_mm_pause", implementation);

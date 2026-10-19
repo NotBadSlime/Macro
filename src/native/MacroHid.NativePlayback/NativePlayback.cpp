@@ -9,6 +9,7 @@
 #include "NativePlayback.h"
 
 #include <avrt.h>
+#include <powrprof.h>
 #include <mmsystem.h>
 #include <intrin.h>
 
@@ -2756,6 +2757,18 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpSetQuietCores(uint64_t mas
 extern "C" __declspec(dllexport) uint64_t __cdecl MhpGetQuietCores()
 {
     return static_cast<uint64_t>(g_quietCoreMask.load(std::memory_order_acquire));
+}
+
+// Max (2.1) hot standby: while a Max profile is warm and a Max hotkey listens, idle workers keep spinning on their cores.
+// Returns MhpInvalidArgument when no Max profile is warm (nothing is changed).
+extern "C" __declspec(dllexport) MhpStatus __cdecl MhpSetHotStandby(int32_t enabled)
+{
+    return g_sharedScheduler.SetHotStandby(enabled != 0) || enabled == 0 ? MhpOk : MhpInvalidArgument;
+}
+
+extern "C" __declspec(dllexport) int32_t __cdecl MhpGetPowerHold()
+{
+    return g_sharedScheduler.PowerHeld() ? 1 : 0;
 }
 
 extern "C" __declspec(dllexport) void __cdecl MhpShutdownEngine()

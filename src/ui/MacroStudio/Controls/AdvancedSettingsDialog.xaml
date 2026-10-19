@@ -1,0 +1,84 @@
+<Window x:Class="MacroStudio.Controls.AdvancedSettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="高级设置"
+        Width="480"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <DockPanel x:Name="DialogBody">
+        <StackPanel DockPanel.Dock="Bottom" Style="{StaticResource DialogButtonRow}">
+            <Button x:Name="ResetButton" MinWidth="82" Content="恢复默认" Click="ResetButton_Click" />
+            <Button x:Name="CancelButton" MinWidth="82" IsCancel="True" Content="取消" />
+            <Button x:Name="ConfirmButton"
+                    MinWidth="82"
+                    Style="{StaticResource PrimaryButton}"
+                    IsDefault="True"
+                    Content="确定"
+                    Click="ConfirmButton_Click" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+            <StackPanel>
+                <!-- 播放期间禁止垃圾回收 -->
+                <TextBlock x:Name="NoGcSectionTitle" Text="播放期间禁止垃圾回收" Style="{StaticResource FieldSectionTitle}" />
+                <TextBlock x:Name="NoGcIntroText" Style="{StaticResource FieldHelpText}" Margin="2,0,0,10" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock x:Name="MaxSecondsLabelText" Text="单轮不超过" Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="MaxSecondsUnitText" DockPanel.Dock="Right" Style="{StaticResource FieldUnitText}" Text="秒" />
+                            <TextBox x:Name="MaxSecondsBox" Height="32" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock x:Name="MaxSecondsErrorText" Style="{StaticResource FieldErrorText}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock x:Name="BudgetLabelText" Text="预留内存" Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="BudgetUnitText" DockPanel.Dock="Right" Style="{StaticResource FieldUnitText}" Text="MB" />
+                            <TextBox x:Name="BudgetBox" Height="32" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock x:Name="BudgetErrorText" Style="{StaticResource FieldErrorText}" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock x:Name="MaxSecondsHelpText" Style="{StaticResource FieldHelpText}" />
+                <TextBlock x:Name="BudgetHelpText" Style="{StaticResource FieldHelpText}" />
+
+                <Border Style="{StaticResource DialogSectionDivider}" />
+
+                <!-- 循环播放时在两轮之间回收的条件 -->
+                <TextBlock x:Name="RenewSectionTitle" Text="循环时在两轮之间回收" Style="{StaticResource FieldSectionTitle}" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock x:Name="SlackLabelText" Text="离下一轮至少还有" Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="SlackUnitText" DockPanel.Dock="Right" Style="{StaticResource FieldUnitText}" Text="毫秒" />
+                            <TextBox x:Name="SlackBox" Height="32" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock x:Name="SlackErrorText" Style="{StaticResource FieldErrorText}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock x:Name="PercentLabelText" Text="预留内存用掉" Style="{StaticResource FieldLabel}" />
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="PercentUnitText" DockPanel.Dock="Right" Style="{StaticResource FieldUnitText}" Text="%" />
+                            <TextBox x:Name="PercentBox" Height="32" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock x:Name="PercentErrorText" Style="{StaticResource FieldErrorText}" />
+                    </StackPanel>
+                </Grid>
+                <CheckBox x:Name="RenewAfterLossCheck" Content="禁止状态失效后，在下一轮之间重新进入" Margin="0,4,0,8" />
+                <CheckBox x:Name="RenewWhileConditionsCheck" Content="条件监控运行时也允许回收" Margin="0,0,0,6" />
+                <TextBlock x:Name="RenewHelpText" Style="{StaticResource FieldHelpText}" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

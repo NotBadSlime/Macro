@@ -498,6 +498,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             ? null
             : TryCreateNativePreparedPlan(document, options, plan);
         var nativePreparedPlan = cachedPreparedPlan ?? localPreparedPlan;
+        // No-GC playback for macros whose iteration is short enough; entered after the first input is on its way.
+        using var gcPause = PlaybackGcPause.Begin(options.Precision, options.PressFloor.Generation, plan.DurationTicks, qpcFrequency);
 
         PlaybackTrace.Mark(PlaybackTraceStage.PlanReady);
         var plannedIterationStartTick = clock.GetTimestamp();
@@ -654,7 +656,12 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                                     actionsSubmitted++;
                                 }
                             }
+                            if (batchIndex == 0) PlaybackGcPause.AfterFirstSubmit();
                         }
+
+                        if (!earlierTimeline && iterationsCompleted + 1 < iterationsTarget)
+                            PlaybackGcPause.RenewAtIterationEnd(iterationStartTick + iterationDurationTicks - clock.GetTimestamp(),
+                                qpcFrequency, conditionsRunning: monitors.Count > 0);
 
                         WaitForIterationEndBeforeDeactivatingConditions(
                             monitors,
@@ -824,6 +831,11 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 {
                     return false;
                 }
+
+                // Idle time after the last batch: a looping macro may collect here (region renewal), never mid-iteration.
+                if (anotherIterationFollows)
+                    PlaybackGcPause.RenewAtIterationEnd(iterationStartTick + iterationDurationTicks - clock.GetTimestamp(),
+                        qpcFrequency, conditionsRunning: monitors.Count > 0);
 
                 WaitForIterationEndBeforeDeactivatingConditions(
                     monitors,

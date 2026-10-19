@@ -73,7 +73,8 @@ public static class NativePlaybackWarmup
                 PlaybackAffinityMask.TryParse(PlaybackAffinityMask.NormalizeOrThrow(maskText), out var mask);
                 var options = new MhpRunOptions { PrecisionMode = Volatile.Read(ref preparedNativePrecision), EnableCpuScan = scan ? 1 : 0,
                     QpcFrequency = System.Diagnostics.Stopwatch.Frequency, NativeEngineMode = (int)NativeEngineMode.Standby,
-                    Generation = (uint)Generation };
+                    Generation = (uint)Generation,
+                    Flags = Volatile.Read(ref preparedNativePrecision) == (int)NativePrecisionMode.UltraLowJitter && MaxPreemption.Enabled ? MaxPreemption.MhpFlagMaxPreemption : 0u };
                 var status = NativePlaybackInterop.MhpPrepareEngine(ref options, mask, out stats);
                 bool measured = CoreMeasureResult.From(stats, status == MhpStatus.Ok).Measured;
                 Volatile.Write(ref cpuScanReady, measured ? 1 : 0);

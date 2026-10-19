@@ -641,6 +641,23 @@
   <data name="BasicSectionTiming" xml:space="preserve"><value>按键时间</value></data>
   <data name="Milliseconds" xml:space="preserve"><value>毫秒</value></data>
   <data name="HoldMillisecondsInvalid" xml:space="preserve"><value>请填 0 到 {0} 毫秒，最多 3 位小数。</value></data>
+  <data name="BasicSectionNoGc" xml:space="preserve"><value>播放期间禁止垃圾回收</value></data>
+  <data name="NoGcMaxIterationSeconds" xml:space="preserve"><value>单轮不超过</value></data>
+  <data name="Seconds" xml:space="preserve"><value>秒</value></data>
+  <data name="NoGcMaxIterationSecondsHelp" xml:space="preserve"><value>单轮写下的时长不超过这个秒数的宏，播放时不做垃圾回收；更长的宏照常回收。填 0 关闭。</value></data>
+  <data name="NoGcSecondsInvalid" xml:space="preserve"><value>请填 0 到 {0} 的整数秒。</value></data>
+  <data name="AdvancedSettings" xml:space="preserve"><value>高级设置</value></data>
+  <data name="AdvancedSectionNoGc" xml:space="preserve"><value>播放期间禁止垃圾回收</value></data>
+  <data name="AdvancedSectionNoGcRenew" xml:space="preserve"><value>循环时在两轮之间回收</value></data>
+  <data name="NoGcIntro" xml:space="preserve"><value>只对极致、极限（含 Max）档、当前播放引擎生效。第一批按键交出之后才进入禁止状态，所以不会挡在按热键到第一下之前。发键的原生线程本来就不受垃圾回收影响，这里保护的是热键交接、循环衔接和条件监控。</value></data>
+  <data name="NoGcBudget" xml:space="preserve"><value>预留内存</value></data>
+  <data name="NoGcBudgetHelp" xml:space="preserve"><value>禁止期间可分配的内存，会一直占着。一轮用超了，.NET 会自己退出禁止状态并照常回收，不会撑爆内存。预留越大，进入时那次回收越慢（冷启动 64MB 测到约 30ms）。</value></data>
+  <data name="NoGcRenewSlack" xml:space="preserve"><value>离下一轮至少还有</value></data>
+  <data name="NoGcRenewPercent" xml:space="preserve"><value>预留内存用掉</value></data>
+  <data name="NoGcRenewAfterLoss" xml:space="preserve"><value>禁止状态失效后，在两轮之间重新进入</value></data>
+  <data name="NoGcRenewWhileConditions" xml:space="preserve"><value>条件监控运行时也允许回收</value></data>
+  <data name="NoGcRenewHelp" xml:space="preserve"><value>循环播放时，只在一轮最后一批之后、下一轮开始之前回收一次，再重新进入禁止状态：离下一轮的时间不少于上面的毫秒数，并且预留内存已用掉上面的百分比（或禁止状态已失效且勾选了重新进入）。不勾选「条件监控」时，有条件在运行就跳过这一次。</value></data>
+  <data name="RangeIntInvalid" xml:space="preserve"><value>请填 {0} 到 {1} 的整数。</value></data>
   <data name="DialogYes" xml:space="preserve"><value>是</value></data>
   <data name="DialogNo" xml:space="preserve"><value>否</value></data>
   <data name="SnapshotSampleMessage" xml:space="preserve"><value>目标进程没有运行。请先打开目标程序，再按一次快捷键。</value></data>
@@ -689,6 +706,7 @@
   <data name="PlaybackVersionHelp" xml:space="preserve"><value>选择用哪个发行版的代码播放宏。旧版本运行当时的原始代码，当时的问题也会保留；它之后才加入的效果卡片（断网、锁帧等）由当前版本代为执行。测核与系统延迟检查始终使用当前版本。</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（当前，推荐）</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安装缺少该版本的引擎文件，播放会失败，请重新安装完整安装包。</value></data>
+  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0（当前）：新增 Max（抢占）精度档；Max 在屏幕关闭、睡眠和待机前后自动退回极限档；短宏播放期间禁止 .NET 垃圾回收，循环时只在两轮之间回收；新增「高级设置」，可调这些规则；其余同 2.0.4：版本切换器，同一时间只运行一个宏，冷启动首次热键约 250 微秒，SendInput 耗时补偿，测核避开中断密集的核心。</value></data>
   <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（当前）：新增版本切换器；移除并行卡片，同一时间只运行一个宏；引擎同 2.0.3：冷启动首次热键从约 2 毫秒降到约 250 微秒；按键时长从 SendInput 开始时起算；SendInput 耗时补偿；可选热键启动对齐与 Raw Input 热键；测核避开中断密集的核心；系统延迟检查。</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：循环末尾的等待不再被丢弃，周期等于写下的总时长；默认间隔只推迟这一次抬起，不再推迟整条时间线；修复「宏基础控制」确定后设置不生效。</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（测试版）：热键入口与启动预热——启动时预热播放路径，低抖动热键待命时保持计时器分辨率；增加诊断追踪。播放时间线与 2.0.0 相同。</value></data>
@@ -708,4 +726,8 @@
   <data name="PlaybackVersionApplied" xml:space="preserve"><value>播放版本：{0}</value></data>
   <data name="PrecisionHotkeySection" xml:space="preserve"><value>热键与发送</value></data>
   <data name="PrecisionCoreSection" xml:space="preserve"><value>CPU 核心</value></data>
+  <data name="PrecisionMax" xml:space="preserve"><value>Max（抢占）</value></data>
+  <data name="PrecisionMaxDescription" xml:space="preserve"><value>极限 + 抢占：两个播放线程以 TimeCritical 运行在 RealTime 优先级进程中，并启用 MMCSS 关键级，绑定到最安静的两个核心；所有等待都改为纯自旋，不再用计时器睡眠。Max 热键待命时线程也保持自旋，首个输入不必等线程唤醒。</value></data>
+  <data name="PrecisionMaxWarning" xml:space="preserve"><value>监听和播放期间会占满两个 CPU 核心。游戏帧率可能下降，这两个核心上的其他程序可能卡顿。屏幕关闭或变暗、睡眠和现代待机期间，以及唤醒后 2 分钟内，Max 自动按极限档运行并恢复进程优先级。不需要时请关闭。</value></data>
+  <data name="PrecisionMaxLegacyVersion" xml:space="preserve"><value>Max 只在当前播放版本下生效；旧版本按它自己的极限档播放。</value></data>
 </root>

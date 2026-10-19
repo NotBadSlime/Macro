@@ -16,7 +16,7 @@
 
 先在新的 `artifacts/packaging-stage-*` 目录构建全部产物，成功后才替换固定输出；替换失败会尝试回滚。旧文件移入该 staging 目录中的 `previous-*`，不会删除用户宏数据库。为便于恢复，构建中间文件和备份保留，可在确认新版正常且没有程序使用后手动清理。禁止并发打包。
 
-可选参数：`-Version 2.0.4`、`-Configuration Release`、`-Launch`、`-InstallInno`。`-OutputRoot` 可指定项目 `artifacts` 下的固定发行包目录；`-ShortcutDirectory` 可指定快捷方式目录。本地运行版始终位于 `artifacts/local-run`。
+可选参数：`-Version 2.1.0`、`-Configuration Release`、`-Launch`、`-InstallInno`。`-OutputRoot` 可指定项目 `artifacts` 下的固定发行包目录；`-ShortcutDirectory` 可指定快捷方式目录。本地运行版始终位于 `artifacts/local-run`。
 
 无桌面的 CI 环境使用 `-SkipShortcut` 跳过桌面快捷方式创建，发行包及本地运行版仍正常生成；本机默认保留快捷方式行为。
 

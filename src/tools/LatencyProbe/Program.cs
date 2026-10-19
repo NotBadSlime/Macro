@@ -27,11 +27,18 @@ Console.WriteLine("native engine choices: auto|standby|inline");
 Console.WriteLine($"timerFrequency={Stopwatch.Frequency} ticks/sec highResolution={Stopwatch.IsHighResolution}");
 
 ApplyAffinityMaskIfRequested(affinityMask);
+// --max: Max precision (2.1), 极限 plus preemption. Must be set before the warm-up below.
+if (HasFlag(args, "--max")) { MaxPreemption.Set(true); Console.WriteLine("maxPreemption=on"); }
+// --quiet-check: the start-up latency check MacroStudio runs (3 passes); Max then pins only among the quiet cores.
+if (HasFlag(args, "--quiet-check")) { for (var pass = 0; pass < 3; pass++) SystemLatencyCheck.Run(60, applyQuietCores: false);
+    Console.WriteLine($"quietCheck noisy=[{string.Join(",", SystemLatencyCheck.StableNoisy.Order())}]"); }
 
 if (warmNative)
 {
     var warmupStart = Stopwatch.GetTimestamp();
     NativePlaybackWarmup.TryWarmUp(scanCpu: cpuScan);
+    // Configure the idle workers for the probed profile (and Max) as MacroStudio does.
+    if (profile == PrecisionMode.UltraLowJitter) NativePlaybackWarmup.PrepareForPrecision(profile, "");
     var warmupUs = ToMicroseconds(Stopwatch.GetTimestamp() - warmupStart, Stopwatch.Frequency);
     Console.WriteLine($"nativeWarmup={warmupUs}us cpuScanReady={NativePlaybackWarmup.CpuScanReady}");
 }
