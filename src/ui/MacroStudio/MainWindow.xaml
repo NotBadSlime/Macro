@@ -12,6 +12,9 @@
         Background="{DynamicResource PageBackground}"
         FontFamily="Segoe UI Variable, Segoe UI"
         ResizeMode="CanResize"
+        AllowDrop="True"
+        PreviewDragOver="MainWindow_PreviewDragOver"
+        PreviewDrop="MainWindow_PreviewDrop"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
         PreviewMouseDown="MainWindow_PreviewMouseDown"
         WindowStyle="None">

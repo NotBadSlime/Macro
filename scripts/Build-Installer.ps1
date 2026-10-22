@@ -8,6 +8,8 @@ param(
 
     [string]$OutputRoot = "",
 
+    [string]$LocalOutputRoot = "",
+
     [switch]$Launch,
 
     [switch]$SkipShortcut,
@@ -23,7 +25,9 @@ $packageRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 } else { [IO.Path]::GetFullPath($OutputRoot) }
 . (Join-Path $PSScriptRoot "Packaging-Helpers.ps1")
 Assert-ArtifactPath $packageRoot
-$fixedLocalRoot = Join-Path $artifactRoot "local-run"
+$fixedLocalRoot = if ([string]::IsNullOrWhiteSpace($LocalOutputRoot)) {
+    Join-Path $artifactRoot "local-run"
+} else { [IO.Path]::GetFullPath($LocalOutputRoot) }
 Assert-ArtifactPath $fixedLocalRoot
 if ($packageRoot.TrimEnd('\') -eq $fixedLocalRoot -or
     $packageRoot.StartsWith($fixedLocalRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or
@@ -289,6 +293,13 @@ try {
     $portableZip = $fixedZip
     $localStudio = Join-Path $fixedLocalRoot "MacroStudio"
     $localExe = Join-Path $localStudio "MacroStudio.exe"
+    # Antivirus (e.g. Kaspersky VHO:Trojan.Win32.Sdum) can quarantine the freshly published apphost.
+    Start-Sleep -Seconds 3
+    $missingOutputs = @($installer, $portableZip, $localExe) | Where-Object { -not (Test-Path -LiteralPath $_) }
+    if ($missingOutputs.Count -gt 0) {
+        throw ("Published outputs disappeared after packaging (likely removed by antivirus): " + ($missingOutputs -join ', ') +
+            ". Add an exclusion for $artifactRoot and restore the files from quarantine, then rerun packaging.")
+    }
     if (-not $SkipShortcut) {
         New-Item -ItemType Directory -Path $ShortcutDirectory -Force | Out-Null
         $shortcutName = "MacroHID " + [char]0x672C + [char]0x5730 + [char]0x7248 + ".lnk"

@@ -239,7 +239,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 2.1.0", MacroHidReleaseVersionIsTwoZeroTwo),
+    ("MacroHID release version is 2.1.0", MacroHidReleaseVersionIsTwoOneZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -443,6 +443,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio macro library exposes process group controls", MacroStudioMacroLibraryExposesProcessGroupControls),
     ("MacroStudio macro library can pick running processes and executable files for groups", MacroStudioMacroLibraryCanPickRunningProcessesAndExecutableFilesForGroups),
     ("MacroStudio macro library supports batch macro import", MacroStudioMacroLibrarySupportsBatchMacroImport),
+    ("MacroStudio imports dropped files into the selected database and folder", FileImportUiTests.Run),
     ("MacroStudio remaps nested macro calls when importing MCRX files", MacroStudioRemapsNestedMacroCallsWhenImportingMcrxFiles),
     ("MacroStudio listeners apply process group filters", MacroStudioListenersApplyProcessGroupFilters),
     ("MacroStudio macro library right click delete keeps its target and reports failures", MacroStudioMacroLibraryRightClickDeleteKeepsItsTargetAndReportsFailures),
@@ -4339,7 +4340,7 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsTwoZeroTwo()
+static void MacroHidReleaseVersionIsTwoOneZero()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
@@ -4353,9 +4354,9 @@ static void MacroHidReleaseVersionIsTwoZeroTwo()
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
     Assert.Contains("#define AppVersion \"2.1.0\"", installer);
     Assert.Contains("[string]$Version = \"2.1.0\"", installerBuild);
-    Assert.Contains("当前正式版是 **2.0.2**", readme);
-    Assert.Contains("最新测试版是 **2.1.0**", readme);
-    Assert.Contains("MacroHID 2.1.0 测试版", releaseNotes);
+    Assert.Contains("当前正式版是 **2.1.0**", readme);
+    Assert.Contains("MacroHID 2.1.0 正式版", releaseNotes);
+    Assert.Contains("<Version>2.1.0</Version>", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MacroStudio.csproj")));
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
@@ -9669,7 +9670,7 @@ static void MacroStudioMacroLibrarySupportsBatchMacroImport()
     var simplified = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Resources", "Strings.zh-CN.resx"));
 
     Assert.Contains("Multiselect = true", libraryCode);
-    Assert.Contains("foreach (var fileName in dialog.FileNames)", libraryCode);
+    Assert.Contains("ImportMacroFiles(dialog.FileNames)", libraryCode);
     Assert.Contains("ConversionSmartImported", libraryCode);
     Assert.Contains("ConversionBatchImportFailed", libraryCode);
     Assert.Contains("<value>已导入 {0} 个宏（选择 {1} 个文件，自动识别 {2} 个子宏）。</value>", simplified);

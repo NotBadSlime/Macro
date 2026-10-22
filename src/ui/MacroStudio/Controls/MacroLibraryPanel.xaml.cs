@@ -2401,9 +2401,23 @@ public partial class MacroLibraryPanel : UserControl
 
         if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
 
+        ImportMacroFiles(dialog.FileNames);
+    }
+
+    public void ImportMacroFiles(IEnumerable<string> fileNames)
+    {
+        if (state is null) return;
+        if (!showingDatabaseContents)
+        {
+            activeDatabaseGroupId = selectedGroupId;
+            currentDatabaseFolder = string.Empty;
+            showingDatabaseContents = true;
+            RefreshTree();
+        }
+
         var selectedFiles = new List<SmartImportFile>();
         var failureMessages = new List<string>();
-        foreach (var fileName in dialog.FileNames)
+        foreach (var fileName in fileNames.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             try
             {

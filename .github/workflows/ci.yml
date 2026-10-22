@@ -28,14 +28,14 @@ jobs:
       - name: Restore
         run: dotnet restore MacroHID.sln
 
-      - name: Build
-        run: dotnet build MacroHID.sln --configuration Release --no-restore
-
       - name: Build native playback engine
         shell: pwsh
         run: |
           # src\native\MacroHid.NativePlayback\MacroHid.NativePlayback.vcxproj
           .\scripts\Build-NativePlayback.ps1 -Configuration Release
+
+      - name: Build
+        run: dotnet build MacroHID.sln --configuration Release --no-restore
 
       - name: Run core tests
         run: dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release --no-build

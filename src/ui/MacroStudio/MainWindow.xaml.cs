@@ -3164,11 +3164,18 @@ public partial class MainWindow : Window
         source.RemoveHook(WindowProcedure);
         source.AddHook(WindowProcedure);
         windowSource = source;
+        EnableShellFileDrop(handle);
         lastMonitor = MonitorFromWindow(handle, MONITOR_DEFAULTTONEAREST);
     }
 
     private IntPtr WindowProcedure(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == ShellDropFilesMessage)
+        {
+            handled = true;
+            ReceiveShellFileDrop(wParam);
+            return IntPtr.Zero;
+        }
         if (!exitConfirmed && (msg == WM_CLOSE
             || (msg == WM_SYSCOMMAND && (wParam.ToInt64() & 0xFFF0) == SC_CLOSE)))
         {
@@ -3792,6 +3799,7 @@ public partial class MainWindow : Window
     private bool isInTray;
     private bool exitConfirmed;
     private bool closePromptQueued;
+    private bool shutdownQueued;
     private int taskbarMinimizeDepth;
     private int displayTransitionTick = int.MinValue;
     private IntPtr lastMonitor;
@@ -3805,7 +3813,18 @@ public partial class MainWindow : Window
     {
         if (exitConfirmed)
         {
-            if (!shutdownFinished) { e.Cancel = true; FinishShutdownAsync(); return; }
+            if (!shutdownFinished)
+            {
+                e.Cancel = true;
+                if (!shutdownQueued)
+                {
+                    shutdownQueued = true;
+                    // Close must return before cleanup can call Close again, even if all tasks
+                    // complete synchronously (the usual case when no macro is running).
+                    Dispatcher.BeginInvoke(new Action(FinishShutdownAsync));
+                }
+                return;
+            }
             DisposeTrayIcon();
             base.OnClosing(e);
             return;
