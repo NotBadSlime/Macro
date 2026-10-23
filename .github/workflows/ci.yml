@@ -40,6 +40,11 @@ jobs:
       - name: Run core tests
         run: dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release --no-build
 
+      - name: Verify dock splitter and palette resize layout
+        env:
+          MACROHID_PALETTE_LAYOUT_AUDIT: '1'
+        run: dotnet run --project tests\MacroHid.Core.Tests\MacroHid.Core.Tests.csproj --configuration Release --no-build
+
       - name: Native scheduler regression (fake input only)
         shell: pwsh
         run: |

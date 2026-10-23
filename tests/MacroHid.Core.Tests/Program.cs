@@ -10,6 +10,12 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
+if (Environment.GetEnvironmentVariable("MACROHID_PALETTE_LAYOUT_AUDIT") == "1")
+{
+    ActionPaletteLayoutTests.Run();
+    return 0;
+}
+
 if (Environment.GetEnvironmentVariable("MACROHID_FPS_LOCATOR_FILE") is { Length: > 0 } fpsFile)
 {
     var location = GameFpsLocator.Locate(fpsFile);
