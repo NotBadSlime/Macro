@@ -98,7 +98,7 @@ public static class UnlockerConfiguration
     {
         var ini = new FpsIni(File.ReadAllBytes(Path.Combine(directory, ConfigName(backend))), backend);
         if (!ini.Enabled) throw new InvalidOperationException($"请先在 {backend} 中启用解帧。");
-        int target = ini.Target, min = backend == FpsBackend.Fufu ? 1 : 30, max = backend == FpsBackend.Fufu ? 100000 : 1000;
+        int target = ini.Target, min = 1, max = backend == FpsBackend.Fufu ? 100000 : 1000;
         if (target < min || target > max) throw new InvalidOperationException($"{backend} 配置目标范围无效。");
         return target;
     }

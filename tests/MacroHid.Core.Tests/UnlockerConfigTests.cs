@@ -55,7 +55,9 @@ internal static class UnlockerConfigTests
             File.WriteAllText(ky3, "[Settings]\nenableFps=1\ntargetFps=151\nother=45\n");
             using (var owner = new ConfigFpsChannel(ky3, FpsBackend.Ky3))
             {
-                Fails(() => owner.Write(29)); owner.Write(60);
+                owner.Write(29); Require(new FpsIni(File.ReadAllBytes(ky3), FpsBackend.Ky3).Target == 29, "KY3 accepts targets below 30");
+                owner.Write(1); Require(new FpsIni(File.ReadAllBytes(ky3), FpsBackend.Ky3).Target == 1, "KY3 accepts 1 FPS");
+                Fails(() => owner.Write(1001)); Fails(() => owner.Write(-1)); owner.Write(60);
                 DateTime stamp = File.GetLastWriteTimeUtc(ky3); owner.Write(60);
                 Require(File.GetLastWriteTimeUtc(ky3) == stamp, "same target no disk write");
                 File.AppendAllText(ky3, "newSetting=1\n"); owner.Restore(151);
@@ -132,7 +134,8 @@ internal static class UnlockerConfigTests
     private static void PatchTests(string fixture, string root)
     {
         byte[] original = File.ReadAllBytes(fixture), patched = Ky3ReloadPatch.Build(original);
-        Require(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(patched)) == Ky3ReloadPatch.PatchedHash, "exact known patch");
+        string patchedPath = Path.Combine(root, "patched-check.dll"); File.WriteAllBytes(patchedPath, patched);
+        Require(Ky3ReloadPatch.Inspect(patchedPath) == Ky3PatchState.Patched, "exact known patch");
         Require(original.Length == patched.Length, "size preserved");
         Fails(() => Ky3ReloadPatch.Build(patched));
         var altered = (byte[])original.Clone(); altered[^1] ^= 1; Fails(() => Ky3ReloadPatch.Build(altered));

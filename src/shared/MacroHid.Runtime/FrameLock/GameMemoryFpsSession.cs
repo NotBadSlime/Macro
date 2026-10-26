@@ -33,7 +33,7 @@ public static class GameMemoryFpsSession
         {
             if (step.Action == YsrFpsAction.Stop || (step.Action == YsrFpsAction.Toggle && channel is not null))
                 return TryStop(out error);
-            if (step.ToggleFps != 0 && step.ToggleFps is < 30 or > 1000) { error = "KY3 目标帧率必须为 30–1000，或 0（999 FPS）。"; return false; }
+            if (step.ToggleFps != 0 && step.ToggleFps is < 1 or > 1000) { error = "KY3 目标帧率必须为 1–1000，或 0（999 FPS）。"; return false; }
             if (!PlaybackEffectScope.TryAcquire(Resource, out error)) return false;
             try
             {

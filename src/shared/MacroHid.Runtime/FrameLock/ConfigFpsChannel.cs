@@ -102,7 +102,7 @@ internal sealed class ConfigFpsChannel : IYsrFpsChannel
     }
     private void ValidateRange(int fps, bool restore)
     {
-        int min = backend == FpsBackend.Ky3 ? 30 : 1;
+        const int min = 1;
         int max = restore && backend == FpsBackend.Fufu ? 100000 : 1000;
         if (fps < min || fps > max) throw new InvalidOperationException($"{backend} 目标帧率必须为 {min}–{max}，或 0（999 FPS）。");
     }

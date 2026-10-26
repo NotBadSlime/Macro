@@ -107,6 +107,7 @@ var tests = new (string Name, Action Body)[]
     ("Playback effect ownership isolates other macros", PlaybackEffectOwnershipIsolatesOtherMacros),
     ("Frame lock retains backup after apply and restore failures", FrameLockRetainsBackupAfterFailures),
     ("Net limit keeps the edited byte rate and defaults to 695", NetLimitKeepsEditedByteRateAndDefaultsTo695),
+    ("Ky3 fps card accepts targets below 30", Ky3FpsCardAcceptsTargetsBelowThirty),
     ("Weak net limits upload only", WeakNetLimitsUploadOnly),
     ("Background window posts input, captures that window, and asks for a process in the global database", BackgroundWindowPostsInputAndCapturesThatWindow),
     ("MCRX parser covers wheel and consumer control steps", McrxParserCoversWheelAndConsumerSteps),
@@ -11222,6 +11223,36 @@ static void FrameLockBacksUpOnceUpdatesFpsAndRestoresOnStop()
     finally
     {
         FrameLockSession.ResetForTests();
+    }
+}
+
+static void Ky3FpsCardAcceptsTargetsBelowThirty()
+{
+    var written = new List<int>();
+    GameMemoryFpsSession.ResetForTests();
+    try
+    {
+        using var owner = new PlaybackEffectScope();
+        var channel = new FakeYsrChannel(60);
+        GameMemoryFpsSession.TestOpenChannel = () => channel;
+        foreach (var target in new[] { 29, 15, 1 })
+        {
+            Assert.True(GameMemoryFpsSession.TryApply(new YsrFpsToggleStep(target, YsrFpsAction.Start, FpsBackend.Ky3), out var error));
+            Assert.Equal(null, error);
+            written.Add(channel.Fps);
+        }
+
+        Assert.Equal(1, written[^1]);
+        Assert.False(GameMemoryFpsSession.TryApply(new YsrFpsToggleStep(1001, YsrFpsAction.Start, FpsBackend.Ky3), out var tooHigh));
+        Assert.Contains("1–1000", tooHigh!);
+        Assert.False(GameMemoryFpsSession.TryApply(new YsrFpsToggleStep(-5, YsrFpsAction.Start, FpsBackend.Ky3), out var negative));
+        Assert.Contains("1–1000", negative!);
+        Assert.True(GameMemoryFpsSession.TryStop(out _));
+        Assert.Equal(60, channel.Fps);
+    }
+    finally
+    {
+        GameMemoryFpsSession.ResetForTests();
     }
 }
 

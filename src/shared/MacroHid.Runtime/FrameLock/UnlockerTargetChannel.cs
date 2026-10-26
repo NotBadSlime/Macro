@@ -19,7 +19,7 @@ internal sealed class Ky3TargetChannel(IGameFpsMemory memory, nint address) : IY
     public void Write(int fps)
     {
         int target = fps == 0 ? 999 : fps;
-        if (target is < 30 or > 1000) throw new InvalidOperationException("KY3 目标帧率必须为 30 到 1000，或 0（999 FPS）。");
+        if (target is < 1 or > 1000) throw new InvalidOperationException("KY3 目标帧率必须为 1 到 1000，或 0（999 FPS）。");
         if (!memory.IsAlive || !memory.IsWritable(address, 4)) throw new InvalidOperationException("KY3 目标帧率内存已不可访问。");
         if (Read() == target) return;
         memory.Write(address, BitConverter.GetBytes(target));
