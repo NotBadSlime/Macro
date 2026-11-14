@@ -8338,7 +8338,9 @@ static void PauseConditionKeepsMainTimelineOnNativePlayback()
     var elapsedMs = (Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency;
     Assert.False(result.Cancelled);
     Assert.True(elapsedMs >= 235);
-    Assert.True((result.InputStats?.BackendName ?? string.Empty).StartsWith("native", StringComparison.Ordinal));
+    if (!(result.InputStats?.BackendName ?? string.Empty).StartsWith("native", StringComparison.Ordinal))
+        throw new InvalidOperationException($"Expected native pause backend; status={result.Status}; " +
+            $"backend={result.InputStats?.BackendName}; fallback={result.InputStats?.NativeFallbackReason}; elapsed={elapsedMs:F1}ms");
 }
 
 static void EmbeddedConverterImportsGIMacrosJson()
