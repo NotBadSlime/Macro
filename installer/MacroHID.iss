@@ -44,6 +44,9 @@ Name: "chinesetrad"; MessagesFile: "compiler:Default.isl,Languages\ChineseTradit
 
 [CustomMessages]
 english.CreateDesktopShortcut=Create a desktop shortcut for MacroStudio
+english.EnableGlobalCommand=Enable the MacroCtl command for the current Windows user
+chinesesimp.EnableGlobalCommand=为当前 Windows 用户启用 MacroCtl 全局命令
+chinesetrad.EnableGlobalCommand=為目前 Windows 使用者啟用 MacroCtl 全域命令
 chinesesimp.CreateDesktopShortcut=创建 MacroStudio 桌面快捷方式
 chinesetrad.CreateDesktopShortcut=建立 MacroStudio 桌面捷徑
 english.ShortcutsGroup=Shortcuts:
@@ -72,9 +75,11 @@ chinesesimp.DeleteUserDataFailed=部分用户数据无法删除，可稍后手�
 chinesetrad.DeleteUserDataFailed=部分使用者資料無法刪除，可稍後手動清理：%n%1
 
 [Tasks]
+Name: "globalcommand"; Description: "{cm:EnableGlobalCommand}"; GroupDescription: "{cm:ShortcutsGroup}"
 Name: "desktopicon"; Description: "{cm:CreateDesktopShortcut}"; GroupDescription: "{cm:ShortcutsGroup}"; Flags: unchecked
 
 [Files]
+Source: "{#SourceDir}\MacroCtl\*"; DestDir: "{app}\MacroCtl"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; MacroHid.NativePlayback.dll is copied into MacroStudio, MacroRunner, and LatencyProbe before these wildcard entries are packed.
 Source: "{#SourceDir}\MacroStudio\*"; DestDir: "{app}\MacroStudio"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceDir}\MacroRunner\*"; DestDir: "{app}\MacroRunner"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -91,7 +96,11 @@ Name: "{group}\{cm:DocumentationShortcut}"; Filename: "{app}\README.md"
 Name: "{autodesktop}\MacroStudio"; Filename: "{app}\MacroStudio\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
+Filename: "{app}\MacroCtl\MacroCtl.exe"; Parameters: "register --studio ""{app}\MacroStudio\{#AppExeName}"""; Tasks: globalcommand; Flags: runhidden runasoriginaluser
 Filename: "{app}\MacroStudio\{#AppExeName}"; Description: "{cm:LaunchMacroStudio}"; Flags: nowait postinstall skipifsilent unchecked
+
+[UninstallRun]
+Filename: "{app}\MacroCtl\MacroCtl.exe"; Parameters: "unregister --studio ""{app}\MacroStudio\{#AppExeName}"""; Flags: runhidden; RunOnceId: "RemoveGlobalCommand"
 
 [Code]
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

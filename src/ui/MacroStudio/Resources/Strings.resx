@@ -1030,4 +1030,12 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="PrecisionMaxDescription" xml:space="preserve"><value>Extreme plus preemption: the two playback threads run time-critical in a realtime-priority process with MMCSS critical, pinned to the two quietest cores, and spin through every wait instead of sleeping on a timer. While a Max hotkey listens they keep spinning, so the first input does not wait for a thread to wake.</value></data>
   <data name="PrecisionMaxWarning" xml:space="preserve"><value>Takes two CPU cores at 100% while listening and playing. Game frame rate can drop and other programs on those cores may stutter. While the display is off or dimmed, during sleep and Modern Standby, and for 2 minutes after waking, Max runs as Extreme and restores the process priority. Turn off when not needed.</value></data>
   <data name="PrecisionMaxLegacyVersion" xml:space="preserve"><value>Max works only with the current playback version; an earlier release plays with its own Extreme.</value></data>
+  <data name="GlobalCommandTitle" xml:space="preserve"><value>Global command</value></data>
+  <data name="GlobalCommandRegister" xml:space="preserve"><value>Register global command</value></data>
+  <data name="GlobalCommandUnregister" xml:space="preserve"><value>Unregister this version</value></data>
+  <data name="GlobalCommandCheck" xml:space="preserve"><value>Check registration</value></data>
+  <data name="GlobalCommandOtherVersion" xml:space="preserve"><value>Another version owns the registration. Nothing was changed.</value></data>
+  <data name="GlobalCommandHint" xml:space="preserve"><value>Register MacroCtl for your Windows user. Reopen terminals after registration. The registered Studio path is shown above. Moving a portable folder requires registration again.</value></data>
+  <data name="CopyExternalCommand" xml:space="preserve"><value>Copy external start command</value></data>
+  <data name="ExternalCommandCopied" xml:space="preserve"><value>External start command copied (3-second delay).</value></data>
 </root>

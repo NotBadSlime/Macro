@@ -449,6 +449,7 @@
                             <MenuItem x:Name="InsertConditionMacroMenuItem" Header="插入到当前宏" Click="InsertConditionMacroMenuItem_Click" />
                             <MenuItem x:Name="EditConditionMacroMenuItem" Header="编辑条件宏" Click="EditConditionMacroMenuItem_Click" />
                             <MenuItem x:Name="CopyMenuItem" Header="复制" InputGestureText="Ctrl+C" Click="CopyMenuItem_Click" />
+                            <MenuItem x:Name="CopyExternalCommandMenuItem" Header="复制外部启动命令" Click="CopyExternalCommand_Click" />
                             <MenuItem x:Name="PasteMenuItem" Header="粘贴" InputGestureText="Ctrl+V" Click="PasteMenuItem_Click" />
                             <Separator />
                             <MenuItem x:Name="DeleteMenuItem" Header="删除" InputGestureText="Delete" Click="DeleteMenuItem_Click" />
@@ -523,6 +524,7 @@
                                 <Separator x:Name="ExplorerContextMenuPrimarySeparator" />
                                 <MenuItem x:Name="ExplorerRenameMenuItem" Header="重命名" InputGestureText="F2" Click="RenameMenuItem_Click" />
                                 <MenuItem x:Name="ExplorerCopyMenuItem" Header="复制" InputGestureText="Ctrl+C" Click="CopyMenuItem_Click" />
+                                <MenuItem x:Name="ExplorerCopyExternalCommandMenuItem" Header="复制外部启动命令" Click="CopyExternalCommand_Click" />
                                 <MenuItem x:Name="ExplorerPasteMenuItem" Header="粘贴" InputGestureText="Ctrl+V" Click="PasteMenuItem_Click" />
                                 <MenuItem x:Name="ExplorerToggleLockMenuItem" Header="锁定宏文件" Click="ExplorerToggleLockMenuItem_Click" />
                                 <Separator x:Name="ExplorerContextMenuViewSeparator" />

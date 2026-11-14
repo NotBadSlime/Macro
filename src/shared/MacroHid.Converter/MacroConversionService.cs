@@ -469,6 +469,19 @@ public static class MacroConversionService
             diagnostics,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             depth: 0);
+        var heldKeys = new HashSet<(HidKey Key, HidModifier Modifiers)>();
+        for (int index = 0; index < steps.Count; index++)
+        {
+            if (steps[index] is KeyStep key)
+            {
+                if (key.Kind == KeyActionKind.Down && !heldKeys.Add((key.Key, key.Modifiers)))
+                    diagnostics.Warning("gimacros.repeatedKeyDown",
+                        $"Key '{key.Key}' is pressed again at converted step {index + 1} without a release. " +
+                        "The source kd was preserved. If this event should release the key, change kd to ku in the source JSON.");
+                else if (key.Kind == KeyActionKind.Up) heldKeys.Remove((key.Key, key.Modifiers));
+            }
+            else if (steps[index] is RepeatStep) heldKeys.Clear(); // State after nested control flow is not inferred.
+        }
         var name = Path.GetFileNameWithoutExtension(fileName ?? string.Empty);
         if (string.IsNullOrWhiteSpace(name))
         {

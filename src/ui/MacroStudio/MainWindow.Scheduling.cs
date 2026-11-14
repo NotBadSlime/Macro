@@ -129,6 +129,7 @@ public partial class MainWindow
 
     private void RequestAllStops()
     {
+        externalJobs.CancelAll();
         lock (triggerGate)
         {
             Interlocked.Increment(ref stopEpoch);
@@ -143,6 +144,7 @@ public partial class MainWindow
         if (shutdownStarted) return;
         if (autoSaveTimer.IsEnabled && jsonValid) PerformDebouncedAutoSave();
         shutdownStarted = true;
+        await ((App)Application.Current).StopControlServerAsync();
         UpdatePrecisionWarmLease();
         listeningUpdateGeneration++;
         RequestAllStops();

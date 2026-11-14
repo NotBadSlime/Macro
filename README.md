@@ -4,6 +4,8 @@ MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。目的是把各大�
 
 宏数据默认保存在 `%APPDATA%\MacroHID\MacroLibrary`。卸载时默认保留，重新安装后仍可继续使用。
 
+外部启动可使用 `MacroCtl run --id "宏ID" --delay 3s`，无需触发键。新版 Studio 的「窗口 → 全局命令」可注册到当前用户 PATH，宏右键菜单可复制启动命令；详见 [外部控制说明](docs/external-control.md)。
+
 运行日志、界面报错、异常堆栈和锁帧诊断统一写入 `%APPDATA%\MacroHID\log`，源码版和安装版使用相同路径。点击顶部「打开日志」即可查看；反馈问题时请提供出错时间和对应的 `runtime-*.log`（有轮转文件时一并提供）。每次启动创建独立日志，单文件约 4 MB，保留两份轮转备份；启动时清理超过 14 天的旧日志。日志包含宏名称、文件路径和错误详情，不记录完整宏内容或逐键输入。旧版 `crash.log` 和 `memory-fps-diagnostic.log` 不迁移、不删除。
 
 源码一键打包：双击根目录的 `打包.cmd`，默认同时生成安装包、便携包、免安装本地运行版，安装包与便携包固定放在 `artifacts/packages`，本地运行版固定放在 `artifacts/local-run`，并更新桌面 `Start Item` 目录中的“MacroHID 本地版”快捷方式。详见 [打包说明](docs/packaging.md)。

@@ -150,7 +150,7 @@ function New-PortableAppLayout([string]$SourceRoot, [string]$AppRoot) {
 
     New-Item -ItemType Directory -Path $AppRoot -Force | Out-Null
 
-    foreach ($name in @("MacroStudio", "MacroRunner", "LatencyProbe", "scripts", "samples", "docs")) {
+    foreach ($name in @("MacroStudio", "MacroCtl", "MacroRunner", "LatencyProbe", "scripts", "samples", "docs")) {
         Copy-DirectoryIfExists (Join-Path $SourceRoot $name) (Join-Path $AppRoot $name)
     }
 
@@ -211,6 +211,7 @@ try {
     if (-not $?) { throw "legacy native build failed" }
 
     Publish-Checked "src\ui\MacroStudio\MacroStudio.csproj" (Join-Path $inputRoot "MacroStudio") $false
+    Publish-Checked "src\tools\MacroCtl\MacroCtl.csproj" (Join-Path $inputRoot "MacroCtl") $false
     Publish-Checked "src\tools\MacroRunner\MacroRunner.csproj" (Join-Path $inputRoot "MacroRunner") $false
     Publish-Checked "src\tools\LatencyProbe\LatencyProbe.csproj" (Join-Path $inputRoot "LatencyProbe") $false
     $ocrServerOutput = Join-Path $inputRoot "WindowsOcrServer"
@@ -268,6 +269,7 @@ try {
     $localRoot = Join-Path $outputRoot "local-run"
     $localStudio = Join-Path $localRoot "MacroStudio"
     Publish-Checked "src\ui\MacroStudio\MacroStudio.csproj" $localStudio $true
+    Publish-Checked "src\tools\MacroCtl\MacroCtl.csproj" (Join-Path $localRoot "MacroCtl") $true
     Publish-Checked "src\tools\WindowsOcrServer\WindowsOcrServer.csproj" (Join-Path $localStudio "ocr") $true
     Copy-Item -LiteralPath $nativeDll -Destination (Join-Path $localStudio "MacroHid.NativePlayback.dll") -Force
     Assert-LegacyRuntimes $localStudio

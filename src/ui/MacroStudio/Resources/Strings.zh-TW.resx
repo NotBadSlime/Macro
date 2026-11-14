@@ -730,4 +730,12 @@
   <data name="PrecisionMaxDescription" xml:space="preserve"><value>極限 + 搶佔：兩個播放執行緒以 TimeCritical 執行在 RealTime 優先級行程中，並啟用 MMCSS 關鍵級，綁定到最安靜的兩個核心；所有等待都改為純自旋，不再用計時器睡眠。Max 熱鍵待命時執行緒也保持自旋，首個輸入不必等執行緒喚醒。</value></data>
   <data name="PrecisionMaxWarning" xml:space="preserve"><value>監聽和播放期間會佔滿兩個 CPU 核心。遊戲幀率可能下降，這兩個核心上的其他程式可能卡頓。螢幕關閉或變暗、睡眠和新式待機期間，以及喚醒後 2 分鐘內，Max 自動按極限檔執行並恢復行程優先級。不需要時請關閉。</value></data>
   <data name="PrecisionMaxLegacyVersion" xml:space="preserve"><value>Max 只在目前播放版本下生效；舊版本按它自己的極限檔播放。</value></data>
+  <data name="GlobalCommandTitle" xml:space="preserve"><value>全域命令</value></data>
+  <data name="GlobalCommandRegister" xml:space="preserve"><value>註冊全域命令</value></data>
+  <data name="GlobalCommandUnregister" xml:space="preserve"><value>取消本版本註冊</value></data>
+  <data name="GlobalCommandCheck" xml:space="preserve"><value>檢查全域命令</value></data>
+  <data name="GlobalCommandOtherVersion" xml:space="preserve"><value>目前命令關聯其他版本，未修改其註冊。</value></data>
+  <data name="GlobalCommandHint" xml:space="preserve"><value>為目前 Windows 使用者註冊 MacroCtl。註冊後重新開啟終端即可使用。上方顯示關聯的 Studio 路徑，移動可攜目錄後需重新註冊。</value></data>
+  <data name="CopyExternalCommand" xml:space="preserve"><value>複製外部啟動命令</value></data>
+  <data name="ExternalCommandCopied" xml:space="preserve"><value>已複製外部啟動命令（延遲 3 秒）。</value></data>
 </root>

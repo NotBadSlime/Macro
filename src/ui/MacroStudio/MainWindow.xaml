@@ -94,6 +94,7 @@
                                     </MenuItem>
                                     <Separator />
                                     <MenuItem x:Name="ResetWorkspaceLayoutMenuItem" Header="重置布局" Click="ResetWorkspaceLayout_Click" />
+                                    <MenuItem x:Name="GlobalCommandMenuItem" Header="全局命令" Click="GlobalCommandSettings_Click" />
                                 </ContextMenu>
                             </Button.ContextMenu>
                         </Button>

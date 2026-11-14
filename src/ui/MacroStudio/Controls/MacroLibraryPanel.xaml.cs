@@ -108,6 +108,8 @@ public partial class MacroLibraryPanel : UserControl
 
     public void ApplyLocalization()
     {
+        CopyExternalCommandMenuItem.Header = L("CopyExternalCommand");
+        ExplorerCopyExternalCommandMenuItem.Header = L("CopyExternalCommand");
         NewGroupButton.Content = L("NewDatabase");
         DeleteDatabaseButton.Content = L("DeleteDatabase");
         BackToManagerButton.Content = L("ReturnToManager");
@@ -892,6 +894,7 @@ public partial class MacroLibraryPanel : UserControl
     private void ExplorerContextMenu_Opened(object sender, RoutedEventArgs e)
     {
         var selected = GetSelectedExplorerNodes();
+        ExplorerCopyExternalCommandMenuItem.IsEnabled = selected.Count == 1 && selected[0].Item is { IsConditionMacro: false };
         var kind = selected.Count == 0
             ? ExplorerContextMenuKind.Blank
             : selected.Count == 1 && selected[0].IsFolder
@@ -1377,12 +1380,21 @@ public partial class MacroLibraryPanel : UserControl
     private void MacroTreeContextMenu_Opened(object sender, RoutedEventArgs e)
     {
         var node = contextMenuTargetNode ?? GetSelectedNode();
+        CopyExternalCommandMenuItem.IsEnabled = node?.Item is { IsConditionMacro: false };
         RenameMenuItem.IsEnabled = node is not null && node.Item?.IsLocked != true;
         CopyMenuItem.IsEnabled = showingDatabaseContents && node is not null && !node.IsGroup;
         DeleteMenuItem.IsEnabled = CanDeleteNode(node);
         var isCondition = node?.Item is { } item && IsConditionLibraryItem(item);
         InsertConditionMacroMenuItem.Visibility = isCondition ? Visibility.Visible : Visibility.Collapsed;
         EditConditionMacroMenuItem.Visibility = isCondition ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void CopyExternalCommand_Click(object sender, RoutedEventArgs e)
+    {
+        var node = contextMenuTargetNode ?? (showingDatabaseContents ? GetSelectedExplorerNodes().FirstOrDefault() : GetSelectedNode());
+        if (node?.Item is not { IsConditionMacro: false } item) return;
+        Clipboard.SetText($"MacroCtl run --id \"{item.Id}\" --delay 3s");
+        ResultMessage?.Invoke(L("ExternalCommandCopied"));
     }
 
     private void InsertConditionMacroMenuItem_Click(object sender, RoutedEventArgs e)

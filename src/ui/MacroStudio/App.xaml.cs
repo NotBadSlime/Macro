@@ -2,14 +2,22 @@ using System.Windows;
 using System.Windows.Threading;
 using MacroHid.Runtime;
 using MacroStudio.Services;
+using MacroHid.Control;
 
 namespace MacroStudio;
 
 public partial class App : Application
 {
     private bool dispatcherErrorDialogPending;
+    private ControlPipeServer? controlServer;
 
-    protected override void OnStartup(StartupEventArgs e)
+    internal async Task StopControlServerAsync()
+    {
+        var server = Interlocked.Exchange(ref controlServer, null);
+        if (server is not null) await server.DisposeAsync();
+    }
+
+    protected override async void OnStartup(StartupEventArgs e)
     {
         AppLog.Initialize();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -25,6 +33,18 @@ public partial class App : Application
         }
 
         Log("=== App Starting ===");
+        try { controlServer = new ControlPipeServer(); }
+        catch (System.IO.IOException ex)
+        {
+            AppLog.Info("Control", "An instance already owns the control endpoint: " + ex.Message);
+            try
+            {
+                await ControlPipe.SendAsync(new ControlRequest(e.Args.Contains("--tray") ? "status" : "show"));
+                Shutdown(0);
+            }
+            catch (Exception error) { AppLog.Error("Control", "Existing instance is unavailable", error); Shutdown(3); }
+            return;
+        }
         UnlockerConfiguration.Faulted += (_, message) => Dispatcher.BeginInvoke(new Action(() =>
             DialogOwnerService.MessageBoxSafe(MainWindow, message, "解帧器配置控制已停止", MessageBoxButton.OK, MessageBoxImage.Warning)));
         var recovered = UnlockerConfiguration.RecoverPending();
@@ -48,12 +68,18 @@ public partial class App : Application
         }
 
         // Created here instead of StartupUri so the --ui-snapshot mode above never constructs it (hooks, engine).
-        new MainWindow().Show();
+        var window = new MainWindow();
+        MainWindow = window;
+        if (e.Args.Contains("--tray")) window.ShowActivated = false;
+        window.Show();
+        if (e.Args.Contains("--tray")) window.HideToTrayForExternalLaunch();
+        controlServer.Start(request => Dispatcher.InvokeAsync(() => window.HandleControlRequest(request)).Task);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         Log($"=== App Exiting ({e.ApplicationExitCode}) ===");
+        _ = StopControlServerAsync();
         RestoreUnlockerTargets();
         PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
         PlaybackEngineHost.Shutdown();

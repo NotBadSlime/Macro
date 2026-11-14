@@ -40,6 +40,7 @@ internal static class UiSnapshot
                     invalid.ZeroGapHoldBox.Text = "-3";
                     Render(invalid, Path.Combine(directory, $"basic-invalid-{suffix}.png"));
                     Render(new AdvancedSettingsDialog(settings), Path.Combine(directory, $"advanced-{suffix}.png"));
+                    Render(new GlobalCommandDialog(), Path.Combine(directory, $"global-command-{suffix}.png"));
                     Render(new PrecisionControlDialog(settings with { Precision = MacroHid.Core.PrecisionMode.UltraLowJitter }),
                         Path.Combine(directory, $"precision-{suffix}.png"));
                     Render(new PlaybackVersionDialog(settings), Path.Combine(directory, $"version-{suffix}.png"));

@@ -3561,6 +3561,7 @@ public partial class MainWindow : Window
 
     private void ApplyWorkspaceMenuItemText()
     {
+        GlobalCommandMenuItem.Header = L("GlobalCommandTitle");
         ShowLibraryMenuItem.Header = WorkspaceTitle("WorkspacePanelLibrary");
         ShowSequenceMenuItem.Header = WorkspaceTitle("WorkspacePanelSequence");
         ShowConditionMenuItem.Header = WorkspaceTitle("WorkspacePanelConditions");

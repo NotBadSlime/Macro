@@ -10,6 +10,12 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
+if (Environment.GetEnvironmentVariable("MACROHID_GIMACROS_FIXTURE") is { Length: > 0 } fixture)
+{
+    GIMacrosReleaseTests.VerifyFile(fixture);
+    return 0;
+}
+
 if (Environment.GetEnvironmentVariable("MACROHID_PALETTE_LAYOUT_AUDIT") == "1")
 {
     ActionPaletteLayoutTests.Run();
@@ -406,6 +412,7 @@ var tests = new (string Name, Action Body)[]
     ("Embedded converter imports Razer module references as macro calls", EmbeddedConverterImportsRazerModuleReferencesAsMacroCalls),
     ("Embedded converter preserves supplied Razer modules as nested calls", EmbeddedConverterPreservesSuppliedRazerModulesAsNestedCalls),
     ("Embedded converter imports GIMacros JSON", EmbeddedConverterImportsGIMacrosJson),
+    ("GIMacros diagnoses duplicate downs and preserves explicit releases", GIMacrosReleaseTests.Run),
     ("Embedded converter exports GIMacros JSON", EmbeddedConverterExportsGIMacrosJson),
     ("Embedded converter imports GengDiJi scripts", EmbeddedConverterImportsGengDiJiScripts),
     ("Embedded converter exports GengDiJi scripts", EmbeddedConverterExportsGengDiJiScripts),
