@@ -8321,8 +8321,11 @@ static void PauseConditionKeepsMainTimelineOnNativePlayback()
             matcher,
             [new WaitStep(TimeSpan.FromMilliseconds(60)), new TextStep(string.Empty)],
             ExecutionMode: ConditionExecutionMode.PauseMainTimeline)]);
-    var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
-    executor.Prepare(document, new(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, false, PrecisionMode.UltraLowJitter));
+    // Pause is independent of the CPU-scanning precision profile. Hosted VMs may
+    // expose only one physical core; the non-scanning native profile still exercises
+    // the same pause control without relaxing the backend or duration assertions.
+    using var executor = new MacroPlaybackExecutor(sink, livePixelEvaluator: _ => true);
+    executor.Prepare(document, new(PlaybackMode.FixedCount, 1, PixelEvaluationMode.Live, false, PrecisionMode.ExtremeDuringPlayback));
     var started = Stopwatch.GetTimestamp();
 
     var result = executor.RunAsync(
@@ -8332,7 +8335,7 @@ static void PauseConditionKeepsMainTimelineOnNativePlayback()
             1,
             PixelEvaluationMode.Live,
             NoWait: false,
-            PrecisionMode.UltraLowJitter),
+            PrecisionMode.ExtremeDuringPlayback),
         CancellationToken.None).GetAwaiter().GetResult();
 
     var elapsedMs = (Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency;
