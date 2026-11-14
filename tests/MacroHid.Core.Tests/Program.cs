@@ -8340,7 +8340,10 @@ static void PauseConditionKeepsMainTimelineOnNativePlayback()
     Assert.True(elapsedMs >= 235);
     if (!(result.InputStats?.BackendName ?? string.Empty).StartsWith("native", StringComparison.Ordinal))
         throw new InvalidOperationException($"Expected native pause backend; status={result.Status}; " +
-            $"backend={result.InputStats?.BackendName}; fallback={result.InputStats?.NativeFallbackReason}; elapsed={elapsedMs:F1}ms");
+            $"backend={result.InputStats?.BackendName}; fallback={result.InputStats?.NativeFallbackReason}; elapsed={elapsedMs:F1}ms; " +
+            $"preparation={PlaybackRuntimeStatus.Preparation}; disablePrepare={Environment.GetEnvironmentVariable("MACROHID_DISABLE_PREPARE")}; " +
+            $"nativePrepared={typeof(MacroPlaybackExecutor).GetField("nativePreparationAvailable", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(executor)}; " +
+            $"modules={string.Join(",", Process.GetCurrentProcess().Modules.Cast<ProcessModule>().Where(m => m.ModuleName.Contains("NativePlayback")).Select(m => m.FileName))}");
 }
 
 static void EmbeddedConverterImportsGIMacrosJson()
