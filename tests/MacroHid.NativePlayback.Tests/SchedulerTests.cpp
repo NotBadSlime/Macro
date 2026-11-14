@@ -62,7 +62,10 @@ struct Run
     {
         Check(WaitForSingleObject(done, timeout) == WAIT_OBJECT_0, "completion timeout");
         MhpRunStats stats{};
-        Check(MhpGetRunResult(handle, &stats) == expected, "wrong result");
+        const auto actual = MhpGetRunResult(handle, &stats);
+        if (actual != expected)
+            throw std::runtime_error("wrong result: expected=" + std::to_string(expected) +
+                " actual=" + std::to_string(actual) + " batches=" + std::to_string(stats.batchesSubmitted));
         return stats;
     }
     ~Run() { MhpReleaseRun(handle); }
@@ -518,9 +521,15 @@ int main(int argc, char** argv)
             }
             calls = 0;
             {
+                // Hold the first fake submission until cancellation is requested. Sleep(10) can
+                // oversleep the entire 40 ms plan on a busy VM, cancelling an already finished run.
+                blockSubmit = true; insideSubmit = false;
                 Run cancelled(dense, maxOptions);
-                Sleep(10);
+                const auto deadline = QueryCounter() + ms(2000);
+                while (!insideSubmit && QueryCounter() < deadline) Sleep(1);
+                Check(insideSubmit, "max fake API did not start");
                 MhpCancelRun(cancelled.handle);
+                blockSubmit = false;
                 const auto stats = cancelled.Wait(MhpCancelled);
                 Check(stats.batchesSubmitted == static_cast<uint32_t>(calls.load()) && stats.batchesSubmitted < 2000, "max race cancel");
             }
