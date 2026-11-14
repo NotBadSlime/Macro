@@ -25,7 +25,8 @@ public static class MacroCtlProgram
                     MacroCtl doctor
                     run defaults to one iteration; --count N executes N iterations; --loop runs until stopped.
                     Delay applies once before the first iteration, starting when Studio accepts the request.
-                    --wait waits for completion; Ctrl+C stops waiting, not the macro. Use stop to cancel.
+                    --loop --wait: Ctrl+C stops that loop and waits for it to stop (exit 130).
+                    Other --wait commands: Ctrl+C only stops waiting. Use stop to cancel the macro.
                     Exit codes: 0 success; 2 invalid arguments; 3 Studio unavailable; 4 not found;
                     5 ambiguous macro; 6 busy; 7 execution failed; 8 cancelled; 130 interrupted wait.
                     """);
@@ -79,6 +80,7 @@ public static class MacroCtlProgram
             ControlProtocol.ValidatePlayback(count, flags.Contains("--loop"));
             var request = new ControlRequest(command, Value("--id"), Value("--library"), Value("--name"), Value("--run-id"),
                 Value("--delay") is { } delay ? ControlProtocol.ParseDelay(delay) : 0, Guid.NewGuid().ToString("N"), count, flags.Contains("--loop"));
+            var stopLoopOnInterrupt = command == "run" && request.Loop && flags.Contains("--wait");
             using var interrupt = new CancellationTokenSource();
             ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; interrupted = true; interrupt.Cancel(); };
             Console.CancelKeyPress += cancel;
@@ -93,7 +95,10 @@ public static class MacroCtlProgram
                         if (status.Capabilities?.Contains(ControlProtocol.PlaybackRepeatCapability) != true)
                             return ControlResponse.Fail("unsupported", "This Studio version does not support --count/--loop. Restart using the updated Studio build.");
                     }
-                    return await ControlPipe.SendAsync(request, interrupt.Token, pipeName);
+                    interrupt.Token.ThrowIfCancellationRequested();
+                    // Keep the acceptance response even if Ctrl+C arrives in flight: we need its
+                    // run ID to stop exactly this job, including while its startup delay is pending.
+                    return await ControlPipe.SendAsync(request, stopLoopOnInterrupt ? CancellationToken.None : interrupt.Token, pipeName);
                 }
                 ControlResponse response;
                 try { response = await SendCommand(); }
@@ -107,12 +112,17 @@ public static class MacroCtlProgram
                 if (flags.Contains("--wait") && response.Ok && response.Job is { } job)
                 {
                     var runId = job.RunId;
-                    while (response.Job is { } current && !ControlProtocol.IsTerminal(current.State))
+                    try
                     {
-                        await Task.Delay(200, interrupt.Token);
-                        response = await ControlPipe.SendAsync(new ControlRequest("status", RunId: runId), interrupt.Token, pipeName);
-                        if (!response.Ok) break;
+                        while (response.Job is { } current && !ControlProtocol.IsTerminal(current.State))
+                        {
+                            await Task.Delay(200, interrupt.Token);
+                            response = await ControlPipe.SendAsync(new ControlRequest("status", RunId: runId), interrupt.Token, pipeName);
+                            if (!response.Ok) break;
+                        }
                     }
+                    catch (OperationCanceledException) when (stopLoopOnInterrupt && interrupt.IsCancellationRequested)
+                    { return await StopLoopAsync(runId, json, pipeName); }
                 }
                 Print(response, json);
                 if (!response.Ok) return response.Code switch { "not_found" => 4, "ambiguous" => 5, "busy" => 6, "invalid" => 2, _ => 7 };
@@ -123,6 +133,33 @@ public static class MacroCtlProgram
         catch (ArgumentException ex) { Print(ControlResponse.Fail("invalid", ex.Message), json); return 2; }
         catch (OperationCanceledException) { Print(ControlResponse.Fail("unavailable", "Studio unavailable or wait interrupted. Start Studio, or use --launch."), json); return interrupted ? 130 : 3; }
         catch (Exception ex) { Print(ControlResponse.Fail("unavailable", ex.Message), json); return 3; }
+    }
+    private static async Task<int> StopLoopAsync(string runId, bool json, string? pipeName)
+    {
+        string Retry(string detail) => $"Could not confirm loop {runId} stopped: {detail} Retry: MacroCtl stop --run-id \"{runId}\"";
+        try
+        {
+            // The Ctrl+C token is already cancelled. Repeated Ctrl+C must not interrupt cleanup.
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var response = await ControlPipe.SendAsync(new ControlRequest("stop", RunId: runId), timeout.Token, pipeName);
+            while (response.Ok && response.Job is { } current && !ControlProtocol.IsTerminal(current.State))
+            {
+                await Task.Delay(100, timeout.Token);
+                response = await ControlPipe.SendAsync(new ControlRequest("status", RunId: runId), timeout.Token, pipeName);
+            }
+            if (!response.Ok || response.Job is null)
+            {
+                Print(ControlResponse.Fail("stop_failed", Retry(response.Message ?? response.Code)), json);
+                return 7;
+            }
+            Print(response, json);
+            return response.Job.State == "failed" ? 7 : 130;
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException)
+        {
+            Print(ControlResponse.Fail("unavailable", Retry(ex.Message)), json);
+            return 3;
+        }
     }
     private static async Task<ControlResponse> WaitForStudio(Func<Task<ControlResponse>> send, CancellationToken token)
     {

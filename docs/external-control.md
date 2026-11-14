@@ -20,6 +20,7 @@ MacroCtl list
 MacroCtl run --id "宏ID" --delay 3s
 MacroCtl run --id "宏ID" --delay 3s --count 5 --wait
 MacroCtl run --id "宏ID" --loop
+MacroCtl run --id "宏ID" --loop --wait
 MacroCtl run --library "日常操作" --name "自动填写" --delay 500ms --wait
 MacroCtl status
 MacroCtl status --run-id "任务ID"
@@ -32,7 +33,8 @@ MacroCtl stop --run-id "任务ID"
 - `--count N` 中 N 必须为正整数，表示整份宏总共执行 N 轮；`--loop` 持续执行直到通过 `stop --run-id`、Studio 停止按钮或强制停止键停止。两者不能同时指定，不传时仍执行一轮。延迟只在第一轮前等待一次，不在每轮重复等待。持续循环下 `--wait` 会一直等待，直到停止或执行失败。
 - 使用循环参数前，命令会检查 Studio 是否支持该功能。若仍运行旧版 Studio，将明确报错并拒绝启动，需切换到新版；不会忽略循环参数后只执行一轮。
 - 接受后立即返回任务 ID，倒计时由 Studio 负责，终端退出不影响已接受的任务。
-- `--wait` 等待执行结束，再按实际结果返回退出码；Ctrl+C 只停止等待，取消任务需用 `stop`。
+- `--loop --wait` 会留在控制台等待；按 Ctrl+C 会停止本命令启动的循环任务，等待 Studio 确认任务结束后退出，退出码为 130。延迟倒计时中的循环任务也会被取消；不会停止其他任务。停止过程中再次按 Ctrl+C 不会中断清理。停止请求失败或 10 秒内未能确认结束时，会报错并显示任务 ID 和可重试的 `stop` 命令，不会声称已停止。
+- 其他 `--wait` 用法仍按实际结果返回退出码，Ctrl+C 只停止等待；取消任务需用 `stop`。不带 `--wait` 的 `--loop` 接受后会立即返回，需用 `stop` 或 Studio 停止。
 - 宏根文档和引用的子宏在接受时取已保存内容的快照。到点录制中、准备中或有其他宏执行时，任务以 `busy` 结束，不排队、不打断其他宏。
 - `status` 区分 `waiting`、`starting`、`running`、`stopping`、`completed`、`cancelled`、`busy`、`failed`，等待状态含剩余毫秒。
 - 强制停止和退出 Studio 会取消外部任务。任务不跨 Studio 重启恢复；最多保留 64 个活动任务和最近一批结束记录。
@@ -44,7 +46,7 @@ MacroCtl stop --run-id "任务ID"
 MacroCtl run --id "宏ID" --delay 3s --wait --json
 ```
 
-退出码：0 成功（未指定 `--wait` 时表示接受成功）；2 参数错误；3 Studio 不可用/连接超时；4 宏或任务不存在；5 名称不唯一；6 忙碌；7 执行失败；8 被停止；130 等待被 Ctrl+C 中断。
+退出码：0 成功（未指定 `--wait` 时表示接受成功）；2 参数错误；3 Studio 不可用/连接超时；4 宏或任务不存在；5 名称不唯一；6 忙碌；7 执行或停止失败；8 被停止；130 被 Ctrl+C 中断（`--loop --wait` 会先确认任务结束）。
 
 ## 传输约定
 

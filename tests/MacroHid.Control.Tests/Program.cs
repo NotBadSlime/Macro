@@ -9,6 +9,8 @@ using MacroHid.Runtime;
 using MacroStudio;
 using System.Text.Json;
 
+if (args is ["--ctrl-c-cli", ..]) return await ConsoleInterruptTests.RunChildAsync(args);
+
 if (args is ["--client-pipe", var childPipe])
 {
     var response = await ControlPipe.SendAsync(new ControlRequest("status"), pipeName: childPipe);
@@ -209,6 +211,7 @@ await using (var oldServer = new ControlPipeServer(cliPipe))
         "A new client silently ran one iteration on an old Studio server.");
 }
 Console.WriteLine("PASS repeat commands refuse older Studio without starting the macro");
+await ConsoleInterruptTests.RunAsync(sample);
 return 0;
 
 internal sealed class InertInputSink(Action? cancel = null) : IMacroInputSink
