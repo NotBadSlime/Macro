@@ -54,6 +54,7 @@ if (File.Exists(nativeSource)) File.Copy(nativeSource, Path.Combine(AppContext.B
 var tests = new (string Name, Action Body)[]
 {
     ("Unlocker config formatting, conflicts, leases, crash recovery and KY3 patch", UnlockerConfigTests.Run),
+    ("Playback listening follows the editor when library selection is cleared or changed", PlaybackListeningSelectionTests.Run),
     ("Compact BGRA frames retain leases and reduce conversion allocation", PerformanceProfileTests.CompactPixels),
     ("Integral NCC preserves threshold decisions and winning coordinates", PerformanceProfileTests.MatchingBoundaries),
     ("Playback trace retains raw QPC timestamps and run identity", PerformanceProfileTests.TraceEvents),
@@ -2062,6 +2063,8 @@ static void McrxSerializerWorksWhenJsonReflectionDefaultsAreDisabled()
         RedirectStandardError = true,
         UseShellExecute = false
     };
+    if (string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase))
+        startInfo.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
     startInfo.Environment["MACROHID_JSON_REFLECTION_DISABLED_PROBE"] = "1";
 
     using var process = Process.Start(startInfo)

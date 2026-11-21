@@ -2041,7 +2041,7 @@ public partial class MainWindow : Window
 
     private void OnStopCurrentListening()
     {
-        if (editorState.SelectedMacroId is not { } id)
+        if ((activeEditorMacroId ?? editorState.SelectedMacroId) is not { } id)
         {
             return;
         }
@@ -2275,7 +2275,9 @@ public partial class MainWindow : Window
 
     private ListeningCandidate BuildCurrentListeningCandidate()
     {
-        if (editorState.SelectedMacroId is not { } id)
+        // Browsing folders or condition packs can clear/change the library selection
+        // while the playback panel still belongs to the macro open in the editor.
+        if ((activeEditorMacroId ?? editorState.SelectedMacroId) is not { } id)
         {
             throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
         }
