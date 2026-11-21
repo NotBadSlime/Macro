@@ -150,3 +150,11 @@ jobs:
             artifacts/packages/MacroHID-Setup-x64.exe
             artifacts/packages/MacroHID-Portable-x64.zip
             artifacts/packages/SHA256SUMS.txt
+
+      - name: Upload standalone desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacroHID-standalone-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 7
+          path: artifacts/local-run

@@ -74,7 +74,7 @@ function Copy-DirectoryIfExists([string]$Source, [string]$Destination) {
 function Publish-Checked([string]$Project, [string]$Destination, [bool]$SelfContained) {
     dotnet publish $Project --configuration $Configuration --runtime win-x64 `
         --self-contained $SelfContained.ToString().ToLowerInvariant() --output $Destination `
-        --disable-build-servers -p:BuildInParallel=false -v:minimal
+        --disable-build-servers -m:1 -p:BuildInParallel=false -v:minimal
     if ($LASTEXITCODE -ne 0) { throw "Publish failed for $Project (exit $LASTEXITCODE)." }
 }
 

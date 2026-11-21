@@ -121,7 +121,27 @@ internal static class UnlockerConfigTests
             Fails(() => UnlockerConfiguration.Validate(FpsBackend.Ky3, directory));
             Fails(() => UnlockerConfiguration.Validate(FpsBackend.Fufu, directory));
             string? fixture = Environment.GetEnvironmentVariable("MACROHID_KY3_PATCH_FIXTURE");
-            if (!string.IsNullOrEmpty(fixture)) PatchTests(fixture, directory);
+            var fixtures = (Environment.GetEnvironmentVariable("MACROHID_KY3_PATCH_FIXTURES") ?? fixture ?? "")
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < fixtures.Length; i++)
+            {
+                string variantRoot = Path.Combine(directory, "variant-" + i);
+                Directory.CreateDirectory(variantRoot);
+                PatchTests(fixtures[i], variantRoot);
+            }
+            if (fixtures.Length > 1)
+            {
+                // A launcher update can leave a valid backup from an older supported build.
+                string current = Path.Combine(directory, "updated-plugin.dll");
+                byte[] latest = File.ReadAllBytes(fixtures[0]);
+                File.WriteAllBytes(current, latest);
+                File.WriteAllBytes(current + ".macro-original.bak", File.ReadAllBytes(fixtures[1]));
+                Ky3ReloadPatch.TestGameRunning = () => false;
+                Ky3ReloadPatch.Install(current);
+                Require(File.ReadAllBytes(current + ".macro-original.bak").SequenceEqual(latest), "stale supported backup refreshed to current original");
+                Ky3ReloadPatch.Restore(current);
+                Require(File.ReadAllBytes(current).SequenceEqual(latest), "updated plugin restored without downgrading");
+            }
         }
         finally
         {
@@ -139,6 +159,19 @@ internal static class UnlockerConfigTests
         Require(original.Length == patched.Length, "size preserved");
         Fails(() => Ky3ReloadPatch.Build(patched));
         var altered = (byte[])original.Clone(); altered[^1] ^= 1; Fails(() => Ky3ReloadPatch.Build(altered));
+        string plugin = Path.Combine(root, UnlockerConfiguration.PluginName(FpsBackend.Ky3));
+        string config = Path.Combine(root, UnlockerConfiguration.ConfigName(FpsBackend.Ky3));
+        const string configuration = "[Settings]\r\nenableFps=1\r\ntargetFps=151\r\n";
+        File.WriteAllBytes(plugin, original);
+        File.WriteAllText(config, configuration);
+        UnlockerConfiguration.Save(new(Ky3Directory: root, AllowSlowKy3: true));
+        UnlockerConfiguration.Validate(FpsBackend.Ky3, root);
+        Require(File.ReadAllBytes(plugin).SequenceEqual(original), "fallback validation does not patch DLL");
+        UnlockerConfiguration.Save(new(Ky3Directory: root, AllowSlowKy3: false));
+        Fails(() => UnlockerConfiguration.Validate(FpsBackend.Ky3, root));
+        File.WriteAllBytes(plugin, patched);
+        UnlockerConfiguration.Validate(FpsBackend.Ky3, root);
+        Require(File.ReadAllText(config) == configuration, "version validation does not modify configuration");
         string dll = Path.Combine(root, "patch-test.dll"); File.WriteAllBytes(dll, original);
         Ky3ReloadPatch.TestGameRunning = () => true; Fails(() => Ky3ReloadPatch.Install(dll));
         Require(File.ReadAllBytes(dll).SequenceEqual(original), "game-running rejection");
@@ -149,5 +182,6 @@ internal static class UnlockerConfigTests
         Require(Ky3ReloadPatch.Inspect(dll) == Ky3PatchState.Patched, "repeat install");
         Require(File.ReadAllBytes(dll + ".macro-original.bak").SequenceEqual(original), "backup exact");
         Ky3ReloadPatch.Restore(dll); Require(File.ReadAllBytes(dll).SequenceEqual(original), "restore DLL");
+        Console.WriteLine($"PASS verified KY3 fixture {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(original))}: configuration validation, patch and exact restore");
     }
 }

@@ -17,6 +17,13 @@ public static class Ky3ReloadPatch
         // KY3 launcher update 2026-10-24 (plugin 2650112 bytes).
         new("53F34C3EC6E708A5D2515E031812166CE2F7CCF0F4ED75FDEECDA095D2156B07", "974D2BFA8692D2C084C38CD5597F99E76F7B53B8BDB2BDF36AF37F9CEB2DE428",
             new[] { (0x677d, "81F9D0070000"), (0xa783, "81F9D0070000") }),
+        // Verified retained original (2643456 bytes); also recognize stale backups after an update.
+        new("73687F708A17F0125E2B18D1807BD6B0D8E1A75A27A143A724A115FFAC702182", "9F885540E980D78A5B58E4188B9A324E3405D4CCBEE36494A0D7037B1FDFF319",
+            new[] { (0x677d, "81F9D0070000"), (0xa7b3, "81F9D0070000") }),
+        // KY3 plugin dated 2026-11-05 (2666496 bytes). Both GetTickCount checks
+        // gate the configuration file-change reader; only these intervals and the PE checksum change.
+        new("78C41E84D74DEB4E091E64D4FC03A493E9AC20FD519BBB47BB9DB9566DC97DBB", "1B433600EFDD46A8C110BA07DB2F1493DFB5F4869E9A4A0C195B4233351079FA",
+            new[] { (0x6a2d, "81F9D0070000"), (0xa9c3, "81F9D0070000") }),
     };
     public static string OriginalHash => Variants[0].OriginalHash;
     public static string PatchedHash => Variants[0].PatchedHash;
