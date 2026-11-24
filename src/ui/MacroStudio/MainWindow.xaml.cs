@@ -74,11 +74,19 @@ public partial class MainWindow : Window
         public string EffectiveProcessFilter => GroupProcessFilter;
     }
 
-    public MainWindow() : this(new MacroLibraryStore(MacroLibraryStore.GetDefaultRoot()), isWorkspacePreview: false)
+    public MainWindow() : this(
+        new MacroLibraryStore(MacroLibraryStore.GetDefaultRoot()),
+        isWorkspacePreview: false,
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID", "MacroLibrary"))
     {
     }
 
     internal MainWindow(MacroLibraryStore libraryStore, bool isWorkspacePreview)
+        : this(libraryStore, isWorkspacePreview, legacyLibraryDirectory: null)
+    {
+    }
+
+    internal MainWindow(MacroLibraryStore libraryStore, bool isWorkspacePreview, string? legacyLibraryDirectory)
     {
         this.libraryStore = libraryStore;
         this.isWorkspacePreview = isWorkspacePreview;
@@ -123,7 +131,7 @@ public partial class MainWindow : Window
         if (!isWorkspacePreview) WarmUpRuntimePrecision();
         InitializeWorkspacePanels();
         ApplyLocalization();
-        InitializeMacroLibrary();
+        InitializeMacroLibrary(legacyLibraryDirectory);
         if (isWorkspacePreview) return;
         coreSelectionTimer.Start();
         PollAutomaticCoreSelection();
@@ -1185,8 +1193,31 @@ public partial class MainWindow : Window
         }
     }
 
-    private void InitializeMacroLibrary()
+    private void InitializeMacroLibrary(string? legacyLibraryDirectory)
     {
+        string? importStatus = null;
+        string? sampleId = null;
+        var importStatusLevel = StatusLevel.Info;
+        if (legacyLibraryDirectory is not null)
+        {
+            try
+            {
+                var imported = libraryStore.ImportLegacyLibraryIfNeeded(legacyLibraryDirectory);
+                if (imported is { ImportedCount: > 0 } or { ImportedGroupCount: > 0 } or { ImportedFolderCount: > 0 })
+                {
+                    importStatus = LocalizationService.Format("LegacyLibraryImported", imported.ImportedCount, imported.ImportedGroupCount);
+                }
+
+                if (imported is { ImportedCount: > 0 }) sampleId = GetUneditedSampleId();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Library", "Automatic import from the older MacroHID library failed", ex);
+                importStatus = L("LegacyLibraryImportFailed");
+                importStatusLevel = StatusLevel.Warning;
+            }
+        }
+
         editorState.ReloadLibrary();
         if (editorState.LibrarySnapshot.Items.Count == 0)
         {
@@ -1194,8 +1225,9 @@ public partial class MainWindow : Window
             editorState.ReloadLibrary();
         }
 
-        editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId
-            ?? editorState.LibrarySnapshot.Items.FirstOrDefault()?.Id;
+        var snapshot = editorState.LibrarySnapshot;
+        var firstImportedId = sampleId is null ? null : snapshot.Items.FirstOrDefault(item => item.Id != sampleId)?.Id;
+        editorState.SelectedMacroId = firstImportedId ?? snapshot.SelectedMacroId ?? snapshot.Items.FirstOrDefault()?.Id;
 
         LibraryPanel.RefreshList();
 
@@ -1211,6 +1243,28 @@ public partial class MainWindow : Window
             SequencePanelControl.ClearUndoHistory();
             RefreshConditionStepChoices();
             ApplyEditLock(false);
+        }
+
+        if (importStatus is not null) SetStatus(importStatus, importStatusLevel);
+    }
+
+    private string? GetUneditedSampleId()
+    {
+        // The library panel still has its pre-import snapshot at this point.
+        if (editorState.LibrarySnapshot.Items is not [var item] || item.Name != "baseline"
+            || item.IsLocked || item.GroupId != MacroLibraryStore.GlobalGroupId || !string.IsNullOrEmpty(item.Folder))
+        {
+            return null;
+        }
+
+        try
+        {
+            var existing = libraryStore.ReadMacro(item.Id) with { Id = null };
+            return McrxSerializer.Serialize(existing) == McrxSerializer.Serialize(McrxParser.Parse(SampleMacro)) ? item.Id : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or JsonException)
+        {
+            return null;
         }
     }
 

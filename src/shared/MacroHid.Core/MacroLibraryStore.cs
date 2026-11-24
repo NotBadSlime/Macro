@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 
 namespace MacroHid.Core;
@@ -96,7 +97,7 @@ public sealed record MacroLibrarySnapshot(
     IReadOnlyList<MacroLibraryGroup> Groups,
     IReadOnlyList<MacroLibraryFolder> GroupFolders);
 
-public sealed class MacroLibraryStore
+public sealed partial class MacroLibraryStore
 {
     public object SyncRoot { get; } = new();
     public const string GlobalGroupId = "global";
@@ -985,5 +986,8 @@ public sealed class MacroLibraryStore
         public List<MacroLibraryFolder> GroupFolders { get; set; } = [];
 
         public string? SelectedMacroId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool LegacyLibraryImported { get; set; }
     }
 }

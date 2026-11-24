@@ -16,7 +16,9 @@ MacroHID Studio 可与同版本号的正式版并列安装。Studio 使用自己
 | 全局命令 | `MacroCtl` | `MacroCtlUI` |
 | 便携版解压根目录 | `MacroHID` | `MacroHID-Studio` |
 
-从正式版导出的宏文件或 ZIP 可拖入 Studio 窗口。如果在两个版本中使用同一个系统热键，可只在当前使用的版本启用监听。
+Studio 启动时会检查当前 Windows 用户的 `%APPDATA%\MacroHID\MacroLibrary`。发现已有宏时，会自动把宏、分组和文件夹复制到自己的宏库。Studio 中已有的同 ID 宏会保留，复制完成后两套宏库各自保存。自动复制只执行一次。旧宏库尚未建立、为空或复制失败时，下次启动会再次检查。
+
+之后可把从正式版导出的宏文件或 ZIP 拖入 Studio 窗口。如果在两个版本中使用同一个系统热键，可只在当前使用的版本启用监听。
 
 ## 本机打包
 
