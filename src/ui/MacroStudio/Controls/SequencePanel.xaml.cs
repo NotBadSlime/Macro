@@ -113,6 +113,7 @@ public partial class SequencePanel : UserControl
         LibraryPathBox.ToolTip = L("LibraryPathHelp");
         ScheduledStepsLabelText.Text = L("ScheduledSteps");
         DurationLabelText.Text = L("Duration");
+        DelayAdjustSection.Header = L("SequenceDelayTools");
         DelayAdjustLabel.Text = L("DelayAdjustLabel");
         DelayAdjustBox.ToolTip = L("DelayAdjustHelp");
         DelayFloorLabel.Text = L("DelayFloorLabel");
@@ -290,7 +291,6 @@ public partial class SequencePanel : UserControl
             estimateLibrary = state?.LibrarySnapshot;
             var scheduledCount = MacroScheduler.CountScheduledSteps(document.Steps);
 
-            MacroNameText.Text = document.Name;
             updatingMacroName = true;
             MacroNameBox.Text = document.Name;
             updatingMacroName = false;
@@ -300,7 +300,6 @@ public partial class SequencePanel : UserControl
         }
         catch (Exception ex)
         {
-            MacroNameText.Text = "-";
             updatingMacroName = true;
             MacroNameBox.Text = string.Empty;
             updatingMacroName = false;

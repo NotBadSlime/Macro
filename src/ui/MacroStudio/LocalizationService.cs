@@ -3,6 +3,7 @@ using System.IO;
 using System.Resources;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using MacroHid.Core;
 
 namespace MacroStudio;
 
@@ -11,7 +12,6 @@ public sealed record SupportedLanguage(string CultureName, string DisplayNameRes
 public static class LocalizationService
 {
     private const string DefaultCultureName = "en-US";
-    private const string SettingsFolderName = "MacroHID";
     private const string SettingsFileName = "MacroStudio.settings.json";
     private static readonly CultureInfo DefaultCulture = CultureInfo.GetCultureInfo(DefaultCultureName);
     private static readonly ResourceManager Resources = new("MacroStudio.Resources.Strings", typeof(LocalizationService).Assembly);
@@ -157,11 +157,7 @@ public static class LocalizationService
         }
     }
 
-    private static string SettingsPath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, SettingsFolderName, SettingsFileName);
-    }
+    private static string SettingsPath() => Path.Combine(ApplicationStorage.RoamingDirectory, SettingsFileName);
 
     private sealed record MacroStudioSettings(string? Language);
 }

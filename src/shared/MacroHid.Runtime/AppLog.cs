@@ -1,11 +1,11 @@
 using System.Text;
+using MacroHid.Core;
 
 namespace MacroHid.Runtime;
 
 public static class AppLog
 {
-    public static string DirectoryPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID", "log");
+    public static string DirectoryPath { get; } = Path.Combine(ApplicationStorage.RoamingDirectory, "log");
     private static readonly RollingLogFile Writer = new(DirectoryPath,
         $"runtime-{DateTime.Now:yyyyMMdd-HHmmssfff}-{Environment.ProcessId}");
 

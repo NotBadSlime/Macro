@@ -328,6 +328,10 @@
   <data name="MoveUp" xml:space="preserve"><value>上移</value></data>
   <data name="MoveDown" xml:space="preserve"><value>下移</value></data>
   <data name="SearchMacros" xml:space="preserve"><value>搜索宏</value></data>
+  <data name="ActionPaletteSearch" xml:space="preserve"><value>搜索动作</value></data>
+  <data name="ActionPaletteSearchEmpty" xml:space="preserve"><value>没有找到匹配的动作。</value></data>
+  <data name="ClearActionPaletteSearch" xml:space="preserve"><value>清空动作搜索</value></data>
+  <data name="SequenceDelayTools" xml:space="preserve"><value>批量延迟</value></data>
   <data name="AdvancedJson" xml:space="preserve"><value>MCRX JSON</value></data>
   <data name="SortManual" xml:space="preserve"><value>自定义顺序</value></data>
   <data name="SortName" xml:space="preserve"><value>按字母顺序</value></data>
@@ -741,7 +745,13 @@
   <data name="GlobalCommandUnregister" xml:space="preserve"><value>取消本版本注册</value></data>
   <data name="GlobalCommandCheck" xml:space="preserve"><value>检测全局命令</value></data>
   <data name="GlobalCommandOtherVersion" xml:space="preserve"><value>当前命令关联的是其他版本，未修改其注册。</value></data>
-  <data name="GlobalCommandHint" xml:space="preserve"><value>为当前 Windows 用户注册 MacroCtl。注册后重新打开终端即可使用。上方显示关联的 Studio 路径，移动便携目录后需重新注册。</value></data>
+  <data name="GlobalCommandHint" xml:space="preserve"><value>为当前 Windows 用户注册 MacroCtlUI。注册后重新打开终端即可使用。上方显示关联的 Studio 路径，移动便携目录后需重新注册。</value></data>
   <data name="CopyExternalCommand" xml:space="preserve"><value>复制外部启动命令</value></data>
   <data name="ExternalCommandCopied" xml:space="preserve"><value>已复制外部启动命令（延迟 3 秒）。</value></data>
+  <data name="StudioEditionName" xml:space="preserve"><value>UI 优化版</value></data>
+  <data name="StudioCommandSearch" xml:space="preserve"><value>查找命令</value></data>
+  <data name="StudioNoMatchingCommands" xml:space="preserve"><value>没有匹配的命令</value></data>
+  <data name="StudioTabConditions" xml:space="preserve"><value>条件</value></data>
+  <data name="StudioTabActions" xml:space="preserve"><value>动作</value></data>
+  <data name="StudioTabPlayback" xml:space="preserve"><value>播放</value></data>
 </root>

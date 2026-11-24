@@ -13,6 +13,7 @@ public sealed record UnlockerSettings(string? FufuDirectory = null, string? Ky3D
 public static class UnlockerConfiguration
 {
     internal const string FufuHash = "58240C6B54A074AE6525C314B79A995ED6F614AB3626EF527EF9B88250DBBE6B";
+    // Share leases and recovery journals with the standard edition for external targets.
     internal static string Root { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID", "unlockers");
     public static event Action<FpsBackend, string>? Faulted;
     internal static void Report(FpsBackend backend, string error)
@@ -22,13 +23,12 @@ public static class UnlockerConfiguration
             try { ((Action<FpsBackend, string>)handler)(backend, error); }
             catch (Exception ex) { GameFpsDiagnostics.Log("NOTIFICATION ERROR " + ex.Message); }
     }
-    public static UnlockerSettings Load() => File.Exists(Path.Combine(Root, "settings.json"))
-        ? JsonSerializer.Deserialize<UnlockerSettings>(File.ReadAllText(Path.Combine(Root, "settings.json"))) ?? new() : new();
-    public static void Save(UnlockerSettings settings)
-    {
-        Directory.CreateDirectory(Root);
-        AtomicText(Path.Combine(Root, "settings.json"), JsonSerializer.Serialize(settings));
-    }
+    internal static string SettingsDirectory { get; set; } = Path.Combine(ApplicationStorage.RoamingDirectory, "unlockers");
+    private static string SettingsPath => Path.Combine(SettingsDirectory, "settings.json");
+    public static UnlockerSettings Load() => File.Exists(SettingsPath)
+        ? JsonSerializer.Deserialize<UnlockerSettings>(File.ReadAllText(SettingsPath)) ?? new() : new();
+    public static void Save(UnlockerSettings settings) =>
+        AtomicText(SettingsPath, JsonSerializer.Serialize(settings));
     internal static void AtomicText(string path, string text)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

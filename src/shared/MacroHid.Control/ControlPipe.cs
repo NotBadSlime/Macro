@@ -10,7 +10,7 @@ namespace MacroHid.Control;
 
 public static class ControlPipe
 {
-    public static string Name => $"MacroHID.Control.v1.{WindowsIdentity.GetCurrent().User!.Value}.{Process.GetCurrentProcess().SessionId}";
+    public static string Name => $"MacroHID.UI.Control.v1.{WindowsIdentity.GetCurrent().User!.Value}.{Process.GetCurrentProcess().SessionId}";
     // A medium label permits an ordinary terminal to talk to elevated Studio. The DACL
     // grants access only to this user; remote clients are rejected by CreateNamedPipe.
     internal static string SecurityDescriptor => $"D:P(A;;GA;;;{WindowsIdentity.GetCurrent().User!.Value})S:(ML;;NW;;;ME)";

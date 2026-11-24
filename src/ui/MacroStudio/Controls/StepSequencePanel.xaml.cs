@@ -171,7 +171,7 @@ public partial class StepSequencePanel : UserControl
         StepDownText.Text = LocalizationService.Get("MoveDown");
         StepDeleteText.Text = LocalizationService.Get("Delete");
         StepClearText.Text = LocalizationService.Get("ClearAll");
-        EmptySequenceOverlay.Text = LocalizationService.Get("DropActionsHint");
+        EmptySequenceOverlayText.Text = LocalizationService.Get("DropActionsHint");
         EnterSubmacroMenuItem.Header = LocalizationService.Get("EnterSubmacro");
         InlineStepEditor.ApplyLocalization();
     }

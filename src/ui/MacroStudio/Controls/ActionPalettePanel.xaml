@@ -24,6 +24,56 @@
                        VerticalAlignment="Center" />
         </DockPanel>
 
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="ActionSearchBox"
+                     AutomationProperties.AutomationId="ActionSearchBox"
+                     AutomationProperties.Name="{Binding Text, ElementName=ActionSearchPlaceholder}"
+                     Padding="34,0,10,0"
+                     Height="36"
+                     TextChanged="ActionSearchBox_TextChanged"
+                     PreviewKeyDown="ActionSearchBox_PreviewKeyDown" />
+            <TextBlock Text="&#xE721;"
+                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                       FontSize="14"
+                       Foreground="{DynamicResource Accent}"
+                       VerticalAlignment="Center"
+                       Margin="12,0,0,0"
+                       IsHitTestVisible="False" />
+            <TextBlock x:Name="ActionSearchPlaceholder" Text="搜索动作">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderHintStyle}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Setter Property="Margin" Value="34,0,6,0" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Text, ElementName=ActionSearchBox}" Value="">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <Button x:Name="ClearActionSearchButton"
+                    Grid.Column="1"
+                    Style="{StaticResource SequenceToolbarIconButton}"
+                    Content="&#xE711;"
+                    Margin="5,0,0,0"
+                    VerticalAlignment="Center"
+                    ToolTip="清空动作搜索"
+                    Visibility="Collapsed"
+                    Click="ClearActionSearch_Click" />
+        </Grid>
+        <TextBlock x:Name="ActionSearchEmptyText"
+                   Text="没有找到匹配的动作。"
+                   Foreground="{DynamicResource SecondaryText}"
+                   TextWrapping="Wrap"
+                   Margin="4,8,4,16"
+                   AutomationProperties.LiveSetting="Polite"
+                   Visibility="Collapsed" />
+
         <controls:CollapsibleSection x:Name="BasicActionsSection" Header="基础功能" IsExpanded="True">
         <primitives:UniformGrid x:Name="BasicCommandGrid" Columns="1">
             <Button x:Name="AddDelayButton"
@@ -38,12 +88,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <TextBlock Text="&#xE823;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource SecondaryText}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.Delay}"
+                                              Foreground="{DynamicResource SecondaryText}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddDelayText" Text="延迟" FontWeight="SemiBold" />
@@ -64,12 +111,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <TextBlock Text="&#xE765;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.Keyboard}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddKeyboardText" Text="键盘功能" FontWeight="SemiBold" />
@@ -90,12 +134,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <TextBlock Text="&#xE962;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentOrange}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.MouseButton}"
+                                              Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddMouseText" Text="鼠标按键" FontWeight="SemiBold" />
@@ -116,12 +157,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <TextBlock Text="&#xE8AB;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentOrange}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.MouseMove}"
+                                              Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddMouseMoveText" Text="鼠标移动" FontWeight="SemiBold" />
@@ -142,12 +180,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <TextBlock Text="&#xE7F4;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentBlue}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.MouseWheel}"
+                                              Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddWheelText" Text="滚轮" FontWeight="SemiBold" />
@@ -168,12 +203,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <TextBlock Text="&#xE8D2;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentBlue}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.Text}"
+                                              Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddTextActionText" Text="文本功能" FontWeight="SemiBold" />
@@ -194,12 +226,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGray}">
-                        <TextBlock Text="&#xE8BD;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource SecondaryText}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.Comment}"
+                                              Foreground="{DynamicResource SecondaryText}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddCommentText" Text="注释" FontWeight="SemiBold" />
@@ -220,12 +249,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGreen}">
-                        <TextBlock Text="&#xE74C;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.MacroCall}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddMacroText" Text="宏" FontWeight="SemiBold" />
@@ -250,12 +276,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGreen}">
-                        <TextBlock Text="&#xE737;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.Window}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddWindowActivateText" Text="指定窗口到前台" FontWeight="SemiBold" />
@@ -276,12 +299,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <TextBlock Text="&#xE8D2;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentBlue}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.OcrText}"
+                                              Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddOcrExtractTextText" Text="OCR 获取文本" FontWeight="SemiBold" />
@@ -302,12 +322,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgePurple}">
-                        <TextBlock Text="&#xE721;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentPink}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.OcrClick}"
+                                              Foreground="{DynamicResource AccentPink}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddOcrClickText" Text="OCR 文字点击" FontWeight="SemiBold" />
@@ -328,12 +345,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgePink}">
-                        <TextBlock Text="&#xE81E;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentPink}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.Pixel}"
+                                              Foreground="{DynamicResource AccentPink}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddPixelText" Text="像素条件" FontWeight="SemiBold" />
@@ -354,12 +368,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <TextBlock Text="&#xE8D2;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentBlue}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.TextWhen}"
+                                              Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddTextWhenText" Text="文字条件" FontWeight="SemiBold" />
@@ -380,12 +391,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <TextBlock Text="&#xE774;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentBlue}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.NetworkRate}"
+                                              Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddNetLimitStartText" Text="开启弱网" FontWeight="SemiBold" />
@@ -406,12 +414,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <TextBlock Text="&#xE711;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentBlue}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.NetworkRateOff}"
+                                              Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddNetLimitStopText" Text="关闭弱网" FontWeight="SemiBold" />
@@ -432,12 +437,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeTeal}">
-                        <TextBlock Text="&#xEC4A;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentBlue}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.NetworkRate}"
+                                              Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddNetLimiterStartText" Text="NetLimiter 限速" FontWeight="SemiBold" />
@@ -458,12 +460,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeTeal}">
-                        <TextBlock Text="&#xE711;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentBlue}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.NetworkRateOff}"
+                                              Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddNetLimiterStopText" Text="关闭 NetLimiter" FontWeight="SemiBold" />
@@ -484,12 +483,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <TextBlock Text="&#xE839;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentOrange}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.WeakNet}"
+                                              Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddWeakNetStartText" Text="开启断网" FontWeight="SemiBold" />
@@ -510,12 +506,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <TextBlock Text="&#xE711;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentOrange}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.WeakNetOff}"
+                                              Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddWeakNetStopText" Text="关闭断网" FontWeight="SemiBold" />
@@ -536,12 +529,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <TextBlock Text="&#xE823;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentOrange}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.ClockShift}"
+                                              Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddClockShiftText" Text="切换系统时间" FontWeight="SemiBold" />
@@ -562,12 +552,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <TextBlock Text="&#xE777;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentOrange}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.ClockRestore}"
+                                              Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddClockRestoreText" Text="恢复系统时间" FontWeight="SemiBold" />
@@ -594,12 +581,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <TextBlock Text="&#xE7F4;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.FrameLock}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddYsrFpsToggleText" Text="YSR 开启锁帧" FontWeight="SemiBold" />
@@ -616,8 +600,9 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.FrameUnlock}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddYsrFpsStopText" Text="YSR 关闭锁帧" FontWeight="SemiBold" />
@@ -633,8 +618,9 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.FrameLock}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddKy3FpsStartText" Text="KY3 开启锁帧" FontWeight="SemiBold" />
@@ -650,8 +636,9 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.FrameUnlock}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddKy3FpsStopText" Text="KY3 恢复帧率" FontWeight="SemiBold" />
@@ -666,8 +653,9 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.FrameLock}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddFufuFpsStartText" Text="Fufu 开启锁帧" FontWeight="SemiBold" />
@@ -683,8 +671,9 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.FrameUnlock}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddFufuFpsStopText" Text="Fufu 恢复帧率" FontWeight="SemiBold" />
@@ -705,12 +694,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <TextBlock Text="&#xE7F4;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.FrameLock}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddFrameLockStartText" Text="RTSS 开启锁帧" FontWeight="SemiBold" />
@@ -731,12 +717,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <TextBlock Text="&#xE711;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Accent}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.FrameUnlock}"
+                                              Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddFrameLockStopText" Text="RTSS 关闭锁帧" FontWeight="SemiBold" />
@@ -761,12 +744,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeRed}">
-                        <TextBlock Text="&#xE8EE;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Danger}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.Loop}"
+                                              Foreground="{DynamicResource Danger}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddLoopText" Text="循环" FontWeight="SemiBold" />
@@ -787,12 +767,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <TextBlock Text="&#xE71A;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentOrange}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.StopCurrent}"
+                                              Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddStopCurrentText" Text="停止本层宏动作" FontWeight="SemiBold" />
@@ -813,12 +790,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeOrange}">
-                        <TextBlock Text="&#xE71A;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource AccentOrange}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.StopIteration}"
+                                              Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddStopIterationText" Text="停止本轮播放" FontWeight="SemiBold" />
@@ -839,12 +813,9 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeRed}">
-                        <TextBlock Text="&#xE71A;"
-                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
-                                   Foreground="{DynamicResource Danger}"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <controls:ActionGlyph Width="19" Height="19"
+                                              Data="{x:Static controls:ActionIcons.StopAll}"
+                                              Foreground="{DynamicResource Danger}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="AddStopAllText" Text="停止本次播放" FontWeight="SemiBold" />
@@ -855,15 +826,25 @@
         </primitives:UniformGrid>
         </controls:CollapsibleSection>
 
-        <TextBlock x:Name="DragHint"
-                   Foreground="{DynamicResource SecondaryText}"
-                   TextWrapping="Wrap"
-                   Margin="2,6,2,0"
-                   Text="点击添加，或拖到序列的目标位置。" />
-        <TextBlock x:Name="AddMacroHintText"
-                   Foreground="{DynamicResource SecondaryText}"
-                   TextWrapping="Wrap"
-                   Margin="2,3,2,0"
-                   Text="把左侧宏拖到序列里，可以复制它的步骤。" />
+        <Border Background="{DynamicResource PanelBackground}"
+                BorderBrush="{DynamicResource PanelBorder}"
+                BorderThickness="1"
+                CornerRadius="9"
+                Padding="10,8"
+                Margin="0,0,0,4">
+            <StackPanel>
+                <TextBlock x:Name="DragHint"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Text="点击添加，或拖到序列的目标位置。" />
+                <TextBlock x:Name="AddMacroHintText"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Margin="0,3,0,0"
+                           Text="把左侧宏拖到序列里，可以复制它的步骤。" />
+            </StackPanel>
+        </Border>
     </StackPanel>
 </UserControl>

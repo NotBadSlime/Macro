@@ -20,13 +20,18 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $artifactRoot = Join-Path $repoRoot "artifacts"
+$installerFileName = "MacroHID-UI-Setup-x64.exe"
+$portableFileName = "MacroHID-UI-Portable-x64.zip"
+$checksumFileName = "MacroHID-UI-SHA256SUMS.txt"
+$portableFolder = "MacroHID-UI"
+$commandExecutable = "MacroCtl\MacroCtlUI.exe"
 $packageRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
-    Join-Path $artifactRoot "packages"
+    Join-Path $artifactRoot "packages-ui"
 } else { [IO.Path]::GetFullPath($OutputRoot) }
 . (Join-Path $PSScriptRoot "Packaging-Helpers.ps1")
 Assert-ArtifactPath $packageRoot
 $fixedLocalRoot = if ([string]::IsNullOrWhiteSpace($LocalOutputRoot)) {
-    Join-Path $artifactRoot "local-run"
+    Join-Path $artifactRoot "local-run-ui"
 } else { [IO.Path]::GetFullPath($LocalOutputRoot) }
 Assert-ArtifactPath $fixedLocalRoot
 if ($packageRoot.TrimEnd('\') -eq $fixedLocalRoot -or
@@ -163,7 +168,7 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 root = fso.GetParentFolderName(WScript.ScriptFullName)
 exe = fso.BuildPath(fso.BuildPath(root, "MacroStudio"), "MacroStudio.exe")
 If Not fso.FileExists(exe) Then
-    MsgBox "找不到 MacroStudio\MacroStudio.exe。请把快捷方式留在解压后的 MacroHID 根目录。", 16, "MacroHID"
+    MsgBox "找不到 MacroStudio\MacroStudio.exe。请把快捷方式留在解压后的 MacroHID-UI 根目录。", 16, "MacroHID UI Edition"
     WScript.Quit 1
 End If
 Set shell = CreateObject("WScript.Shell")
@@ -181,7 +186,8 @@ start "" "%ROOT%MacroStudio\MacroStudio.exe"
 
     $missing = @(
         (Join-Path $AppRoot "MacroStudio\MacroStudio.exe"),
-        (Join-Path $AppRoot "MacroStudio.cmd")
+        (Join-Path $AppRoot "MacroStudio.cmd"),
+        (Join-Path $AppRoot $commandExecutable)
     ) | Where-Object { -not (Test-Path $_) }
     if ($missing.Count -gt 0) {
         throw "Portable layout is missing: $($missing -join ', ')"
@@ -226,6 +232,9 @@ try {
     Copy-PublicDocumentation (Join-Path $repoRoot "docs") (Join-Path $inputRoot "docs")
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $inputRoot -Force
     Remove-InstallerDebugArtifacts $inputRoot
+    if (-not (Test-Path (Join-Path $inputRoot $commandExecutable))) {
+        throw "UI Edition control command missing: $commandExecutable"
+    }
 
     $isccArgs = @(
         "/DSourceDir=$inputRoot",
@@ -239,14 +248,14 @@ try {
         throw "Inno Setup compiler failed with exit code $LASTEXITCODE."
     }
 
-    $installer = Join-Path $outputRoot "MacroHID-Setup-x64.exe"
+    $installer = Join-Path $outputRoot $installerFileName
     if (-not (Test-Path $installer)) {
         throw "Expected installer was not produced: $installer"
     }
 
     $portableStage = Join-Path $outputRoot "portable-stage"
-    $portableAppRoot = Join-Path $portableStage "MacroHID"
-    $portableZip = Join-Path $outputRoot "MacroHID-Portable-x64.zip"
+    $portableAppRoot = Join-Path $portableStage $portableFolder
+    $portableZip = Join-Path $outputRoot $portableFileName
     Assert-ArtifactPath $portableStage
     if (Test-Path $portableStage) {
         Remove-Item -LiteralPath $portableStage -Recurse -Force
@@ -275,12 +284,15 @@ try {
     Assert-LegacyRuntimes $localStudio
     $localExe = Join-Path $localStudio "MacroStudio.exe"
     if (-not (Test-Path -LiteralPath $localExe)) { throw "Standalone executable missing: $localExe" }
+    if (-not (Test-Path (Join-Path $localRoot $commandExecutable))) {
+        throw "Standalone UI Edition control command missing: $commandExecutable"
+    }
     # Recheck after publishing in case a user started the old build meanwhile.
     Confirm-StopBuildProcesses @($fixedLocalRoot, $packageRoot)
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
-    $fixedInstaller = Join-Path $packageRoot "MacroHID-Setup-x64.exe"
-    $fixedZip = Join-Path $packageRoot "MacroHID-Portable-x64.zip"
-    $checksums = Join-Path $outputRoot "SHA256SUMS.txt"
+    $fixedInstaller = Join-Path $packageRoot $installerFileName
+    $fixedZip = Join-Path $packageRoot $portableFileName
+    $checksums = Join-Path $outputRoot $checksumFileName
     $checksumLines = foreach ($packageFile in @($installer, $portableZip)) {
         "{0}  {1}" -f (Get-FileHash -LiteralPath $packageFile -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path -Leaf $packageFile)
     }
@@ -288,7 +300,7 @@ try {
     Publish-StagedOutputs @(
         @{ Source = $installer; Target = $fixedInstaller },
         @{ Source = $portableZip; Target = $fixedZip },
-        @{ Source = $checksums; Target = (Join-Path $packageRoot "SHA256SUMS.txt") },
+        @{ Source = $checksums; Target = (Join-Path $packageRoot $checksumFileName) },
         @{ Source = $localRoot; Target = $fixedLocalRoot }
     ) $outputRoot
     $installer = $fixedInstaller
@@ -304,10 +316,10 @@ try {
     }
     if (-not $SkipShortcut) {
         New-Item -ItemType Directory -Path $ShortcutDirectory -Force | Out-Null
-        $shortcutName = "MacroHID " + [char]0x672C + [char]0x5730 + [char]0x7248 + ".lnk"
+        $shortcutName = "MacroHID UI Edition.lnk"
         $desktopShortcut = Join-Path $ShortcutDirectory $shortcutName
         New-PortableRootShortcut -ShortcutPath $desktopShortcut -TargetPath $localExe `
-            -WorkingDirectory $localStudio -Description "MacroHID $Version local standalone build"
+            -WorkingDirectory $localStudio -Description "MacroHID UI Edition $Version local standalone build"
         Write-Host "Shortcut: $desktopShortcut"
     }
     Write-Host "Installer created: $installer"

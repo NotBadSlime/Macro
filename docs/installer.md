@@ -1,4 +1,4 @@
-# MacroHID Installation / MacroHID 安装说明
+# MacroHID UI Edition Installation / MacroHID UI 优化版安装说明
 
 ## 中文
 
@@ -7,7 +7,7 @@
 - Windows 10/11 x64。
 - .NET 8 Desktop Runtime。当前发布采用框架依赖模式，安装包不内置 .NET 运行时。
 - 如果要控制管理员权限应用，请以管理员身份启动 MacroStudio 或 MacroRunner。
-- 安装向导会显示「选择目标位置」，可改安装目录；默认是 `C:\Program Files\MacroHID`。覆盖安装时也会显示该页，并预填上次路径。
+- 安装向导会显示「选择目标位置」，可改安装目录；默认是 `C:\Program Files\MacroHID UI Edition`。覆盖安装时也会显示该页，并预填上次路径。
 
 ### 安装包构建
 
@@ -18,8 +18,8 @@
 输出文件：
 
 ```text
-artifacts\installer\MacroHID-Setup-x64.exe
-artifacts\installer\MacroHID-Portable-x64.zip
+artifacts\packages-ui\MacroHID-UI-Setup-x64.exe
+artifacts\packages-ui\MacroHID-UI-Portable-x64.zip
 ```
 
 安装包包含：
@@ -38,7 +38,7 @@ artifacts\installer\MacroHID-Portable-x64.zip
 
 ```powershell
 .\scripts\Build-LocalRun.ps1 -Configuration Release
-.\artifacts\local-run\MacroStudio\MacroStudio.exe
+.\artifacts\local-run-ui\MacroStudio\MacroStudio.exe
 ```
 
 也可以构建后立刻启动：
@@ -52,12 +52,12 @@ artifacts\installer\MacroHID-Portable-x64.zip
 MacroStudio 的宏数据库位于：
 
 ```text
-%APPDATA%\MacroHID\MacroLibrary
+%APPDATA%\MacroHID-UI\MacroLibrary
 ```
 
 每个宏仍以普通 `.mcrx` 文件保存，`library.json` 保存文件夹、排序、选择状态、触发键、播放模式和更新时间等索引信息。
 
-卸载时默认保留该目录，以便重新安装后继续使用。普通卸载会询问是否同时清除宏数据库、设置和界面布局；只有连续两次确认才会删除 `%APPDATA%\MacroHID`，静默卸载始终保留用户数据。
+卸载时默认保留该目录，以便重新安装后继续使用。普通卸载会询问是否同时清除宏数据库、设置和界面布局；只有连续两次确认才会删除 `%APPDATA%\MacroHID-UI`，静默卸载始终保留用户数据。
 
 ### 无驱动说明
 
@@ -72,7 +72,7 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 
 ### 从网上下载后被拦截
 
-从 GitHub 下载的 `MacroHID-Setup-x64.exe` 会带上浏览器的「来自互联网」标记。安装程序还要在临时目录里再解出一份 `.tmp` 来执行。当前安装包没有向 CA 购买的代码签名证书，Windows 11 的智能应用控制 / 应用程序控制策略可能直接拦住这份临时文件。
+从 GitHub 下载的 `MacroHID-UI-Setup-x64.exe` 会带上浏览器的「来自互联网」标记。安装程序还要在临时目录里再解出一份 `.tmp` 来执行。当前安装包没有向 CA 购买的代码签名证书，Windows 11 的智能应用控制 / 应用程序控制策略可能直接拦住这份临时文件。
 
 典型提示：
 
@@ -85,12 +85,12 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 1. **解除锁定后再装。** 右键安装包 → 属性 → 若有「解除锁定」则勾选 → 应用 → 确定。或在 PowerShell 中执行：
 
    ```powershell
-   Unblock-File -Path "$env:USERPROFILE\Downloads\MacroHID-Setup-x64.exe"
+   Unblock-File -Path "$env:USERPROFILE\Downloads\MacroHID-UI-Setup-x64.exe"
    ```
 
-   文件名若被改成 `MacroHID-Setup-x64 (1).exe`，路径要写成实际文件名。然后右键「以管理员身份运行」。
+   文件名若被改成 `MacroHID-UI-Setup-x64 (1).exe`，路径要写成实际文件名。然后右键「以管理员身份运行」。
 
-2. **改用便携包。** 在同一 Releases 页下载 `MacroHID-Portable-x64.zip`，先对 zip 解除锁定，再解压。目录排布与安装版相同（`MacroStudio`、`MacroRunner`、`LatencyProbe`、`docs` 等）。双击根目录的 **MacroStudio** 快捷方式启动，不要把快捷方式单独拷走。
+2. **改用便携包。** 在同一 Releases 页下载 `MacroHID-UI-Portable-x64.zip`，先对 zip 解除锁定，再解压。目录排布与安装版相同（`MacroStudio`、`MacroRunner`、`LatencyProbe`、`docs` 等）。双击 `MacroHID-UI` 根目录下的 `MacroStudio.cmd` 启动，不要把快捷方式单独拷走。
 
 3. **仍被拦住。** 打开 Windows 安全中心 → 应用和浏览器控制 → **智能应用控制**。若处于「开」，未签名软件无法单独加白名单。可在确认文件来自本仓库 Releases 后，临时关掉智能应用控制再安装；微软说明关掉后有的版本不能再打开，除非重置系统，请自行权衡。
 
@@ -110,7 +110,7 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 - Windows 10/11 x64.
 - .NET 8 Desktop Runtime. Current builds are framework-dependent and do not bundle the .NET runtime.
 - To automate elevated applications, run MacroStudio or MacroRunner as Administrator.
-- The setup wizard shows Select Destination Location. The default is `C:\Program Files\MacroHID`; upgrades still show this page and prefill the previous folder.
+- The setup wizard shows Select Destination Location. The default is `C:\Program Files\MacroHID UI Edition`; upgrades still show this page and prefill the previous folder.
 
 ### Build the Installer
 
@@ -121,8 +121,8 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 Output:
 
 ```text
-artifacts\installer\MacroHID-Setup-x64.exe
-artifacts\installer\MacroHID-Portable-x64.zip
+artifacts\packages-ui\MacroHID-UI-Setup-x64.exe
+artifacts\packages-ui\MacroHID-UI-Portable-x64.zip
 ```
 
 The setup package includes:
@@ -141,7 +141,7 @@ For development verification without creating a setup package:
 
 ```powershell
 .\scripts\Build-LocalRun.ps1 -Configuration Release
-.\artifacts\local-run\MacroStudio\MacroStudio.exe
+.\artifacts\local-run-ui\MacroStudio\MacroStudio.exe
 ```
 
 Build and launch immediately:
@@ -155,12 +155,12 @@ Build and launch immediately:
 MacroStudio stores the local macro database in:
 
 ```text
-%APPDATA%\MacroHID\MacroLibrary
+%APPDATA%\MacroHID-UI\MacroLibrary
 ```
 
 Each macro is stored as a normal `.mcrx` file. `library.json` stores folders, ordering, selection state, trigger keys, playback modes, and timestamps.
 
-Uninstall keeps this directory by default so a later reinstall can reuse it. Interactive uninstall asks whether to remove the macro database, settings, and workspace layout, and requires a second confirmation before deleting `%APPDATA%\MacroHID`. Silent uninstall always preserves user data.
+Uninstall keeps this directory by default so a later reinstall can reuse it. Interactive uninstall asks whether to remove the macro database, settings, and workspace layout, and requires a second confirmation before deleting `%APPDATA%\MacroHID-UI`. Silent uninstall always preserves user data.
 
 ### No Driver
 
@@ -177,7 +177,7 @@ MacroHID uses Windows `SendInput` only:
 
 GitHub downloads carry Mark of the Web. Inno Setup then unpacks a `.tmp` helper under `%TEMP%`. This build is not Authenticode-signed, so Windows 11 Smart App Control may abort with Error 4551.
 
-Unblock the file first (`Properties` → Unblock, or `Unblock-File`), or use `MacroHID-Portable-x64.zip` after unblocking the zip. See the Chinese section above for Smart App Control notes.
+Unblock the file first (`Properties` → Unblock, or `Unblock-File`), or use `MacroHID-UI-Portable-x64.zip` after unblocking the zip. See the Chinese section above for Smart App Control notes.
 
 ### Troubleshooting
 

@@ -214,11 +214,5 @@ public static class RuntimePrecisionSettingsStore
         return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name : name + ".exe";
     }
 
-    private static string GetSettingsPath()
-    {
-        var root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MacroHID");
-        return Path.Combine(root, SettingsFileName);
-    }
+    private static string GetSettingsPath() => Path.Combine(ApplicationStorage.RoamingDirectory, SettingsFileName);
 }

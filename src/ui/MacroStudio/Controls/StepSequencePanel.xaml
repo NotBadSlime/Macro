@@ -49,7 +49,8 @@
                     Style="{StaticResource SoftListItemBorder}"
                     Background="{Binding BackgroundBrush}"
                     BorderThickness="2"
-                    Padding="8,7"
+                    CornerRadius="9"
+                    Padding="8,5"
                     Margin="{Binding LeftMargin}"
                     Cursor="Hand"
                     MouseLeftButtonDown="StepRow_MouseLeftButtonDown"
@@ -66,15 +67,15 @@
 
                     <Border x:Name="HoverOverlay"
                             Grid.ColumnSpan="6"
-                            Margin="-8,-7"
+                            Margin="-8,-5"
                             Background="{DynamicResource ActionHoverOverlay}"
-                            CornerRadius="10"
+                            CornerRadius="9"
                             Visibility="Collapsed"
                             IsHitTestVisible="False" />
                     <Border x:Name="HoverRail"
                             Grid.ColumnSpan="6"
-                            Width="4"
-                            Margin="-8,-5,0,-5"
+                            Width="3"
+                            Margin="-8,-2,0,-2"
                             HorizontalAlignment="Left"
                             Background="{DynamicResource Accent}"
                             CornerRadius="2"
@@ -83,18 +84,23 @@
 
                     <TextBlock Text="{Binding StepNumberLabel}"
                                Foreground="{DynamicResource SecondaryText}"
-                               FontSize="12"
+                               FontFamily="Cascadia Mono, Consolas"
+                               FontSize="11"
                                FontWeight="SemiBold"
                                MinWidth="28"
                                Margin="0,0,6,0"
                                HorizontalAlignment="Right"
                                VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding Icon}"
-                               FontSize="15"
-                               Foreground="{Binding IconBrush}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
+                    <Border Grid.Column="1"
+                            Width="27" Height="27"
+                            Background="{DynamicResource PanelBackground}"
+                            BorderBrush="{DynamicResource PanelBorder}"
+                            BorderThickness="1"
+                            CornerRadius="7"
+                            VerticalAlignment="Center">
+                        <local:ActionGlyph Data="{Binding IconGeometry}"
+                                           Foreground="{Binding IconBrush}" />
+                    </Border>
                     <TextBlock Grid.Column="2"
                                Text="{Binding ActionIndicator}"
                                FontSize="14"
@@ -108,13 +114,15 @@
                                Foreground="{Binding ActionForeground}"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Title}"
                                Cursor="Hand"
                                MouseLeftButtonUp="StepTitle_MouseLeftButtonUp" />
                     <TextBlock Grid.Column="4"
                                Text="{Binding Badge}"
                                Foreground="{Binding ActionForeground}"
-                               Opacity="0.72"
-                               FontSize="12"
+                               Opacity="0.82"
+                               FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI"
+                               FontSize="11"
                                VerticalAlignment="Center"
                                Margin="8,0,4,0" />
                     <StackPanel x:Name="RowActions"
@@ -165,15 +173,24 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <DockPanel x:Name="ToolbarPanel" Margin="4,0,4,10" LastChildFill="True">
+        <WrapPanel x:Name="ToolbarPanel" Margin="4,0,4,5">
+            <WrapPanel VerticalAlignment="Center" Margin="0,0,12,5">
+                <TextBlock x:Name="SequenceTitleText" Text="序列"
+                           Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Margin="0,0,8,0"
+                           MaxWidth="330" TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                <Button x:Name="ZoomOutButton" Style="{StaticResource StepRowActionButton}" Content="−" ToolTip="缩小序列（Ctrl + 滚轮）" Click="ZoomOut_Click" />
+                <Button x:Name="SequenceZoomButton" Style="{StaticResource StepRowActionButton}" Width="48" FontSize="12" Content="100%" ToolTip="恢复原始大小" Click="ResetZoom_Click" />
+                <Button x:Name="ZoomInButton" Style="{StaticResource StepRowActionButton}" Content="+" ToolTip="放大序列（Ctrl + 滚轮）" Click="ZoomIn_Click" />
+            </WrapPanel>
             <Border x:Name="SequenceToolbarGroup"
-                    DockPanel.Dock="Right"
+                    Margin="0,0,0,5"
                     Padding="4"
                     Background="{DynamicResource ControlBackground}"
                     BorderBrush="{DynamicResource ControlBorder}"
                     BorderThickness="1"
-                    CornerRadius="14">
-                <StackPanel x:Name="SequenceToolbarButtonStrip" Orientation="Horizontal">
+                    CornerRadius="11">
+                <WrapPanel x:Name="SequenceToolbarButtonStrip">
                     <Button x:Name="ReturnPreviousMacroButton"
                             Style="{StaticResource SequenceToolbarIconButton}"
                             Content="&#xE72B;"
@@ -212,30 +229,24 @@
                             Content="&#xE894;"
                             ToolTip="{Binding Text, ElementName=StepClearText}"
                             Click="StepClear_Click" />
-                </StackPanel>
-            </Border>
-            <Grid>
-                <WrapPanel VerticalAlignment="Center">
-                    <TextBlock x:Name="SequenceTitleText" Text="序列" Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <Button x:Name="ZoomOutButton" Style="{StaticResource StepRowActionButton}" Content="−" ToolTip="缩小序列（Ctrl + 滚轮）" Click="ZoomOut_Click" />
-                    <Button x:Name="SequenceZoomButton" Style="{StaticResource StepRowActionButton}" Width="48" FontSize="12" Content="100%" ToolTip="恢复原始大小" Click="ResetZoom_Click" />
-                    <Button x:Name="ZoomInButton" Style="{StaticResource StepRowActionButton}" Content="+" ToolTip="放大序列（Ctrl + 滚轮）" Click="ZoomIn_Click" />
                 </WrapPanel>
-                <TextBlock x:Name="ReturnPreviousMacroText" Text="返回上一宏" Visibility="Collapsed" />
-                <TextBlock x:Name="StepUndoText" Text="撤回" Visibility="Collapsed" />
-                <TextBlock x:Name="StepRedoText" Text="还原" Visibility="Collapsed" />
-                <TextBlock x:Name="StepUpText" Text="上移" Visibility="Collapsed" />
-                <TextBlock x:Name="StepDownText" Text="下移" Visibility="Collapsed" />
-                <TextBlock x:Name="StepDeleteText" Text="删除" Visibility="Collapsed" />
-                <TextBlock x:Name="StepClearText" Text="清空" Visibility="Collapsed" />
-            </Grid>
-        </DockPanel>
+            </Border>
+            <TextBlock x:Name="ReturnPreviousMacroText" Text="返回上一宏" Visibility="Collapsed" />
+            <TextBlock x:Name="StepUndoText" Text="撤回" Visibility="Collapsed" />
+            <TextBlock x:Name="StepRedoText" Text="还原" Visibility="Collapsed" />
+            <TextBlock x:Name="StepUpText" Text="上移" Visibility="Collapsed" />
+            <TextBlock x:Name="StepDownText" Text="下移" Visibility="Collapsed" />
+            <TextBlock x:Name="StepDeleteText" Text="删除" Visibility="Collapsed" />
+            <TextBlock x:Name="StepClearText" Text="清空" Visibility="Collapsed" />
+        </WrapPanel>
 
         <Grid Grid.Row="1" PreviewMouseWheel="SequenceViewport_PreviewMouseWheel">
             <Grid.LayoutTransform>
                 <ScaleTransform x:Name="SequenceScale" ScaleX="1" ScaleY="1" />
             </Grid.LayoutTransform>
             <ListBox x:Name="StepList"
+                     BorderThickness="0"
+                     Background="Transparent"
                      VirtualizingPanel.IsVirtualizing="True"
                      VirtualizingPanel.VirtualizationMode="Recycling"
                      ScrollViewer.CanContentScroll="True"
@@ -260,16 +271,33 @@
                     </ContextMenu>
                 </ListBox.ContextMenu>
             </ListBox>
-            <TextBlock x:Name="EmptySequenceOverlay"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       MaxWidth="280"
-                       TextAlignment="Center"
-                       Foreground="{DynamicResource Placeholder}"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       IsHitTestVisible="False"
-                       Text="把动作拖到这里，或直接点击右侧添加项。" />
+            <StackPanel x:Name="EmptySequenceOverlay"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False"
+                        MaxWidth="290"
+                        Margin="12">
+                <Border Width="48" Height="48"
+                        Background="{DynamicResource Selection}"
+                        BorderBrush="{DynamicResource PanelBorder}"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        HorizontalAlignment="Center">
+                    <TextBlock Text="&#xE710;"
+                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               Foreground="{DynamicResource Accent}"
+                               FontSize="19"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <TextBlock x:Name="EmptySequenceOverlayText"
+                           Margin="0,10,0,0"
+                           TextAlignment="Center"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="13"
+                           TextWrapping="Wrap"
+                           Text="把动作拖到这里，或直接点击右侧添加项。" />
+            </StackPanel>
             <Border x:Name="SelectionRectangle"
                     Panel.ZIndex="20"
                     BorderBrush="{DynamicResource Accent}"
@@ -307,6 +335,7 @@
                    Text="把动作拖到这里，或直接点击右侧添加项。"
                    Foreground="{DynamicResource SecondaryText}"
                    TextWrapping="Wrap"
+                   FontSize="12"
                    Margin="4,8,4,0" />
 
         <Popup x:Name="InlineStepEditorPopup"

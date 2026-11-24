@@ -141,7 +141,7 @@ internal static class ConsoleInterruptTests
             if (rejectStop)
             {
                 Check(!json.RootElement.GetProperty("ok").GetBoolean() && output.Contains(runId!)
-                    && output.Contains("MacroCtl stop --run-id") && jobs.Get(runId!)!.State == "waiting",
+                    && output.Contains($"{GlobalCommand.CommandName} stop --run-id") && jobs.Get(runId!)!.State == "waiting",
                     "Rejected stop was reported as success or lost recovery instructions.");
             }
             else if (loop)

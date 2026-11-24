@@ -1,4 +1,7 @@
-﻿using System.Windows;
+﻿using System.Globalization;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls.Primitives;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -12,12 +15,22 @@ public partial class ActionPalettePanel : UserControl
     private const string ActionTemplateDragFormat = "MacroHID.ActionTemplate";
     private Point paletteDragStartPoint;
     private bool paletteDragStarted;
+    private bool isReadOnly;
+    private readonly (CollapsibleSection Section, UniformGrid Grid)[] searchSections;
+    private bool[]? expansionBeforeSearch;
 
     public event Action<MacroActionTemplateKind>? ActionClicked;
 
     public ActionPalettePanel()
     {
         InitializeComponent();
+        searchSections =
+        [
+            (BasicActionsSection, BasicCommandGrid),
+            (AdvancedActionsSection, AdvancedCommandGrid),
+            (YsrUnlockerSection, YsrCommandGrid),
+            (LoopActionsSection, LoopCommandGrid)
+        ];
         Loaded += ActionPalettePanel_Loaded;
         Unloaded += ActionPalettePanel_Unloaded;
     }
@@ -95,9 +108,82 @@ public partial class ActionPalettePanel : UserControl
         AddStopCurrentHintText.Text = L("AddStopCurrentHint");
         AddStopIterationHintText.Text = L("AddStopIterationHint");
         AddStopAllHintText.Text = L("AddStopAllHint");
-        DragHint.Text = L("ActionPaletteDragHint");
+        DragHint.Text = L(isReadOnly ? "MacroLockedReadOnly" : "ActionPaletteDragHint");
         AddMacroHintText.Text = L("AddMacroHint");
         ActionColorSettingsButton.ToolTip = L("ActionColorSettingsTitle");
+        ActionSearchPlaceholder.Text = L("ActionPaletteSearch");
+        ActionSearchEmptyText.Text = L("ActionPaletteSearchEmpty");
+        ClearActionSearchButton.ToolTip = L("ClearActionPaletteSearch");
+        AutomationProperties.SetName(ClearActionSearchButton, L("ClearActionPaletteSearch"));
+        foreach (var (_, grid) in searchSections)
+        {
+            foreach (var button in grid.Children.OfType<Button>())
+            {
+                var labels = GetActionLabels(button);
+                if (labels.FirstOrDefault() is { } title)
+                    AutomationProperties.SetName(button, title.Text);
+            }
+        }
+        UpdateActionSearch();
+    }
+
+    private static IEnumerable<TextBlock> GetActionLabels(Button action) =>
+        (action.Content as Grid)?.Children.OfType<StackPanel>().FirstOrDefault()?.Children.OfType<TextBlock>() ?? [];
+
+    private void ActionSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (searchSections is not null)
+            UpdateActionSearch();
+    }
+
+    private void ActionSearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || ActionSearchBox.Text.Length == 0) return;
+        ActionSearchBox.Clear();
+        e.Handled = true;
+    }
+
+    private void ClearActionSearch_Click(object sender, RoutedEventArgs e)
+    {
+        ActionSearchBox.Clear();
+        ActionSearchBox.Focus();
+    }
+
+    private void UpdateActionSearch()
+    {
+        var terms = ActionSearchBox.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var searching = terms.Length > 0;
+        if (searching && expansionBeforeSearch is null)
+            expansionBeforeSearch = searchSections.Select(group => group.Section.IsExpanded).ToArray();
+
+        var anyVisible = false;
+        for (var index = 0; index < searchSections.Length; index++)
+        {
+            var (section, grid) = searchSections[index];
+            var sectionHasMatches = false;
+            foreach (var button in grid.Children.OfType<Button>())
+            {
+                var sectionTitle = section.Header?.ToString();
+                var searchableText = string.Join(" ", GetActionLabels(button).Select(label => label.Text).Append(sectionTitle).Append(button.Tag?.ToString()));
+                var visible = terms.All(term => CultureInfo.CurrentUICulture.CompareInfo.IndexOf(searchableText, term,
+                    CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0);
+                button.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                sectionHasMatches |= visible;
+            }
+
+            section.Visibility = sectionHasMatches ? Visibility.Visible : Visibility.Collapsed;
+            if (searching && sectionHasMatches)
+                section.IsExpanded = true;
+            else if (!searching && expansionBeforeSearch is not null)
+                section.IsExpanded = expansionBeforeSearch[index];
+
+            anyVisible |= sectionHasMatches;
+        }
+
+        if (!searching)
+            expansionBeforeSearch = null;
+        ClearActionSearchButton.Visibility = ActionSearchBox.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ActionSearchEmptyText.Visibility = searching && !anyVisible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ActionPalette_Click(object sender, RoutedEventArgs e)
@@ -158,6 +244,7 @@ public partial class ActionPalettePanel : UserControl
         var columns = ActualWidth >= 520 ? 2 : 1;
         BasicCommandGrid.Columns = columns;
         AdvancedCommandGrid.Columns = columns;
+        YsrCommandGrid.Columns = columns;
         LoopCommandGrid.Columns = columns;
     }
 
@@ -177,8 +264,10 @@ public partial class ActionPalettePanel : UserControl
 
     public void SetReadOnly(bool value)
     {
+        isReadOnly = value;
         BasicCommandGrid.IsEnabled = !value;
         AdvancedCommandGrid.IsEnabled = !value;
+        YsrCommandGrid.IsEnabled = !value;
         LoopCommandGrid.IsEnabled = !value;
         DragHint.Text = value ? L("MacroLockedReadOnly") : L("ActionPaletteDragHint");
     }
@@ -249,7 +338,7 @@ public partial class ActionPalettePanel : UserControl
         }
 
         var iconBadge = grid.Children.OfType<Border>().FirstOrDefault();
-        if (iconBadge?.Child is TextBlock icon)
+        if (iconBadge?.Child is ActionGlyph icon)
         {
             icon.Foreground = appearance.Icon;
             if (appearance.Icon is SolidColorBrush iconBrush)

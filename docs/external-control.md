@@ -1,30 +1,30 @@
 # 外部启动与全局命令
 
-`MacroCtl` 通过当前用户、当前登录会话的本地管道控制 Studio。外部启动不需要宏触发键或开启监听，也不会切换当前编辑的宏。执行的是宏库中已保存的内容；默认执行一轮，可用 `--count N` 指定轮数，或用 `--loop` 持续循环，使用 Studio 当前的播放版本、精度及后台运行设置。前台运行仍需满足宏库的进程启用条件，不会主动切换目标窗口。
+`MacroCtlUI` 通过当前用户、当前登录会话的本地管道控制 Studio。正式版继续使用 `MacroCtl`。外部启动不需要宏触发键或开启监听，也不会切换当前编辑的宏。执行的是宏库中已保存的内容；默认执行一轮，可用 `--count N` 指定轮数，或用 `--loop` 持续循环，使用 Studio 当前的播放版本、精度及后台运行设置。前台运行仍需满足宏库的进程启用条件，不会主动切换目标窗口。
 
 ## 注册与检查
 
 在 Studio 顶部的「窗口 → 全局命令」中点击「注册全局命令」，随后重新打开终端。也可从完整程序目录运行：
 
 ```powershell
-& ".\MacroCtl\MacroCtl.exe" register --studio "D:\Apps\MacroHID\MacroStudio\MacroStudio.exe"
-MacroCtl doctor
+& ".\MacroCtl\MacroCtlUI.exe" register --studio "D:\Apps\MacroHID UI Edition\MacroStudio\MacroStudio.exe"
+MacroCtlUI doctor
 ```
 
-注册会将启动器放到 `%LOCALAPPDATA%\MacroHID\bin`，把该目录加入当前用户 PATH，并记录 Studio 的实际位置。安装版默认勾选「启用 MacroCtl 全局命令」；便携版按需注册。移动便携目录、切换安装版本后重新注册即可。取消注册或卸载旧版本时，只有关联位置匹配才移除注册，避免影响已切换到的新版本。取消注册保留启动器文件，避免删除正在执行的命令；PATH 和关联信息会移除。
+注册会将启动器放到 `%LOCALAPPDATA%\MacroHID-UI\bin`，把该目录加入当前用户 PATH，并记录 Studio 的实际位置。安装版默认勾选「启用 MacroCtlUI 全局命令」；便携版按需注册。移动便携目录、切换安装版本后重新注册即可。取消注册或卸载旧版本时，只有关联位置匹配才移除注册，避免影响已切换到的新版本。取消注册保留启动器文件，避免删除正在执行的命令；PATH 和关联信息会移除。
 
 ## 命令
 
 ```powershell
-MacroCtl list
-MacroCtl run --id "宏ID" --delay 3s
-MacroCtl run --id "宏ID" --delay 3s --count 5 --wait
-MacroCtl run --id "宏ID" --loop
-MacroCtl run --id "宏ID" --loop --wait
-MacroCtl run --library "日常操作" --name "自动填写" --delay 500ms --wait
-MacroCtl status
-MacroCtl status --run-id "任务ID"
-MacroCtl stop --run-id "任务ID"
+MacroCtlUI list
+MacroCtlUI run --id "宏ID" --delay 3s
+MacroCtlUI run --id "宏ID" --delay 3s --count 5 --wait
+MacroCtlUI run --id "宏ID" --loop
+MacroCtlUI run --id "宏ID" --loop --wait
+MacroCtlUI run --library "日常操作" --name "自动填写" --delay 500ms --wait
+MacroCtlUI status
+MacroCtlUI status --run-id "任务ID"
+MacroCtlUI stop --run-id "任务ID"
 ```
 
 宏右键菜单的「复制外部启动命令」会复制 ID 和示例 `--delay 3s`，可自行修改或去掉延迟。ID 不受宏重命名影响。名称重名时请改用 ID。主序列为空且含有条件的宏可用 `--loop` 持续检测条件，也可用 `--count N` 指定检测轮数。
@@ -43,7 +43,7 @@ MacroCtl stop --run-id "任务ID"
 脚本可添加 `--json` 读取结构化结果：
 
 ```powershell
-MacroCtl run --id "宏ID" --delay 3s --wait --json
+MacroCtlUI run --id "宏ID" --delay 3s --wait --json
 ```
 
 退出码：0 成功（未指定 `--wait` 时表示接受成功）；2 参数错误；3 Studio 不可用/连接超时；4 宏或任务不存在；5 名称不唯一；6 忙碌；7 执行或停止失败；8 被停止；130 被 Ctrl+C 中断（`--loop --wait` 会先确认任务结束）。

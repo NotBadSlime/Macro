@@ -3,14 +3,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:MacroStudio.Controls"
-        Title="MacroHID Studio"
-        Height="820"
-        Width="1120"
+        Title="MacroHID Studio · UI Edition"
+        Height="900"
+        Width="1440"
         MinHeight="560"
         MinWidth="1040"
         Icon="Assets/AppIcon.ico"
         Background="{DynamicResource PageBackground}"
         FontFamily="Segoe UI Variable, Segoe UI"
+        UseLayoutRounding="True"
         ResizeMode="CanResize"
         AllowDrop="True"
         PreviewDragOver="MainWindow_PreviewDragOver"
@@ -27,44 +28,44 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
 
-    <Border x:Name="AppShellRoot"
-            Background="{DynamicResource PageBackground}">
-        <DockPanel>
+    <Grid x:Name="AppShellRoot" Background="{DynamicResource StudioBackdrop}">
+        <DockPanel x:Name="StudioWorkspace">
             <Border x:Name="CommandBar"
                     DockPanel.Dock="Top"
-                    Background="{DynamicResource ChromeBackground}"
+                    Background="{DynamicResource StudioChrome}"
                     BorderBrush="{DynamicResource ChromeBorder}"
                     BorderThickness="0,0,0,1"
-                    Padding="16,7"
+                    Padding="16,10,10,10"
                     MouseLeftButtonDown="TopChromeBar_MouseLeftButtonDown">
-                <DockPanel LastChildFill="False">
+                <DockPanel>
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="8"
-                                Height="8"
-                                Margin="0,0,10,0"
-                                CornerRadius="3"
-                                Background="{DynamicResource Accent}" />
-                        <TextBlock Text="MacroHID"
-                                   FontSize="15"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,16,0" />
-                        <Button x:Name="OpenButton"
-                                Style="{StaticResource CommandBarButton}"
-                                Content="打开宏文件"
-                                Click="OpenMacro_Click" />
-                        <Button x:Name="SaveButton"
-                                Style="{StaticResource CommandBarButton}"
-                                Content="另存当前宏"
-                                Click="SaveMacro_Click" />
-                        <Button x:Name="OpenLogsButton"
-                                Style="{StaticResource CommandBarButton}"
-                                Content="打开日志"
-                                Click="OpenLogs_Click" />
-                        <Button x:Name="UnlockerSettingsButton" Style="{StaticResource CommandBarButton}" Content="解帧器设置" Click="UnlockerSettings_Click" />
+                        <Border Width="36" Height="36" CornerRadius="11" Margin="0,0,11,0">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#815AFF" Offset="0" />
+                                    <GradientStop Color="#4430AC" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Viewbox Width="23" Height="23">
+                                <Path Data="M2,16 L7,16 10,7 14,21 17,12 22,12" Stroke="White"
+                                      StrokeThickness="2.25" StrokeLineJoin="Round"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            </Viewbox>
+                        </Border>
+                        <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                            <TextBlock Text="MacroHID Studio" Foreground="{DynamicResource PrimaryText}"
+                                       FontSize="16" FontWeight="Bold" />
+                            <TextBlock x:Name="EditionLabelText" Text="UI 优化版" Foreground="{DynamicResource Accent}"
+                                       FontSize="11" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <Rectangle Width="1" Height="25" Margin="0,0,8,0" Fill="{DynamicResource ChromeBorder}" />
+                        <Button x:Name="OpenButton" Style="{StaticResource CommandBarButton}"
+                                Content="打开宏文件" Click="OpenMacro_Click" />
+                        <Button x:Name="SaveButton" Style="{StaticResource CommandBarButton}"
+                                Content="另存当前宏" Click="SaveMacro_Click" />
                         <Button x:Name="WindowMenuButton"
                                 Style="{StaticResource CommandBarButton}"
                                 Content="窗口"
-                                Visibility="Collapsed"
                                 Click="WindowMenu_Click">
                             <Button.ContextMenu>
                                 <ContextMenu x:Name="WindowMenuContext">
@@ -99,67 +100,59 @@
                             </Button.ContextMenu>
                         </Button>
                     </StackPanel>
+
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="{DynamicResource PanelRaised}"
-                                BorderBrush="{DynamicResource PanelBorder}"
-                                BorderThickness="1"
-                                CornerRadius="12"
-                                Padding="10,5"
-                                Margin="0,0,10,0">
-                            <DockPanel>
-                            <Ellipse x:Name="StatusDot" DockPanel.Dock="Left" Width="7" Height="7" Margin="0,5,8,0" VerticalAlignment="Top" Fill="{DynamicResource Accent}" />
-                            <StackPanel>
-                            <TextBlock x:Name="StatusText"
-                                       MaxWidth="380"
-                                       TextTrimming="CharacterEllipsis"
-                                       Foreground="{DynamicResource SecondaryText}"
-                                       VerticalAlignment="Center"
-                                       Text="Input backend ready" />
-                            <TextBlock x:Name="PerformanceStatusText" FontSize="10" Foreground="{DynamicResource SecondaryText}" MaxWidth="380" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                            </DockPanel>
-                        </Border>
-                        <Button x:Name="PauseListeningButton"
-                                Style="{StaticResource CommandBarButton}"
-                                MinWidth="88"
-                                Margin="0,0,12,0"
-                                Content="暂停监听"
-                                Click="PauseListeningButton_Click" />
-                        <TextBlock x:Name="LanguageLabelText"
-                                   Text="语言"
-                                   Foreground="{DynamicResource SecondaryText}"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0" />
-                        <ComboBox x:Name="LanguageComboBox"
-                                  Width="142"
-                                  Height="32"
-                                  Margin="0,0,12,0"
+                        <Button x:Name="PauseListeningButton" Style="{StaticResource CommandBarButton}"
+                                Content="暂停监听" Margin="0,0,4,0" Click="PauseListeningButton_Click" />
+                        <TextBlock x:Name="LanguageLabelText" Text="语言" Visibility="Collapsed" />
+                        <ComboBox x:Name="LanguageComboBox" Width="96" Height="32" Margin="0,0,3,0"
+                                  AutomationProperties.LabeledBy="{Binding ElementName=LanguageLabelText}"
                                   SelectionChanged="LanguageComboBox_SelectionChanged" />
-                        <Button x:Name="ThemeToggleButton"
-                                Style="{StaticResource WindowControlButton}"
-                                Content="&#xE706;"
-                                Click="ThemeToggle_Click"
-                                ToolTip="Toggle theme" />
-                        <Button x:Name="MinimizeWindowButton"
-                                Style="{StaticResource WindowControlButton}"
-                                Content="&#xE921;"
-                                ToolTip="最小化"
-                                Click="MinimizeWindow_Click" />
-                        <Button x:Name="MaximizeWindowButton"
-                                Style="{StaticResource WindowControlButton}"
-                                Content="&#xE922;"
-                                Click="MaximizeWindow_Click" />
-                        <Button x:Name="CloseWindowButton"
-                                Style="{StaticResource CloseWindowButton}"
-                                Content="&#xE8BB;"
-                                Click="CloseWindow_Click" />
+                        <Button x:Name="ThemeToggleButton" Style="{StaticResource WindowControlButton}"
+                                Content="&#xE706;" Click="ThemeToggle_Click" ToolTip="Toggle theme" />
+                        <Rectangle Width="1" Height="25" Margin="5,0" Fill="{DynamicResource ChromeBorder}" />
+                        <Button x:Name="MinimizeWindowButton" Style="{StaticResource WindowControlButton}"
+                                Content="&#xE921;" ToolTip="最小化" Click="MinimizeWindow_Click" />
+                        <Button x:Name="MaximizeWindowButton" Style="{StaticResource WindowControlButton}"
+                                Content="&#xE922;" ToolTip="最大化" Click="MaximizeWindow_Click" />
+                        <Button x:Name="CloseWindowButton" Style="{StaticResource CloseWindowButton}"
+                                Content="&#xE8BB;" ToolTip="关闭" Click="CloseWindow_Click" />
                     </StackPanel>
+
+                    <Button x:Name="CommandSearchButton" Style="{StaticResource StudioSearchButton}"
+                            MaxWidth="320" Margin="12,0" Click="CommandSearchButton_Click">
+                        <DockPanel VerticalAlignment="Center">
+                            <TextBlock DockPanel.Dock="Left" Text="&#xE721;" Margin="0,0,9,0"
+                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" />
+                            <TextBlock DockPanel.Dock="Right" Text="Ctrl+K" FontFamily="Consolas"
+                                       Margin="8,0,0,0" Foreground="{DynamicResource Accent}" />
+                            <TextBlock x:Name="CommandSearchLabel" Text="查找命令" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                    </Button>
+                </DockPanel>
+            </Border>
+
+            <Border DockPanel.Dock="Bottom" Background="{DynamicResource ChromeBackground}"
+                    BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="15,3">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <TextBlock x:Name="PerformanceStatusText" FontSize="11" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource SecondaryText}" MaxWidth="370" TextTrimming="CharacterEllipsis" />
+                        <Button x:Name="OpenLogsButton" Style="{StaticResource StudioFooterButton}"
+                                Content="打开日志" Click="OpenLogs_Click" />
+                        <Button x:Name="UnlockerSettingsButton" Style="{StaticResource StudioFooterButton}"
+                                Content="解帧器设置" Click="UnlockerSettings_Click" />
+                    </StackPanel>
+                    <Ellipse x:Name="StatusDot" DockPanel.Dock="Left" Width="7" Height="7"
+                             Margin="2,0,9,0" VerticalAlignment="Center" Fill="{DynamicResource StudioSuccess}" />
+                    <TextBlock x:Name="StatusText" Foreground="{DynamicResource SecondaryText}" FontSize="12"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 </DockPanel>
             </Border>
 
             <Grid x:Name="WorkspaceRoot" ClipToBounds="True">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="46" />
+                    <ColumnDefinition Width="57" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
@@ -168,10 +161,7 @@
                         Background="{DynamicResource ChromeBackground}"
                         BorderBrush="{DynamicResource ChromeBorder}"
                         BorderThickness="0,0,1,0">
-                    <DockPanel Margin="4,8,4,8" LastChildFill="False">
-                        <StackPanel x:Name="ToolWindowBottomButtons"
-                                    DockPanel.Dock="Bottom"
-                                    VerticalAlignment="Bottom">
+                    <StackPanel x:Name="WorkspaceRailButtons" Margin="7,14,7,8" VerticalAlignment="Top">
                             <ToggleButton x:Name="LibraryToolButton"
                                           Style="{StaticResource ToolWindowRailButton}"
                                           Content="&#xE8B7;"
@@ -208,8 +198,7 @@
                                           Tag="playback"
                                           ToolTip="播放控制"
                                           Click="WorkspaceToolButton_Click" />
-                        </StackPanel>
-                    </DockPanel>
+                    </StackPanel>
                 </Border>
 
                 <controls:WorkspaceDockHost x:Name="DockHost" Margin="14,10,14,14" ClipToBounds="True" Grid.Column="1">
@@ -219,11 +208,11 @@
                         <RowDefinition x:Name="BottomDockRow" Height="230" MinHeight="160" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition x:Name="LeftDockColumn" Width="260" MinWidth="210" />
+                        <ColumnDefinition x:Name="LeftDockColumn" Width="260" MinWidth="186" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition x:Name="CenterDockColumn" Width="*" MinWidth="480" />
+                        <ColumnDefinition x:Name="CenterDockColumn" Width="*" MinWidth="420" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition x:Name="RightDockColumn" Width="390" MinWidth="320" />
+                        <ColumnDefinition x:Name="RightDockColumn" Width="390" MinWidth="282" />
                     </Grid.ColumnDefinitions>
 
                     <Grid x:Name="LeftDockContent" Grid.Row="0" Grid.Column="0" VerticalAlignment="Stretch">
@@ -286,29 +275,36 @@
                             CornerRadius="16"
                             ClipToBounds="True">
                         <DockPanel>
-                            <StackPanel x:Name="RightToolTabs"
-                                        DockPanel.Dock="Top"
-                                        Orientation="Horizontal"
-                                        Margin="0,0,0,8">
-                                <ToggleButton x:Name="ConditionRightToolButton"
-                                              Tag="conditions"
-                                              Style="{StaticResource RightToolTabStyle}"
-                                              Click="RightToolButton_Click"
-                                              Content="&#xE9D9;"
-                                              ToolTip="条件序列" />
-                                <ToggleButton x:Name="ActionRightToolButton"
-                                              Tag="actions"
-                                              Style="{StaticResource RightToolTabStyle}"
-                                              Click="RightToolButton_Click"
-                                              Content="&#xE8A7;"
-                                              ToolTip="动作面板" />
-                                <ToggleButton x:Name="PlaybackRightToolButton"
-                                              Tag="playback"
-                                              Style="{StaticResource RightToolTabStyle}"
-                                              Click="RightToolButton_Click"
-                                              Content="&#xE768;"
-                                              ToolTip="播放控制" />
-                            </StackPanel>
+                            <Border DockPanel.Dock="Top" CornerRadius="12" Padding="3"
+                                    Background="{DynamicResource PanelBackground}"
+                                    BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1" Margin="0,0,0,8">
+                                <UniformGrid x:Name="RightToolTabs" Rows="1">
+                                    <ToggleButton x:Name="ConditionRightToolButton" Tag="conditions" ToolTip="条件序列"
+                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE9D9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                       VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBlock x:Name="ConditionRightToolLabel" Text="条件序列" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </ToggleButton>
+                                    <ToggleButton x:Name="ActionRightToolButton" Tag="actions" ToolTip="动作面板"
+                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                       VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBlock x:Name="ActionRightToolLabel" Text="动作面板" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </ToggleButton>
+                                    <ToggleButton x:Name="PlaybackRightToolButton" Tag="playback" ToolTip="播放控制"
+                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                       VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBlock x:Name="PlaybackRightToolLabel" Text="播放控制" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </ToggleButton>
+                                </UniformGrid>
+                            </Border>
 
                             <Grid x:Name="RightToolDeck">
                                 <Border x:Name="ConditionToolChrome" Style="{StaticResource ToolWindowHostStyle}">
@@ -344,7 +340,7 @@
                                                       HorizontalScrollBarVisibility="Disabled"
                                                       CanContentScroll="False">
                                             <ContentControl x:Name="ActionPaletteHost">
-                                                <controls:ActionPalettePanel x:Name="ActionPalette" />
+                                                <controls:ActionPalettePanel x:Name="ActionPalette" Margin="10,10,10,8" />
                                             </ContentControl>
                                         </ScrollViewer>
                                     </DockPanel>
@@ -366,7 +362,7 @@
                                                       HorizontalScrollBarVisibility="Disabled"
                                                       CanContentScroll="False">
                                             <ContentControl x:Name="PlaybackPanelHost">
-                                                <controls:PlaybackPanel x:Name="PlaybackPanelControl" />
+                                                <controls:PlaybackPanel x:Name="PlaybackPanelControl" Margin="12,12,12,14" />
                                             </ContentControl>
                                         </ScrollViewer>
                                     </DockPanel>
@@ -408,5 +404,6 @@
                 </controls:WorkspaceDockHost>
             </Grid>
         </DockPanel>
-    </Border>
+        <controls:StudioCommandPalette x:Name="CommandPalette" Visibility="Collapsed" />
+    </Grid>
 </Window>

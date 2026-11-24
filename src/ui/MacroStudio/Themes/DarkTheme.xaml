@@ -2,35 +2,35 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
-    <SolidColorBrush x:Key="PageBackground" Color="#1F232A" />
-    <SolidColorBrush x:Key="PanelBackground" Color="#252A32" />
-    <SolidColorBrush x:Key="PanelRaised" Color="#2B3038" />
-    <SolidColorBrush x:Key="PanelBorder" Color="#363D48" />
-    <SolidColorBrush x:Key="PrimaryText" Color="#F4F6FA" />
-    <SolidColorBrush x:Key="SecondaryText" Color="#A6AFBD" />
-    <SolidColorBrush x:Key="Accent" Color="#62B0FF" />
-    <SolidColorBrush x:Key="AccentBlue" Color="#75BCFF" />
-    <SolidColorBrush x:Key="AccentOrange" Color="#F6B44B" />
-    <SolidColorBrush x:Key="AccentPink" Color="#F078B6" />
-    <SolidColorBrush x:Key="Danger" Color="#FF6B6F" />
-    <SolidColorBrush x:Key="Hover" Color="#333A45" />
-    <SolidColorBrush x:Key="Selection" Color="#263B4F" />
-    <SolidColorBrush x:Key="SelectionBorder" Color="#62B0FF" />
-    <SolidColorBrush x:Key="ActionHoverOverlay" Color="#3062B0FF" />
-    <SolidColorBrush x:Key="ChromeBackground" Color="#252A32" />
-    <SolidColorBrush x:Key="ChromeBorder" Color="#343B46" />
-    <SolidColorBrush x:Key="ControlBackground" Color="#232830" />
-    <SolidColorBrush x:Key="ControlBorder" Color="#6B7788" />
-    <SolidColorBrush x:Key="ScrollThumb" Color="#505966" />
-    <SolidColorBrush x:Key="ScrollThumbHover" Color="#697482" />
-    <SolidColorBrush x:Key="DisabledText" Color="#6B7481" />
-    <SolidColorBrush x:Key="Placeholder" Color="#7A8492" />
-    <SolidColorBrush x:Key="FocusRing" Color="#62B0FF" />
-    <SolidColorBrush x:Key="DangerHover" Color="#442A2D" />
-    <SolidColorBrush x:Key="PrimaryHover" Color="#7ABEFF" />
-    <SolidColorBrush x:Key="ShellSidebarBackground" Color="#252A32" />
-    <SolidColorBrush x:Key="WorkbenchBackground" Color="#20252D" />
-    <SolidColorBrush x:Key="InspectorBackground" Color="#252A32" />
+    <SolidColorBrush x:Key="PageBackground" Color="#0B1120" />
+    <SolidColorBrush x:Key="PanelBackground" Color="#121A2C" />
+    <SolidColorBrush x:Key="PanelRaised" Color="#192439" />
+    <SolidColorBrush x:Key="PanelBorder" Color="#2B3854" />
+    <SolidColorBrush x:Key="PrimaryText" Color="#F1F3FD" />
+    <SolidColorBrush x:Key="SecondaryText" Color="#A4AFC8" />
+    <SolidColorBrush x:Key="Accent" Color="#A59AFF" />
+    <SolidColorBrush x:Key="AccentBlue" Color="#79BBFF" />
+    <SolidColorBrush x:Key="AccentOrange" Color="#FFC37A" />
+    <SolidColorBrush x:Key="AccentPink" Color="#F998C7" />
+    <SolidColorBrush x:Key="Danger" Color="#FF8C9D" />
+    <SolidColorBrush x:Key="Hover" Color="#243250" />
+    <SolidColorBrush x:Key="Selection" Color="#2A2C55" />
+    <SolidColorBrush x:Key="SelectionBorder" Color="#978BFF" />
+    <SolidColorBrush x:Key="ActionHoverOverlay" Color="#309B8BFF" />
+    <SolidColorBrush x:Key="ChromeBackground" Color="#111A2C" />
+    <SolidColorBrush x:Key="ChromeBorder" Color="#293550" />
+    <SolidColorBrush x:Key="ControlBackground" Color="#10182A" />
+    <SolidColorBrush x:Key="ControlBorder" Color="#4A5978" />
+    <SolidColorBrush x:Key="ScrollThumb" Color="#414D68" />
+    <SolidColorBrush x:Key="ScrollThumbHover" Color="#5D6D90" />
+    <SolidColorBrush x:Key="DisabledText" Color="#78859F" />
+    <SolidColorBrush x:Key="Placeholder" Color="#8E9AB5" />
+    <SolidColorBrush x:Key="FocusRing" Color="#ACA2FF" />
+    <SolidColorBrush x:Key="DangerHover" Color="#472C40" />
+    <SolidColorBrush x:Key="PrimaryHover" Color="#725CFF" />
+    <SolidColorBrush x:Key="ShellSidebarBackground" Color="#131D30" />
+    <SolidColorBrush x:Key="WorkbenchBackground" Color="#0D1527" />
+    <SolidColorBrush x:Key="InspectorBackground" Color="#10182A" />
 
     <sys:Double x:Key="PanelShadowOpacity">0.18</sys:Double>
     <sys:Double x:Key="PanelShadowBlur">22</sys:Double>
@@ -48,8 +48,26 @@
     <SolidColorBrush x:Key="BadgeOrange" Color="#41301F" />
 
     <!-- Selection glows (were fixed blue in SharedStyles) -->
-    <SolidColorBrush x:Key="WorkspacePanelGlowBrush" Color="#7A62B0FF" />
-    <SolidColorBrush x:Key="RailSelectionGlow" Color="#3362B0FF" />
-    <SolidColorBrush x:Key="SelectionBandBrush" Color="#3062B0FF" />
+    <SolidColorBrush x:Key="WorkspacePanelGlowBrush" Color="#3B8874FF" />
+    <SolidColorBrush x:Key="RailSelectionGlow" Color="#359483FF" />
+    <SolidColorBrush x:Key="SelectionBandBrush" Color="#409483FF" />
 
+    <SolidColorBrush x:Key="StudioPrimaryFill" Color="#644CF0" />
+    <SolidColorBrush x:Key="StudioSuccess" Color="#56D8B2" />
+    <SolidColorBrush x:Key="StudioDimmer" Color="#B1080E1C" />
+    <Color x:Key="StudioWashStart">#121D38</Color>
+    <Color x:Key="StudioWashMiddle">#0B1120</Color>
+    <Color x:Key="StudioWashEnd">#191730</Color>
+    <Color x:Key="StudioChromeEnd">#181C36</Color>
+
+    <LinearGradientBrush x:Key="StudioBackdrop" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource StudioWashStart}" Offset="0" />
+        <GradientStop Color="{StaticResource StudioWashMiddle}" Offset="0.52" />
+        <GradientStop Color="{StaticResource StudioWashEnd}" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="StudioChrome" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="{StaticResource StudioWashStart}" Offset="0" />
+        <GradientStop Color="{StaticResource StudioWashMiddle}" Offset="0.56" />
+        <GradientStop Color="{StaticResource StudioChromeEnd}" Offset="1" />
+    </LinearGradientBrush>
 </ResourceDictionary>

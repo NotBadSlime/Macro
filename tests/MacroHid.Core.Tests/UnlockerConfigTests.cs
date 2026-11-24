@@ -10,7 +10,9 @@ internal static class UnlockerConfigTests
     {
         string directory = Path.Combine(Path.GetTempPath(), "Macro 配置 测试 " + Guid.NewGuid().ToString("N"));
         string oldRoot = UnlockerConfiguration.Root;
+        string oldSettingsDirectory = UnlockerConfiguration.SettingsDirectory;
         Directory.CreateDirectory(directory); UnlockerConfiguration.Root = Path.Combine(directory, "state");
+        UnlockerConfiguration.SettingsDirectory = Path.Combine(directory, "settings");
         try
         {
             foreach (var encoding in new[] { new UTF8Encoding(false), new UTF8Encoding(true), Encoding.Unicode, Encoding.BigEndianUnicode, Encoding.Latin1 })
@@ -146,6 +148,7 @@ internal static class UnlockerConfigTests
         finally
         {
             Ky3ReloadPatch.TestGameRunning = null; UnlockerConfiguration.Root = oldRoot;
+            UnlockerConfiguration.SettingsDirectory = oldSettingsDirectory;
             // Only the freshly created test directory is removed.
             if (!Path.GetFullPath(directory).StartsWith(Path.GetFullPath(Path.GetTempPath()), StringComparison.OrdinalIgnoreCase)) throw new Exception("Unsafe test cleanup path");
             Directory.Delete(directory, true);

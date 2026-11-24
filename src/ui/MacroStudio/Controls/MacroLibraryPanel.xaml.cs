@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using MacroHid.Control;
 using MacroHid.Converter;
 using MacroHid.Core;
 using MacroStudio.Services;
@@ -112,7 +113,8 @@ public partial class MacroLibraryPanel : UserControl
         ExplorerCopyExternalCommandMenuItem.Header = L("CopyExternalCommand");
         NewGroupButton.Content = L("NewDatabase");
         DeleteDatabaseButton.Content = L("DeleteDatabase");
-        BackToManagerButton.Content = L("ReturnToManager");
+        BackToManagerButton.ToolTip = L("ReturnToManager");
+        System.Windows.Automation.AutomationProperties.SetName(BackToManagerButton, L("ReturnToManager"));
         NewMacroMenuButton.Content = L("NewMacro");
         ToolbarNewMacroMenuItem.Header = L("NewMacroFile");
         ToolbarNewConditionMacroMenuItem.Header = L("NewConditionMacroFile");
@@ -135,8 +137,8 @@ public partial class MacroLibraryPanel : UserControl
         CopyMenuItem.Header = L("Copy");
         PasteMenuItem.Header = L("Paste");
         DeleteMenuItem.Header = L("Delete");
-        UpFolderButton.Content = L("UpOneLevel");
         UpFolderButton.ToolTip = L("UpOneLevel");
+        System.Windows.Automation.AutomationProperties.SetName(UpFolderButton, L("UpOneLevel"));
         ExplorerNameHeaderText.Text = L("Name");
         ExplorerTypeHeaderText.Text = L("Type");
         ExplorerTriggerHeaderText.Text = L("Trigger");
@@ -1282,7 +1284,7 @@ public partial class MacroLibraryPanel : UserControl
 
     private string GetExplorerViewMode()
     {
-        return (LibraryViewBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "details";
+        return (LibraryViewBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "list";
     }
 
     private void ApplyExplorerViewMode()
@@ -1300,6 +1302,8 @@ public partial class MacroLibraryPanel : UserControl
         ExplorerListView.ItemTemplate = (DataTemplate)Resources[templateKey];
         ExplorerListView.ItemsPanel = (ItemsPanelTemplate)Resources[panelKey];
         ExplorerDetailsHeader.Visibility = mode == "details" ? Visibility.Visible : Visibility.Collapsed;
+        ScrollViewer.SetHorizontalScrollBarVisibility(ExplorerListView,
+            mode == "details" ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled);
 
         if (ExplorerDetailsMenuItem is null) return;
         ExplorerDetailsMenuItem.IsChecked = mode == "details";
@@ -1393,7 +1397,7 @@ public partial class MacroLibraryPanel : UserControl
     {
         var node = contextMenuTargetNode ?? (showingDatabaseContents ? GetSelectedExplorerNodes().FirstOrDefault() : GetSelectedNode());
         if (node?.Item is not { } item) return;
-        Clipboard.SetText($"MacroCtl run --id \"{item.Id}\" --delay 3s");
+        Clipboard.SetText($"{GlobalCommand.CommandName} run --id \"{item.Id}\" --delay 3s");
         ResultMessage?.Invoke(L("ExternalCommandCopied"));
     }
 

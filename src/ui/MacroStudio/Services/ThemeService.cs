@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using MacroHid.Core;
 
 namespace MacroStudio.Services;
 
@@ -17,7 +18,7 @@ public static class ThemeService
 
     private static ResourceDictionary? currentThemeDictionary;
 
-    public static AppTheme CurrentTheme { get; private set; } = AppTheme.Light;
+    public static AppTheme CurrentTheme { get; private set; } = AppTheme.Dark;
 
     public static event Action? ThemeChanged;
 
@@ -75,35 +76,28 @@ public static class ThemeService
         return string.Equals(left.OriginalString, right.OriginalString, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string SettingsPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MacroHID",
-            "settings.json");
+    private static string SettingsPath => Path.Combine(ApplicationStorage.RoamingDirectory, "settings.json");
 
     private static AppTheme LoadSavedTheme()
     {
         try
         {
-            if (!File.Exists(SettingsPath))
+            if (File.Exists(SettingsPath))
             {
-                return AppTheme.Light;
-            }
-
-            var json = File.ReadAllText(SettingsPath);
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("theme", out var prop)
-                && string.Equals(prop.GetString(), "dark", StringComparison.OrdinalIgnoreCase))
-            {
-                return AppTheme.Dark;
+                using var document = JsonDocument.Parse(File.ReadAllText(SettingsPath));
+                if (document.RootElement.TryGetProperty("theme", out var theme) &&
+                    string.Equals(theme.GetString(), "light", StringComparison.OrdinalIgnoreCase))
+                {
+                    return AppTheme.Light;
+                }
             }
         }
         catch
         {
-            // Fall back to light theme on any error.
+            // An unreadable profile uses the default studio theme.
         }
 
-        return AppTheme.Light;
+        return AppTheme.Dark;
     }
 
     private static void SaveTheme(AppTheme theme)

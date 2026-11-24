@@ -15,10 +15,8 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Icon}"
-                               FontSize="14"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
+                    <local:ActionGlyph Data="{Binding IconGeometry}"
+                                       Foreground="{Binding IconBrush}" />
                     <TextBlock Grid.Column="1"
                                Text="{Binding ActionIndicator}"
                                Foreground="{DynamicResource SecondaryText}"
@@ -39,9 +37,9 @@
         </DataTemplate>
 
         <DataTemplate x:Key="ConditionItemTemplate">
-            <Grid Margin="10,8">
+            <Grid Margin="8,7">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="12" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
@@ -49,7 +47,8 @@
                         CornerRadius="2"
                         Background="{Binding ColorBrush}"
                         VerticalAlignment="Stretch"
-                        Margin="0,0,8,0" />
+                        HorizontalAlignment="Left"
+                        Margin="0,2,0,2" />
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{Binding Description}"
@@ -59,20 +58,24 @@
                                TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{Binding RangeBadge}"
                                Foreground="{DynamicResource SecondaryText}"
+                               FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI"
                                FontSize="11"
-                               Margin="0,2,0,0" />
+                               Margin="0,2,0,0"
+                               TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
                     <TextBlock Text="{Binding TypeIcon}"
                                FontSize="16"
                                VerticalAlignment="Center"
                                Margin="0,0,6,0" />
-                    <Border Background="{Binding StatusBrush}"
+                    <Border Background="{DynamicResource PanelRaised}"
+                            BorderBrush="{Binding StatusBrush}"
+                            BorderThickness="1"
                             CornerRadius="8"
-                            Padding="8,3">
+                            Padding="6,3">
                         <TextBlock Text="{Binding StatusText}"
-                                   FontSize="10"
-                                   Foreground="White" />
+                                   FontSize="11"
+                                   Foreground="{DynamicResource PrimaryText}" />
                     </Border>
                 </StackPanel>
             </Grid>
@@ -166,7 +169,7 @@
                         Panel.ZIndex="20"
                         BorderBrush="{DynamicResource Accent}"
                         BorderThickness="1"
-                        Background="#22007AFF"
+                        Background="{DynamicResource SelectionBandBrush}"
                         CornerRadius="6"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Top"
@@ -230,13 +233,19 @@
                 <!-- Name -->
                 <StackPanel Margin="0,0,0,8">
                     <TextBlock x:Name="ConditionNameLabelText" Text="名称" Style="{StaticResource FieldLabel}" />
-                    <TextBox x:Name="CondNameBox" Height="30" TextChanged="CondNameBox_TextChanged" />
+                    <TextBox x:Name="CondNameBox"
+                             Height="34"
+                             AutomationProperties.LabeledBy="{Binding ElementName=ConditionNameLabelText}"
+                             TextChanged="CondNameBox_TextChanged" />
                 </StackPanel>
 
                 <!-- Type selector -->
                 <StackPanel Grid.Row="1" Margin="0,0,0,8">
                     <TextBlock x:Name="ConditionTypeLabelText" Text="条件类型" Style="{StaticResource FieldLabel}" />
-                    <ComboBox x:Name="CondTypeCombo" Height="30" SelectionChanged="CondTypeCombo_SelectionChanged">
+                    <ComboBox x:Name="CondTypeCombo"
+                              Height="32"
+                              AutomationProperties.LabeledBy="{Binding ElementName=ConditionTypeLabelText}"
+                              SelectionChanged="CondTypeCombo_SelectionChanged">
                         <ComboBoxItem Content="像素颜色" Tag="pixel" />
                         <ComboBoxItem Content="文字识别 (OCR)" Tag="text" />
                     </ComboBox>
@@ -246,7 +255,8 @@
                 <StackPanel Grid.Row="2" Margin="0,0,0,8">
                     <TextBlock x:Name="ConditionExecutionModeLabelText" Text="触发动作执行方式" Style="{StaticResource FieldLabel}" />
                     <ComboBox x:Name="ExecutionModeCombo"
-                              Height="30"
+                              Height="32"
+                              AutomationProperties.LabeledBy="{Binding ElementName=ConditionExecutionModeLabelText}"
                               SelectionChanged="ExecutionModeCombo_SelectionChanged">
                         <ComboBoxItem Content="同时执行" Tag="Parallel" />
                         <ComboBoxItem Content="暂停主时间线，完成后继续" Tag="PauseMainTimeline" />
@@ -263,24 +273,26 @@
 
                 <!-- Then actions (placed early so users can find "add action") -->
                 <StackPanel x:Name="ThenActionsSection" Grid.Row="3" Margin="0,0,0,12">
-                    <DockPanel Margin="0,0,0,6">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                            <Button x:Name="RecordThenActionsButton"
-                                    Content="● 录制输入"
-                                    MinWidth="112"
-                                    Height="30"
-                                    ToolTip="记录键盘、鼠标和真实延迟；Ctrl+Shift+F12 停止"
-                                    Click="RecordThenActions_Click" />
-                            <Button x:Name="AddThenActionButton"
-                                    Content="添加动作"
-                                    Style="{StaticResource PrimaryButton}"
-                                    MinWidth="96"
-                                    Height="30"
-                                    Margin="8,0,0,0"
-                                    Click="AddThenAction_Click" />
-                        </StackPanel>
-                        <TextBlock x:Name="ThenActionsLabelText" Text="触发后执行" Style="{StaticResource FieldLabel}" />
-                    </DockPanel>
+                    <TextBlock x:Name="ThenActionsLabelText"
+                               Text="触发后执行"
+                               Style="{StaticResource PanelTitle}"
+                               Margin="0,4,0,6" />
+                    <WrapPanel Margin="0,0,0,2">
+                        <Button x:Name="AddThenActionButton"
+                                Content="添加动作"
+                                Style="{StaticResource PrimaryButton}"
+                                MinWidth="82"
+                                Height="30"
+                                Margin="0,0,6,6"
+                                Click="AddThenAction_Click" />
+                        <Button x:Name="RecordThenActionsButton"
+                                Content="● 录制输入"
+                                MinWidth="92"
+                                Height="30"
+                                Margin="0,0,0,6"
+                                ToolTip="记录键盘、鼠标和真实延迟；Ctrl+Shift+F12 停止"
+                                Click="RecordThenActions_Click" />
+                    </WrapPanel>
                     <TextBlock x:Name="ThenActionsHintText"
                                Text="条件成立后要跑的动作写在这里。点「添加动作」或从右侧拖入。"
                                Foreground="{DynamicResource SecondaryText}"

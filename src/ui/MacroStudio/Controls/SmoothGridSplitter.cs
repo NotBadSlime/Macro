@@ -10,6 +10,7 @@ public class SmoothGridSplitter : GridSplitter
 {
     private bool isDragging;
     private Border? gripBar;
+    internal event Action? WidthReset;
 
     public SmoothGridSplitter()
     {
@@ -96,12 +97,19 @@ public class SmoothGridSplitter : GridSplitter
             return;
 
         var defaultWidth = targetColumn.MinWidth > 0 ? targetColumn.MinWidth * 1.2 : 300;
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            targetColumn.Width = new GridLength(defaultWidth);
+            WidthReset?.Invoke();
+            return;
+        }
+
         var animation = new DoubleAnimation(targetColumn.ActualWidth, defaultWidth, TimeSpan.FromMilliseconds(250))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
         };
 
-        var helper = new GridColumnAnimationHelper(targetColumn);
+        var helper = new GridColumnAnimationHelper(targetColumn, () => WidthReset?.Invoke());
         helper.Animate(animation);
     }
 
@@ -127,12 +135,14 @@ public class SmoothGridSplitter : GridSplitter
     private sealed class GridColumnAnimationHelper
     {
         private readonly ColumnDefinition column;
+        private readonly Action completed;
         private DoubleAnimation? animation;
         private long startTick;
 
-        public GridColumnAnimationHelper(ColumnDefinition column)
+        public GridColumnAnimationHelper(ColumnDefinition column, Action completed)
         {
             this.column = column;
+            this.completed = completed;
         }
 
         public void Animate(DoubleAnimation anim)
@@ -164,6 +174,7 @@ public class SmoothGridSplitter : GridSplitter
             {
                 CompositionTarget.Rendering -= OnFrame;
                 animation = null;
+                completed();
             }
         }
     }

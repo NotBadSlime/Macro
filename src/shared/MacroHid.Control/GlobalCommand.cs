@@ -1,38 +1,43 @@
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using MacroHid.Core;
 
 namespace MacroHid.Control;
 
 public sealed record CommandRegistration(string StudioPath);
 public static class GlobalCommand
 {
-    public static string BinDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MacroHID", "bin");
+    public const string CommandName = "MacroCtlUI";
+    private const string ExecutableName = CommandName + ".exe";
+
+    public static string BinDirectory => Path.Combine(ApplicationStorage.LocalDirectory, "bin");
     private static string RegistrationPath => Path.Combine(BinDirectory, "registration.json");
     public static string FindCommandDirectory(string studioDirectory)
     {
         var sibling = Path.GetFullPath(Path.Combine(studioDirectory, "..", "MacroCtl"));
-        if (File.Exists(Path.Combine(sibling, "MacroCtl.exe"))) return sibling;
+        if (File.Exists(Path.Combine(sibling, ExecutableName))) return sibling;
         for (var directory = new DirectoryInfo(studioDirectory); directory is not null; directory = directory.Parent)
         {
             var candidate = Path.Combine(directory.FullName, "src", "tools", "MacroCtl", "bin", "Release", "net8.0-windows");
-            if (File.Exists(Path.Combine(candidate, "MacroCtl.exe"))) return candidate;
+            if (File.Exists(Path.Combine(candidate, ExecutableName))) return candidate;
         }
-        throw new FileNotFoundException("MacroCtl.exe is missing. Use a complete package.");
+        throw new FileNotFoundException($"{ExecutableName} is missing. Use a complete package.");
     }
     public static CommandRegistration? Read() => File.Exists(RegistrationPath)
         ? JsonSerializer.Deserialize<CommandRegistration>(File.ReadAllText(RegistrationPath), ControlProtocol.Json) : null;
     public static string Describe()
     {
         var registration = Read();
-        return $"Command: {Path.Combine(BinDirectory, "MacroCtl.exe")}\nLauncher exists: {File.Exists(Path.Combine(BinDirectory, "MacroCtl.exe"))}\nStudio: {registration?.StudioPath ?? "(not registered)"}\nTarget exists: {File.Exists(registration?.StudioPath)}\nUser PATH registered: {HasPath()}\nReopen terminals after changing registration.";
+        var executablePath = Path.Combine(BinDirectory, ExecutableName);
+        return $"Command: {executablePath}\nLauncher exists: {File.Exists(executablePath)}\nStudio: {registration?.StudioPath ?? "(not registered)"}\nTarget exists: {File.Exists(registration?.StudioPath)}\nUser PATH registered: {HasPath()}\nReopen terminals after changing registration.";
     }
     public static void Register(string studioPath, string commandDirectory)
     {
         studioPath = Path.GetFullPath(studioPath);
         if (!File.Exists(studioPath) || !string.Equals(Path.GetFileName(studioPath), "MacroStudio.exe", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Studio path must point to an existing MacroStudio.exe.");
-        if (!File.Exists(Path.Combine(commandDirectory, "MacroCtl.exe"))) throw new IOException("MacroCtl.exe is missing. Use a complete build/package.");
+        if (!File.Exists(Path.Combine(commandDirectory, ExecutableName))) throw new IOException($"{ExecutableName} is missing. Use a complete build/package.");
         Directory.CreateDirectory(BinDirectory);
         if (!string.Equals(Path.GetFullPath(commandDirectory).TrimEnd('\\'), Path.GetFullPath(BinDirectory).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
         {
@@ -57,7 +62,7 @@ public static class GlobalCommand
         var retained = path.Split(';').Where(entry => !SamePath(entry, BinDirectory));
         environment.SetValue("Path", string.Join(';', retained), environment.GetValueKindOrDefault("Path"));
         File.Delete(RegistrationPath);
-        // Keep launcher files so a running MacroCtl process is never deleted underneath itself.
+        // Keep launcher files so a running MacroCtlUI process is never deleted underneath itself.
         Broadcast(); return true;
     }
     public static bool HasPath()

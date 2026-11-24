@@ -624,6 +624,10 @@
   <data name="MoveUp" xml:space="preserve"><value>Up</value></data>
   <data name="MoveDown" xml:space="preserve"><value>Down</value></data>
   <data name="SearchMacros" xml:space="preserve"><value>Search macros</value></data>
+  <data name="ActionPaletteSearch" xml:space="preserve"><value>Search actions</value></data>
+  <data name="ActionPaletteSearchEmpty" xml:space="preserve"><value>No actions match your search.</value></data>
+  <data name="ClearActionPaletteSearch" xml:space="preserve"><value>Clear action search</value></data>
+  <data name="SequenceDelayTools" xml:space="preserve"><value>Batch delays</value></data>
   <data name="AdvancedJson" xml:space="preserve"><value>MCRX JSON</value></data>
   <data name="SortManual" xml:space="preserve"><value>Custom Order</value></data>
   <data name="SortName" xml:space="preserve"><value>Name A-Z</value></data>
@@ -1041,7 +1045,13 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="GlobalCommandUnregister" xml:space="preserve"><value>Unregister this version</value></data>
   <data name="GlobalCommandCheck" xml:space="preserve"><value>Check registration</value></data>
   <data name="GlobalCommandOtherVersion" xml:space="preserve"><value>Another version owns the registration. Nothing was changed.</value></data>
-  <data name="GlobalCommandHint" xml:space="preserve"><value>Register MacroCtl for your Windows user. Reopen terminals after registration. The registered Studio path is shown above. Moving a portable folder requires registration again.</value></data>
+  <data name="GlobalCommandHint" xml:space="preserve"><value>Register MacroCtlUI for your Windows user. Reopen terminals after registration. The registered Studio path is shown above. Moving a portable folder requires registration again.</value></data>
   <data name="CopyExternalCommand" xml:space="preserve"><value>Copy external start command</value></data>
   <data name="ExternalCommandCopied" xml:space="preserve"><value>External start command copied (3-second delay).</value></data>
+  <data name="StudioEditionName" xml:space="preserve"><value>UI Edition</value></data>
+  <data name="StudioCommandSearch" xml:space="preserve"><value>Search commands</value></data>
+  <data name="StudioNoMatchingCommands" xml:space="preserve"><value>No matching commands</value></data>
+  <data name="StudioTabConditions" xml:space="preserve"><value>Conditions</value></data>
+  <data name="StudioTabActions" xml:space="preserve"><value>Actions</value></data>
+  <data name="StudioTabPlayback" xml:space="preserve"><value>Playback</value></data>
 </root>

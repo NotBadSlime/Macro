@@ -121,10 +121,7 @@ public sealed class MacroLibraryStore
 
     public static string GetDefaultRoot()
     {
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MacroHID",
-            "MacroLibrary");
+        return Path.Combine(ApplicationStorage.RoamingDirectory, "MacroLibrary");
     }
 
     public MacroLibrarySnapshot Load()

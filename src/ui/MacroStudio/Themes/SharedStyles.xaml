@@ -381,7 +381,7 @@
     <!-- PrimaryButton -->
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
         <Setter Property="Foreground" Value="#FFFFFF" />
-        <Setter Property="Background" Value="{DynamicResource Accent}" />
+        <Setter Property="Background" Value="{DynamicResource StudioPrimaryFill}" />
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource PrimaryHover}" />
@@ -604,7 +604,7 @@
     </Style>
 
     <Style x:Key="ToolWindowHostStyle" TargetType="Border" BasedOn="{StaticResource PanelBorderStyle}">
-        <Setter Property="Margin" Value="0,0,0,10" />
+        <Setter Property="Margin" Value="0" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="ClipToBounds" Value="True" />
     </Style>
@@ -613,12 +613,12 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
-        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Padding" Value="13,9" />
     </Style>
 
     <Style x:Key="ToolWindowTitle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
@@ -678,52 +678,57 @@
     </Style>
 
     <Style x:Key="RightToolTabStyle" TargetType="ToggleButton">
-        <Setter Property="Width" Value="38" />
-        <Setter Property="Height" Value="34" />
-        <Setter Property="Margin" Value="0,0,7,0" />
+        <Setter Property="Height" Value="35" />
+        <Setter Property="Margin" Value="2" />
         <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
-        <Setter Property="Background" Value="{DynamicResource PanelRaised}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol" />
-        <Setter Property="FontSize" Value="15" />
-        <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
-        <Setter Property="RenderTransform">
-            <Setter.Value>
-                <ScaleTransform />
-            </Setter.Value>
-        </Setter>
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="Root"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="11">
-                        <Grid>
-                            <Border x:Name="Glow"
-                                    Background="{DynamicResource WorkspacePanelGlowBrush}"
-                                    CornerRadius="11"
-                                    Opacity="0" />
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Grid>
+                    <Border x:Name="Root" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8" Padding="4,0">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Glow" Property="Opacity" Value="0.42" />
-                            <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Hover}" />
+                            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Accent}" />
-                            <Setter TargetName="Glow" Property="Opacity" Value="0.72" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Selection}" />
                             <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <Style x:Key="StudioSearchButton" TargetType="Button" BasedOn="{StaticResource CommandBarButton}">
+        <Setter Property="Height" Value="35" />
+        <Setter Property="Padding" Value="11,0" />
+        <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <Style x:Key="StudioFooterButton" TargetType="Button" BasedOn="{StaticResource CommandBarButton}">
+        <Setter Property="Height" Value="25" />
+        <Setter Property="Margin" Value="7,0,0,0" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
+        <Setter Property="FontSize" Value="11" />
     </Style>
 
     <Style x:Key="AnimatedDockSplitterStyle" TargetType="GridSplitter">

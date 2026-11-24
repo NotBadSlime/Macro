@@ -257,13 +257,7 @@ public static class ActionAppearanceService
         }
     }
 
-    private static string GetSettingsPath()
-    {
-        var root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MacroHID");
-        return Path.Combine(root, SettingsFileName);
-    }
+    private static string GetSettingsPath() => Path.Combine(ApplicationStorage.RoamingDirectory, SettingsFileName);
 
     private sealed record SavedActionAppearance(string? Text = null, string? Icon = null, string? Background = null);
 }

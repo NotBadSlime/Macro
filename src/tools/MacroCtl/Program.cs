@@ -15,14 +15,14 @@ public static class MacroCtlProgram
         {
             if (args.Length == 0 || args[0] is "--help" or "-h" or "help")
             {
-                Console.WriteLine("""
-                    MacroCtl list [--json]
-                    MacroCtl run (--id ID | --library LIBRARY --name NAME) [--count N | --loop] [--delay 500ms|3s|1m] [--wait] [--launch] [--json]
-                    MacroCtl status [--run-id ID] [--json]
-                    MacroCtl stop --run-id ID [--json]
-                    MacroCtl register --studio PATH-TO-MacroStudio.exe
-                    MacroCtl unregister --studio PATH-TO-MacroStudio.exe
-                    MacroCtl doctor
+                Console.WriteLine($"""
+                    {GlobalCommand.CommandName} list [--json]
+                    {GlobalCommand.CommandName} run (--id ID | --library LIBRARY --name NAME) [--count N | --loop] [--delay 500ms|3s|1m] [--wait] [--launch] [--json]
+                    {GlobalCommand.CommandName} status [--run-id ID] [--json]
+                    {GlobalCommand.CommandName} stop --run-id ID [--json]
+                    {GlobalCommand.CommandName} register --studio PATH-TO-MacroStudio.exe
+                    {GlobalCommand.CommandName} unregister --studio PATH-TO-MacroStudio.exe
+                    {GlobalCommand.CommandName} doctor
                     run defaults to one iteration; --count N executes N iterations; --loop runs until stopped.
                     Delay applies once before the first iteration, starting when Studio accepts the request.
                     --loop --wait: Ctrl+C stops that loop and waits for it to stop (exit 130).
@@ -136,7 +136,7 @@ public static class MacroCtlProgram
     }
     private static async Task<int> StopLoopAsync(string runId, bool json, string? pipeName)
     {
-        string Retry(string detail) => $"Could not confirm loop {runId} stopped: {detail} Retry: MacroCtl stop --run-id \"{runId}\"";
+        string Retry(string detail) => $"Could not confirm loop {runId} stopped: {detail} Retry: {GlobalCommand.CommandName} stop --run-id \"{runId}\"";
         try
         {
             // The Ctrl+C token is already cancelled. Repeated Ctrl+C must not interrupt cleanup.

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -22,8 +23,10 @@ namespace MacroStudio;
 
 public partial class MainWindow : Window
 {
-    private readonly MacroLibraryStore libraryStore = new(MacroLibraryStore.GetDefaultRoot());
+    private readonly MacroLibraryStore libraryStore;
     private readonly MacroEditorState editorState;
+    private readonly bool isWorkspacePreview;
+    private IInputElement? commandPaletteReturnFocus;
     private readonly ActionTemplateInsertGate actionTemplateInsertGate = new();
     private readonly DispatcherTimer autoSaveTimer;
     private readonly DispatcherTimer coreSelectionTimer;
@@ -69,13 +72,26 @@ public partial class MainWindow : Window
         public string EffectiveProcessFilter => GroupProcessFilter;
     }
 
-    public MainWindow()
+    public MainWindow() : this(new MacroLibraryStore(MacroLibraryStore.GetDefaultRoot()), isWorkspacePreview: false)
     {
+    }
+
+    internal MainWindow(MacroLibraryStore libraryStore, bool isWorkspacePreview)
+    {
+        this.libraryStore = libraryStore;
+        this.isWorkspacePreview = isWorkspacePreview;
         editorState = new MacroEditorState(libraryStore);
 
         InitializeComponent();
+        CommandPalette.Dismissed += RestoreCommandPaletteFocus;
         // Keep the larger sequence viewport inside the usable desktop on small screens.
         Height = Math.Min(Height, Math.Max(MinHeight, SystemParameters.WorkArea.Height - 24));
+        Width = Math.Min(Width, Math.Max(MinWidth, SystemParameters.WorkArea.Width - 24));
+        SizeChanged += (_, e) =>
+        {
+            if (e.WidthChanged) FitDockToWindow(e.NewSize.Width);
+        };
+        Loaded += (_, _) => FitDockToWindow(ActualWidth);
         autoSaveTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(450)
@@ -95,17 +111,18 @@ public partial class MainWindow : Window
             PerformanceStatusText.ToolTip = $"准备后端：{preparation.Backend}\n回退 / 准备原因：{(reason.Length == 0 ? "无" : reason)}";
         };
         ContentRendered += MainWindow_ContentRendered;
-        LocalizationService.Initialize();
+        if (!isWorkspacePreview) LocalizationService.Initialize();
         ConfigureWorkspaceDockHost();
         RefreshThemeToggleButton();
 
         InitializeLanguageComboBox();
         InitializePanels();
         LibraryPanel.SetRuntimePrecisionControls(runtimePrecisionSettings);
-        WarmUpRuntimePrecision();
+        if (!isWorkspacePreview) WarmUpRuntimePrecision();
         InitializeWorkspacePanels();
         ApplyLocalization();
         InitializeMacroLibrary();
+        if (isWorkspacePreview) return;
         coreSelectionTimer.Start();
         PollAutomaticCoreSelection();
         RefreshKeyboardHook();
@@ -193,6 +210,7 @@ public partial class MainWindow : Window
     {
         DockHost.AttachRegions(
             LeftDockColumn,
+            CenterDockColumn,
             RightDockColumn,
             BottomDockRow,
             LeftDockSplitter,
@@ -209,16 +227,22 @@ public partial class MainWindow : Window
         DockHost.BottomResizeRequested += (_, _) => OpenBottomRegionForResize();
     }
 
+    private void FitDockToWindow(double windowWidth)
+    {
+        var railWidth = WorkspaceRoot.ColumnDefinitions[0].Width.Value;
+        DockHost.FitWithin(Math.Max(0, windowWidth - railWidth - DockHost.Margin.Left - DockHost.Margin.Right));
+    }
+
     private void InitializeWorkspacePanels()
     {
         RegisterWorkspacePanel("library", WorkspaceTitle("WorkspacePanelLibrary"), LibraryToolChrome, LibraryPanelHost, WorkspaceDockRegion.Left, 260, 0);
         RegisterWorkspacePanel("sequence", WorkspaceTitle("WorkspacePanelSequence"), SequenceToolChrome, SequencePanelHost, WorkspaceDockRegion.Center, 0, 0);
-        RegisterWorkspacePanel("conditions", WorkspaceTitle("WorkspacePanelConditions"), ConditionToolChrome, ConditionPanelHost, WorkspaceDockRegion.Right, 390, 0, defaultIsVisible: false);
+        RegisterWorkspacePanel("conditions", WorkspaceTitle("WorkspacePanelConditions"), ConditionToolChrome, ConditionPanelHost, WorkspaceDockRegion.Right, 390, 0);
         RegisterWorkspacePanel("actions", WorkspaceTitle("WorkspacePanelActions"), ActionPaletteToolChrome, ActionPaletteHost, WorkspaceDockRegion.Right, 390, 1);
         RegisterWorkspacePanel("playback", WorkspaceTitle("WorkspacePanelPlayback"), PlaybackToolChrome, PlaybackPanelHost, WorkspaceDockRegion.Right, 390, 2);
         RegisterWorkspacePanel("json", WorkspaceTitle("AdvancedJson"), JsonToolChrome, JsonPanelHost, WorkspaceDockRegion.Bottom, 230, 0, defaultIsVisible: false);
 
-        workspaceLayout = WorkspaceLayoutStore.Load();
+        if (!isWorkspacePreview) workspaceLayout = WorkspaceLayoutStore.Load();
         ApplyDockSizes();
         ApplyWorkspaceLayout();
         UpdateWorkspaceMenuChecks();
@@ -248,6 +272,7 @@ public partial class MainWindow : Window
 
     private void ApplyWorkspaceLayout()
     {
+        var initialRightPanel = workspaceLayout.ActiveRightPanelId ?? "actions";
         var layoutNeedsSave = workspaceLayout.Version < WorkspaceLayoutStore.CurrentVersion;
         foreach (var panel in workspacePanels.Values)
         {
@@ -271,6 +296,7 @@ public partial class MainWindow : Window
             }
         }
 
+        activeRightToolPanelId = initialRightPanel;
         ApplyDockRegionVisibility();
         if (layoutNeedsSave)
         {
@@ -546,6 +572,8 @@ public partial class MainWindow : Window
             ToggleWorkspacePanelVisibility(panel.Id, panel.IsVisible, saveLayout: false);
         }
 
+        activeRightToolPanelId = "actions";
+        ApplyDockRegionVisibility();
         SaveWorkspaceLayout();
         SetStatus(L("WorkspaceLayoutReset"));
     }
@@ -816,6 +844,7 @@ public partial class MainWindow : Window
 
     private void SaveWorkspaceLayout()
     {
+        if (isWorkspacePreview) return;
         var panels = new Dictionary<string, WorkspacePanelLayout>(StringComparer.OrdinalIgnoreCase);
         var dockSizes = DockHost.CaptureDockSizes();
         foreach (var panel in workspacePanels.Values)
@@ -839,7 +868,7 @@ public partial class MainWindow : Window
             panels[panel.Id] = panel.SavedLayout;
         }
 
-        workspaceLayout = new WorkspaceLayout(panels, WorkspaceLayoutStore.CurrentVersion, dockSizes);
+        workspaceLayout = new WorkspaceLayout(panels, WorkspaceLayoutStore.CurrentVersion, dockSizes, activeRightToolPanelId);
         WorkspaceLayoutStore.Save(workspaceLayout);
     }
 
@@ -992,7 +1021,7 @@ public partial class MainWindow : Window
 
         if (editorState.SelectedMacroId is not null)
         {
-            LoadMacroFromLibrary(editorState.SelectedMacroId);
+            LoadMacroFromLibrary(editorState.SelectedMacroId, revealInLibrary: true);
         }
         else
         {
@@ -1004,7 +1033,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void LoadMacroFromLibrary(string id)
+    private void LoadMacroFromLibrary(string id, bool revealInLibrary = false)
     {
         try
         {
@@ -1021,7 +1050,7 @@ public partial class MainWindow : Window
             CheckAndWarnConflicts(document);
             var item = libraryStore.Load().Items.FirstOrDefault(candidate => string.Equals(candidate.Id, id, StringComparison.OrdinalIgnoreCase));
             ApplyEditLock(item?.IsLocked == true);
-            SetLibraryPathForItem(item, document.Name);
+            SetLibraryPathForItem(item, document.Name, revealInLibrary);
             SetStatus(document.Name);
             SequencePanelControl.FocusMacroNameEditor();
         }
@@ -2548,7 +2577,7 @@ public partial class MainWindow : Window
         return dialog.SelectedMask;
     }
 
-    private void SetLibraryPathForItem(MacroLibraryItem? item, string fallbackName)
+    private void SetLibraryPathForItem(MacroLibraryItem? item, string fallbackName, bool revealInLibrary = false)
     {
         if (item is null)
         {
@@ -2559,7 +2588,9 @@ public partial class MainWindow : Window
         var groupName = libraryStore.Load().Groups
             .FirstOrDefault(group => string.Equals(group.Id, item.GroupId, StringComparison.OrdinalIgnoreCase))
             ?.Name ?? item.GroupId;
-        SequencePanelControl.SetLibraryPath(MacroLibraryPath.Format(groupName, item.Folder, item.Name));
+        var path = MacroLibraryPath.Format(groupName, item.Folder, item.Name);
+        SequencePanelControl.SetLibraryPath(path);
+        if (revealInLibrary) LibraryPanel.TryReveal(path, out _);
     }
 
     private void OnLibraryPathNavigate(string path)
@@ -3128,7 +3159,7 @@ public partial class MainWindow : Window
         {
             StatusLevel.Error => "Danger",
             StatusLevel.Warning => "AccentOrange",
-            _ => "Accent"
+            _ => "StudioSuccess"
         });
     }
 
@@ -3165,6 +3196,7 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+        if (isWorkspacePreview) return;
         var handle = new WindowInteropHelper(this).Handle;
         var source = HwndSource.FromHwnd(handle);
         if (source is null)
@@ -3332,6 +3364,16 @@ public partial class MainWindow : Window
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var modifiers = Keyboard.Modifiers;
 
+        if (modifiers == ModifierKeys.Control && key == Key.K && !pauseOwnedByCapture && macroRecorder is null)
+        {
+            if (CommandPalette.IsVisible) CommandPalette.Close();
+            else OpenCommandPalette();
+            e.Handled = true;
+            return;
+        }
+
+        if (CommandPalette.IsVisible) return;
+
         if ((modifiers & ModifierKeys.Control) != 0
             && key == Key.Z
             && (modifiers & (ModifierKeys.Shift | ModifierKeys.Alt)) == 0
@@ -3492,7 +3534,12 @@ public partial class MainWindow : Window
 
     private void ApplyLocalization()
     {
-        Title = L("AppTitle");
+        Title = $"{L("AppTitle")} · {L("StudioEditionName")}";
+        EditionLabelText.Text = L("StudioEditionName");
+        CommandSearchLabel.Text = L("StudioCommandSearch");
+        CommandSearchButton.ToolTip = $"{L("StudioCommandSearch")} (Ctrl+K)";
+        AutomationProperties.SetName(CommandSearchButton, L("StudioCommandSearch"));
+        AutomationProperties.SetName(LanguageComboBox, L("Language"));
         MinimizeWindowButton.ToolTip = L("Minimize");
         CloseWindowButton.ToolTip = L("CloseWindow");
         ThemeToggleButton.ToolTip = L("ToggleTheme");
@@ -3516,6 +3563,9 @@ public partial class MainWindow : Window
         SetWorkspacePanelTitle("json", WorkspaceTitle("AdvancedJson"));
         SetWorkspacePanelTitle("actions", WorkspaceTitle("WorkspacePanelActions"));
         SetWorkspacePanelTitle("playback", WorkspaceTitle("WorkspacePanelPlayback"));
+        ConditionRightToolLabel.Text = L("StudioTabConditions");
+        ActionRightToolLabel.Text = L("StudioTabActions");
+        PlaybackRightToolLabel.Text = L("StudioTabPlayback");
         ApplyWorkspaceMenuItemText();
 
         updatingLanguageComboBox = true;
@@ -3824,6 +3874,12 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
+        if (isWorkspacePreview)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
         if (exitConfirmed)
         {
             if (!shutdownFinished)
@@ -3980,7 +4036,7 @@ public partial class MainWindow : Window
     {
         if (trayIcon is not null)
         {
-            var title = L("AppTitle");
+            var title = Title;
             trayIcon.Text = title.Length <= 63 ? title : title[..63];
         }
 

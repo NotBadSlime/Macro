@@ -225,12 +225,15 @@
         </DataTemplate>
 
         <DataTemplate x:Key="ExplorerListTemplate">
-            <Grid Width="260" MinHeight="44" Margin="6,2">
+            <Grid MinHeight="44" Margin="6,2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="34" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Icon}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="22" Foreground="{Binding Accent}" VerticalAlignment="Center" />
+                <Border Width="31" Height="31" CornerRadius="8" Background="{DynamicResource PanelRaised}">
+                    <TextBlock Text="{Binding Icon}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="17"
+                               Foreground="{Binding Accent}" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                </Border>
                 <Grid Grid.Column="1" Margin="5,0,0,0">
                     <StackPanel x:Name="ListTitlePanel" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" Style="{StaticResource ExplorerTitleTextStyle}" />
@@ -308,13 +311,14 @@
                     </Grid.ColumnDefinitions>
                     <Button x:Name="BackToManagerButton"
                             Grid.Column="0"
-                            MinWidth="90"
-                            Content="返回管理"
+                            Style="{StaticResource SequenceToolbarIconButton}"
+                            Content="&#xE8B7;"
+                            ToolTip="返回管理"
                             Click="BackToManager_Click" />
                     <Button x:Name="UpFolderButton"
                             Grid.Column="2"
-                            MinWidth="76"
-                            Content="返回上级"
+                            Style="{StaticResource SequenceToolbarIconButton}"
+                            Content="&#xE74A;"
                             ToolTip="返回上级"
                             Click="UpFolder_Click" />
                     <TextBox x:Name="DatabasePathBox"
@@ -363,14 +367,15 @@
                                   Grid.Column="2"
                                   Height="30"
                                   SelectionChanged="LibraryViewBox_SelectionChanged">
-                            <ComboBoxItem Tag="details" Content="详细信息" IsSelected="True" />
-                            <ComboBoxItem Tag="list" Content="列表" />
+                            <ComboBoxItem Tag="details" Content="详细信息" />
+                            <ComboBoxItem Tag="list" Content="列表" IsSelected="True" />
                             <ComboBoxItem Tag="smallIcons" Content="小图标" />
                             <ComboBoxItem Tag="largeIcons" Content="大图标" />
                         </ComboBox>
                     </Grid>
                     <WrapPanel Margin="0,0,0,8">
-                        <Button x:Name="NewMacroMenuButton" MinWidth="88" Content="新建" Click="NewMacroMenuButton_Click">
+                        <Button x:Name="NewMacroMenuButton" Style="{StaticResource PrimaryButton}"
+                                MinWidth="66" Content="新建" Click="NewMacroMenuButton_Click">
                             <Button.ContextMenu>
                                 <ContextMenu x:Name="NewMacroContextMenu">
                                     <MenuItem x:Name="ToolbarNewMacroMenuItem" Header="宏文件" InputGestureText="Ctrl+N" Click="NewMacro_Click" />
@@ -637,14 +642,15 @@
                                    Text="导入 / 导出"
                                    Style="{StaticResource FieldLabel}"
                                    Margin="0,0,0,8" />
-                        <WrapPanel Margin="0,0,0,8">
-                            <Button x:Name="ImportMacroButton" MinWidth="120" Content="导入宏" Click="ImportMacro_Click" />
+                        <UniformGrid Rows="1" Margin="0,0,0,8">
+                            <Button x:Name="ImportMacroButton" MinWidth="0" Padding="6,0" Content="导入宏" Click="ImportMacro_Click" />
                             <Button x:Name="ExportMacroButton"
-                                    MinWidth="120"
-                                    Margin="8,0,0,0"
+                                    MinWidth="0"
+                                    Padding="6,0"
+                                    Margin="6,0,0,0"
                                     Content="导出"
                                     Click="ExportMacro_Click" />
-                        </WrapPanel>
+                        </UniformGrid>
                         <TextBlock x:Name="ConversionText"
                                    Text="转换器已内置"
                                    TextWrapping="Wrap"

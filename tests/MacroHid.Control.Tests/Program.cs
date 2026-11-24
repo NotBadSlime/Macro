@@ -93,6 +93,31 @@ await using (var server = new ControlPipeServer(pipeName))
 }
 Console.WriteLine("PASS real Windows pipe roundtrips, malformed lengths, reconnects and single endpoint ownership");
 
+var uiRoamingDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID-UI");
+var uiLocalDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MacroHID-UI");
+Check(MacroLibraryStore.GetDefaultRoot() == Path.Combine(uiRoamingDirectory, "MacroLibrary"), "UI macro library uses the wrong profile.");
+Check(AppLog.DirectoryPath == Path.Combine(uiRoamingDirectory, "log"), "UI logs use the wrong profile.");
+Check(GlobalCommand.BinDirectory == Path.Combine(uiLocalDirectory, "bin"), "The registration uses the wrong profile.");
+Check(GlobalCommand.CommandName == "MacroCtlUI" && typeof(MacroCtlProgram).Assembly.GetName().Name == "MacroCtlUI",
+    "The CLI must have a distinct executable name.");
+const string uiPipePrefix = "MacroHID.UI.Control.v1.";
+Check(ControlPipe.Name.StartsWith(uiPipePrefix, StringComparison.Ordinal), "UI Studio pipe uses the wrong namespace.");
+var pipeTestSuffix = ".Test." + Guid.NewGuid().ToString("N");
+var uiPipe = ControlPipe.Name + pipeTestSuffix;
+var standardPipe = "MacroHID.Control.v1." + ControlPipe.Name[uiPipePrefix.Length..] + pipeTestSuffix;
+await using (var uiServer = new ControlPipeServer(uiPipe))
+await using (var standardServer = new ControlPipeServer(standardPipe))
+{
+    uiServer.Start(_ => Task.FromResult(new ControlResponse(true, "ui")));
+    standardServer.Start(_ => Task.FromResult(new ControlResponse(true, "standard")));
+    var responses = await Task.WhenAll(
+        ControlPipe.SendAsync(new ControlRequest("status"), pipeName: uiPipe),
+        ControlPipe.SendAsync(new ControlRequest("status"), pipeName: standardPipe));
+    Check(responses[0].Code == "ui" && responses[1].Code == "standard", "Both editions must route independently.");
+}
+Console.WriteLine("PASS UI Edition profile, CLI name and separate Windows pipe ownership");
+
+
 // Exercise the actual Studio command router against an isolated library without
 // constructing the real window, installing hooks or touching the user's data.
 var root = Path.Combine(Path.GetTempPath(), "MacroHID-ControlTests-" + Guid.NewGuid().ToString("N"));

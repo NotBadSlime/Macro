@@ -12,7 +12,11 @@ public sealed class WorkspaceDockHost : Grid
     public const double MaxBottomHeightRatio = 0.55;
 
     private ColumnDefinition? leftColumn;
+    private ColumnDefinition? centerColumn;
     private ColumnDefinition? rightColumn;
+    private double leftMinimum;
+    private double rightMinimum;
+    private double viewportWidth = double.PositiveInfinity;
     private RowDefinition? bottomRow;
     private FrameworkElement? leftSplitter;
     private FrameworkElement? rightSplitter;
@@ -28,6 +32,7 @@ public sealed class WorkspaceDockHost : Grid
 
     public void AttachRegions(
         ColumnDefinition leftColumn,
+        ColumnDefinition centerColumn,
         ColumnDefinition rightColumn,
         RowDefinition bottomRow,
         FrameworkElement leftSplitter,
@@ -38,7 +43,10 @@ public sealed class WorkspaceDockHost : Grid
         FrameworkElement bottomContent)
     {
         this.leftColumn = leftColumn;
+        this.centerColumn = centerColumn;
         this.rightColumn = rightColumn;
+        leftMinimum = leftColumn.MinWidth;
+        rightMinimum = rightColumn.MinWidth;
         this.bottomRow = bottomRow;
         this.leftSplitter = leftSplitter;
         this.rightSplitter = rightSplitter;
@@ -47,11 +55,21 @@ public sealed class WorkspaceDockHost : Grid
         this.rightContent = rightContent;
         this.bottomContent = bottomContent;
 
-        SizeChanged += (_, _) => ClampCurrentBottomHeight();
+        SizeChanged += (_, e) =>
+        {
+            if (e.HeightChanged) ClampCurrentBottomHeight();
+        };
         AttachSplitter(leftSplitter);
         AttachSplitter(rightSplitter);
         AttachSplitter(bottomSplitter);
         bottomSplitter.PreviewMouseLeftButtonDown += OnBottomSplitterPreviewMouseLeftButtonDown;
+    }
+
+    public void FitWithin(double width)
+    {
+        viewportWidth = width;
+        MaxWidth = width;
+        FitSideColumns();
     }
 
     public void ApplyDockSizes(WorkspaceDockSizes sizes)
@@ -60,10 +78,7 @@ public sealed class WorkspaceDockHost : Grid
         lastDockSizes = sizes;
         try
         {
-            if (leftColumn is not null)
-                leftColumn.Width = new GridLength(Math.Max(leftColumn.MinWidth, sizes.LeftWidth), GridUnitType.Pixel);
-            if (rightColumn is not null)
-                rightColumn.Width = new GridLength(Math.Max(rightColumn.MinWidth, sizes.RightWidth), GridUnitType.Pixel);
+            FitSideColumns();
             if (bottomRow is not null)
                 bottomRow.Height = new GridLength(ClampBottomHeight(sizes.BottomHeight), GridUnitType.Pixel);
         }
@@ -75,17 +90,11 @@ public sealed class WorkspaceDockHost : Grid
 
     public WorkspaceDockSizes CaptureDockSizes()
     {
-        var left = leftContent?.Visibility == Visibility.Visible && leftColumn?.ActualWidth > 0
-            ? leftColumn.ActualWidth
-            : lastDockSizes.LeftWidth;
-        var right = rightContent?.Visibility == Visibility.Visible && rightColumn?.ActualWidth > 0
-            ? rightColumn.ActualWidth
-            : lastDockSizes.RightWidth;
         var bottom = bottomContent?.Visibility == Visibility.Visible && bottomRow?.ActualHeight > 0
             ? bottomRow.ActualHeight
             : lastDockSizes.BottomHeight;
 
-        lastDockSizes = new WorkspaceDockSizes(left, right, bottom);
+        lastDockSizes = lastDockSizes with { BottomHeight = bottom };
         return lastDockSizes;
     }
 
@@ -94,10 +103,12 @@ public sealed class WorkspaceDockHost : Grid
         switch (region)
         {
             case WorkspaceDockRegion.Left:
-                SetColumnVisible(leftColumn, leftSplitter, leftContent, visible);
+                SetColumnVisible(leftSplitter, leftContent, visible);
+                FitSideColumns();
                 break;
             case WorkspaceDockRegion.Right:
-                SetColumnVisible(rightColumn, rightSplitter, rightContent, visible);
+                SetColumnVisible(rightSplitter, rightContent, visible);
+                FitSideColumns();
                 break;
             case WorkspaceDockRegion.Bottom:
                 SetBottomVisible(visible);
@@ -112,31 +123,38 @@ public sealed class WorkspaceDockHost : Grid
         return Math.Clamp(requestedHeight, MinBottomHeight, max);
     }
 
-    private void SetColumnVisible(
-        ColumnDefinition? column,
+    private static void SetColumnVisible(
         FrameworkElement? splitter,
         FrameworkElement? content,
         bool visible)
     {
-        if (column is not null)
-        {
-            var requestedWidth = ReferenceEquals(column, leftColumn) ? lastDockSizes.LeftWidth : lastDockSizes.RightWidth;
-            if (!visible && column.ActualWidth > 0)
-            {
-                lastDockSizes = ReferenceEquals(column, leftColumn)
-                    ? lastDockSizes with { LeftWidth = column.ActualWidth }
-                    : lastDockSizes with { RightWidth = column.ActualWidth };
-            }
-
-            var width = visible ? Math.Max(column.MinWidth, requestedWidth) : 0;
-            column.Width = new GridLength(width, GridUnitType.Pixel);
-        }
-
         if (splitter is not null)
             splitter.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         if (content is not null)
             content.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    private void FitSideColumns()
+    {
+        if (leftColumn is null || centerColumn is null || rightColumn is null) return;
+
+        var leftVisible = leftContent?.Visibility == Visibility.Visible;
+        var rightVisible = rightContent?.Visibility == Visibility.Visible;
+        var room = viewportWidth - centerColumn.MinWidth - SplitterWidth(leftSplitter) - SplitterWidth(rightSplitter);
+        var minimumLeft = leftVisible ? leftMinimum : 0;
+        var minimumRight = rightVisible ? rightMinimum : 0;
+        var desiredLeft = leftVisible ? Math.Max(minimumLeft, lastDockSizes.LeftWidth) : 0;
+        var desiredRight = rightVisible ? Math.Max(minimumRight, lastDockSizes.RightWidth) : 0;
+        var flexible = desiredLeft + desiredRight - minimumLeft - minimumRight;
+        var scale = flexible > 0 ? Math.Clamp((room - minimumLeft - minimumRight) / flexible, 0, 1) : 0;
+        leftColumn.MinWidth = minimumLeft;
+        rightColumn.MinWidth = minimumRight;
+        leftColumn.Width = new GridLength(minimumLeft + (desiredLeft - minimumLeft) * scale);
+        rightColumn.Width = new GridLength(minimumRight + (desiredRight - minimumRight) * scale);
+    }
+
+    private static double SplitterWidth(FrameworkElement? splitter) =>
+        splitter?.Visibility != Visibility.Visible ? 0 : splitter.Width;
 
     private void SetBottomVisible(bool visible)
     {
@@ -183,6 +201,11 @@ public sealed class WorkspaceDockHost : Grid
 
     private void AttachSplitter(FrameworkElement splitter)
     {
+        if (splitter is SmoothGridSplitter smoothGridSplitter)
+        {
+            smoothGridSplitter.WidthReset += () => RememberSideWidth(smoothGridSplitter);
+        }
+
         if (splitter is GridSplitter gridSplitter)
         {
             gridSplitter.DragCompleted += OnDockSplitterDragCompleted;
@@ -198,7 +221,22 @@ public sealed class WorkspaceDockHost : Grid
         if (suppressSizeChanged)
             return;
 
+        if (ReferenceEquals(sender, leftSplitter) || ReferenceEquals(sender, rightSplitter))
+        {
+            RememberSideWidth(sender);
+            return;
+        }
+
         ClampCurrentBottomHeight();
+        DockSizeChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void RememberSideWidth(object? splitter)
+    {
+        lastDockSizes = ReferenceEquals(splitter, leftSplitter)
+            ? lastDockSizes with { LeftWidth = leftColumn!.Width.Value }
+            : lastDockSizes with { RightWidth = rightColumn!.Width.Value };
+        FitSideColumns();
         DockSizeChanged?.Invoke(this, EventArgs.Empty);
     }
 }

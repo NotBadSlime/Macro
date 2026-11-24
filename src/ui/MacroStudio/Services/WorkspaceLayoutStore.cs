@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using MacroHid.Core;
 
 namespace MacroStudio.Services;
 
@@ -51,7 +52,8 @@ public sealed record WorkspaceDockSizes(
 public sealed record WorkspaceLayout(
     Dictionary<string, WorkspacePanelLayout> Panels,
     int Version = WorkspaceLayoutStore.CurrentVersion,
-    WorkspaceDockSizes? DockSizes = null);
+    WorkspaceDockSizes? DockSizes = null,
+    string? ActiveRightPanelId = null);
 
 public sealed record LegacyWorkspacePanelLayout(
     bool IsVisible = true,
@@ -138,7 +140,9 @@ public static class WorkspaceLayoutStore
                 ?? new WorkspaceDockSizes();
         }
 
-        return new WorkspaceLayout(panels, version, dockSizes);
+        var activeRightPanelId = document.RootElement.TryGetProperty(nameof(WorkspaceLayout.ActiveRightPanelId), out var activePanel)
+            && activePanel.ValueKind == JsonValueKind.String ? activePanel.GetString() : null;
+        return new WorkspaceLayout(panels, version, dockSizes, activeRightPanelId);
     }
 
     private static WorkspacePanelLayout DeserializePanelLayout(JsonElement panel)
@@ -155,11 +159,5 @@ public static class WorkspaceLayoutStore
         return WorkspacePanelLayout.FromLegacy(legacy);
     }
 
-    private static string GetLayoutPath()
-    {
-        var root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MacroHID");
-        return Path.Combine(root, LayoutFileName);
-    }
+    private static string GetLayoutPath() => Path.Combine(ApplicationStorage.RoamingDirectory, LayoutFileName);
 }
