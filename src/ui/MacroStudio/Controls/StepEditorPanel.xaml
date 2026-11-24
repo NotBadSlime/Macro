@@ -1,9 +1,9 @@
 <UserControl x:Class="MacroStudio.Controls.StepEditorPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Border Style="{StaticResource PanelBorderStyle}" Padding="14">
+    <Border x:Name="StepEditorFrame" Style="{StaticResource PanelBorderStyle}" Padding="14">
         <StackPanel>
-            <DockPanel Margin="0,0,0,12">
+            <DockPanel x:Name="StepEditorTitleBar" Margin="0,0,0,12">
                 <TextBlock x:Name="StepEditorTitleText" Text="属性" Style="{StaticResource PanelTitle}" />
                 <Button x:Name="ApplyStepEditButton"
                         DockPanel.Dock="Right"

@@ -28,7 +28,7 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
 
-    <Grid x:Name="AppShellRoot" Background="{DynamicResource StudioBackdrop}">
+    <Grid x:Name="AppShellRoot" Background="{DynamicResource PageBackground}">
         <DockPanel x:Name="StudioWorkspace">
             <Border x:Name="CommandBar"
                     DockPanel.Dock="Top"
@@ -37,16 +37,12 @@
                     BorderThickness="0,0,0,1"
                     MouseLeftButtonDown="TopChromeBar_MouseLeftButtonDown">
                 <DockPanel>
-                    <Border Height="2" DockPanel.Dock="Top" IsHitTestVisible="False"
-                            Background="{DynamicResource StudioHorizon}" />
-                    <DockPanel Margin="15,9,10,9">
+                    <DockPanel Margin="16,7,8,7">
                         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Width="38" Height="38" CornerRadius="10" Margin="0,0,10,0"
+                            <Border Width="31" Height="31" CornerRadius="6" Margin="0,0,10,0"
                                     Background="{DynamicResource StudioBrandSurface}"
                                     BorderBrush="{DynamicResource StudioChromeEdge}" BorderThickness="1">
                                 <Grid>
-                                    <Rectangle Height="1" Margin="7,0" VerticalAlignment="Top"
-                                               Fill="{DynamicResource StudioHorizon}" />
                                     <Viewbox Width="24" Height="24">
                                         <Path Data="M2,15 L7,15 10,6 14,21 17,11 22,11"
                                               Stroke="{DynamicResource StudioBrandMark}" StrokeThickness="2"
@@ -60,14 +56,16 @@
                                 <TextBlock x:Name="EditionLabelText" Text="UI 优化版" Foreground="{DynamicResource StudioSignal}"
                                            FontSize="11" FontWeight="SemiBold" />
                             </StackPanel>
-                            <Border VerticalAlignment="Center" Padding="2"
-                                    Background="{DynamicResource StudioToolbarSurface}"
-                                    BorderBrush="{DynamicResource StudioChromeEdge}" BorderThickness="1" CornerRadius="10">
+                            <Border VerticalAlignment="Center" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1,0,0,0" Padding="8,0,0,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Button x:Name="OpenButton" Style="{StaticResource CommandBarButton}"
                                             Content="打开宏文件" Tag="&#xE838;" Click="OpenMacro_Click" />
                                     <Button x:Name="SaveButton" Style="{StaticResource CommandBarButton}"
                                             Content="另存当前宏" Tag="&#xE792;" Click="SaveMacro_Click" />
+                                    <Button x:Name="ConditionWorkspaceButton" Style="{StaticResource CommandBarButton}"
+                                            Content="条件序列" Click="OpenWorkspaceTool_Click" />
+                                    <Button x:Name="JsonWorkspaceButton" Style="{StaticResource CommandBarButton}"
+                                            Content="JSON" Click="OpenWorkspaceTool_Click" />
                                     <Button x:Name="WindowMenuButton"
                                             Style="{StaticResource CommandBarButton}"
                                             Content="窗口" Tag="&#xE737;"
@@ -77,6 +75,7 @@
                                                 <MenuItem x:Name="ShowPanelsMenuItem" Header="显示">
                                                     <MenuItem x:Name="ShowLibraryMenuItem" Header="宏数据库" Tag="library" IsCheckable="True" Click="WindowPanelVisibility_Click" />
                                                     <MenuItem x:Name="ShowSequenceMenuItem" Header="序列" Tag="sequence" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                                    <MenuItem x:Name="ShowPropertiesMenuItem" Header="步骤属性" Tag="properties" IsCheckable="True" Click="WindowPanelVisibility_Click" />
                                                     <MenuItem x:Name="ShowConditionMenuItem" Header="条件序列" Tag="conditions" IsCheckable="True" Click="WindowPanelVisibility_Click" />
                                                     <MenuItem x:Name="ShowJsonMenuItem" Header="MCRX JSON" Tag="json" IsCheckable="True" Click="WindowPanelVisibility_Click" />
                                                     <MenuItem x:Name="ShowActionMenuItem" Header="动作面板" Tag="actions" IsCheckable="True" Click="WindowPanelVisibility_Click" />
@@ -85,6 +84,7 @@
                                                 <MenuItem x:Name="FloatPanelsMenuItem" Header="浮动">
                                                     <MenuItem Header="宏数据库" Tag="library" Click="FloatPanel_Click" />
                                                     <MenuItem Header="序列" Tag="sequence" Click="FloatPanel_Click" />
+                                                    <MenuItem Header="步骤属性" Tag="properties" Click="FloatPanel_Click" />
                                                     <MenuItem Header="条件序列" Tag="conditions" Click="FloatPanel_Click" />
                                                     <MenuItem x:Name="FloatJsonMenuItem" Header="MCRX JSON" Tag="json" Click="FloatPanel_Click" />
                                                     <MenuItem Header="动作面板" Tag="actions" Click="FloatPanel_Click" />
@@ -93,6 +93,7 @@
                                                 <MenuItem x:Name="DockPanelsMenuItem" Header="停靠">
                                                     <MenuItem Header="宏数据库" Tag="library" Click="DockPanel_Click" />
                                                     <MenuItem Header="序列" Tag="sequence" Click="DockPanel_Click" />
+                                                    <MenuItem Header="步骤属性" Tag="properties" Click="DockPanel_Click" />
                                                     <MenuItem Header="条件序列" Tag="conditions" Click="DockPanel_Click" />
                                                     <MenuItem x:Name="DockJsonMenuItem" Header="MCRX JSON" Tag="json" Click="DockPanel_Click" />
                                                     <MenuItem Header="动作面板" Tag="actions" Click="DockPanel_Click" />
@@ -100,6 +101,9 @@
                                                 </MenuItem>
                                                 <Separator />
                                                 <MenuItem x:Name="ResetWorkspaceLayoutMenuItem" Header="重置布局" Click="ResetWorkspaceLayout_Click" />
+                                                <MenuItem x:Name="BasicControlMenuItem" Header="基础控制" Click="BasicControlMenu_Click" />
+                                                <MenuItem x:Name="PrecisionControlMenuItem" Header="精度控制" Click="PrecisionControlMenu_Click" />
+                                                <MenuItem x:Name="AdvancedSettingsMenuItem" Header="高级设置" Click="AdvancedSettingsMenu_Click" />
                                                 <MenuItem x:Name="GlobalCommandMenuItem" Header="全局命令" Click="GlobalCommandSettings_Click" />
                                             </ContextMenu>
                                         </Button.ContextMenu>
@@ -129,9 +133,9 @@
                         <Button x:Name="CommandSearchButton" Style="{StaticResource StudioSearchButton}"
                                 MaxWidth="340" Margin="12,0" Click="CommandSearchButton_Click">
                             <DockPanel VerticalAlignment="Center">
-                                <TextBlock DockPanel.Dock="Left" Text="&#xE721;" Margin="0,0,9,0"
+                                <TextBlock x:Name="CommandSearchGlyph" DockPanel.Dock="Left" Text="&#xE721;" Margin="0,0,9,0"
                                            FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" />
-                                <Border DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,1" CornerRadius="4"
+                                <Border x:Name="CommandSearchBadge" DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,1" CornerRadius="4"
                                         BorderBrush="{DynamicResource StudioChromeEdge}" BorderThickness="1"
                                         Background="{DynamicResource StudioToolbarSurface}">
                                     <TextBlock Text="Ctrl+K" FontFamily="Consolas" FontSize="10"
@@ -168,76 +172,24 @@
             </Border>
 
             <Grid x:Name="WorkspaceRoot" ClipToBounds="True">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="57" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <Rectangle Grid.ColumnSpan="2" Fill="{DynamicResource StudioBackdropGrid}" IsHitTestVisible="False" />
-
-                <Border x:Name="ToolWindowRail"
-                        Grid.Column="0"
-                        Background="{DynamicResource StudioRailSurface}"
-                        BorderBrush="{DynamicResource StudioChromeEdge}"
-                        BorderThickness="0,0,1,0">
-                    <StackPanel x:Name="WorkspaceRailButtons" Margin="7,14,7,8" VerticalAlignment="Top">
-                            <ToggleButton x:Name="LibraryToolButton"
-                                          Style="{StaticResource ToolWindowRailButton}"
-                                          Content="&#xE8B7;"
-                                          Tag="library"
-                                          ToolTip="宏数据库"
-                                          Click="WorkspaceToolButton_Click" />
-                            <ToggleButton x:Name="SequenceToolButton"
-                                          Style="{StaticResource ToolWindowRailButton}"
-                                          Content="&#xE8FD;"
-                                          Tag="sequence"
-                                          ToolTip="序列"
-                                          Click="WorkspaceToolButton_Click" />
-                            <ToggleButton x:Name="ConditionToolButton"
-                                          Style="{StaticResource ToolWindowRailButton}"
-                                          Content="&#xE9D9;"
-                                          Tag="conditions"
-                                          ToolTip="条件序列"
-                                          Click="WorkspaceToolButton_Click" />
-                            <ToggleButton x:Name="ActionToolButton"
-                                          Style="{StaticResource ToolWindowRailButton}"
-                                          Content="&#xE8A7;"
-                                          Tag="actions"
-                                          ToolTip="动作面板"
-                                          Click="WorkspaceToolButton_Click" />
-                            <ToggleButton x:Name="JsonToolButton"
-                                          Style="{StaticResource ToolWindowRailButton}"
-                                          Content="&#xE943;"
-                                          Tag="json"
-                                          ToolTip="MCRX JSON"
-                                          Click="WorkspaceToolButton_Click" />
-                            <ToggleButton x:Name="PlaybackToolButton"
-                                          Style="{StaticResource ToolWindowRailButton}"
-                                          Content="&#xE768;"
-                                          Tag="playback"
-                                          ToolTip="播放控制"
-                                          Click="WorkspaceToolButton_Click" />
-                    </StackPanel>
-                </Border>
-
-                <controls:WorkspaceDockHost x:Name="DockHost" Margin="14,10,14,14" ClipToBounds="True" Grid.Column="1">
+                <controls:WorkspaceDockHost x:Name="DockHost" ClipToBounds="True">
                     <Grid.RowDefinitions>
                         <RowDefinition x:Name="MainDockRow" Height="*" MinHeight="320" />
                         <RowDefinition x:Name="BottomDockSplitterRow" Height="12" />
                         <RowDefinition x:Name="BottomDockRow" Height="230" MinHeight="160" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition x:Name="LeftDockColumn" Width="260" MinWidth="186" />
+                        <ColumnDefinition x:Name="LeftDockColumn" Width="218" MinWidth="174" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition x:Name="CenterDockColumn" Width="*" MinWidth="420" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition x:Name="RightDockColumn" Width="390" MinWidth="282" />
+                        <ColumnDefinition x:Name="RightDockColumn" Width="550" MinWidth="270" />
                     </Grid.ColumnDefinitions>
 
                     <Grid x:Name="LeftDockContent" Grid.Row="0" Grid.Column="0" VerticalAlignment="Stretch">
-                        <Border x:Name="LibraryToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                        <Border x:Name="LibraryToolChrome" Background="{DynamicResource ShellSidebarBackground}" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,1,0">
                             <DockPanel>
-                                <Border x:Name="LibraryPART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                <Border x:Name="LibraryPART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}" Visibility="Collapsed">
                                     <DockPanel>
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                             <Button Tag="library" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
@@ -256,14 +208,14 @@
 
                     <controls:SmoothGridSplitter x:Name="LeftDockSplitter"
                                                  Grid.Row="0"
-                                                 Grid.Column="1"
+                                                 Grid.Column="1" Width="7"
                                                  ResizeBehavior="PreviousAndNext"
                                                  Style="{StaticResource AnimatedDockSplitterStyle}" />
 
                     <Grid x:Name="CenterDockContent" Grid.Row="0" Grid.Column="2" VerticalAlignment="Stretch">
-                        <Border x:Name="SequenceToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                        <Border x:Name="SequenceToolChrome" Background="{DynamicResource WorkbenchBackground}">
                             <DockPanel>
-                                <Border x:Name="SequencePART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                <Border x:Name="SequencePART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}" Visibility="Collapsed">
                                     <DockPanel>
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                             <Button Tag="sequence" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
@@ -285,7 +237,7 @@
 
                     <controls:SmoothGridSplitter x:Name="RightDockSplitter"
                                                  Grid.Row="0"
-                                                 Grid.Column="3"
+                                                 Grid.Column="3" Width="7"
                                                  ResizeBehavior="PreviousAndNext"
                                                  Style="{StaticResource AnimatedDockSplitterStyle}" />
 
@@ -293,42 +245,57 @@
                             Grid.Row="0"
                             Grid.Column="4"
                             Background="{DynamicResource InspectorBackground}"
-                            CornerRadius="16"
+                            BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1,0,0,0"
                             ClipToBounds="True">
                         <DockPanel>
-                            <Border DockPanel.Dock="Top" CornerRadius="12" Padding="3"
-                                    Background="{DynamicResource PanelBackground}"
-                                    BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1" Margin="0,0,0,8">
+                            <Border x:Name="InspectorTabsFrame" DockPanel.Dock="Top" Margin="10,8,10,0"
+                                    Background="{DynamicResource InspectorBackground}"
+                                    BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,0,1">
                                 <UniformGrid x:Name="RightToolTabs" Rows="1">
-                                    <ToggleButton x:Name="ConditionRightToolButton" Tag="conditions" ToolTip="条件序列"
-                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE9D9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                       VerticalAlignment="Center" Margin="0,0,6,0" />
-                                            <TextBlock x:Name="ConditionRightToolLabel" Text="条件序列" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </ToggleButton>
-                                    <ToggleButton x:Name="ActionRightToolButton" Tag="actions" ToolTip="动作面板"
-                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                       VerticalAlignment="Center" Margin="0,0,6,0" />
-                                            <TextBlock x:Name="ActionRightToolLabel" Text="动作面板" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </ToggleButton>
+                                    <ToggleButton x:Name="PropertiesRightToolButton" Tag="properties" ToolTip="步骤属性"
+                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click"
+                                                  Content="属性" />
+                                    <ToggleButton x:Name="ActionRightToolButton" Tag="actions" ToolTip="动作库"
+                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click"
+                                                  Content="动作库" />
                                     <ToggleButton x:Name="PlaybackRightToolButton" Tag="playback" ToolTip="播放控制"
-                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                       VerticalAlignment="Center" Margin="0,0,6,0" />
-                                            <TextBlock x:Name="PlaybackRightToolLabel" Text="播放控制" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </ToggleButton>
+                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click"
+                                                  Content="播放" />
+                                    <ToggleButton x:Name="ConditionRightToolButton" Tag="conditions" ToolTip="条件序列"
+                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click"
+                                                  Content="条件" />
                                 </UniformGrid>
                             </Border>
 
-                            <Grid x:Name="RightToolDeck">
-                                <Border x:Name="ConditionToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                            <Grid x:Name="RightToolDeck" Margin="12,9,12,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition x:Name="InspectorUpperRow" Height="*" />
+                                    <RowDefinition x:Name="InspectorPlaybackRow" Height="0" />
+                                </Grid.RowDefinitions>
+                                <Border x:Name="PropertiesToolChrome" Grid.ColumnSpan="2">
+                                    <DockPanel>
+                                        <Border x:Name="PropertiesPART_Header" Tag="PART_Header" DockPanel.Dock="Top"
+                                                Style="{StaticResource ToolWindowHeaderStyle}">
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                    <Button Tag="properties" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
+                                                    <Button Tag="properties" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
+                                                </StackPanel>
+                                                <TextBlock x:Name="PropertiesToolTitle" Text="步骤属性" Style="{StaticResource ToolWindowTitle}" />
+                                            </DockPanel>
+                                        </Border>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                            <ContentControl x:Name="StepInspectorHost">
+                                                <controls:StepInspectorPanel x:Name="WorkspaceStepInspector" Margin="1,8,6,8" />
+                                            </ContentControl>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </Border>
+                                <Border x:Name="ConditionToolChrome" Grid.ColumnSpan="2">
                                     <DockPanel>
                                         <Border x:Name="ConditionPART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
                                             <DockPanel>
@@ -346,7 +313,7 @@
                                     </DockPanel>
                                 </Border>
 
-                                <Border x:Name="ActionPaletteToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                                <Border x:Name="ActionPaletteToolChrome" Grid.ColumnSpan="2">
                                     <DockPanel>
                                         <Border x:Name="ActionPalettePART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
                                             <DockPanel>
@@ -355,7 +322,7 @@
                                                     <Button Tag="actions" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
                                                 </StackPanel>
                                                 <TextBlock DockPanel.Dock="Left" Text="&#xE8A7;" Style="{StaticResource ToolWindowHeaderGlyph}" />
-                                                <TextBlock x:Name="ActionPaletteToolTitle" Text="动作面板" Style="{StaticResource ToolWindowTitle}" />
+                                                <TextBlock x:Name="ActionPaletteToolTitle" Text="动作库" Style="{StaticResource ToolWindowTitle}" />
                                             </DockPanel>
                                         </Border>
                                         <ScrollViewer x:Name="ActionPaletteToolScrollViewer"
@@ -363,13 +330,13 @@
                                                       HorizontalScrollBarVisibility="Disabled"
                                                       CanContentScroll="False">
                                             <ContentControl x:Name="ActionPaletteHost">
-                                                <controls:ActionPalettePanel x:Name="ActionPalette" Margin="10,10,10,8" />
+                                                <controls:ActionPalettePanel x:Name="ActionPalette" Margin="1,8,1,6" />
                                             </ContentControl>
                                         </ScrollViewer>
                                     </DockPanel>
                                 </Border>
 
-                                <Border x:Name="PlaybackToolChrome" Style="{StaticResource ToolWindowHostStyle}">
+                                <Border x:Name="PlaybackToolChrome" Grid.ColumnSpan="2">
                                     <DockPanel>
                                         <Border x:Name="PlaybackPART_Header" Tag="PART_Header" DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
                                             <DockPanel>
@@ -378,7 +345,7 @@
                                                     <Button Tag="playback" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
                                                 </StackPanel>
                                                 <TextBlock DockPanel.Dock="Left" Text="&#xE768;" Style="{StaticResource ToolWindowHeaderGlyph}" />
-                                                <TextBlock x:Name="PlaybackToolTitle" Text="播放控制" Style="{StaticResource ToolWindowTitle}" />
+                                                <TextBlock x:Name="PlaybackToolTitle" Text="宏播放设置" Style="{StaticResource ToolWindowTitle}" />
                                             </DockPanel>
                                         </Border>
                                         <ScrollViewer x:Name="PlaybackToolScrollViewer"
@@ -386,7 +353,7 @@
                                                       HorizontalScrollBarVisibility="Disabled"
                                                       CanContentScroll="False">
                                             <ContentControl x:Name="PlaybackPanelHost">
-                                                <controls:PlaybackPanel x:Name="PlaybackPanelControl" Margin="12,12,12,14" />
+                                                <controls:PlaybackPanel x:Name="PlaybackPanelControl" Margin="1,8,3,8" />
                                             </ContentControl>
                                         </ScrollViewer>
                                     </DockPanel>

@@ -37,7 +37,7 @@ internal static class UiSnapshot
                     ThemeService.ApplyTheme(theme);
                     var suffix = theme == AppTheme.Dark ? "dark" : "light";
                     Render(new MainWindow(studioLibrary, isWorkspacePreview: true) { Width = 1380, Height = 846 },
-                        Path.Combine(directory, $"workspace-{suffix}.png"));
+                        Path.Combine(directory, $"workspace-{suffix}.png"), CheckWideWorkspace);
                     if (theme == AppTheme.Dark)
                     {
                         Render(new MainWindow(studioLibrary, isWorkspacePreview: true) { Width = 1040, Height = 660 },
@@ -45,7 +45,9 @@ internal static class UiSnapshot
                         Render(new MainWindow(studioLibrary, isWorkspacePreview: true) { Width = 1280, Height = 790 },
                             Path.Combine(directory, "command-search-dark.png"), DemonstrateCommandSearch);
                         Render(new MainWindow(studioLibrary, isWorkspacePreview: true) { Width = 1380, Height = 846 },
-                            Path.Combine(directory, "workspace-running-dark.png"), DemonstrateRunningOverview);
+                            Path.Combine(directory, "workspace-other-tools-dark.png"), DemonstrateOtherTools);
+                        Render(new MainWindow(studioLibrary, isWorkspacePreview: true) { Width = 1380, Height = 846 },
+                            Path.Combine(directory, "workspace-step-edit-dark.png"), VerifyStepEdit);
                     }
                     var settings = RuntimePrecisionSettings.Default;
                     Render(new LatencyCheckDialog(), Path.Combine(directory, $"latency-{suffix}.png"));
@@ -122,14 +124,35 @@ internal static class UiSnapshot
     private static void CheckCompactWorkspace(Window window)
     {
         var main = (MainWindow)window;
-        main.PlaybackRightToolButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Click(main.PlaybackRightToolButton);
         main.UpdateLayout();
         var rightDock = main.RightDockContent;
         var end = rightDock.TranslatePoint(new Point(rightDock.ActualWidth, 0), main.AppShellRoot);
-        if (end.X > main.AppShellRoot.ActualWidth - main.DockHost.Margin.Right + 1 || rightDock.ActualWidth <= 0)
+        if (end.X > main.AppShellRoot.ActualWidth - main.DockHost.Margin.Right + 1 || rightDock.ActualWidth <= 0 ||
+            !main.InspectorTabsFrame.IsVisible || !main.PlaybackToolChrome.IsVisible || main.PropertiesToolChrome.IsVisible)
         {
-            throw new InvalidOperationException("The inspector is clipped in the compact workspace.");
+            throw new InvalidOperationException("The compact inspector could not switch to the playback pane.");
         }
+
+        Click(main.ActionRightToolButton);
+        if (!main.ActionPaletteToolChrome.IsVisible || main.PlaybackToolChrome.IsVisible)
+            throw new InvalidOperationException("The compact action library tab did not open.");
+        Click(main.PropertiesRightToolButton);
+        if (!main.PropertiesToolChrome.IsVisible || main.ActionPaletteToolChrome.IsVisible)
+            throw new InvalidOperationException("The compact properties tab did not open.");
+        main.SequencePanelControl.SelectedStepIndex = 0;
+    }
+
+    private static void CheckWideWorkspace(Window window)
+    {
+        var main = (MainWindow)window;
+        if (main.InspectorTabsFrame.IsVisible || !main.PropertiesToolChrome.IsVisible ||
+            !main.ActionPaletteToolChrome.IsVisible || !main.PlaybackToolChrome.IsVisible ||
+            Grid.GetColumn(main.ActionPaletteToolChrome) != 1 || Grid.GetRow(main.PlaybackToolChrome) != 1)
+        {
+            throw new InvalidOperationException("The wide workspace did not arrange the properties, actions and playback panes together.");
+        }
+        main.SequencePanelControl.SelectedStepIndex = 0;
     }
 
     private static void DemonstrateCommandSearch(Window window)
@@ -146,32 +169,51 @@ internal static class UiSnapshot
         query.Clear();
     }
 
-    private static void DemonstrateRunningOverview(Window window)
+    private static void DemonstrateOtherTools(Window window)
+    {
+        var main = (MainWindow)window;
+        Click(main.ConditionWorkspaceButton);
+        main.UpdateLayout();
+        if (!main.ConditionToolChrome.IsVisible || main.ActionPaletteToolChrome.IsVisible)
+            throw new InvalidOperationException("The Conditions shortcut did not open the condition editor.");
+        Click(main.JsonWorkspaceButton);
+        main.UpdateLayout();
+        if (!main.JsonToolChrome.IsVisible || main.BottomDockContent.ActualHeight <= 0)
+            throw new InvalidOperationException("The JSON shortcut did not open the MCRX editor.");
+    }
+
+    private static void VerifyStepEdit(Window window)
     {
         var main = (MainWindow)window;
         var sequence = main.SequencePanelControl;
-        var overview = sequence.SequenceOverviewChart;
-        var keyboard = System.Windows.Input.Keyboard.PrimaryDevice;
-        var source = PresentationSource.FromVisual(overview)
-            ?? throw new InvalidOperationException("The sequence overview has no presentation source.");
-        overview.RaiseEvent(new System.Windows.Input.KeyEventArgs(keyboard, source, Environment.TickCount, System.Windows.Input.Key.End)
-        {
-            RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent
-        });
-        if (sequence.SelectedStepIndex != sequence.GetCurrentDocument().Steps.Count - 1)
-        {
-            throw new InvalidOperationException("The sequence overview could not navigate to the last step.");
-        }
-        overview.RaiseEvent(new System.Windows.Input.KeyEventArgs(keyboard, source, Environment.TickCount, System.Windows.Input.Key.Home)
-        {
-            RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent
-        });
-        if (sequence.SelectedStepIndex != 0)
-        {
-            throw new InvalidOperationException("The sequence overview could not navigate to the first step.");
-        }
-        sequence.SetOverviewPlaybackStatus(MacroHid.Runtime.PlaybackStatus.Running, "PlaybackStatusRunning");
+        var waitIndex = sequence.GetCurrentDocument().Steps
+            .Select((step, index) => (step, index))
+            .First(pair => pair.step is WaitStep).index;
+        sequence.SelectedStepIndex = waitIndex;
+        main.UpdateLayout();
+        main.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+        var inspector = main.WorkspaceStepInspector;
+        if (!inspector.ApplyButton.IsEnabled || !inspector.Editor.DelayMsBox.IsVisible)
+            throw new InvalidOperationException("The docked inspector did not show the selected delay.");
+        inspector.Editor.DelayMsBox.Text = "42";
+        Click(inspector.ApplyButton);
+        if (sequence.GetCurrentDocument().Steps[waitIndex] is not WaitStep changed ||
+            changed.Duration != TimeSpan.FromMilliseconds(42) || !sequence.CanUndo)
+            throw new InvalidOperationException("The docked step editor did not apply the change with undo support.");
+        sequence.UndoLastChange();
+        if (sequence.GetCurrentDocument().Steps[waitIndex] is not WaitStep undone ||
+            undone.Duration == TimeSpan.FromMilliseconds(42))
+            throw new InvalidOperationException("The docked edit could not be undone.");
+        main.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+        sequence.SetReadOnly(true);
+        main.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+        if (inspector.ApplyButton.IsEnabled || inspector.RemoveButton.IsEnabled)
+            throw new InvalidOperationException("The step inspector allowed edits while locked.");
+        sequence.SetReadOnly(false);
     }
+
+    private static void Click(System.Windows.Controls.Primitives.ButtonBase button) =>
+        button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 
     private static void Render(Window window, string path, Action<Window>? prepare = null)
     {

@@ -13,12 +13,13 @@ public enum AppTheme
 
 public static class ThemeService
 {
+    private const AppTheme DefaultTheme = AppTheme.Light;
     private static readonly Uri LightThemeUri = new("Themes/LightTheme.xaml", UriKind.Relative);
     private static readonly Uri DarkThemeUri = new("Themes/DarkTheme.xaml", UriKind.Relative);
 
     private static ResourceDictionary? currentThemeDictionary;
 
-    public static AppTheme CurrentTheme { get; private set; } = AppTheme.Dark;
+    public static AppTheme CurrentTheme { get; private set; } = DefaultTheme;
 
     public static event Action? ThemeChanged;
 
@@ -86,9 +87,10 @@ public static class ThemeService
             {
                 using var document = JsonDocument.Parse(File.ReadAllText(SettingsPath));
                 if (document.RootElement.TryGetProperty("theme", out var theme) &&
-                    string.Equals(theme.GetString(), "light", StringComparison.OrdinalIgnoreCase))
+                    theme.ValueKind == JsonValueKind.String &&
+                    string.Equals(theme.GetString(), "dark", StringComparison.OrdinalIgnoreCase))
                 {
-                    return AppTheme.Light;
+                    return AppTheme.Dark;
                 }
             }
         }
@@ -97,7 +99,7 @@ public static class ThemeService
             // An unreadable profile uses the default studio theme.
         }
 
-        return AppTheme.Dark;
+        return DefaultTheme;
     }
 
     private static void SaveTheme(AppTheme theme)

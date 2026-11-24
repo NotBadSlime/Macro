@@ -123,6 +123,7 @@ public partial class StepSequencePanel : UserControl
     {
         state = editorState;
         InlineStepEditor.Initialize(editorState);
+        stepInspector?.Initialize(editorState);
         InlineStepEditor.StepEdited += OnInlineStepEdited;
         InlineStepEditor.CoordinatePickerStarted += OnInlineCoordinatePickerStarted;
         InlineStepEditor.CoordinatePickerFinished += OnInlineCoordinatePickerFinished;
@@ -174,6 +175,13 @@ public partial class StepSequencePanel : UserControl
         EmptySequenceOverlayText.Text = LocalizationService.Get("DropActionsHint");
         EnterSubmacroMenuItem.Header = LocalizationService.Get("EnterSubmacro");
         InlineStepEditor.ApplyLocalization();
+        stepInspector?.ApplyLocalization();
+        StepNumberHeading.Text = LocalizationService.Get("StepTableNumber");
+        StepStartHeading.Text = LocalizationService.Get("StepTableStart");
+        StepStartHeading.ToolTip = LocalizationService.Get("StepTableStartHint");
+        StepActionHeading.Text = LocalizationService.Get("StepTableAction");
+        StepParameterHeading.Text = LocalizationService.Get("StepTableParameter");
+        RefreshList(SelectedStepPath);
     }
 
     public void SetTitle(string title)
@@ -212,6 +220,7 @@ public partial class StepSequencePanel : UserControl
             InlineStepEditorPopup.IsOpen = false;
             FinishBoxSelection();
         }
+        RefreshStepInspector();
     }
 
     public void SetSteps(IReadOnlyList<MacroStep> newSteps)
@@ -514,6 +523,7 @@ public partial class StepSequencePanel : UserControl
         var empty = StepList.Items.Count == 0;
         EmptySequenceOverlay.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
         SelectedStepText.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        ScheduleStepInspectorRefresh();
     }
 
     private string ResolveMacroDisplayName(string value)
@@ -544,8 +554,8 @@ public partial class StepSequencePanel : UserControl
     {
         SelectedStepText.Text = StepList.SelectedItem is StepDisplayItem { StepPath.Count: > 0 } selected
             ? selected.ExecutionOrdinal >= 0
-                ? $"{selected.StepNumberLabel} {selected.Title}"
-                : selected.Title
+                ? $"{selected.StepNumberLabel} {selected.Table.Action} {selected.Table.ParameterWithIndicator}".Trim()
+                : $"{selected.Table.Action} {selected.Table.ParameterWithIndicator}".Trim()
             : LocalizationService.Get("DropActionsHint");
     }
 
@@ -553,6 +563,7 @@ public partial class StepSequencePanel : UserControl
     {
         RefreshSelectedStepText();
         StepSelectionChanged?.Invoke(SelectedStepIndex);
+        ScheduleStepInspectorRefresh();
     }
 
     private void StepList_Drop(object sender, DragEventArgs e)
@@ -914,6 +925,7 @@ public partial class StepSequencePanel : UserControl
         // WPF keeps that multi-select when clicking one of the selected rows, which
         // previously blocked the inline editor. Always focus the clicked row first.
         SelectStepPath(item.StepPath);
+        if (TryUseStepInspector()) return;
         var current = MacroStepTreeEditor.GetAtPath(steps, item.StepPath);
         OpenInlineStepEditor(item.StepPath, current, placementTarget);
     }
@@ -1515,7 +1527,13 @@ public partial class StepSequencePanel : UserControl
 
     private ScrollViewer? GetStepScrollViewer()
     {
-        return stepScrollViewer ??= FindVisualChild<ScrollViewer>(StepList);
+        if (stepScrollViewer is null && FindVisualChild<ScrollViewer>(StepList) is { } scroll)
+        {
+            stepScrollViewer = scroll;
+            System.Windows.Data.BindingOperations.SetBinding(StepTableHeader, FrameworkElement.WidthProperty,
+                new System.Windows.Data.Binding(nameof(ScrollViewer.ViewportWidth)) { Source = scroll });
+        }
+        return stepScrollViewer;
     }
 
     private static double ScaleAutoScrollDelta(double distanceIntoEdge, double edgeSize, double maxDelta)

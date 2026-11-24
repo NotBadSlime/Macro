@@ -7,56 +7,41 @@
              SizeChanged="ActionPalette_SizeChanged">
     <UserControl.Resources>
         <Style x:Key="StudioActionTile" TargetType="Button" BasedOn="{StaticResource ActionPaletteCommandStyle}">
-            <Setter Property="MinHeight" Value="56" />
-            <Setter Property="Margin" Value="0,0,4,7" />
-            <Setter Property="Padding" Value="7,5,8,5" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="3,0,6,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Root"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{DynamicResource PanelBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10">
+                        <Border x:Name="Row" Background="Transparent"
+                                BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,0,1">
                             <Grid>
-                                <Border Background="{DynamicResource StudioChrome}"
-                                        CornerRadius="9"
-                                        Opacity="0.55"
+                                <Border Background="{TemplateBinding Background}" Opacity="0.16"
                                         IsHitTestVisible="False" />
-                                <Border x:Name="TileHover"
-                                        Background="{DynamicResource ActionHoverOverlay}"
-                                        CornerRadius="9"
-                                        Opacity="0"
-                                        IsHitTestVisible="False" />
-                                <Border x:Name="TileEdge"
-                                        Background="{DynamicResource Accent}"
-                                        Width="2"
-                                        CornerRadius="1"
-                                        HorizontalAlignment="Left"
-                                        Margin="1,9,0,9"
-                                        Opacity="0"
-                                        IsHitTestVisible="False" />
-                                <ContentPresenter Margin="{TemplateBinding Padding}"
-                                                  HorizontalAlignment="Stretch"
-                                                  VerticalAlignment="Center" />
+                                <DockPanel Margin="{TemplateBinding Padding}" LastChildFill="True">
+                                    <TextBlock DockPanel.Dock="Right" Text="+" FontSize="15"
+                                               Foreground="{DynamicResource SecondaryText}"
+                                               VerticalAlignment="Center" Margin="6,0,0,0"
+                                               IsHitTestVisible="False" />
+                                    <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                                </DockPanel>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
-                                <Setter TargetName="TileHover" Property="Opacity" Value="0.78" />
-                                <Setter TargetName="TileEdge" Property="Opacity" Value="0.82" />
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource Hover}" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
-                                <Setter TargetName="TileHover" Property="Opacity" Value="0.78" />
-                                <Setter TargetName="TileEdge" Property="Opacity" Value="0.82" />
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource Selection}" />
+                                <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="TileHover" Property="Opacity" Value="1" />
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource Selection}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Root" Property="Opacity" Value="0.55" />
+                                <Setter TargetName="Row" Property="Opacity" Value="0.55" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -65,42 +50,32 @@
         </Style>
 
         <Style x:Key="StudioActionSection" TargetType="controls:CollapsibleSection">
-            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="Margin" Value="0,0,0,9" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="controls:CollapsibleSection">
-                        <Border Background="{DynamicResource PanelBackground}"
-                                BorderBrush="{DynamicResource PanelBorder}"
-                                BorderThickness="1"
-                                CornerRadius="12">
+                        <Border BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,0,1">
                             <DockPanel>
                                 <Button x:Name="PART_ToggleButton"
                                         DockPanel.Dock="Top"
                                         Content="{TemplateBinding Header}"
                                         Foreground="{TemplateBinding Foreground}"
                                         Margin="0"
-                                        Padding="10,0"
-                                        Height="38"
+                                        Padding="3,0,4,0"
+                                        Height="29"
                                         Cursor="Hand"
                                         HorizontalContentAlignment="Stretch">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="SectionHeader"
-                                                    Background="{DynamicResource StudioChrome}"
-                                                    CornerRadius="11,11,0,0"
+                                                    Background="Transparent"
+                                                    BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,1,0,1"
                                                     Padding="{TemplateBinding Padding}">
                                                 <DockPanel LastChildFill="True">
-                                                    <Border DockPanel.Dock="Left"
-                                                            Background="{TemplateBinding Foreground}"
-                                                            Width="16"
-                                                            Height="2"
-                                                            CornerRadius="1"
-                                                            VerticalAlignment="Center"
-                                                            Margin="0,0,8,0" />
                                                     <Path x:Name="SectionArrow"
                                                           DockPanel.Dock="Right"
                                                           Data="M 0 0 L 5 5 L 10 0"
-                                                          Stroke="{TemplateBinding Foreground}"
+                                                          Stroke="{DynamicResource SecondaryText}"
                                                           StrokeThickness="1.5"
                                                           StrokeStartLineCap="Round"
                                                           StrokeEndLineCap="Round"
@@ -130,7 +105,7 @@
                                         </ControlTemplate>
                                     </Button.Template>
                                 </Button>
-                                <Border x:Name="PART_ContentHost" Padding="8,7,4,2">
+                                <Border x:Name="PART_ContentHost" Padding="0">
                                     <ContentPresenter />
                                 </Border>
                             </DockPanel>
@@ -142,34 +117,19 @@
     </UserControl.Resources>
 
     <StackPanel Margin="2,0">
-        <DockPanel Margin="0,0,0,12" LastChildFill="True">
-            <Button x:Name="ActionColorSettingsButton"
-                    DockPanel.Dock="Right"
-                    Width="32"
-                    Height="32"
-                    Padding="0"
-                    Content="&#xE790;"
-                    FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                    FontSize="15"
-                    Style="{StaticResource SequenceToolbarIconButton}"
-                    ToolTip="动作颜色"
-                    Click="ActionColorSettingsButton_Click" />
-            <TextBlock x:Name="AddTitleText"
-                       Text="添加"
-                       Style="{StaticResource PanelTitle}"
-                       VerticalAlignment="Center" />
-        </DockPanel>
+        <TextBlock x:Name="AddTitleText" Text="添加" Visibility="Collapsed" />
 
-        <Grid Margin="0,0,0,12">
+        <Grid Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="ActionSearchBox"
                      AutomationProperties.AutomationId="ActionSearchBox"
                      AutomationProperties.Name="{Binding Text, ElementName=ActionSearchPlaceholder}"
                      Padding="34,0,10,0"
-                     Height="36"
+                     Height="32"
                      TextChanged="ActionSearchBox_TextChanged"
                      PreviewKeyDown="ActionSearchBox_PreviewKeyDown" />
             <TextBlock Text="&#xE721;"
@@ -201,6 +161,18 @@
                     ToolTip="清空动作搜索"
                     Visibility="Collapsed"
                     Click="ClearActionSearch_Click" />
+            <Button x:Name="ActionColorSettingsButton"
+                    Grid.Column="2"
+                    Width="30"
+                    Height="30"
+                    Padding="0"
+                    Margin="5,0,0,0"
+                    Content="&#xE790;"
+                    FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                    FontSize="15"
+                    Style="{StaticResource SequenceToolbarIconButton}"
+                    ToolTip="动作颜色"
+                    Click="ActionColorSettingsButton_Click" />
         </Grid>
         <TextBlock x:Name="ActionSearchEmptyText"
                    Text="没有找到匹配的动作。"
@@ -215,21 +187,22 @@
             <Button x:Name="AddDelayButton"
                     Tag="Delay"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddDelayHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.Delay}"
                                               Foreground="{DynamicResource SecondaryText}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddDelayText" Text="延迟" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddDelayText" Text="延迟" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddDelayHintText" Text="固定或随机等待" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -238,21 +211,22 @@
             <Button x:Name="AddKeyboardButton"
                     Tag="Keyboard"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddKeyboardHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.Keyboard}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddKeyboardText" Text="键盘功能" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddKeyboardText" Text="键盘功能" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddKeyboardHintText" Text="按下、抬起或输入" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -261,21 +235,22 @@
             <Button x:Name="AddMouseButton"
                     Tag="MouseButton"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddMouseHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.MouseButton}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddMouseText" Text="鼠标按键" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddMouseText" Text="鼠标按键" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddMouseHintText" Text="点击、按住与坐标" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -284,21 +259,22 @@
             <Button x:Name="AddMouseMoveButton"
                     Tag="MouseMove"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddMouseMoveHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.MouseMove}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddMouseMoveText" Text="鼠标移动" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddMouseMoveText" Text="鼠标移动" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddMouseMoveHintText" Text="相对或绝对移动" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -307,21 +283,22 @@
             <Button x:Name="AddWheelButton"
                     Tag="MouseWheel"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddWheelHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.MouseWheel}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddWheelText" Text="滚轮" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddWheelText" Text="滚轮" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddWheelHintText" Text="垂直/水平滚动" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -330,21 +307,22 @@
             <Button x:Name="AddTextButton"
                     Tag="Text"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddTextHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.Text}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddTextActionText" Text="文本功能" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddTextActionText" Text="文本功能" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddTextHintText" Text="发送 Unicode 文本" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -353,21 +331,22 @@
             <Button x:Name="AddCommentButton"
                     Tag="Comment"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddCommentHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGray}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.Comment}"
                                               Foreground="{DynamicResource SecondaryText}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddCommentText" Text="注释" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddCommentText" Text="注释" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddCommentHintText" Text="只作标记，不执行任何动作" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -376,21 +355,22 @@
             <Button x:Name="AddMacroButton"
                     Tag="Macro"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddMacroActionHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGreen}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.MacroCall}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddMacroText" Text="宏" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddMacroText" Text="宏" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddMacroActionHintText" Text="调用宏数据库条目" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -403,21 +383,22 @@
             <Button x:Name="AddWindowActivateButton"
                     Tag="WindowActivate"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddWindowActivateHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGreen}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.Window}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddWindowActivateText" Text="指定窗口到前台" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddWindowActivateText" Text="指定窗口到前台" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddWindowActivateHintText" Text="定位、恢复并确认目标窗口" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -426,21 +407,22 @@
             <Button x:Name="AddOcrExtractTextButton"
                     Tag="OcrExtractText"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddOcrExtractTextHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.OcrText}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddOcrExtractTextText" Text="OCR 获取文本" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddOcrExtractTextText" Text="OCR 获取文本" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddOcrExtractTextHintText" Text="从混合文字中提取内容到剪贴板" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -449,21 +431,22 @@
             <Button x:Name="AddOcrClickButton"
                     Tag="OcrClick"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddOcrClickHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgePurple}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.OcrClick}"
                                               Foreground="{DynamicResource AccentPink}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddOcrClickText" Text="OCR 文字点击" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddOcrClickText" Text="OCR 文字点击" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddOcrClickHintText" Text="识别区域内的文字并点击" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -472,21 +455,22 @@
             <Button x:Name="AddPixelButton"
                     Tag="Pixel"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddPixelHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgePink}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.Pixel}"
                                               Foreground="{DynamicResource AccentPink}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddPixelText" Text="像素条件" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddPixelText" Text="像素条件" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddPixelHintText" Text="匹配屏幕上的一个像素" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -495,21 +479,22 @@
             <Button x:Name="AddTextWhenButton"
                     Tag="TextWhen"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddTextWhenHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.TextWhen}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddTextWhenText" Text="文字条件" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddTextWhenText" Text="文字条件" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddTextWhenHintText" Text="识别到文字后再执行后续动作" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -518,21 +503,22 @@
             <Button x:Name="AddNetLimitStartButton"
                     Tag="NetLimitStart"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddNetLimitStartHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.NetworkRate}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddNetLimitStartText" Text="开启弱网" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddNetLimitStartText" Text="开启弱网" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddNetLimitStartHintText" Text="内置限速，不用另外安装。默认 695 B/s，可在卡片里改" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -541,21 +527,22 @@
             <Button x:Name="AddNetLimitStopButton"
                     Tag="NetLimitStop"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddNetLimitStopHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.NetworkRateOff}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddNetLimitStopText" Text="关闭弱网" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddNetLimitStopText" Text="关闭弱网" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddNetLimitStopHintText" Text="取消限速，恢复原来的网速" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -564,21 +551,22 @@
             <Button x:Name="AddNetLimiterStartButton"
                     Tag="NetLimiterStart"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddNetLimiterStartHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeTeal}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.NetworkRate}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddNetLimiterStartText" Text="NetLimiter 限速" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddNetLimiterStartText" Text="NetLimiter 限速" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddNetLimiterStartHintText" Text="使用本机已安装的 NetLimiter，默认 695 B/s，可改" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -587,21 +575,22 @@
             <Button x:Name="AddNetLimiterStopButton"
                     Tag="NetLimiterStop"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddNetLimiterStopHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeTeal}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.NetworkRateOff}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddNetLimiterStopText" Text="关闭 NetLimiter" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddNetLimiterStopText" Text="关闭 NetLimiter" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddNetLimiterStopHintText" Text="取消 NetLimiter 里的限速。没安装时不会生效" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -610,21 +599,22 @@
             <Button x:Name="AddWeakNetStartButton"
                     Tag="WeakNetStart"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddWeakNetStartHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.WeakNet}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddWeakNetStartText" Text="开启断网" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddWeakNetStartText" Text="开启断网" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddWeakNetStartHintText" Text="丢弃外网数据包，拨快时间在卡片里设置" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -633,21 +623,22 @@
             <Button x:Name="AddWeakNetStopButton"
                     Tag="WeakNetStop"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddWeakNetStopHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.WeakNetOff}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddWeakNetStopText" Text="关闭断网" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddWeakNetStopText" Text="关闭断网" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddWeakNetStopHintText" Text="恢复网络。系统时间在宏结束时改回" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -656,21 +647,22 @@
             <Button x:Name="AddClockShiftButton"
                     Tag="ClockShift"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddClockShiftHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.ClockShift}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddClockShiftText" Text="切换系统时间" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddClockShiftText" Text="切换系统时间" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddClockShiftHintText" Text="把系统时间拨快，时长在卡片里设置" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -679,21 +671,22 @@
             <Button x:Name="AddClockRestoreButton"
                     Tag="ClockRestore"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddClockRestoreHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.ClockRestore}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddClockRestoreText" Text="恢复系统时间" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddClockRestoreText" Text="恢复系统时间" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddClockRestoreHintText" Text="立刻把系统时间改回。播放结束也会改回" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -708,21 +701,22 @@
             <Button x:Name="AddYsrFpsToggleButton"
                     Tag="YsrFpsStart"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddYsrFpsToggleHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.FrameLock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddYsrFpsToggleText" Text="YSR 开启锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddYsrFpsToggleText" Text="YSR 开启锁帧" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddYsrFpsToggleHintText" Text="目标 117 FPS，可在卡片中修改" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -730,89 +724,94 @@
 
             <!-- RTSS 锁帧 按钮 -->
             <Button x:Name="AddYsrFpsStopButton" Tag="YsrFpsStop"
-                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddYsrFpsStopHintText}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.FrameUnlock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddYsrFpsStopText" Text="YSR 关闭锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddYsrFpsStopText" Text="YSR 关闭锁帧" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddYsrFpsStopHintText" Text="恢复开启前的帧率" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
             </Button>
 
             <Button x:Name="AddKy3FpsStartButton" Tag="Ky3FpsStart"
-                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddKy3FpsStartHintText}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.FrameLock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddKy3FpsStartText" Text="KY3 开启锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddKy3FpsStartText" Text="KY3 开启锁帧" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddKy3FpsStartHintText" Text="目标 117 FPS，可在卡片中修改" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
             </Button>
 
             <Button x:Name="AddKy3FpsStopButton" Tag="Ky3FpsStop"
-                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddKy3FpsStopHintText}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.FrameUnlock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddKy3FpsStopText" Text="KY3 恢复帧率" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddKy3FpsStopText" Text="KY3 恢复帧率" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddKy3FpsStopHintText" Text="恢复开启前的帧率" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
             </Button>
             <Button x:Name="AddFufuFpsStartButton" Tag="FufuFpsStart"
-                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddFufuFpsStartHintText}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.FrameLock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddFufuFpsStartText" Text="Fufu 开启锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddFufuFpsStartText" Text="Fufu 开启锁帧" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddFufuFpsStartHintText" Text="目标 117 FPS，可在卡片中修改" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
             </Button>
 
             <Button x:Name="AddFufuFpsStopButton" Tag="FufuFpsStop"
-                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddFufuFpsStopHintText}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.FrameUnlock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddFufuFpsStopText" Text="Fufu 恢复帧率" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddFufuFpsStopText" Text="Fufu 恢复帧率" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddFufuFpsStopHintText" Text="恢复开启前的帧率" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -821,21 +820,22 @@
             <Button x:Name="AddFrameLockStartButton"
                     Tag="FrameLockStart"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddFrameLockStartHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.FrameLock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddFrameLockStartText" Text="RTSS 开启锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddFrameLockStartText" Text="RTSS 开启锁帧" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddFrameLockStartHintText" Text="把指定程序限到设定帧数" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -844,21 +844,22 @@
             <Button x:Name="AddFrameLockStopButton"
                     Tag="FrameLockStop"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddFrameLockStopHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.FrameUnlock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddFrameLockStopText" Text="RTSS 关闭锁帧" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddFrameLockStopText" Text="RTSS 关闭锁帧" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddFrameLockStopHintText" Text="恢复这个程序原来的帧数上限" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -871,21 +872,22 @@
             <Button x:Name="AddLoopButton"
                     Tag="Loop"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddLoopHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeRed}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.Loop}"
                                               Foreground="{DynamicResource Danger}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddLoopText" Text="循环" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddLoopText" Text="循环" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddLoopHintText" Text="重复一组步骤" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -894,21 +896,22 @@
             <Button x:Name="AddStopCurrentButton"
                     Tag="StopCurrent"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddStopCurrentHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.StopCurrent}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddStopCurrentText" Text="停止本层宏动作" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddStopCurrentText" Text="停止本层宏动作" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddStopCurrentHintText" Text="退出当前调用，外层继续" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -917,21 +920,22 @@
             <Button x:Name="AddStopIterationButton"
                     Tag="StopIteration"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddStopIterationHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeOrange}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.StopIteration}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddStopIterationText" Text="停止本轮播放" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddStopIterationText" Text="停止本轮播放" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddStopIterationHintText" Text="跳过本轮剩余步骤，循环继续" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -940,21 +944,22 @@
             <Button x:Name="AddStopAllButton"
                     Tag="StopAll"
                     Style="{StaticResource StudioActionTile}"
+                    ToolTip="{Binding Text, ElementName=AddStopAllHintText}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeRed}">
-                        <controls:ActionGlyph Width="21" Height="21"
+                    <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
+                        <controls:ActionGlyph Width="17" Height="17"
                                               Data="{x:Static controls:ActionIcons.StopAll}"
                                               Foreground="{DynamicResource Danger}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="AddStopAllText" Text="停止本次播放" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AddStopAllText" Text="停止本次播放" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="AddStopAllHintText" Text="立即终止整次宏播放" Style="{StaticResource ActionPaletteDescriptionStyle}" />
                     </StackPanel>
                 </Grid>
@@ -962,12 +967,7 @@
         </primitives:UniformGrid>
         </controls:CollapsibleSection>
 
-        <Border Background="{DynamicResource PanelBackground}"
-                BorderBrush="{DynamicResource PanelBorder}"
-                BorderThickness="1"
-                CornerRadius="9"
-                Padding="10,8"
-                Margin="0,0,0,4">
+        <Border Padding="2,3,2,6">
             <StackPanel>
                 <TextBlock x:Name="DragHint"
                            Foreground="{DynamicResource SecondaryText}"

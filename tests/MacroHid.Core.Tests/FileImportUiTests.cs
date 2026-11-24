@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Windows;
+using System.Windows.Controls;
 using System.Runtime.InteropServices;
 using System.Text;
 using MacroHid.Converter;
@@ -53,9 +54,23 @@ internal static class FileImportUiTests
 
             var panel = new MacroLibraryPanel();
             panel.Initialize(new MacroEditorState(store));
-            // Selecting a database in the manager must also permit an external drop.
-            typeof(MacroLibraryPanel).GetField("selectedGroupId", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .SetValue(panel, group.Id);
+            // The workbench opens the Global library. Use the manager toolbar and its tree to switch to a group.
+            var managerButton = (Button)panel.FindName("BackToManagerButton");
+            if (managerButton.Visibility != Visibility.Visible || panel.CurrentDatabaseGroupId != MacroLibraryStore.GlobalGroupId)
+                throw new Exception("The library did not open at the Global root.");
+            managerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var groupTree = (TreeView)panel.FindName("MacroTreeView");
+            if (groupTree.Visibility != Visibility.Visible)
+                throw new Exception("The manager toolbar did not open the database list.");
+            panel.Measure(new Size(220, 600));
+            panel.Arrange(new Rect(0, 0, 220, 600));
+            panel.UpdateLayout();
+            var groupNode = groupTree.Items.OfType<MacroLibraryTreeNode>().Single(node => node.GroupId == group.Id);
+            if (groupTree.ItemContainerGenerator.ContainerFromItem(groupNode) is not TreeViewItem groupRow)
+                throw new Exception("Unable to find the manager row for the import target.");
+            groupRow.IsSelected = true;
+            if (panel.CurrentDatabaseGroupId != group.Id)
+                throw new Exception("The selected manager row did not become the active drop target.");
             panel.ImportMacroFiles(files);
             var imported = store.Load().Items;
             if (imported.Count != 2 || imported.Any(item => item.GroupId != group.Id || item.Folder != string.Empty))

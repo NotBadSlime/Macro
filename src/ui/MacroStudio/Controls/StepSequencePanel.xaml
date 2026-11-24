@@ -38,6 +38,9 @@
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Root" Property="Background" Value="{DynamicResource Selection}" />
                             </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -48,161 +51,192 @@
             <Setter Property="Foreground" Value="{DynamicResource Danger}" />
         </Style>
 
-        <Style x:Key="StepDetailChip" TargetType="Border">
-            <Setter Property="CornerRadius" Value="5" />
-            <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="6,3" />
+        <Style x:Key="StepTableHeading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="StepTableContainer" TargetType="ListBoxItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleRow}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StepParameterWell" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding Badge}" Value="">
-                    <Setter Property="Visibility" Value="Collapsed" />
+                <DataTrigger Binding="{Binding Table.IsKey}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+                    <Setter Property="BorderThickness" Value="1" />
+                    <Setter Property="Padding" Value="5,2" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
         <DataTemplate x:Key="StepTemplate">
             <Border x:Name="StepRow"
-                    Style="{StaticResource SoftListItemBorder}"
-                    Background="{Binding BackgroundBrush}"
-                    BorderThickness="2"
-                    CornerRadius="10"
-                    Padding="10,5"
-                    Margin="{Binding LeftMargin}"
-                    Cursor="Hand"
+                    Background="Transparent"
+                    BorderBrush="{DynamicResource PanelBorder}"
+                    BorderThickness="0,0,0,1"
+                    MinHeight="38"
+                    Padding="8,3"
                     MouseLeftButtonDown="StepRow_MouseLeftButtonDown"
                     MouseLeftButtonUp="StepRow_MouseLeftButtonUp">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="36" />
-                        <ColumnDefinition Width="22" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="0.72*" MaxWidth="58" />
+                        <ColumnDefinition Width="1.35*" MaxWidth="116" />
+                        <ColumnDefinition Width="2.25*" MaxWidth="184" />
+                        <ColumnDefinition Width="3.4*" />
+                        <ColumnDefinition Width="51" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.ColumnSpan="6"
-                            Margin="-10,-5"
-                            CornerRadius="9"
-                            Background="{DynamicResource StudioChrome}"
-                            Opacity="0.55"
+                    <Border Grid.ColumnSpan="5"
+                            Margin="-8,-3"
+                            Background="{Binding BackgroundBrush}"
+                            Opacity="0.16"
                             IsHitTestVisible="False" />
                     <Border x:Name="HoverOverlay"
-                            Grid.ColumnSpan="6"
-                            Margin="-10,-5"
+                            Grid.ColumnSpan="5"
+                            Margin="-8,-3"
                             Background="{DynamicResource ActionHoverOverlay}"
-                            CornerRadius="9"
-                            Visibility="Collapsed"
-                            IsHitTestVisible="False" />
-                    <Border x:Name="HoverRail"
-                            Grid.ColumnSpan="6"
-                            Width="2"
-                            Margin="-7,1,0,1"
-                            HorizontalAlignment="Left"
-                            Background="{Binding IconBrush}"
-                            CornerRadius="1"
-                            Opacity="0.46"
-                            IsHitTestVisible="False" />
-                    <Border x:Name="ActiveEdge"
-                            Grid.ColumnSpan="6"
-                            Height="1"
-                            VerticalAlignment="Top"
-                            Margin="8,-5,12,0"
-                            Background="{Binding IconBrush}"
                             Opacity="0"
                             IsHitTestVisible="False" />
-
-                    <TextBlock x:Name="StepOrdinal" Text="{Binding StepNumberLabel}"
+                    <Border x:Name="HoverRail"
+                            Grid.ColumnSpan="5"
+                            Width="2" Margin="-8,-3,0,-3"
+                            HorizontalAlignment="Left"
+                            Background="{DynamicResource Accent}"
+                            Opacity="0"
+                            IsHitTestVisible="False" />
+                    <ItemsControl ItemsSource="{Binding ConditionBars}"
+                                  Width="3" MaxHeight="20"
+                                  Margin="-4,0,0,0"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  IsHitTestVisible="False"
+                                  ClipToBounds="True">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="3" Height="4" CornerRadius="1"
+                                        Margin="0,0,0,1" Background="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="StepOrdinal"
+                               Text="{Binding StepNumberLabel}"
                                Foreground="{DynamicResource SecondaryText}"
                                FontFamily="Cascadia Mono, Consolas"
                                FontSize="11"
-                               FontWeight="SemiBold"
-                               MinWidth="28"
-                               Margin="0,0,6,0"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Center" />
-                    <Border x:Name="GlyphWell"
-                            Grid.Column="1"
-                            Width="31" Height="31"
-                            Background="{DynamicResource ControlBackground}"
-                            BorderBrush="{DynamicResource PanelBorder}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            VerticalAlignment="Center">
-                        <Grid>
-                            <Border CornerRadius="7" Background="{Binding IconBrush}" Opacity="0.12" />
-                            <local:ActionGlyph Width="21" Height="21"
-                                               Data="{Binding IconGeometry}"
-                                               Foreground="{Binding IconBrush}" />
-                        </Grid>
-                    </Border>
-                    <TextBlock Grid.Column="2"
-                               Text="{Binding ActionIndicator}"
-                               FontSize="14"
-                               FontWeight="Bold"
-                               Foreground="{Binding IconBrush}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                    <TextBlock x:Name="StepTitleText"
-                               Grid.Column="3"
-                               Text="{Binding Title}"
-                               Foreground="{Binding ActionForeground}"
-                               FontWeight="SemiBold"
+                               Margin="4,0,6,0"
                                VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Title}"
-                               Cursor="Hand"
-                               MouseLeftButtonUp="StepTitle_MouseLeftButtonUp" />
-                    <Border Grid.Column="4" Style="{StaticResource StepDetailChip}"
-                            VerticalAlignment="Center" Margin="8,0,4,0">
-                        <TextBlock Text="{Binding Badge}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Table.Start}"
+                               ToolTip="{Binding Table.StartDescription}"
+                               AutomationProperties.Name="{Binding Table.StartDescription}"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontFamily="Cascadia Mono, Consolas"
+                               FontSize="11"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <DockPanel Grid.Column="2" Margin="{Binding TableActionIndent}" VerticalAlignment="Center"
+                               LastChildFill="True" ClipToBounds="True">
+                        <local:ActionGlyph DockPanel.Dock="Left"
+                                           Width="16" Height="16" Margin="0,0,5,0"
+                                           Data="{Binding IconGeometry}"
+                                           Foreground="{Binding IconBrush}" />
+                        <TextBlock x:Name="StepTitleText"
+                                   Text="{Binding Table.Action}"
                                    Foreground="{Binding ActionForeground}"
-                                   FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI"
-                                   FontSize="11"
-                                   MaxWidth="104"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding Badge}" />
-                    </Border>
-                    <StackPanel x:Name="RowActions"
-                                Grid.Column="5"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center"
-                                Margin="8,0,0,0">
+                                   ToolTip="{Binding Table.Action}"
+                                   Margin="0,0,7,0"
+                                   Cursor="Hand"
+                                   MouseLeftButtonUp="StepTitle_MouseLeftButtonUp" />
+                    </DockPanel>
+                    <DockPanel Grid.Column="3" LastChildFill="True" ClipToBounds="True"
+                               VerticalAlignment="Center" Margin="1,0,4,0"
+                               ToolTip="{Binding Table.AccessibleParameter}">
+                        <TextBlock DockPanel.Dock="Left"
+                                   Text="{Binding Table.Indicator}"
+                                   Foreground="{Binding IconBrush}"
+                                   AutomationProperties.Name="{Binding Table.StateDescription}"
+                                   FontWeight="SemiBold"
+                                   FontSize="13"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Margin" Value="0,0,4,0" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Table.Indicator}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Border Style="{StaticResource StepParameterWell}" HorizontalAlignment="Left">
+                            <TextBlock Text="{Binding Table.Parameter}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Border>
+                    </DockPanel>
+                    <StackPanel x:Name="RowActions" Grid.Column="4"
+                                Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                IsEnabled="{Binding AllowDrop, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                Opacity="0">
                         <Button x:Name="StepCopyButton"
                                 Style="{StaticResource StepRowActionButton}"
+                                Width="22" Margin="0,0,2,0"
                                 Content="⧉"
-                                ToolTip="复制"
+                                ToolTip="{Binding TableCopyLabel}"
+                                AutomationProperties.Name="{Binding TableCopyLabel}"
                                 Click="StepCopy_Click" />
                         <Button x:Name="StepRowDeleteButton"
                                 Style="{StaticResource StepRowDeleteActionButton}"
+                                Width="22" Margin="0"
                                 Content="×"
-                                ToolTip="删除"
+                                ToolTip="{Binding TableDeleteLabel}"
+                                AutomationProperties.Name="{Binding TableDeleteLabel}"
                                 Click="StepRowDelete_Click" />
                     </StackPanel>
                 </Grid>
             </Border>
             <DataTemplate.Triggers>
                 <Trigger SourceName="StepRow" Property="IsMouseOver" Value="True">
-                    <Setter TargetName="StepRow" Property="BorderBrush" Value="{DynamicResource Accent}" />
-                    <Setter TargetName="HoverOverlay" Property="Visibility" Value="Visible" />
-                    <Setter TargetName="HoverRail" Property="Opacity" Value="0.82" />
-                    <Setter TargetName="ActiveEdge" Property="Opacity" Value="0.38" />
-                    <Setter TargetName="GlyphWell" Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
+                    <Setter TargetName="HoverOverlay" Property="Opacity" Value="0.5" />
+                    <Setter TargetName="RowActions" Property="Opacity" Value="1" />
+                </Trigger>
+                <Trigger SourceName="StepRow" Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter TargetName="RowActions" Property="Opacity" Value="1" />
                 </Trigger>
                 <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                    <Setter TargetName="StepRow" Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
-                    <Setter TargetName="HoverOverlay" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="StepRow" Property="Background" Value="{DynamicResource Selection}" />
                     <Setter TargetName="HoverRail" Property="Opacity" Value="1" />
-                    <Setter TargetName="ActiveEdge" Property="Opacity" Value="0.68" />
-                    <Setter TargetName="GlyphWell" Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
                     <Setter TargetName="StepOrdinal" Property="Foreground" Value="{DynamicResource Accent}" />
+                    <Setter TargetName="RowActions" Property="Opacity" Value="1" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Index}" Value="-1">
                     <Setter TargetName="RowActions" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsConditionEndpoint}" Value="True">
-                    <Setter TargetName="StepTitleText" Property="FontWeight" Value="SemiBold" />
+                    <Setter TargetName="StepTitleText" Property="Foreground" Value="{DynamicResource Accent}" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -288,90 +322,116 @@
             <Grid.LayoutTransform>
                 <ScaleTransform x:Name="SequenceScale" ScaleX="1" ScaleY="1" />
             </Grid.LayoutTransform>
-            <ListBox x:Name="StepList"
-                     BorderThickness="0"
-                     Background="Transparent"
-                     VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Recycling"
-                     ScrollViewer.CanContentScroll="True"
-                     VirtualizingPanel.ScrollUnit="Pixel"
-                     AllowDrop="True"
-                     SelectionMode="Extended"
-                     ItemTemplate="{StaticResource StepTemplate}"
-                     SelectionChanged="StepList_SelectionChanged"
-                     PreviewMouseLeftButtonDown="StepList_PreviewMouseLeftButtonDown"
-                     PreviewMouseMove="StepList_PreviewMouseMove"
-                     PreviewMouseLeftButtonUp="StepList_PreviewMouseLeftButtonUp"
-                     LostMouseCapture="StepList_LostMouseCapture"
-                     DragOver="StepList_DragOver"
-                     DragLeave="StepList_DragLeave"
-                     Drop="StepList_Drop"
-                     HorizontalContentAlignment="Stretch">
-                <ListBox.ContextMenu>
-                    <ContextMenu Opened="StepListContextMenu_Opened">
-                        <MenuItem x:Name="EnterSubmacroMenuItem"
-                                  Header="进入子宏"
-                                  Click="EnterSubmacroMenuItem_Click" />
-                    </ContextMenu>
-                </ListBox.ContextMenu>
-            </ListBox>
-            <StackPanel x:Name="EmptySequenceOverlay"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        IsHitTestVisible="False"
-                        MaxWidth="290"
-                        Margin="12">
-                <Border Width="48" Height="48"
-                        Background="{DynamicResource Selection}"
-                        BorderBrush="{DynamicResource PanelBorder}"
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Border x:Name="StepTableHeader" HorizontalAlignment="Left"
+                    Background="{DynamicResource PanelRaised}"
+                    BorderBrush="{DynamicResource PanelBorder}"
+                    BorderThickness="0,0,0,1"
+                    Padding="8,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="0.72*" MaxWidth="58" />
+                        <ColumnDefinition Width="1.35*" MaxWidth="116" />
+                        <ColumnDefinition Width="2.25*" MaxWidth="184" />
+                        <ColumnDefinition Width="3.4*" />
+                        <ColumnDefinition Width="51" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="StepNumberHeading" Style="{StaticResource StepTableHeading}" Text="序号" Margin="4,0,6,0" />
+                    <TextBlock x:Name="StepStartHeading" Grid.Column="1" Style="{StaticResource StepTableHeading}" Text="开始" />
+                    <TextBlock x:Name="StepActionHeading" Grid.Column="2" Style="{StaticResource StepTableHeading}" Text="动作" />
+                    <TextBlock x:Name="StepParameterHeading" Grid.Column="3" Style="{StaticResource StepTableHeading}" Text="参数" Margin="1,0,0,0" />
+                </Grid>
+            </Border>
+            <Grid Grid.Row="1">
+                <ListBox x:Name="StepList"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         ScrollViewer.CanContentScroll="True"
+                         VirtualizingPanel.ScrollUnit="Pixel"
+                         AllowDrop="True"
+                         SelectionMode="Extended"
+                         ItemTemplate="{StaticResource StepTemplate}"
+                         ItemContainerStyle="{StaticResource StepTableContainer}"
+                         SelectionChanged="StepList_SelectionChanged"
+                         PreviewMouseLeftButtonDown="StepList_PreviewMouseLeftButtonDown"
+                         PreviewMouseMove="StepList_PreviewMouseMove"
+                         PreviewMouseLeftButtonUp="StepList_PreviewMouseLeftButtonUp"
+                         LostMouseCapture="StepList_LostMouseCapture"
+                         DragOver="StepList_DragOver"
+                         DragLeave="StepList_DragLeave"
+                         Drop="StepList_Drop"
+                         HorizontalContentAlignment="Stretch">
+                    <ListBox.ContextMenu>
+                        <ContextMenu Opened="StepListContextMenu_Opened">
+                            <MenuItem x:Name="EnterSubmacroMenuItem"
+                                      Header="进入子宏"
+                                      Click="EnterSubmacroMenuItem_Click" />
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
+                </ListBox>
+                <StackPanel x:Name="EmptySequenceOverlay"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False"
+                            MaxWidth="290"
+                            Margin="12">
+                    <Border Width="48" Height="48"
+                            Background="{DynamicResource Selection}"
+                            BorderBrush="{DynamicResource PanelBorder}"
+                            BorderThickness="1"
+                            CornerRadius="14"
+                            HorizontalAlignment="Center">
+                        <TextBlock Text="&#xE710;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                   Foreground="{DynamicResource Accent}"
+                                   FontSize="19"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock x:Name="EmptySequenceOverlayText"
+                               Margin="0,10,0,0"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource SecondaryText}"
+                               FontSize="13"
+                               TextWrapping="Wrap"
+                               Text="把动作拖到这里，或直接点击右侧添加项。" />
+                </StackPanel>
+                <Border x:Name="SelectionRectangle"
+                        Panel.ZIndex="20"
+                        BorderBrush="{DynamicResource Accent}"
                         BorderThickness="1"
-                        CornerRadius="14"
-                        HorizontalAlignment="Center">
-                    <TextBlock Text="&#xE710;"
-                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               Foreground="{DynamicResource Accent}"
-                               FontSize="19"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
+                        Background="{DynamicResource SelectionBandBrush}"
+                        CornerRadius="6"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Visibility="Collapsed"
+                        IsHitTestVisible="False">
+                    <Border.RenderTransform>
+                        <TranslateTransform />
+                    </Border.RenderTransform>
                 </Border>
-                <TextBlock x:Name="EmptySequenceOverlayText"
-                           Margin="0,10,0,0"
-                           TextAlignment="Center"
-                           Foreground="{DynamicResource SecondaryText}"
-                           FontSize="13"
-                           TextWrapping="Wrap"
-                           Text="把动作拖到这里，或直接点击右侧添加项。" />
-            </StackPanel>
-            <Border x:Name="SelectionRectangle"
-                    Panel.ZIndex="20"
-                    BorderBrush="{DynamicResource Accent}"
-                    BorderThickness="1"
-                    Background="{DynamicResource SelectionBandBrush}"
-                    CornerRadius="6"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Top"
-                    Visibility="Collapsed"
-                    IsHitTestVisible="False">
-                <Border.RenderTransform>
-                    <TranslateTransform />
-                </Border.RenderTransform>
-            </Border>
-            <Border x:Name="DropIndicator"
-                    Tag="{StaticResource DropIndicatorPulseStoryboard}"
-                    Panel.ZIndex="30"
-                    Height="4"
-                    Margin="10,0"
-                    VerticalAlignment="Top"
-                    HorizontalAlignment="Stretch"
-                    Background="{DynamicResource Accent}"
-                    CornerRadius="2"
-                    Opacity="0.9"
-                    Visibility="Collapsed"
-                    IsHitTestVisible="False">
-                <Border.RenderTransform>
-                    <TranslateTransform Y="0" />
-                </Border.RenderTransform>
-            </Border>
+                <Border x:Name="DropIndicator"
+                        Tag="{StaticResource DropIndicatorPulseStoryboard}"
+                        Panel.ZIndex="30"
+                        Height="4"
+                        Margin="10,0"
+                        VerticalAlignment="Top"
+                        HorizontalAlignment="Stretch"
+                        Background="{DynamicResource Accent}"
+                        CornerRadius="2"
+                        Opacity="0.9"
+                        Visibility="Collapsed"
+                        IsHitTestVisible="False">
+                    <Border.RenderTransform>
+                        <TranslateTransform Y="0" />
+                    </Border.RenderTransform>
+                </Border>
+            </Grid>
         </Grid>
 
         <TextBlock x:Name="SelectedStepText"

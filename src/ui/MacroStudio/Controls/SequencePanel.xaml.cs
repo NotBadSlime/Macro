@@ -4,10 +4,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using MacroHid.Core;
-using MacroHid.Runtime;
 using MacroStudio.Services;
 
 namespace MacroStudio.Controls;
@@ -21,8 +19,6 @@ public partial class SequencePanel : UserControl
     private bool isReadOnly;
     private bool isRecording;
     private bool compactHeader;
-    private PlaybackStatus overviewPlaybackStatus = PlaybackStatus.Idle;
-    private string overviewPlaybackTextKey = "PlaybackStatusIdle";
     private string editorText = string.Empty;
     private MacroDocument? parsedDocument;
     private Dictionary<string, MacroDocument?> estimateCache = new(StringComparer.OrdinalIgnoreCase);
@@ -36,6 +32,7 @@ public partial class SequencePanel : UserControl
 
     public event Action? SaveLibraryRequested;
     public event Action? RunNowRequested;
+    public event Action? ShowActionsRequested;
     public event Action? StopRequested;
     public event Action<MacroRecordingMode>? RecordingStartRequested;
     public event Action? RecordingStopRequested;
@@ -55,8 +52,6 @@ public partial class SequencePanel : UserControl
     public SequencePanel()
     {
         InitializeComponent();
-        SequenceOverviewChart.StepRequested += index => StepSequenceControl.RevealTopLevelStep(index);
-        IsVisibleChanged += (_, _) => UpdateOverviewMotion();
         SizeChanged += (_, e) => ApplyHeaderDensity(e.NewSize);
     }
 
@@ -96,11 +91,7 @@ public partial class SequencePanel : UserControl
         StepSequenceControl.SetMacroNameResolver(ResolveMacroDisplayName);
         StepSequenceControl.BeforeStepsChanged += CaptureUndoSnapshot;
         StepSequenceControl.StepsChanged += OnStepSequenceStepsChanged;
-        StepSequenceControl.StepSelectionChanged += index =>
-        {
-            RefreshOverviewSelection();
-            StepSelectionChanged?.Invoke(index);
-        };
+        StepSequenceControl.StepSelectionChanged += index => StepSelectionChanged?.Invoke(index);
         StepSequenceControl.ActionTemplateDropped += (kind, parentPath, insertIndex) => ActionTemplateDropped?.Invoke(kind, parentPath, insertIndex);
         StepSequenceControl.MacroLibraryDropped += (macroId, parentPath, insertIndex) => MacroLibraryDropped?.Invoke(macroId, parentPath, insertIndex);
         StepSequenceControl.UndoRequested += UndoLastChange;
@@ -115,6 +106,7 @@ public partial class SequencePanel : UserControl
     {
         SaveLibraryButton.Content = L("SaveLibrary");
         RunNowHeaderButton.Content = L("RunNow");
+        AddStepActionButton.Content = "＋ " + L("StudioAddAction");
         RunNowHeaderButton.ToolTip = L("RunNowOnceHint");
         StopHeaderButton.Content = L("Stop");
         RecordInputButton.Content = L(isRecording ? "StopRecording" : "StartRecording");
@@ -125,10 +117,6 @@ public partial class SequencePanel : UserControl
         LibraryPathBox.ToolTip = L("LibraryPathHelp");
         ScheduledStepsLabelText.Text = L("ScheduledSteps");
         DurationLabelText.Text = L("Duration");
-        SequenceOverviewLabel.Text = L("SequenceOverview");
-        SequenceOverviewChart.ToolTip = L("SequenceOverviewHint");
-        System.Windows.Automation.AutomationProperties.SetHelpText(SequenceOverviewChart, L("SequenceOverviewHint"));
-        StepActivityText.Text = L(overviewPlaybackTextKey);
         DelayAdjustSection.Header = L("SequenceDelayTools");
         DelayAdjustLabel.Text = L("DelayAdjustLabel");
         DelayAdjustBox.ToolTip = L("DelayAdjustHelp");
@@ -313,8 +301,6 @@ public partial class SequencePanel : UserControl
             StepCountText.Text = scheduledCount.ToString();
             DurationText.Text = FormatDurationRange(MacroDurationEstimator.EstimateSteps(document.Steps, ResolveMacroForEstimate));
             StepSequenceControl.SetSteps(document.Steps);
-            SequenceOverviewChart.SetSteps(document.Steps);
-            RefreshOverviewSelection();
         }
         catch (Exception ex)
         {
@@ -323,7 +309,6 @@ public partial class SequencePanel : UserControl
             updatingMacroName = false;
             StepCountText.Text = "0";
             DurationText.Text = "0 ms";
-            SequenceOverviewChart.SetSteps([]);
             // Preserve the last valid sequence during incomplete edits.
             // Keep the JSON text as the source of truth and surface parse errors in the status row.
             StepSequenceControl.SetTitle(ex.Message);
@@ -332,22 +317,16 @@ public partial class SequencePanel : UserControl
 
     public MacroDocument GetCurrentDocument() => parsedDocument ??= McrxParser.Parse(EditorText);
 
-    private void RefreshOverviewSelection()
-    {
-        var path = StepSequenceControl.SelectedStepPath;
-        SequenceOverviewChart.SetSelectedIndex(path.Count > 0 ? path[0] : -1);
-    }
-
     private void ApplyHeaderDensity(Size space)
     {
         var compact = space.Width < 475 || space.Height < 525;
         if (compactHeader == compact) return;
         compactHeader = compact;
-        EditorHeaderStack.Margin = compact ? new Thickness(10, 6, 10, 6) : new Thickness(14, 10, 14, 10);
-        MacroNameBox.Height = compact ? 36 : 45;
-        MacroNameBox.FontSize = compact ? 23 : 28;
-        SequenceOverviewChart.Height = compact ? 37 : 49;
-        RunNowHeaderButton.MinWidth = compact ? 75 : 84;
+        SequenceRoot.Margin = compact ? new Thickness(17, 8, 17, 8) : new Thickness(24, 12, 24, 10);
+        MacroNameBox.Height = compact ? 39 : 51;
+        MacroNameBox.FontSize = compact ? 26 : 34;
+        RunNowHeaderButton.MinWidth = compact ? 70 : 84;
+        AddStepActionButton.MinWidth = compact ? 71 : 82;
         StopHeaderButton.MinWidth = compact ? 45 : 56;
         RecordInputButton.MinWidth = compact ? 76 : 92;
         SaveLibraryButton.MinWidth = compact ? 64 : 78;
@@ -356,44 +335,6 @@ public partial class SequencePanel : UserControl
         {
             command.Height = compact ? 31 : command == RunNowHeaderButton ? 36 : 34;
         }
-    }
-
-    internal void SetOverviewPlaybackStatus(PlaybackStatus status, string textKey)
-    {
-        if (overviewPlaybackStatus == status && overviewPlaybackTextKey == textKey) return;
-        overviewPlaybackStatus = status;
-        overviewPlaybackTextKey = textKey;
-        StepActivityText.Text = L(textKey);
-        var tone = status switch
-        {
-            PlaybackStatus.Running => "StudioSignal",
-            PlaybackStatus.Stopping => "AccentOrange",
-            PlaybackStatus.Error or PlaybackStatus.InputUnavailable => "Danger",
-            _ => "SecondaryText"
-        };
-        StepActivityDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, tone);
-        StepActivityText.SetResourceReference(TextBlock.ForegroundProperty, tone);
-        UpdateOverviewMotion();
-    }
-
-    private void UpdateOverviewMotion()
-    {
-        var running = overviewPlaybackStatus == PlaybackStatus.Running;
-        StepActivityDot.BeginAnimation(OpacityProperty, null);
-        RunningAccent.BeginAnimation(OpacityProperty, null);
-        RunningAccent.Opacity = running ? 0.72 : 0;
-        if (!running || !IsVisible || !SystemParameters.ClientAreaAnimation) return;
-
-        StepActivityDot.BeginAnimation(OpacityProperty, new DoubleAnimation(1.0, 0.37, TimeSpan.FromMilliseconds(620))
-        {
-            AutoReverse = true,
-            RepeatBehavior = RepeatBehavior.Forever
-        });
-        RunningAccent.BeginAnimation(OpacityProperty, new DoubleAnimation(0.85, 0.24, TimeSpan.FromMilliseconds(620))
-        {
-            AutoReverse = true,
-            RepeatBehavior = RepeatBehavior.Forever
-        });
     }
 
     public void SetRunNowHint(bool continuous) =>
@@ -590,6 +531,8 @@ public partial class SequencePanel : UserControl
     private void SaveLibrary_Click(object sender, RoutedEventArgs e) => SaveLibraryRequested?.Invoke();
     private void MacroLockButton_Click(object sender, RoutedEventArgs e) => EditLockChanged?.Invoke(MacroLockButton.IsChecked == true);
     private void RunNow_Click(object sender, RoutedEventArgs e) => RunNowRequested?.Invoke();
+
+    private void AddStepAction_Click(object sender, RoutedEventArgs e) => ShowActionsRequested?.Invoke();
     private void Stop_Click(object sender, RoutedEventArgs e) => StopRequested?.Invoke();
     private void RecordInputButton_Click(object sender, RoutedEventArgs e)
     {

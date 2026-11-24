@@ -318,7 +318,7 @@ public enum StepDisplayKind
     Delay
 }
 
-public sealed class StepDisplayItem : INotifyPropertyChanged
+public sealed partial class StepDisplayItem : INotifyPropertyChanged
 {
     private static readonly Brush GreenBrush = AccentPalette.Green;
     private static readonly Brush BlueBrush = AccentPalette.Blue;
@@ -389,6 +389,7 @@ public sealed class StepDisplayItem : INotifyPropertyChanged
         if (!Equals(Index, other.Index)) { Index = other.Index; changed = true; }
         if (!StepPath.SequenceEqual(other.StepPath)) { StepPath = other.StepPath; changed = true; }
         if (!Equals(StepPathText, other.StepPathText)) { StepPathText = other.StepPathText; changed = true; }
+        if (Table != other.Table) { Table = other.Table; changed = true; }
         if (!Equals(IconGeometry, other.IconGeometry)) { IconGeometry = other.IconGeometry; changed = true; }
         if (!Equals(ActionIndicator, other.ActionIndicator)) { ActionIndicator = other.ActionIndicator; changed = true; }
         if (!Equals(Title, other.Title)) { Title = other.Title; changed = true; }
@@ -434,6 +435,7 @@ public sealed class StepDisplayItem : INotifyPropertyChanged
     {
         var items = FlattenSteps(steps, macroNameResolver: macroNameResolver);
         AssignExecutionOrdinals(items);
+        AssignTableCells(steps, items, macroNameResolver);
         return items;
     }
 

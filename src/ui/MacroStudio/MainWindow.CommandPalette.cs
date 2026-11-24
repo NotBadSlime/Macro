@@ -19,6 +19,7 @@ public partial class MainWindow
             new("\ue792", L("SaveMacroAs"), "save file export 保存 儲存", () => ClickWorkspaceButton(SaveButton)),
             new("\ue8b7", L("WorkspacePanelLibrary"), "library database macros 宏庫 宏库", () => ShowPalettePanel("library")),
             new("\ue8fd", L("WorkspacePanelSequence"), "steps sequence editor 步骤 步驟", () => ShowPalettePanel("sequence")),
+            new("\ue713", L("StudioStepProperties"), "properties inspector attributes 属性 屬性", () => ShowPalettePanel("properties")),
             new("\ue9d9", L("WorkspacePanelConditions"), "conditions triggers 条件 條件", () => ShowPalettePanel("conditions")),
             new("\ue8a7", L("WorkspacePanelActions"), "actions templates 动作 動作", () => ShowPalettePanel("actions")),
             new("\ue768", L("WorkspacePanelPlayback"), "playback run hotkeys 播放 触发鍵", () => ShowPalettePanel("playback")),

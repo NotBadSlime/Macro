@@ -143,8 +143,12 @@ public sealed class WorkspaceDockHost : Grid
         var room = viewportWidth - centerColumn.MinWidth - SplitterWidth(leftSplitter) - SplitterWidth(rightSplitter);
         var minimumLeft = leftVisible ? leftMinimum : 0;
         var minimumRight = rightVisible ? rightMinimum : 0;
-        var desiredLeft = leftVisible ? Math.Max(minimumLeft, lastDockSizes.LeftWidth) : 0;
-        var desiredRight = rightVisible ? Math.Max(minimumRight, lastDockSizes.RightWidth) : 0;
+        var compact = viewportWidth < 1170;
+        var defaults = new WorkspaceDockSizes();
+        var leftPreference = compact && lastDockSizes.LeftWidth == defaults.LeftWidth ? 180 : lastDockSizes.LeftWidth;
+        var rightPreference = compact && lastDockSizes.RightWidth == defaults.RightWidth ? 300 : lastDockSizes.RightWidth;
+        var desiredLeft = leftVisible ? Math.Max(minimumLeft, leftPreference) : 0;
+        var desiredRight = rightVisible ? Math.Max(minimumRight, rightPreference) : 0;
         var flexible = desiredLeft + desiredRight - minimumLeft - minimumRight;
         var scale = flexible > 0 ? Math.Clamp((room - minimumLeft - minimumRight) / flexible, 0, 1) : 0;
         leftColumn.MinWidth = minimumLeft;

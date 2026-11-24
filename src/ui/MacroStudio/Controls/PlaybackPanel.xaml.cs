@@ -10,6 +10,9 @@ namespace MacroStudio.Controls;
 
 public partial class PlaybackPanel : UserControl
 {
+    private const double WideFieldsWidth = 470;
+
+    private bool wideFields;
     private bool capturingTrigger;
     private bool updatingPlaybackControls;
     private bool isReadOnly;
@@ -28,11 +31,38 @@ public partial class PlaybackPanel : UserControl
     public PlaybackPanel()
     {
         InitializeComponent();
+        SizeChanged += PlaybackFields_SizeChanged;
         triggerCaptureCommitTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(450)
         };
         triggerCaptureCommitTimer.Tick += (_, _) => CommitTriggerCapture();
+    }
+
+    private void PlaybackFields_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var wide = e.NewSize.Width >= WideFieldsWidth;
+        if (wide == wideFields)
+        {
+            return;
+        }
+
+        wideFields = wide;
+        FieldGapColumn.Width = new GridLength(wide ? 16 : 8);
+        FieldEndColumn.Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(72);
+
+        Grid.SetColumnSpan(TriggerField, wide ? 1 : 3);
+        Grid.SetRow(ModeField, wide ? 0 : 1);
+        Grid.SetColumn(ModeField, wide ? 2 : 0);
+        Grid.SetColumn(CountField, wide ? 0 : 2);
+        Grid.SetRow(DaemonField, wide ? 1 : 2);
+        Grid.SetColumn(DaemonField, wide ? 2 : 0);
+        Grid.SetColumnSpan(DaemonField, wide ? 1 : 3);
+        DaemonField.Margin = wide ? new Thickness(0, 0, 0, 8) : new Thickness(0, 9, 0, 0);
+        DaemonField.Padding = wide ? new Thickness(0, 20, 0, 0) : new Thickness(0, 9, 0, 10);
+        DaemonField.BorderThickness = new Thickness(0, wide ? 0 : 1, 0, 0);
+        DaemonField.VerticalAlignment = wide ? VerticalAlignment.Center : VerticalAlignment.Stretch;
+        CountField.Margin = wide ? new Thickness(0, 0, 0, 8) : new Thickness(0);
     }
 
     public string TriggerText => TriggerTextBox.Text.Trim();

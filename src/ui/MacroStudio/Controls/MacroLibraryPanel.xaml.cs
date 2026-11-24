@@ -44,7 +44,7 @@ public partial class MacroLibraryPanel : UserControl
     private string selectedGroupId = MacroLibraryStore.GlobalGroupId;
     private string activeDatabaseGroupId = MacroLibraryStore.GlobalGroupId;
     private string currentDatabaseFolder = string.Empty;
-    private bool showingDatabaseContents;
+    private bool showingDatabaseContents = true;
     private bool managerSelectionInitialized;
     private string? selectedFolder;
     private IReadOnlyList<MacroLibraryClipboardItem> clipboard = [];
@@ -111,14 +111,15 @@ public partial class MacroLibraryPanel : UserControl
     {
         CopyExternalCommandMenuItem.Header = L("CopyExternalCommand");
         ExplorerCopyExternalCommandMenuItem.Header = L("CopyExternalCommand");
-        NewGroupButton.Content = L("NewDatabase");
+        LibraryHeadingText.Text = L("ConditionLibraryMenu");
+        NewGroupButton.ToolTip = L("NewDatabase");
         DeleteDatabaseButton.Content = L("DeleteDatabase");
-        BackToManagerButton.ToolTip = L("ReturnToManager");
-        System.Windows.Automation.AutomationProperties.SetName(BackToManagerButton, L("ReturnToManager"));
-        NewMacroMenuButton.Content = L("NewMacro");
+        BackToManagerButton.ToolTip = L("MacroLibrary");
+        NewMacroMenuButton.ToolTip = L("NewMacro");
         ToolbarNewMacroMenuItem.Header = L("NewMacroFile");
         ToolbarNewConditionMacroMenuItem.Header = L("NewConditionMacroFile");
         ToolbarNewFolderMenuItem.Header = L("NewFolder");
+        ManagerOnlyControls.Header = L("SelectProcess");
         GroupProcessFilterLabelText.Text = L("GroupProcessFilter");
         GroupProcessFilterBox.ToolTip = L("GroupProcessFilterHelp");
         SelectProcessButton.Content = L("SelectProcess");
@@ -138,7 +139,7 @@ public partial class MacroLibraryPanel : UserControl
         PasteMenuItem.Header = L("Paste");
         DeleteMenuItem.Header = L("Delete");
         UpFolderButton.ToolTip = L("UpOneLevel");
-        System.Windows.Automation.AutomationProperties.SetName(UpFolderButton, L("UpOneLevel"));
+        DatabasePathBox.ToolTip = L("LibraryPathHelp");
         ExplorerNameHeaderText.Text = L("Name");
         ExplorerTypeHeaderText.Text = L("Type");
         ExplorerTriggerHeaderText.Text = L("Trigger");
@@ -167,8 +168,11 @@ public partial class MacroLibraryPanel : UserControl
         ExplorerRefreshMenuItem.Header = L("Refresh");
         ExplorerDeleteMenuItem.Header = L("Delete");
         ImportExportTitleText.Text = L("ImportExport");
-        ImportMacroButton.Content = L("ImportMacro");
-        ExportMacroButton.Content = L("ExportMacro");
+        ImportMacroButton.ToolTip = L("ImportMacro");
+        ExportMacroButton.ToolTip = L("ExportMacro");
+        LibraryViewLabel.Text = L("View");
+        LibrarySortLabel.Text = L("SortBy");
+        LibraryDisplaySettings.Header = $"{L("View")} / {L("SortBy")}";
         MacroSearchBox.ToolTip = L("SearchMacros");
         MacroSearchPlaceholderText.Text = L("SearchMacros");
         GroupProcessFilterPlaceholderText.Text = L("ProcessFilterPlaceholder");
@@ -181,6 +185,17 @@ public partial class MacroLibraryPanel : UserControl
                 "manual" => L("SortManual"),
                 "updated" => L("SortRecentlyUpdated"),
                 _ => L("SortName")
+            };
+        }
+
+        foreach (var item in LibraryViewBox.Items.OfType<ComboBoxItem>())
+        {
+            item.Content = item.Tag?.ToString() switch
+            {
+                "list" => L("ViewList"),
+                "smallIcons" => L("ViewSmallIcons"),
+                "largeIcons" => L("ViewLargeIcons"),
+                _ => L("ViewDetails")
             };
         }
 
@@ -277,17 +292,6 @@ public partial class MacroLibraryPanel : UserControl
         {
             refreshTreeAfterRename = true;
             return;
-        }
-
-        foreach (var item in LibraryViewBox.Items.OfType<ComboBoxItem>())
-        {
-            item.Content = item.Tag?.ToString() switch
-            {
-                "list" => L("ViewList"),
-                "smallIcons" => L("ViewSmallIcons"),
-                "largeIcons" => L("ViewLargeIcons"),
-                _ => L("ViewDetails")
-            };
         }
 
         RefreshTree();
@@ -614,6 +618,9 @@ public partial class MacroLibraryPanel : UserControl
         var databaseVisibility = showingDatabaseContents ? Visibility.Visible : Visibility.Collapsed;
         ManagerOnlyControls.Visibility = managerVisibility;
         ManagerRuntimeControls.Visibility = managerVisibility;
+        NewGroupButton.Visibility = managerVisibility;
+        BackToManagerButton.Visibility = databaseVisibility;
+        NewMacroMenuButton.Visibility = databaseVisibility;
         DatabaseOnlyControls.Visibility = databaseVisibility;
         DatabaseNavigationBar.Visibility = databaseVisibility;
         LibraryImportExportPanel.Visibility = databaseVisibility;
@@ -621,7 +628,9 @@ public partial class MacroLibraryPanel : UserControl
         ExplorerView.Visibility = databaseVisibility;
         MacroTreeView.AllowDrop = false;
         ExplorerListView.AllowDrop = showingDatabaseContents;
-        UpFolderButton.IsEnabled = showingDatabaseContents;
+        UpFolderButton.Visibility = showingDatabaseContents && !string.IsNullOrWhiteSpace(currentDatabaseFolder)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         ImportMacroButton.IsEnabled = showingDatabaseContents;
         ExportMacroButton.IsEnabled = showingDatabaseContents;
         CopyMenuItem.Visibility = databaseVisibility;
@@ -1284,7 +1293,7 @@ public partial class MacroLibraryPanel : UserControl
 
     private string GetExplorerViewMode()
     {
-        return (LibraryViewBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "list";
+        return (LibraryViewBox?.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "list";
     }
 
     private void ApplyExplorerViewMode()
@@ -2402,7 +2411,7 @@ public partial class MacroLibraryPanel : UserControl
 
     private void RefreshConversionText()
     {
-        ConversionText.Text = L("ConversionAutoDetectHelp");
+        ImportExportTitleText.ToolTip = L("ConversionAutoDetectHelp");
     }
 
     private void ImportMacro_Click(object sender, RoutedEventArgs e)

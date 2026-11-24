@@ -1,5 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -17,6 +18,7 @@ public partial class StepEditorPanel : UserControl
     private bool capturingStepKey;
     private bool updatingEditor;
     private bool applyingOcrExtractPreset;
+    private bool isEmbedded;
     private ScreenRegion ocrExtractRegion = ScreenRegion.FromRect(0, 0, 640, 360);
     private ScreenRegion ocrClickRegion = ScreenRegion.FromRect(0, 0, 640, 360);
 
@@ -39,7 +41,7 @@ public partial class StepEditorPanel : UserControl
         StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
         ApplyStepEditButton.IsEnabled = false;
         PreviewKeyDown += Editor_PreviewKeyDown;
-        IsVisibleChanged += (_, _) => { if (IsVisible) FocusPrimaryEditor(); };
+        IsVisibleChanged += (_, _) => { if (IsVisible && !isEmbedded) FocusPrimaryEditor(); };
     }
 
     public void Initialize(MacroEditorState editorState)
@@ -139,6 +141,7 @@ public partial class StepEditorPanel : UserControl
         PixelLabelText.Text = L("PixelIf");
         PickPixelColorButton.Content = L("PickColor");
         RefreshEnumBoxLocalization(ActionKindBox);
+        PresentEmbeddedActionKinds();
         RefreshEnumBoxLocalization(MouseButtonBox);
         RefreshEnumBoxLocalization(MouseButtonCoordinateModeBox);
         RefreshEnumBoxLocalization(MoveModeBox);
@@ -162,9 +165,29 @@ public partial class StepEditorPanel : UserControl
         }
     }
 
+    internal void UseEmbeddedPresentation()
+    {
+        isEmbedded = true;
+        StepEditorFrame.Background = Brushes.Transparent;
+        StepEditorFrame.BorderThickness = new Thickness(0);
+        StepEditorFrame.Padding = new Thickness(0);
+        StepEditorFrame.Effect = null;
+        ActionKindBox.IsEditable = false;
+        AutomationProperties.SetLabeledBy(ActionKindBox, ActionKindLabelText);
+        ActionKindBox.SelectionChanged += (_, _) => UpdateEmbeddedActionKindHelp();
+        PresentEmbeddedActionKinds();
+        StepEditorTitleBar.Visibility = Visibility.Collapsed;
+        StepEditorHintText.Visibility = Visibility.Collapsed;
+    }
+
+    internal bool CanApplyStepEdit => ApplyStepEditButton.IsEnabled;
+
+    internal void CancelStepKeyCapture() => StopStepKeyCapture();
+
     public void ShowStep(MacroStep? step)
     {
         StopStepKeyCapture();
+        if (isEmbedded) StepEditorHintText.Visibility = Visibility.Collapsed;
         if (step is null)
         {
             StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
@@ -177,6 +200,7 @@ public partial class StepEditorPanel : UserControl
         {
             StepEditorFieldsPanel.Visibility = Visibility.Collapsed;
             ApplyStepEditButton.IsEnabled = false;
+            StepEditorHintText.Visibility = Visibility.Visible;
             StepEditorHintText.Text = step switch
             {
                 StopAllSequencesStep => L("AddStopAllHint"),
@@ -191,7 +215,7 @@ public partial class StepEditorPanel : UserControl
         updatingEditor = false;
         StepEditorFieldsPanel.Visibility = Visibility.Visible;
         ApplyStepEditButton.IsEnabled = true;
-        FocusPrimaryEditor();
+        if (!isEmbedded) FocusPrimaryEditor();
     }
 
     public void SetHintText(string text)
@@ -226,22 +250,19 @@ public partial class StepEditorPanel : UserControl
         switch (step)
         {
             case KeyStep key:
-                FillEnumBox(ActionKindBox, key.Kind);
+                SetActionKind(key.Kind);
                 StepKeyBox.Text = key.Key.ToString();
-                SetComboBox(ActionKindBox, key.Kind.ToString());
                 break;
             case MouseButtonStep button:
-                FillEnumBox(ActionKindBox, button.Kind);
+                SetActionKind(button.Kind);
                 SetComboBox(MouseButtonBox, button.Button.ToString());
-                SetComboBox(ActionKindBox, button.Kind.ToString());
                 MouseButtonCoordinateEnabledBox.IsChecked = button.HasCoordinate;
                 SetComboBox(MouseButtonCoordinateModeBox, (button.CoordinateMode ?? MouseMoveMode.Absolute).ToString());
                 MouseButtonXBox.Text = button.X?.ToString() ?? string.Empty;
                 MouseButtonYBox.Text = button.Y?.ToString() ?? string.Empty;
                 break;
             case ConsumerStep consumer:
-                FillEnumBox(ActionKindBox, consumer.Kind);
-                SetComboBox(ActionKindBox, consumer.Kind.ToString());
+                SetActionKind(consumer.Kind);
                 break;
             case MouseMoveStep move:
                 SetComboBox(MoveModeBox, move.Mode.ToString());
@@ -1294,13 +1315,55 @@ public partial class StepEditorPanel : UserControl
             or HidKey.LeftAlt or HidKey.RightAlt
             or HidKey.LeftGui or HidKey.RightGui;
 
-    private static void FillEnumBox<TEnum>(ComboBox comboBox, TEnum selected) where TEnum : struct, Enum
+    private void SetActionKind<TEnum>(TEnum selected) where TEnum : struct, Enum
+    {
+        FillEnumBox(ActionKindBox, selected, includeClick: isEmbedded);
+        PresentEmbeddedActionKinds();
+        SetComboBox(ActionKindBox, selected.ToString());
+        if (isEmbedded) UpdateEmbeddedActionKindHelp();
+    }
+
+    private void PresentEmbeddedActionKinds()
+    {
+        if (!isEmbedded) return;
+        foreach (var item in ActionKindBox.Items.OfType<ComboBoxItem>())
+        {
+            if (item.Tag is null) continue;
+            var description = GetEnumLabel(item.Tag);
+            item.Content = item.Tag switch
+            {
+                KeyActionKind.Down or ButtonActionKind.Down => "↓",
+                KeyActionKind.Up or ButtonActionKind.Up => "↑",
+                KeyActionKind.Tap or ButtonActionKind.Click => "↓↑",
+                _ => description
+            };
+            item.ToolTip = description;
+            AutomationProperties.SetName(item, description);
+        }
+
+        // The noneditable combo creates its displayed label when the selection changes.
+        if (ActionKindBox.SelectedItem is { } selected)
+        {
+            ActionKindBox.SelectedItem = null;
+            ActionKindBox.SelectedItem = selected;
+        }
+        UpdateEmbeddedActionKindHelp();
+    }
+
+    private void UpdateEmbeddedActionKindHelp()
+    {
+        var description = (ActionKindBox.SelectedItem as ComboBoxItem)?.ToolTip as string ?? string.Empty;
+        ActionKindBox.ToolTip = description;
+        AutomationProperties.SetHelpText(ActionKindBox, description);
+    }
+
+    private static void FillEnumBox<TEnum>(ComboBox comboBox, TEnum selected, bool includeClick = false) where TEnum : struct, Enum
     {
         comboBox.Items.Clear();
         foreach (var value in Enum.GetValues<TEnum>())
         {
             if (value.ToString() == "None") continue;
-            if (typeof(TEnum) == typeof(ButtonActionKind) && value.ToString() == nameof(ButtonActionKind.Click)) continue;
+            if (!includeClick && typeof(TEnum) == typeof(ButtonActionKind) && value.ToString() == nameof(ButtonActionKind.Click)) continue;
             var item = new ComboBoxItem { Tag = value, Content = GetEnumLabel(value) };
             comboBox.Items.Add(item);
             if (EqualityComparer<TEnum>.Default.Equals(value, selected))

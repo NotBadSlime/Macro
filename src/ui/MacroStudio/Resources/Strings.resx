@@ -609,6 +609,24 @@
   <data name="AddMacroHint" xml:space="preserve"><value>Drag another macro from the library into the sequence to copy its steps.</value></data>
   <data name="StepProperties" xml:space="preserve"><value>Properties</value></data>
   <data name="StepPropertiesHint" xml:space="preserve"><value>Select a step to edit it visually.</value></data>
+  <data name="StepTableNumber" xml:space="preserve"><value>No.</value></data>
+  <data name="StepTableStart" xml:space="preserve"><value>Start</value></data>
+  <data name="StepTableAction" xml:space="preserve"><value>Action</value></data>
+  <data name="StepTableParameter" xml:space="preserve"><value>Parameter</value></data>
+  <data name="StepTableStartHint" xml:space="preserve"><value>Planned start in seconds. Nested steps show the first pass. A dash marks a start that depends on playback.</value></data>
+  <data name="StepTablePlannedAt" xml:space="preserve"><value>Planned start {0} seconds</value></data>
+  <data name="StepTableUnknownTime" xml:space="preserve"><value>Start determined at playback</value></data>
+  <data name="StepTableKeyboard" xml:space="preserve"><value>Keyboard</value></data>
+  <data name="StepTableMedia" xml:space="preserve"><value>Media</value></data>
+  <data name="StepTableBranch" xml:space="preserve"><value>Branch</value></data>
+  <data name="StepTableGroupEnd" xml:space="preserve"><value>End</value></data>
+  <data name="StepTableDown" xml:space="preserve"><value>Press</value></data>
+  <data name="StepTableUp" xml:space="preserve"><value>Release</value></data>
+  <data name="StepTableTap" xml:space="preserve"><value>Press and release</value></data>
+  <data name="StepTableMouseLeft" xml:space="preserve"><value>Left button</value></data>
+  <data name="StepTableMouseRight" xml:space="preserve"><value>Right button</value></data>
+  <data name="StepTableMouseMiddle" xml:space="preserve"><value>Middle button</value></data>
+  <data name="StepTableCopyFailed" xml:space="preserve"><value>Could not copy this step.</value></data>
   <data name="Key" xml:space="preserve"><value>Key</value></data>
   <data name="Action" xml:space="preserve"><value>Action</value></data>
   <data name="MoveMode" xml:space="preserve"><value>Move Mode</value></data>
@@ -1052,8 +1070,11 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="StudioCommandSearch" xml:space="preserve"><value>Search commands</value></data>
   <data name="StudioNoMatchingCommands" xml:space="preserve"><value>No matching commands</value></data>
   <data name="StudioTabConditions" xml:space="preserve"><value>Conditions</value></data>
-  <data name="StudioTabActions" xml:space="preserve"><value>Actions</value></data>
+  <data name="StudioTabActions" xml:space="preserve"><value>Action library</value></data>
   <data name="StudioTabPlayback" xml:space="preserve"><value>Playback</value></data>
-  <data name="SequenceOverview" xml:space="preserve"><value>Step overview</value></data>
-  <data name="SequenceOverviewHint" xml:space="preserve"><value>Select a step in the overview to reveal it. Use Left and Right to move, or Home and End to jump.</value></data>
+  <data name="StudioLibrary" xml:space="preserve"><value>Library</value></data>
+  <data name="StudioStepProperties" xml:space="preserve"><value>Step properties</value></data>
+  <data name="StudioTabProperties" xml:space="preserve"><value>Properties</value></data>
+  <data name="StudioMacroPlayback" xml:space="preserve"><value>Macro playback</value></data>
+  <data name="StudioAddAction" xml:space="preserve"><value>Add action</value></data>
 </root>

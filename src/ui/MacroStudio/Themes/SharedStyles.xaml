@@ -47,7 +47,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="11"
+                            CornerRadius="5"
                             Padding="{TemplateBinding Padding}">
                         <ScrollViewer x:Name="PART_ContentHost"
                                       Focusable="False"
@@ -120,10 +120,11 @@
     <Style x:Key="ToolButton" TargetType="Button">
         <Setter Property="MinWidth" Value="76" />
         <Setter Property="Height" Value="34" />
-        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="Padding" Value="11,0" />
         <Setter Property="Margin" Value="0,0,8,0" />
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
         <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
@@ -137,15 +138,18 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Root"
                             Background="{TemplateBinding Background}"
-                            BorderBrush="{DynamicResource ControlBorder}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="11"
+                            CornerRadius="5"
                             RenderTransformOrigin="0.5,0.5">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Hover}" />
+                            <Setter Property="Background" Value="{DynamicResource Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45" />
@@ -210,7 +214,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Surface" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}" CornerRadius="7">
+                            Padding="{TemplateBinding Padding}" CornerRadius="5">
                         <DockPanel LastChildFill="True">
                             <TextBlock x:Name="CommandIcon" DockPanel.Dock="Left" VerticalAlignment="Center"
                                        Margin="0,0,7,0" Foreground="{DynamicResource StudioSignal}" FontSize="13"
@@ -381,11 +385,11 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="9">
+                            CornerRadius="4">
                         <Grid>
                             <Border x:Name="Glow"
                                     Margin="2"
-                                    CornerRadius="9"
+                                    CornerRadius="4"
                                     Background="{DynamicResource RailSelectionGlow}"
                                     Opacity="0" />
                             <Border x:Name="ActiveMark"
@@ -423,12 +427,14 @@
 
     <!-- PrimaryButton -->
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
-        <Setter Property="Foreground" Value="#FFFFFF" />
+        <Setter Property="Foreground" Value="{DynamicResource StudioPrimaryInk}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Background" Value="{DynamicResource StudioPrimaryFill}" />
         <Setter Property="ContentTemplate">
             <Setter.Value>
                 <DataTemplate>
-                    <TextBlock Text="{Binding}" Foreground="White" />
+                    <TextBlock Text="{Binding}" Foreground="{DynamicResource StudioPrimaryInk}" />
                 </DataTemplate>
             </Setter.Value>
         </Setter>
@@ -470,7 +476,7 @@
                     <Border x:Name="Root"
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -491,8 +497,8 @@
     <Style x:Key="CloseWindowButton" TargetType="Button" BasedOn="{StaticResource WindowControlButton}">
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#E81123" />
-                <Setter Property="Foreground" Value="#FFFFFF" />
+                <Setter Property="Background" Value="{DynamicResource DangerHover}" />
+                <Setter Property="Foreground" Value="{DynamicResource Danger}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -636,7 +642,7 @@
         <Setter Property="Background" Value="{DynamicResource PanelRaised}" />
         <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="CornerRadius" Value="5" />
         <Setter Property="Effect">
             <Setter.Value>
                 <DropShadowEffect Color="#000000"
@@ -661,14 +667,15 @@
     <Style x:Key="ToolWindowHostStyle" TargetType="Border" BasedOn="{StaticResource PanelBorderStyle}">
         <Setter Property="Margin" Value="0" />
         <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
         <Setter Property="ClipToBounds" Value="True" />
     </Style>
 
     <Style x:Key="ToolWindowHeaderStyle" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource StudioPanelHeaderSurface}" />
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
-        <Setter Property="Padding" Value="13,7" />
+        <Setter Property="Padding" Value="12,7" />
     </Style>
 
     <Style x:Key="ToolWindowHeaderGlyph" TargetType="TextBlock">
@@ -682,7 +689,7 @@
 
     <Style x:Key="ToolWindowTitle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
@@ -704,7 +711,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Root"
                             Background="{TemplateBinding Background}"
-                            CornerRadius="8">
+                            CornerRadius="4">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -742,7 +749,7 @@
     </Style>
 
     <Style x:Key="RightToolTabStyle" TargetType="ToggleButton">
-        <Setter Property="Height" Value="35" />
+        <Setter Property="Height" Value="30" />
         <Setter Property="Margin" Value="2" />
         <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
         <Setter Property="Background" Value="Transparent" />
@@ -756,7 +763,7 @@
                 <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="Root" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="8" Padding="4,0">
+                            CornerRadius="4" Padding="4,0">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -810,13 +817,13 @@
         <Setter Property="Margin" Value="12" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="ClipToBounds" Value="True" />
-        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="CornerRadius" Value="5" />
         <Setter Property="Background" Value="{DynamicResource PanelRaised}" />
         <Setter Property="Effect">
             <Setter.Value>
                 <DropShadowEffect Color="#000000"
                                   BlurRadius="32"
-                                  Opacity="0.18"
+                                  Opacity="0.08"
                                   ShadowDepth="10"
                                   Direction="270" />
             </Setter.Value>
@@ -915,9 +922,9 @@
         <Setter Property="Opacity" Value="0.86" />
         <Setter Property="Effect">
             <Setter.Value>
-                <DropShadowEffect Color="#2F80ED"
+                <DropShadowEffect Color="#43312B"
                                   BlurRadius="24"
-                                  Opacity="0.28"
+                                  Opacity="0.16"
                                   ShadowDepth="0" />
             </Setter.Value>
         </Setter>
@@ -982,16 +989,15 @@
     </Style>
 
     <Style x:Key="ActionPaletteIconBadgeStyle" TargetType="Border">
-        <Setter Property="Width" Value="34" />
-        <Setter Property="Height" Value="34" />
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Background" Value="{DynamicResource Selection}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Margin" Value="0,0,10,0" />
+        <Setter Property="Width" Value="24" />
+        <Setter Property="Height" Value="24" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Margin" Value="0" />
     </Style>
 
     <Style x:Key="ActionPaletteDescriptionStyle" TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+        <Setter Property="Visibility" Value="Collapsed" />
         <Setter Property="FontSize" Value="11" />
         <Setter Property="Margin" Value="0,3,0,0" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -1272,16 +1278,16 @@
                     <DockPanel>
                         <Border x:Name="CheckBorder"
                                 DockPanel.Dock="Left"
-                                Width="18" Height="18"
-                                CornerRadius="4"
-                                BorderThickness="1.5"
+                                Width="15" Height="15"
+                                CornerRadius="3"
+                                BorderThickness="1"
                                 BorderBrush="{DynamicResource ControlBorder}"
                                 Background="{DynamicResource ControlBackground}"
                                 VerticalAlignment="Center"
                                 Margin="0,0,8,0">
                             <Path x:Name="CheckMark"
                                   Data="M 3 9 L 7 13 L 15 4"
-                                  Stroke="White"
+                                  Stroke="{DynamicResource StudioPrimaryInk}"
                                   StrokeThickness="2"
                                   StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round"
@@ -1293,6 +1299,9 @@
                         <ContentPresenter VerticalAlignment="Center" />
                     </DockPanel>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource Accent}" />
                             <Trigger.EnterActions>
@@ -1334,7 +1343,7 @@
                                 Background="{DynamicResource ControlBackground}"
                                 BorderBrush="{DynamicResource ControlBorder}"
                                 BorderThickness="1"
-                                CornerRadius="12"
+                                CornerRadius="5"
                                 Padding="10,0">
                             <DockPanel>
                                 <Path DockPanel.Dock="Right"
@@ -1387,7 +1396,7 @@
                                     Background="{DynamicResource PanelRaised}"
                                     BorderBrush="{DynamicResource PanelBorder}"
                                     BorderThickness="1"
-                                    CornerRadius="12"
+                                    CornerRadius="5"
                                     Margin="0,4,0,0"
                                     Padding="4">
                                 <Border.Effect>

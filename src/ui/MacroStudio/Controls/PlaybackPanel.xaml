@@ -14,64 +14,67 @@
         <TextBlock x:Name="PlaybackTitleText"
                    Style="{StaticResource PanelTitle}"
                    Text="播放"
-                   Margin="0,0,0,12" />
-        <StackPanel Grid.Row="1">
-            <TextBlock x:Name="TriggerLabelText" Text="触发键" Style="{StaticResource FieldLabel}" />
-            <Grid Margin="0,0,0,6">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBox x:Name="TriggerTextBox"
-                         Height="34"
-                         VerticalContentAlignment="Center"
-                         FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI"
-                         FontWeight="SemiBold"
-                         IsReadOnly="True"
-                         AutomationProperties.LabeledBy="{Binding ElementName=TriggerLabelText}"
-                         TextChanged="PlaybackSettings_TextChanged" />
-                <TextBlock x:Name="TriggerCaptureHintText" Text="按下触发键…">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderHintStyle}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <MultiDataTrigger>
-                                    <MultiDataTrigger.Conditions>
-                                        <Condition Binding="{Binding Text, ElementName=TriggerTextBox}" Value="" />
-                                        <Condition Binding="{Binding Tag, ElementName=TriggerTextBox}" Value="Capturing" />
-                                    </MultiDataTrigger.Conditions>
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </MultiDataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-                <Button x:Name="CaptureTriggerButton"
-                        Grid.Column="1"
-                        MinWidth="68"
-                        Height="34"
-                        Margin="8,0,0,0"
-                        Content="捕获"
-                        Click="CaptureTrigger_Click" />
-            </Grid>
-            <TextBlock x:Name="TriggerSupportHintText"
-                       Margin="0,0,0,12"
-                       Foreground="{DynamicResource SecondaryText}"
-                       FontSize="11"
-                       TextWrapping="Wrap"
-                       Text="支持主键盘、数字小键盘、符号键、F1–F24 和标准鼠标 1–5 键。" />
-        </StackPanel>
-
-        <Grid Grid.Row="2">
+                   Visibility="Collapsed" />
+        <Grid Grid.Row="1" Margin="0,0,0,1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="72" />
+                <ColumnDefinition x:Name="FieldGapColumn" Width="8" />
+                <ColumnDefinition x:Name="FieldEndColumn" Width="72" />
             </Grid.ColumnDefinitions>
-            <StackPanel>
+            <StackPanel x:Name="TriggerField" Grid.ColumnSpan="3">
+                <TextBlock x:Name="TriggerLabelText" Text="触发键" Style="{StaticResource FieldLabel}" />
+                <Grid Margin="0,0,0,9">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="TriggerTextBox"
+                             Height="32"
+                             VerticalContentAlignment="Center"
+                             FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI"
+                             FontWeight="SemiBold"
+                             IsReadOnly="True"
+                             AutomationProperties.LabeledBy="{Binding ElementName=TriggerLabelText}"
+                             ToolTip="{Binding Text, ElementName=TriggerSupportHintText}"
+                             AutomationProperties.HelpText="{Binding Text, ElementName=TriggerSupportHintText}"
+                             TextChanged="PlaybackSettings_TextChanged" />
+                    <TextBlock x:Name="TriggerCaptureHintText" Text="按下触发键…">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderHintStyle}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding Text, ElementName=TriggerTextBox}" Value="" />
+                                            <Condition Binding="{Binding Tag, ElementName=TriggerTextBox}" Value="Capturing" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <Button x:Name="CaptureTriggerButton"
+                            Grid.Column="1"
+                            MinWidth="58"
+                            Height="32"
+                            Margin="8,0,0,0"
+                            Content="捕获"
+                            Click="CaptureTrigger_Click" />
+                </Grid>
+                <TextBlock x:Name="TriggerSupportHintText"
+                           Visibility="Collapsed"
+                           Text="支持主键盘、数字小键盘、符号键、F1–F24 和标准鼠标 1–5 键。" />
+            </StackPanel>
+            <StackPanel x:Name="ModeField" Grid.Row="1">
                 <TextBlock x:Name="ModeLabelText" Text="模式" Style="{StaticResource FieldLabel}" />
                 <ComboBox x:Name="PlaybackModeBox"
-                          Height="34"
+                          Height="32"
                           AutomationProperties.LabeledBy="{Binding ElementName=ModeLabelText}"
                           SelectionChanged="PlaybackModeBox_SelectionChanged">
                     <ComboBoxItem Tag="toggleLoop" Content="按下循环" />
@@ -79,37 +82,25 @@
                     <ComboBoxItem Tag="fixedCount" Content="播放 N 次" IsSelected="True" />
                 </ComboBox>
             </StackPanel>
-            <StackPanel Grid.Column="2">
+            <StackPanel x:Name="CountField" Grid.Row="1" Grid.Column="2">
                 <TextBlock x:Name="PlaybackCountLabelText" Text="次数" Style="{StaticResource FieldLabel}" />
                 <TextBox x:Name="PlaybackCountTextBox"
-                         Height="34"
+                         Height="32"
                          Text="1"
                          FontFamily="Cascadia Mono, Consolas"
                          AutomationProperties.LabeledBy="{Binding ElementName=PlaybackCountLabelText}"
                          TextChanged="PlaybackSettings_TextChanged" />
             </StackPanel>
+            <Border x:Name="DaemonField" Grid.Row="2" Grid.ColumnSpan="3" Margin="0,9,0,0" Padding="0,9,0,10"
+                    BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,1,0,0">
+                <CheckBox x:Name="RunAsDaemonCheckBox"
+                          HorizontalAlignment="Left"
+                          Content="作为守护宏运行"
+                          ToolTip="允许此宏与普通宏同时运行。"
+                          Checked="RunAsDaemon_Changed"
+                          Unchecked="RunAsDaemon_Changed" />
+            </Border>
         </Grid>
-
-        <Border Grid.Row="3" BorderThickness="1" CornerRadius="10" Padding="10,8" Margin="0,10,0,12">
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
-                    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsChecked, ElementName=RunAsDaemonCheckBox}" Value="True">
-                            <Setter Property="Background" Value="{DynamicResource Selection}" />
-                            <Setter Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
-            <CheckBox x:Name="RunAsDaemonCheckBox"
-                      HorizontalAlignment="Left"
-                      Content="作为守护宏运行"
-                      ToolTip="允许此宏与普通宏同时运行。"
-                      Checked="RunAsDaemon_Changed"
-                      Unchecked="RunAsDaemon_Changed" />
-        </Border>
 
         <Grid Grid.Row="4">
             <Grid.ColumnDefinitions>
@@ -136,27 +127,21 @@
             <Button x:Name="StopPlaybackButton" Grid.Column="2" MinWidth="64" Content="停止" Visibility="Collapsed" Style="{StaticResource DangerButton}" Click="StopPlayback_Click" />
         </Grid>
 
-        <Border Grid.Row="5" Background="{DynamicResource PanelRaised}"
-                BorderBrush="{DynamicResource PanelBorder}"
-                BorderThickness="1"
-                CornerRadius="11"
-                Padding="10"
-                Margin="0,12,0,0">
+        <Border Grid.Row="5" BorderBrush="{DynamicResource PanelBorder}"
+                BorderThickness="0,1,0,0" Padding="0,8,0,2" Margin="0,9,0,0">
             <DockPanel>
-                <Border DockPanel.Dock="Left"
-                        Background="{DynamicResource Accent}"
-                        CornerRadius="2"
-                        Width="3"
-                        Margin="0,0,9,0" />
+                <Ellipse DockPanel.Dock="Left"
+                         Fill="{DynamicResource StudioSignal}" Width="5" Height="5"
+                         VerticalAlignment="Top" Margin="0,6,7,0" />
                 <StackPanel>
                     <TextBlock x:Name="PlaybackStatusText"
                                Text="播放：空闲"
-                               FontWeight="SemiBold"
+                               FontSize="12" FontWeight="SemiBold"
                                AutomationProperties.LiveSetting="Polite"
                                TextWrapping="Wrap" />
                     <TextBlock x:Name="PlaybackResultText"
                                Text="上次结果：无"
-                               Margin="0,4,0,0"
+                               Margin="0,2,0,0"
                                Foreground="{DynamicResource SecondaryText}"
                                TextWrapping="Wrap" />
                 </StackPanel>

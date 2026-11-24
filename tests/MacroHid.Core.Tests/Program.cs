@@ -318,7 +318,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio autosaves sequence conditions and rebuilds listeners", MacroStudioAutosavesSequenceConditionsAndRebuildsListeners),
     ("MacroStudio drop insertion uses target row and suppresses drag click duplication", MacroStudioDropInsertionUsesTargetRowAndSuppressesDragClickDuplication),
     ("MacroStudio supports multi-select drag feedback and sequence condition cards", MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel),
-    ("MacroStudio hosts step properties inside sequence cards", MacroStudioHostsStepPropertiesInsideSequenceCards),
+    ("MacroStudio docks step properties and retains inline editing", MacroStudioDocksStepPropertiesAndRetainsInlineEditing),
     ("MacroStudio closes inline editor after apply and returns focus to sequence", MacroStudioClosesInlineEditorAfterApplyAndReturnsFocusToSequence),
     ("MacroStudio closes inline editor on outside click but keeps coordinate picker open", MacroStudioClosesInlineEditorOnOutsideClickButKeepsCoordinatePickerOpen),
     ("MacroStudio closes inline editor when focus moves to sibling panels", MacroStudioClosesInlineEditorWhenFocusMovesToSiblingPanels),
@@ -326,7 +326,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio condition actions support explorer sequence interactions", MacroStudioConditionActionsSupportExplorerSequenceInteractions),
     ("MacroStudio condition list supports explorer operations", MacroStudioConditionListSupportsExplorerOperations),
     ("MacroStudio provides workspace window menu", MacroStudioProvidesWorkspaceWindowMenu),
-    ("MacroStudio provides IDEA style tool window stripe", MacroStudioProvidesIdeaStyleToolWindowStripe),
+    ("MacroStudio provides IDEA style tool window stripe", MacroStudioKeepsWorkspaceToolsDiscoverable),
     ("MacroStudio detaches MCRX JSON into a tool panel", MacroStudioDetachesMcrxJsonIntoToolPanel),
     ("MacroStudio uses IDE dock regions for workspace panels", MacroStudioUsesIdeDockRegionsForWorkspacePanels),
     ("MacroStudio workspace layout migrates old floating bounds", MacroStudioWorkspaceLayoutMigratesOldFloatingBounds),
@@ -4401,7 +4401,7 @@ static void MacroStudioUsesBorderlessCustomWindowChrome()
     Assert.Contains("InlineStepEditorPopup", stepSequenceXaml);
     Assert.Contains("MacroTargetBox", stepEditorXaml);
     Assert.Contains("PickPixelColorButton", stepEditorXaml);
-    Assert.Contains("Color=\"#E9EDF8\"", lightThemeXaml);
+    Assert.Contains("Color=\"#FCFBF8\"", lightThemeXaml);
     Assert.Contains("TopChromeBar_MouseLeftButtonDown", codeBehind);
     Assert.Contains("ToggleMaximize", codeBehind);
 }
@@ -4495,10 +4495,10 @@ static void MacroStudioUsesLauncherStyleSoftWorkbenchShell()
     Assert.Contains("MinHeight=\"560\"", mainWindowXaml);
     Assert.Contains("Width=\"1440\"", mainWindowXaml);
     Assert.Contains("MinWidth=\"1040\"", mainWindowXaml);
-    Assert.Contains("controls:WorkspaceDockHost x:Name=\"DockHost\" Margin=\"14,10,14,14\" ClipToBounds=\"True\"", mainWindowXaml);
-    Assert.Contains("ColumnDefinition x:Name=\"LeftDockColumn\" Width=\"260\" MinWidth=\"186\"", mainWindowXaml);
+    Assert.Contains("controls:WorkspaceDockHost x:Name=\"DockHost\" ClipToBounds=\"True\"", mainWindowXaml);
+    Assert.Contains("ColumnDefinition x:Name=\"LeftDockColumn\" Width=\"218\" MinWidth=\"174\"", mainWindowXaml);
     Assert.Contains("ColumnDefinition x:Name=\"CenterDockColumn\" Width=\"*\" MinWidth=\"420\"", mainWindowXaml);
-    Assert.Contains("ColumnDefinition x:Name=\"RightDockColumn\" Width=\"390\" MinWidth=\"282\"", mainWindowXaml);
+    Assert.Contains("ColumnDefinition x:Name=\"RightDockColumn\" Width=\"550\" MinWidth=\"270\"", mainWindowXaml);
     Assert.Contains("<controls:SmoothGridSplitter x:Name=\"LeftDockSplitter\"", mainWindowXaml);
     Assert.Contains("<controls:SmoothGridSplitter x:Name=\"RightDockSplitter\"", mainWindowXaml);
     Assert.DoesNotContain("Width=\"250\"", mainWindowXaml);
@@ -4513,11 +4513,11 @@ static void MacroStudioUsesLauncherStyleSoftWorkbenchShell()
     Assert.Contains("<controls:ConditionDirectivePanel x:Name=\"ConditionPanel\"", mainWindowXaml);
     Assert.DoesNotContain("Grid.Column=\"6\"", mainWindowXaml);
 
-    Assert.Contains("Color=\"#E9EDF8\"", lightThemeXaml);
-    Assert.Contains("Color=\"#F8F9FF\"", lightThemeXaml);
-    Assert.Contains("Color=\"#E3E8FA\"", lightThemeXaml);
-    Assert.Contains("Color=\"#0B1120\"", darkThemeXaml);
-    Assert.Contains("Color=\"#192439\"", darkThemeXaml);
+    Assert.Contains("Color=\"#FCFBF8\"", lightThemeXaml);
+    Assert.Contains("Color=\"#F6F4EF\"", lightThemeXaml);
+    Assert.Contains("Color=\"#EFEAE2\"", lightThemeXaml);
+    Assert.Contains("Color=\"#22211E\"", darkThemeXaml);
+    Assert.Contains("Color=\"#282621\"", darkThemeXaml);
 
     Assert.Contains("Style x:Key=\"CommandBarButton\"", sharedStyles);
     Assert.Contains("Style TargetType=\"{x:Type TreeView}\"", sharedStyles);
@@ -4526,7 +4526,7 @@ static void MacroStudioUsesLauncherStyleSoftWorkbenchShell()
     Assert.Contains("CornerRadius=\"14\"", sharedStyles);
     Assert.Contains("ShadowDepth=\"0\"", sharedStyles);
 
-    Assert.Contains("Style=\"{StaticResource SoftListItemBorder}\"", stepSequenceXaml);
+    Assert.Contains("ItemContainerStyle=\"{StaticResource StepTableContainer}\"", stepSequenceXaml);
     Assert.Contains("Style=\"{StaticResource SidebarPanelBorderStyle}\"", libraryXaml);
 }
 
@@ -6032,7 +6032,7 @@ static void MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel()
     Assert.Contains("PixelOptionsPanel", conditionXaml);
 }
 
-static void MacroStudioHostsStepPropertiesInsideSequenceCards()
+static void MacroStudioDocksStepPropertiesAndRetainsInlineEditing()
 {
     var mainWindowXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml"));
     var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
@@ -6041,7 +6041,8 @@ static void MacroStudioHostsStepPropertiesInsideSequenceCards()
     var stepEditorXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "StepEditorPanel.xaml"));
 
     Assert.DoesNotContain("<controls:StepEditorPanel x:Name=\"StepEditor\"", mainWindowXaml);
-    Assert.DoesNotContain("Header=\"步骤属性\"", mainWindowXaml);
+    Assert.Contains("<controls:StepInspectorPanel x:Name=\"WorkspaceStepInspector\"", mainWindowXaml);
+    Assert.Contains("AttachStepInspector(", mainWindowCode);
     Assert.DoesNotContain("StepEditor.Initialize", mainWindowCode);
     Assert.DoesNotContain("StepEditor.StepEdited", mainWindowCode);
     Assert.DoesNotContain("StepEditor.ApplyLocalization", mainWindowCode);
@@ -6208,39 +6209,23 @@ static void MacroStudioProvidesWorkspaceWindowMenu()
     Assert.Contains("\"playback\"", mainWindowCode);
 }
 
-static void MacroStudioProvidesIdeaStyleToolWindowStripe()
+static void MacroStudioKeepsWorkspaceToolsDiscoverable()
 {
     var mainWindowXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml"));
     var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
-    var sharedStyles = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Themes", "SharedStyles.xaml"));
 
-    Assert.Contains("x:Name=\"WorkspaceRoot\"", mainWindowXaml);
-    Assert.Contains("x:Name=\"ToolWindowRail\"", mainWindowXaml);
-    Assert.Contains("x:Name=\"WorkspaceRailButtons\"", mainWindowXaml);
-    Assert.Contains("x:Name=\"LibraryToolButton\"", mainWindowXaml);
-    Assert.Contains("x:Name=\"SequenceToolButton\"", mainWindowXaml);
-    Assert.Contains("x:Name=\"ConditionToolButton\"", mainWindowXaml);
-    Assert.Contains("x:Name=\"JsonToolButton\"", mainWindowXaml);
-    Assert.Contains("x:Name=\"ActionToolButton\"", mainWindowXaml);
-    Assert.Contains("x:Name=\"PlaybackToolButton\"", mainWindowXaml);
-    Assert.DoesNotContain("Content=\"M\"", mainWindowXaml);
-    Assert.DoesNotContain("Content=\"S\"", mainWindowXaml);
-    Assert.DoesNotContain("Content=\"C\"", mainWindowXaml);
-    Assert.DoesNotContain("Content=\"A\"", mainWindowXaml);
-    Assert.DoesNotContain("Content=\"J\"", mainWindowXaml);
-    Assert.DoesNotContain("Content=\"P\"", mainWindowXaml);
-    Assert.Contains("Click=\"WorkspaceToolButton_Click\"", mainWindowXaml);
-    Assert.Contains("Style=\"{StaticResource ToolWindowRailButton}\"", mainWindowXaml);
-    Assert.Contains("Grid.Column=\"1\"", mainWindowXaml);
-
-    Assert.Contains("WorkspaceToolButton_Click", mainWindowCode);
-    Assert.Contains("UpdateWorkspaceToolButtonStates", mainWindowCode);
-    Assert.Contains("SetToolButtonCheck", mainWindowCode);
-    Assert.Contains("SetWorkspaceToolButtonText", mainWindowCode);
-
-    Assert.Contains("Style x:Key=\"ToolWindowRailButton\"", sharedStyles);
-    Assert.Contains("TargetType=\"ToggleButton\"", sharedStyles);
-    Assert.Contains("Segoe Fluent Icons", sharedStyles);
+    Assert.Contains("x:Name=\"ConditionWorkspaceButton\"", mainWindowXaml);
+    Assert.Contains("x:Name=\"JsonWorkspaceButton\"", mainWindowXaml);
+    Assert.Contains("Click=\"OpenWorkspaceTool_Click\"", mainWindowXaml);
+    Assert.Contains("x:Name=\"WindowMenuButton\"", mainWindowXaml);
+    Assert.Contains("x:Name=\"ShowPropertiesMenuItem\"", mainWindowXaml);
+    Assert.Contains("x:Name=\"AdvancedSettingsMenuItem\"", mainWindowXaml);
+    Assert.Contains("x:Name=\"GlobalCommandMenuItem\"", mainWindowXaml);
+    Assert.Contains("x:Name=\"PropertiesRightToolButton\"", mainWindowXaml);
+    Assert.Contains("x:Name=\"ActionRightToolButton\"", mainWindowXaml);
+    Assert.Contains("x:Name=\"PlaybackRightToolButton\"", mainWindowXaml);
+    Assert.Contains("AttachStepInspector(", mainWindowCode);
+    Assert.Contains("PlaceInspectorPanel(PlaybackToolChrome", mainWindowCode);
 }
 
 static void MacroStudioDetachesMcrxJsonIntoToolPanel()
@@ -6349,7 +6334,7 @@ static void MacroStudioDefaultsToCleanCodexStyleWorkspace()
     Assert.Contains("RegisterWorkspacePanel(\"conditions\"", mainWindowCode);
     Assert.Contains("RegisterWorkspacePanel(\"json\"", mainWindowCode);
     Assert.Contains("defaultIsVisible: false", mainWindowCode);
-    Assert.Contains("RegisterWorkspacePanel(\"conditions\", WorkspaceTitle(\"WorkspacePanelConditions\"), ConditionToolChrome, ConditionPanelHost, WorkspaceDockRegion.Right, 390, 0)", mainWindowCode);
+    Assert.Contains("RegisterWorkspacePanel(\"conditions\", WorkspaceTitle(\"WorkspacePanelConditions\"), ConditionToolChrome, ConditionPanelHost, WorkspaceDockRegion.Right, 550, 3)", mainWindowCode);
     Assert.Contains("RegisterWorkspacePanel(\"json\", WorkspaceTitle(\"AdvancedJson\"), JsonToolChrome, JsonPanelHost, WorkspaceDockRegion.Bottom, 230, 0, defaultIsVisible: false)", mainWindowCode);
     Assert.Contains("DefaultIsVisible = defaultIsVisible", mainWindowCode);
 }
@@ -6787,11 +6772,11 @@ static void MacroStudioUsesStrongerActionHoverAndDimmedLightTheme()
 
     Assert.Contains("x:Name=\"HoverOverlay\"", stepSequenceXaml);
     Assert.Contains("x:Name=\"HoverRail\"", stepSequenceXaml);
-    Assert.Contains("BorderThickness=\"2\"", stepSequenceXaml);
+    Assert.Contains("BorderThickness=\"0,0,0,1\"", stepSequenceXaml);
     Assert.Contains("ActionHoverOverlay", lightThemeXaml);
     Assert.Contains("ActionHoverOverlay", darkThemeXaml);
-    Assert.Contains("Color=\"#E9EDF8\"", lightThemeXaml);
-    Assert.Contains("Color=\"#FDFDFF\"", lightThemeXaml);
+    Assert.Contains("Color=\"#FCFBF8\"", lightThemeXaml);
+    Assert.Contains("Color=\"#FFFDF9\"", lightThemeXaml);
     Assert.DoesNotContain("Color=\"#FFFFFF\"", lightThemeXaml);
 }
 
@@ -9834,7 +9819,7 @@ static void MacroStudioPolishesInputChromeMenusAndEmptyStates()
     Assert.Contains("x:Name=\"GroupProcessFilterPlaceholderText\"", libraryXaml);
     Assert.Contains("Style=\"{StaticResource ToolToggleButton}\"", sequenceXaml);
     Assert.Contains("x:Name=\"TriggerCaptureHintText\"", playbackXaml);
-    Assert.Contains("Height=\"34\"", playbackXaml);
+    Assert.Contains("x:Name=\"TriggerTextBox\"", playbackXaml);
     Assert.Contains("Tag = \"Capturing\"", playbackCode);
     Assert.Contains("x:Name=\"EmptySequenceOverlay\"", stepSequenceXaml);
     Assert.Contains("EmptySequenceOverlay.Visibility", stepSequenceCode);
@@ -10381,7 +10366,7 @@ static void MacroStudioMacroLibrarySupportsExplorerMultiSelectAndViewModes()
 
     Assert.Contains("x:Name=\"ExplorerListView\"", libraryXaml);
     Assert.Contains("SelectionMode=\"Extended\"", libraryXaml);
-    Assert.Contains("Background=\"{DynamicResource PanelBackground}\"", libraryXaml);
+    Assert.Contains("Background=\"Transparent\"", libraryXaml);
     Assert.Contains("Foreground=\"{DynamicResource PrimaryText}\"", libraryXaml);
     Assert.Contains("x:Name=\"ItemRoot\"", libraryXaml);
     Assert.Contains("Value=\"{DynamicResource Selection}\"", libraryXaml);
@@ -10397,7 +10382,7 @@ static void MacroStudioMacroLibrarySupportsExplorerMultiSelectAndViewModes()
     Assert.Contains("ExplorerRefreshMenuItem", libraryXaml);
     Assert.Contains("UpFolderButton", libraryXaml);
     Assert.Contains("ToolTip=\"返回上级\"", libraryXaml);
-    Assert.Contains("AutomationProperties.SetName(UpFolderButton", libraryCode);
+    Assert.Contains("AutomationProperties.Name", libraryXaml);
     Assert.Contains("ScrollViewer.IsDeferredScrollingEnabled=\"False\"", libraryXaml);
     Assert.Contains("ScrollViewer.PanningMode=\"Both\"", libraryXaml);
     Assert.Contains("PreviewMouseWheel=\"ExplorerListView_PreviewMouseWheel\"", libraryXaml);

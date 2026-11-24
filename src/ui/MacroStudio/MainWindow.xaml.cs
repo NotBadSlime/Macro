@@ -57,7 +57,7 @@ public partial class MainWindow : Window
     private bool syncingJsonPanel;
     private bool workspaceContentRendered;
     private bool macroRecordingTargetsCondition;
-    private string activeRightToolPanelId = "actions";
+    private string activeRightToolPanelId = "properties";
     private string? activeEditorMacroId;
     private WindowState windowStateBeforeRecording = WindowState.Normal;
     private readonly Stack<string> macroNavigationStack = new();
@@ -140,6 +140,8 @@ public partial class MainWindow : Window
     {
         LibraryPanel.Initialize(editorState);
         SequencePanelControl.Initialize(editorState);
+        SequencePanelControl.StepSequenceControl.AttachStepInspector(
+            WorkspaceStepInspector, () => ToggleWorkspacePanelVisibility("properties", true));
         ConditionPanel.Initialize(editorState);
 
         LibraryPanel.MacroSelected += OnMacroSelected;
@@ -164,6 +166,7 @@ public partial class MainWindow : Window
 
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
         SequencePanelControl.RunNowRequested += OnRunNow;
+        SequencePanelControl.ShowActionsRequested += ShowWorkspaceActions;
         SequencePanelControl.StopRequested += OnStopPlayback;
         SequencePanelControl.RecordingStartRequested += OnStartRecording;
         SequencePanelControl.RecordingStopRequested += OnStopRecording;
@@ -225,21 +228,30 @@ public partial class MainWindow : Window
             SaveWorkspaceLayout();
         };
         DockHost.BottomResizeRequested += (_, _) => OpenBottomRegionForResize();
+        RightDockContent.SizeChanged += (_, e) =>
+        {
+            if (e.WidthChanged) ApplyRightToolPanelVisibility();
+        };
     }
 
     private void FitDockToWindow(double windowWidth)
     {
-        var railWidth = WorkspaceRoot.ColumnDefinitions[0].Width.Value;
-        DockHost.FitWithin(Math.Max(0, windowWidth - railWidth - DockHost.Margin.Left - DockHost.Margin.Right));
+        DockHost.FitWithin(Math.Max(0, windowWidth - DockHost.Margin.Left - DockHost.Margin.Right));
+        var compact = windowWidth < 1190;
+        CommandSearchLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        CommandSearchBadge.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        CommandSearchGlyph.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 9, 0);
+        CommandSearchButton.Width = compact ? 36 : double.NaN;
     }
 
     private void InitializeWorkspacePanels()
     {
-        RegisterWorkspacePanel("library", WorkspaceTitle("WorkspacePanelLibrary"), LibraryToolChrome, LibraryPanelHost, WorkspaceDockRegion.Left, 260, 0);
+        RegisterWorkspacePanel("library", WorkspaceTitle("WorkspacePanelLibrary"), LibraryToolChrome, LibraryPanelHost, WorkspaceDockRegion.Left, 218, 0);
         RegisterWorkspacePanel("sequence", WorkspaceTitle("WorkspacePanelSequence"), SequenceToolChrome, SequencePanelHost, WorkspaceDockRegion.Center, 0, 0);
-        RegisterWorkspacePanel("conditions", WorkspaceTitle("WorkspacePanelConditions"), ConditionToolChrome, ConditionPanelHost, WorkspaceDockRegion.Right, 390, 0);
-        RegisterWorkspacePanel("actions", WorkspaceTitle("WorkspacePanelActions"), ActionPaletteToolChrome, ActionPaletteHost, WorkspaceDockRegion.Right, 390, 1);
-        RegisterWorkspacePanel("playback", WorkspaceTitle("WorkspacePanelPlayback"), PlaybackToolChrome, PlaybackPanelHost, WorkspaceDockRegion.Right, 390, 2);
+        RegisterWorkspacePanel("properties", L("StudioStepProperties"), PropertiesToolChrome, StepInspectorHost, WorkspaceDockRegion.Right, 550, 0);
+        RegisterWorkspacePanel("actions", L("StudioTabActions"), ActionPaletteToolChrome, ActionPaletteHost, WorkspaceDockRegion.Right, 550, 1);
+        RegisterWorkspacePanel("playback", L("StudioMacroPlayback"), PlaybackToolChrome, PlaybackPanelHost, WorkspaceDockRegion.Right, 550, 2);
+        RegisterWorkspacePanel("conditions", WorkspaceTitle("WorkspacePanelConditions"), ConditionToolChrome, ConditionPanelHost, WorkspaceDockRegion.Right, 550, 3);
         RegisterWorkspacePanel("json", WorkspaceTitle("AdvancedJson"), JsonToolChrome, JsonPanelHost, WorkspaceDockRegion.Bottom, 230, 0, defaultIsVisible: false);
 
         if (!isWorkspacePreview) workspaceLayout = WorkspaceLayoutStore.Load();
@@ -272,7 +284,9 @@ public partial class MainWindow : Window
 
     private void ApplyWorkspaceLayout()
     {
-        var initialRightPanel = workspaceLayout.ActiveRightPanelId ?? "actions";
+        var initialRightPanel = workspaceLayout.ActiveRightPanelId ?? "properties";
+        if (initialRightPanel == "actions" && !workspaceLayout.Panels.ContainsKey("properties"))
+            initialRightPanel = "properties";
         var layoutNeedsSave = workspaceLayout.Version < WorkspaceLayoutStore.CurrentVersion;
         foreach (var panel in workspacePanels.Values)
         {
@@ -306,7 +320,15 @@ public partial class MainWindow : Window
 
     private void ApplyDockSizes()
     {
-        DockHost.ApplyDockSizes(workspaceLayout.DockSizes ?? new WorkspaceDockSizes());
+        var sizes = workspaceLayout.DockSizes ?? new WorkspaceDockSizes();
+        if (!workspaceLayout.Panels.ContainsKey("properties"))
+        {
+            var defaults = new WorkspaceDockSizes();
+            if (sizes.LeftWidth == 260) sizes = sizes with { LeftWidth = defaults.LeftWidth };
+            if (sizes.RightWidth == 390) sizes = sizes with { RightWidth = defaults.RightWidth };
+        }
+
+        DockHost.ApplyDockSizes(sizes);
     }
 
     private void SaveDockSizes()
@@ -394,13 +416,31 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void WorkspaceToolButton_Click(object sender, RoutedEventArgs e)
+    private void OpenWorkspaceTool_Click(object sender, RoutedEventArgs e)
     {
-        if (updatingWorkspaceMenu) return;
-        if (sender is not ToggleButton { Tag: string id } item) return;
-        ToggleWorkspacePanelVisibility(id, item.IsChecked == true);
-        e.Handled = true;
+        var id = ReferenceEquals(sender, ConditionWorkspaceButton) ? "conditions" : "json";
+        if (!workspacePanels.TryGetValue(id, out var panel)) return;
+
+        if (id == "conditions" && panel.IsVisible && !panel.IsFloating && activeRightToolPanelId == id)
+        {
+            SelectRightToolPanel("properties");
+        }
+        else
+        {
+            ToggleWorkspacePanelVisibility(id, id == "conditions" || !panel.IsVisible);
+        }
     }
+
+    private void ShowWorkspaceActions()
+    {
+        ConditionPanel.DeactivateThenActionSequence();
+        ToggleWorkspacePanelVisibility("actions", true);
+        ActionPalette.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+    }
+
+    private void BasicControlMenu_Click(object sender, RoutedEventArgs e) => OnBasicControlRequested();
+    private void PrecisionControlMenu_Click(object sender, RoutedEventArgs e) => OnPrecisionControlRequested();
+    private void AdvancedSettingsMenu_Click(object sender, RoutedEventArgs e) => OnAdvancedSettingsRequested();
 
     private void FloatPanel_Click(object sender, RoutedEventArgs e)
     {
@@ -561,7 +601,7 @@ public partial class MainWindow : Window
     private void ResetWorkspaceLayout()
     {
         WorkspaceLayoutStore.Reset();
-        activeRightToolPanelId = "actions";
+        activeRightToolPanelId = "properties";
         workspaceLayout = new([], WorkspaceLayoutStore.CurrentVersion, new WorkspaceDockSizes());
         ApplyDockSizes();
         foreach (var panel in workspacePanels.Values)
@@ -572,7 +612,7 @@ public partial class MainWindow : Window
             ToggleWorkspacePanelVisibility(panel.Id, panel.IsVisible, saveLayout: false);
         }
 
-        activeRightToolPanelId = "actions";
+        activeRightToolPanelId = "properties";
         ApplyDockRegionVisibility();
         SaveWorkspaceLayout();
         SetStatus(L("WorkspaceLayoutReset"));
@@ -775,16 +815,41 @@ public partial class MainWindow : Window
             activeRightToolPanelId = visibleRightPanels[0].Id;
         }
 
+        bool IsDocked(string id) => visibleRightPanels.Any(panel => panel.Id == id);
+        var split = RightDockContent.ActualWidth >= 460
+            && activeRightToolPanelId != "conditions"
+            && visibleRightPanels.Any(panel => panel.Id != "conditions");
+        var hasProperties = split && IsDocked("properties");
+        var hasActions = split && IsDocked("actions");
+        var hasPlayback = split && IsDocked("playback");
+        var hasUpper = hasProperties || hasActions;
+        InspectorUpperRow.Height = hasPlayback && !hasUpper ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        InspectorPlaybackRow.Height = hasPlayback ? new GridLength(hasUpper ? 0.86 : 1, GridUnitType.Star) : new GridLength(0);
+        PlaceInspectorPanel(PropertiesToolChrome, 0, 0, hasProperties && hasActions ? 1 : 2);
+        PlaceInspectorPanel(ActionPaletteToolChrome, 0, hasProperties && hasActions ? 1 : 0, hasProperties && hasActions ? 1 : 2);
+        PlaceInspectorPanel(PlaybackToolChrome, hasPlayback ? 1 : 0, 0, 2);
+        ActionPaletteToolChrome.Margin = hasProperties && hasActions ? new Thickness(10, 0, 0, 0) : new Thickness(0);
+        PlaybackToolChrome.Margin = hasUpper && hasPlayback ? new Thickness(0, 8, 0, 0) : new Thickness(0);
+        InspectorTabsFrame.Visibility = split ? Visibility.Collapsed : Visibility.Visible;
+
         foreach (var panel in workspacePanels.Values.Where(panel => panel.DockRegion == WorkspaceDockRegion.Right && !panel.IsFloating))
         {
-            panel.DockContainer.Visibility = panel.IsVisible && panel.Id == activeRightToolPanelId
+            panel.DockContainer.Visibility = panel.IsVisible && (split ? panel.Id != "conditions" : panel.Id == activeRightToolPanelId)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
         }
 
+        SetRightToolButtonState(PropertiesRightToolButton, "properties");
         SetRightToolButtonState(ConditionRightToolButton, "conditions");
         SetRightToolButtonState(ActionRightToolButton, "actions");
         SetRightToolButtonState(PlaybackRightToolButton, "playback");
+    }
+
+    private static void PlaceInspectorPanel(UIElement panel, int row, int column, int columns)
+    {
+        Grid.SetRow(panel, row);
+        Grid.SetColumn(panel, column);
+        Grid.SetColumnSpan(panel, columns);
     }
 
     private void SetRightToolButtonState(ToggleButton button, string id)
@@ -888,37 +953,17 @@ public partial class MainWindow : Window
         updatingWorkspaceMenu = true;
         SetShowMenuCheck(ShowLibraryMenuItem, "library");
         SetShowMenuCheck(ShowSequenceMenuItem, "sequence");
+        SetShowMenuCheck(ShowPropertiesMenuItem, "properties");
         SetShowMenuCheck(ShowConditionMenuItem, "conditions");
         SetShowMenuCheck(ShowJsonMenuItem, "json");
         SetShowMenuCheck(ShowActionMenuItem, "actions");
         SetShowMenuCheck(ShowPlaybackMenuItem, "playback");
-        UpdateWorkspaceToolButtonStates();
         updatingWorkspaceMenu = false;
     }
 
     private void SetShowMenuCheck(MenuItem item, string id)
     {
         item.IsChecked = workspacePanels.TryGetValue(id, out var panel) && panel.IsVisible;
-    }
-
-    private void UpdateWorkspaceToolButtonStates()
-    {
-        SetToolButtonCheck(LibraryToolButton, "library");
-        SetToolButtonCheck(SequenceToolButton, "sequence");
-        SetToolButtonCheck(ConditionToolButton, "conditions");
-        SetToolButtonCheck(JsonToolButton, "json");
-        SetToolButtonCheck(ActionToolButton, "actions");
-        SetToolButtonCheck(PlaybackToolButton, "playback");
-    }
-
-    private void SetToolButtonCheck(ToggleButton button, string id)
-    {
-        button.IsChecked = workspacePanels.TryGetValue(id, out var panel) && panel.IsVisible;
-    }
-
-    private static void SetWorkspaceToolButtonText(ToggleButton button, string title)
-    {
-        button.ToolTip = title;
     }
 
     private void SetWorkspacePanelTitle(string id, string title)
@@ -1038,10 +1083,11 @@ public partial class MainWindow : Window
         try
         {
             editorState.SelectedMacroId = id;
-            SetActiveEditorMacroId(id);
+            activeEditorMacroId = id;
             libraryStore.SetSelected(id);
             var document = libraryStore.ReadMacro(id);
             SequencePanelControl.SetEditorDocument(document);
+            if (document.Steps.Count > 0) SequencePanelControl.SelectedStepIndex = 0;
             SequencePanelControl.ClearUndoHistory();
             PlaybackPanelControl.SetPlaybackControls(document.Playback);
             RefreshConditionStepChoices();
@@ -1122,7 +1168,7 @@ public partial class MainWindow : Window
             libraryStore.DeleteMacro(id);
             editorState.ReloadLibrary();
             editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
-            SetActiveEditorMacroId(editorState.SelectedMacroId);
+            activeEditorMacroId = editorState.SelectedMacroId;
             LibraryPanel.RefreshList();
 
             if (editorState.SelectedMacroId is not null)
@@ -1186,7 +1232,7 @@ public partial class MainWindow : Window
 
             editorState.ReloadLibrary();
             editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
-            SetActiveEditorMacroId(editorState.SelectedMacroId);
+            activeEditorMacroId = editorState.SelectedMacroId;
             LibraryPanel.RefreshList();
             if (editorState.SelectedMacroId is not null)
             {
@@ -1457,7 +1503,7 @@ public partial class MainWindow : Window
             item = libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
         }
 
-        SetActiveEditorMacroId(item.Id);
+        activeEditorMacroId = item.Id;
         if (editorState.SelectedMacroId is null
             || string.Equals(editorState.SelectedMacroId, item.Id, StringComparison.OrdinalIgnoreCase)
             || libraryStore.TryGetItem(editorState.SelectedMacroId)?.IsConditionMacro != true)
@@ -2649,7 +2695,6 @@ public partial class MainWindow : Window
             AppLog.Error("Playback", "Start failed", ex);
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
-            SequencePanelControl.SetOverviewPlaybackStatus(PlaybackStatus.Error, "PlaybackStatusError");
         }
     }
 
@@ -2730,7 +2775,7 @@ public partial class MainWindow : Window
             : null;
         item ??= libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
         editorState.SelectedMacroId = item.Id;
-        SetActiveEditorMacroId(item.Id);
+        activeEditorMacroId = item.Id;
         LibraryPanel.RefreshList();
         RefreshLibraryListeningState();
         SequencePanelControl.SetEditorDocument(document);
@@ -3115,7 +3160,6 @@ public partial class MainWindow : Window
         if (finished is { Direct: true }) RetireController(controller);
         if (shutdownStarted) return;
         RefreshDirectStopBinding();
-        RefreshEditorPlaybackVisual();
         if (run != controller.RunId || !ReferenceEquals(playbackController, controller)) return;
         UpdatePlaybackStatus();
         if (!ReferenceEquals(playbackController, controller)) return;
@@ -3133,7 +3177,6 @@ public partial class MainWindow : Window
 
     private void UpdatePlaybackStatus()
     {
-        RefreshEditorPlaybackVisual();
         lock (triggerGate)
         {
             if (playbackController?.Status is not (PlaybackStatus.Running or PlaybackStatus.Stopping))
@@ -3147,25 +3190,6 @@ public partial class MainWindow : Window
 
         PlaybackPanelControl.SetPlaybackStatus(L(PlaybackStatusResourceKey(playbackController.Status)));
         SetStatus(L(StatusResourceKey(playbackController.Status)));
-    }
-
-    private void SetActiveEditorMacroId(string? macroId)
-    {
-        if (string.Equals(activeEditorMacroId, macroId, StringComparison.OrdinalIgnoreCase)) return;
-        activeEditorMacroId = macroId;
-        RefreshEditorPlaybackVisual();
-    }
-
-    private void RefreshEditorPlaybackVisual()
-    {
-        PlaybackStatus status;
-        lock (triggerGate)
-        {
-            status = playbackRuns.Find(activeEditorMacroId ?? editorState.SelectedMacroId)?.Controller.Status
-                ?? PlaybackStatus.Idle;
-        }
-
-        SequencePanelControl.SetOverviewPlaybackStatus(status, PlaybackStatusResourceKey(status));
     }
 
     private enum StatusLevel { Info, Warning, Error }
@@ -3583,11 +3607,16 @@ public partial class MainWindow : Window
         SetWorkspacePanelTitle("sequence", WorkspaceTitle("WorkspacePanelSequence"));
         SetWorkspacePanelTitle("conditions", WorkspaceTitle("WorkspacePanelConditions"));
         SetWorkspacePanelTitle("json", WorkspaceTitle("AdvancedJson"));
-        SetWorkspacePanelTitle("actions", WorkspaceTitle("WorkspacePanelActions"));
-        SetWorkspacePanelTitle("playback", WorkspaceTitle("WorkspacePanelPlayback"));
-        ConditionRightToolLabel.Text = L("StudioTabConditions");
-        ActionRightToolLabel.Text = L("StudioTabActions");
-        PlaybackRightToolLabel.Text = L("StudioTabPlayback");
+        SetWorkspacePanelTitle("actions", L("StudioTabActions"));
+        SetWorkspacePanelTitle("playback", L("StudioMacroPlayback"));
+        SetWorkspacePanelTitle("properties", L("StudioStepProperties"));
+        PropertiesRightToolButton.Content = L("StudioTabProperties");
+        ConditionRightToolButton.Content = L("StudioTabConditions");
+        ActionRightToolButton.Content = L("StudioTabActions");
+        PlaybackRightToolButton.Content = L("StudioTabPlayback");
+        ConditionWorkspaceButton.Content = L("StudioTabConditions");
+        ConditionWorkspaceButton.ToolTip = WorkspaceTitle("WorkspacePanelConditions");
+        JsonWorkspaceButton.ToolTip = WorkspaceTitle("AdvancedJson");
         ApplyWorkspaceMenuItemText();
 
         updatingLanguageComboBox = true;
@@ -3645,9 +3674,13 @@ public partial class MainWindow : Window
 
     private void ApplyWorkspaceMenuItemText()
     {
+        BasicControlMenuItem.Header = L("MacroBasicControl");
+        PrecisionControlMenuItem.Header = L("PrecisionControl");
+        AdvancedSettingsMenuItem.Header = L("AdvancedSettings");
         GlobalCommandMenuItem.Header = L("GlobalCommandTitle");
         ShowLibraryMenuItem.Header = WorkspaceTitle("WorkspacePanelLibrary");
         ShowSequenceMenuItem.Header = WorkspaceTitle("WorkspacePanelSequence");
+        ShowPropertiesMenuItem.Header = L("StudioStepProperties");
         ShowConditionMenuItem.Header = WorkspaceTitle("WorkspacePanelConditions");
         ShowJsonMenuItem.Header = WorkspaceTitle("AdvancedJson");
         ShowActionMenuItem.Header = WorkspaceTitle("WorkspacePanelActions");
@@ -3655,19 +3688,13 @@ public partial class MainWindow : Window
         SetSubMenuHeaders(FloatPanelsMenuItem);
         SetSubMenuHeaders(DockPanelsMenuItem);
 
-        LibraryToolTitle.Text = WorkspaceTitle("WorkspacePanelLibrary");
+        LibraryToolTitle.Text = L("StudioLibrary");
         SequenceToolTitle.Text = WorkspaceTitle("WorkspacePanelSequence");
+        PropertiesToolTitle.Text = L("StudioStepProperties");
         ConditionToolTitle.Text = WorkspaceTitle("WorkspacePanelConditions");
-        ActionPaletteToolTitle.Text = WorkspaceTitle("WorkspacePanelActions");
-        PlaybackToolTitle.Text = WorkspaceTitle("WorkspacePanelPlayback");
+        ActionPaletteToolTitle.Text = L("StudioTabActions");
+        PlaybackToolTitle.Text = L("StudioMacroPlayback");
         JsonToolTitle.Text = WorkspaceTitle("AdvancedJson");
-
-        SetWorkspaceToolButtonText(LibraryToolButton, WorkspaceTitle("WorkspacePanelLibrary"));
-        SetWorkspaceToolButtonText(SequenceToolButton, WorkspaceTitle("WorkspacePanelSequence"));
-        SetWorkspaceToolButtonText(ConditionToolButton, WorkspaceTitle("WorkspacePanelConditions"));
-        SetWorkspaceToolButtonText(JsonToolButton, WorkspaceTitle("AdvancedJson"));
-        SetWorkspaceToolButtonText(ActionToolButton, WorkspaceTitle("WorkspacePanelActions"));
-        SetWorkspaceToolButtonText(PlaybackToolButton, WorkspaceTitle("WorkspacePanelPlayback"));
     }
 
     private void SetSubMenuHeaders(MenuItem parent)
@@ -3678,6 +3705,7 @@ public partial class MainWindow : Window
             {
                 "library" => WorkspaceTitle("WorkspacePanelLibrary"),
                 "sequence" => WorkspaceTitle("WorkspacePanelSequence"),
+                "properties" => L("StudioStepProperties"),
                 "conditions" => WorkspaceTitle("WorkspacePanelConditions"),
                 "json" => WorkspaceTitle("AdvancedJson"),
                 "actions" => WorkspaceTitle("WorkspacePanelActions"),

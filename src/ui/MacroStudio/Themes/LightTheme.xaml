@@ -2,115 +2,72 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
-    <SolidColorBrush x:Key="PageBackground" Color="#E9EDF8" />
-    <SolidColorBrush x:Key="PanelBackground" Color="#F8F9FF" />
-    <SolidColorBrush x:Key="PanelRaised" Color="#FDFDFF" />
-    <SolidColorBrush x:Key="PanelBorder" Color="#D6DEF1" />
-    <SolidColorBrush x:Key="PrimaryText" Color="#19243F" />
-    <SolidColorBrush x:Key="SecondaryText" Color="#465675" />
-    <SolidColorBrush x:Key="Accent" Color="#5041BD" />
-    <SolidColorBrush x:Key="AccentBlue" Color="#1F62AF" />
-    <SolidColorBrush x:Key="AccentOrange" Color="#93510D" />
-    <SolidColorBrush x:Key="AccentPink" Color="#A13270" />
-    <SolidColorBrush x:Key="Danger" Color="#AD314D" />
-    <SolidColorBrush x:Key="Hover" Color="#E3E8FA" />
-    <SolidColorBrush x:Key="Selection" Color="#E3DFFF" />
-    <SolidColorBrush x:Key="SelectionBorder" Color="#8070E4" />
-    <SolidColorBrush x:Key="ActionHoverOverlay" Color="#245D4BE0" />
-    <SolidColorBrush x:Key="ChromeBackground" Color="#F1F4FF" />
-    <SolidColorBrush x:Key="ChromeBorder" Color="#CFD8EF" />
-    <SolidColorBrush x:Key="ControlBackground" Color="#FAFBFF" />
-    <SolidColorBrush x:Key="ControlBorder" Color="#A6B1CE" />
-    <SolidColorBrush x:Key="ScrollThumb" Color="#ADB9D5" />
-    <SolidColorBrush x:Key="ScrollThumbHover" Color="#8899BF" />
-    <SolidColorBrush x:Key="DisabledText" Color="#697996" />
-    <SolidColorBrush x:Key="Placeholder" Color="#657491" />
-    <SolidColorBrush x:Key="FocusRing" Color="#5E47DA" />
-    <SolidColorBrush x:Key="DangerHover" Color="#FCE8EF" />
-    <SolidColorBrush x:Key="PrimaryHover" Color="#513BCF" />
-    <SolidColorBrush x:Key="ShellSidebarBackground" Color="#F5F7FF" />
-    <SolidColorBrush x:Key="WorkbenchBackground" Color="#EDF1FA" />
-    <SolidColorBrush x:Key="InspectorBackground" Color="#F2F5FF" />
+    <SolidColorBrush x:Key="PageBackground" Color="#FCFBF8" />
+    <SolidColorBrush x:Key="PanelBackground" Color="#FCFBF8" />
+    <SolidColorBrush x:Key="PanelRaised" Color="#FFFDF9" />
+    <SolidColorBrush x:Key="PanelBorder" Color="#DFD9CD" />
+    <SolidColorBrush x:Key="PrimaryText" Color="#27231D" />
+    <SolidColorBrush x:Key="SecondaryText" Color="#655E50" />
+    <SolidColorBrush x:Key="Accent" Color="#A73522" />
+    <SolidColorBrush x:Key="AccentBlue" Color="#315984" />
+    <SolidColorBrush x:Key="AccentOrange" Color="#8C5127" />
+    <SolidColorBrush x:Key="AccentPink" Color="#87374A" />
+    <SolidColorBrush x:Key="Danger" Color="#9E3926" />
+    <SolidColorBrush x:Key="Hover" Color="#EFEAE2" />
+    <SolidColorBrush x:Key="Selection" Color="#F3E4D9" />
+    <SolidColorBrush x:Key="SelectionBorder" Color="#A73522" />
+    <SolidColorBrush x:Key="ActionHoverOverlay" Color="#239F5639" />
+    <SolidColorBrush x:Key="ChromeBackground" Color="#F6F4EF" />
+    <SolidColorBrush x:Key="ChromeBorder" Color="#DFD9CD" />
+    <SolidColorBrush x:Key="ControlBackground" Color="#FFFDF9" />
+    <SolidColorBrush x:Key="ControlBorder" Color="#D5CDBD" />
+    <SolidColorBrush x:Key="ScrollThumb" Color="#C6BDAD" />
+    <SolidColorBrush x:Key="ScrollThumbHover" Color="#9E9381" />
+    <SolidColorBrush x:Key="DisabledText" Color="#827769" />
+    <SolidColorBrush x:Key="Placeholder" Color="#796F62" />
+    <SolidColorBrush x:Key="FocusRing" Color="#A73522" />
+    <SolidColorBrush x:Key="DangerHover" Color="#F8E5DD" />
+    <SolidColorBrush x:Key="PrimaryHover" Color="#8D2A1B" />
+    <SolidColorBrush x:Key="ShellSidebarBackground" Color="#EFEDE6" />
+    <SolidColorBrush x:Key="WorkbenchBackground" Color="#FCFBF8" />
+    <SolidColorBrush x:Key="InspectorBackground" Color="#F6F4EF" />
 
-    <sys:Double x:Key="PanelShadowOpacity">0.04</sys:Double>
-    <sys:Double x:Key="PanelShadowBlur">20</sys:Double>
+    <sys:Double x:Key="PanelShadowOpacity">0</sys:Double>
+    <sys:Double x:Key="PanelShadowBlur">0</sys:Double>
 
-    <!-- Action palette icon badges -->
-    <SolidColorBrush x:Key="BadgeBlue" Color="#EAF3FF" />
-    <SolidColorBrush x:Key="BadgeAmber" Color="#FFF4E0" />
-    <SolidColorBrush x:Key="BadgeGray" Color="#E8EAED" />
-    <SolidColorBrush x:Key="BadgeGreen" Color="#EAF8EF" />
-    <SolidColorBrush x:Key="BadgePurple" Color="#F8EAF5" />
-    <SolidColorBrush x:Key="BadgePink" Color="#FDE8EF" />
-    <SolidColorBrush x:Key="BadgeTeal" Color="#E7F6F8" />
-    <SolidColorBrush x:Key="BadgeRed" Color="#FFEDEE" />
-    <SolidColorBrush x:Key="BadgeMint" Color="#DDECE2" />
-    <SolidColorBrush x:Key="BadgeOrange" Color="#FFF0E5" />
+    <SolidColorBrush x:Key="BadgeBlue" Color="#EEF0ED" />
+    <SolidColorBrush x:Key="BadgeAmber" Color="#F2EBDD" />
+    <SolidColorBrush x:Key="BadgeGray" Color="#EFEDE6" />
+    <SolidColorBrush x:Key="BadgeGreen" Color="#EBEEE5" />
+    <SolidColorBrush x:Key="BadgePurple" Color="#EFEAE7" />
+    <SolidColorBrush x:Key="BadgePink" Color="#F2E7E5" />
+    <SolidColorBrush x:Key="BadgeTeal" Color="#E7EEE9" />
+    <SolidColorBrush x:Key="BadgeRed" Color="#F3E7E0" />
+    <SolidColorBrush x:Key="BadgeMint" Color="#E9EEE6" />
+    <SolidColorBrush x:Key="BadgeOrange" Color="#F2E7DA" />
+    <SolidColorBrush x:Key="WorkspacePanelGlowBrush" Color="#24A73522" />
+    <SolidColorBrush x:Key="RailSelectionGlow" Color="#10A73522" />
+    <SolidColorBrush x:Key="SelectionBandBrush" Color="#28A73522" />
+    <SolidColorBrush x:Key="StudioPrimaryFill" Color="#A73522" />
+    <SolidColorBrush x:Key="StudioPrimaryInk" Color="#FFFDF8" />
+    <SolidColorBrush x:Key="StudioSuccess" Color="#32634A" />
+    <SolidColorBrush x:Key="StudioDimmer" Color="#883B3328" />
+    <SolidColorBrush x:Key="StudioSignal" Color="#A73522" />
+    <SolidColorBrush x:Key="StudioChromeEdge" Color="#DFD9CD" />
+    <SolidColorBrush x:Key="StudioToolbarSurface" Color="#F6F4EF" />
+    <SolidColorBrush x:Key="StudioStatusSurface" Color="#FCFBF8" />
+    <SolidColorBrush x:Key="StudioBrandMark" Color="#F4AA8E" />
+    <SolidColorBrush x:Key="StudioBrandSurface" Color="#27231D" />
+    <SolidColorBrush x:Key="StudioHorizon" Color="#DFD9CD" />
+    <SolidColorBrush x:Key="StudioBackdropGrid" Color="Transparent" />
 
-    <!-- Selection glows (were fixed blue in SharedStyles) -->
-    <SolidColorBrush x:Key="WorkspacePanelGlowBrush" Color="#22614AF5" />
-    <SolidColorBrush x:Key="RailSelectionGlow" Color="#1A614AF5" />
-    <SolidColorBrush x:Key="SelectionBandBrush" Color="#28614AF5" />
+    <Color x:Key="StudioWashStart">#EFEDE6</Color>
+    <Color x:Key="StudioWashMiddle">#FCFBF8</Color>
+    <Color x:Key="StudioWashEnd">#F6F4EF</Color>
+    <Color x:Key="StudioChromeEnd">#F6F4EF</Color>
 
-    <LinearGradientBrush x:Key="StudioPrimaryFill" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#146786" Offset="0" />
-        <GradientStop Color="#3E55C8" Offset="0.57" />
-        <GradientStop Color="#593BC6" Offset="1" />
-    </LinearGradientBrush>
-    <SolidColorBrush x:Key="StudioSuccess" Color="#136F57" />
-    <SolidColorBrush x:Key="StudioDimmer" Color="#9027334F" />
-    <Color x:Key="StudioWashStart">#D5E8F8</Color>
-    <Color x:Key="StudioWashMiddle">#E9EDF8</Color>
-    <Color x:Key="StudioWashEnd">#EBE1F8</Color>
-    <Color x:Key="StudioChromeEnd">#E9DFF7</Color>
-
-    <LinearGradientBrush x:Key="StudioBackdrop" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="{StaticResource StudioWashStart}" Offset="0" />
-        <GradientStop Color="{StaticResource StudioWashMiddle}" Offset="0.52" />
-        <GradientStop Color="{StaticResource StudioWashEnd}" Offset="1" />
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="StudioChrome" StartPoint="0,0" EndPoint="1,0">
-        <GradientStop Color="{StaticResource StudioWashStart}" Offset="0" />
-        <GradientStop Color="{StaticResource StudioWashMiddle}" Offset="0.56" />
-        <GradientStop Color="{StaticResource StudioChromeEnd}" Offset="1" />
-    </LinearGradientBrush>
-
-    <SolidColorBrush x:Key="StudioSignal" Color="#066481" />
-    <SolidColorBrush x:Key="StudioChromeEdge" Color="#ADBFD9" />
-    <SolidColorBrush x:Key="StudioToolbarSurface" Color="#D6F6F9FF" />
-    <SolidColorBrush x:Key="StudioStatusSurface" Color="#F1F5FC" />
-    <SolidColorBrush x:Key="StudioBrandMark" Color="#E4FAFF" />
-
-    <LinearGradientBrush x:Key="StudioBrandSurface" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#1E5C88" Offset="0" />
-        <GradientStop Color="#5641A5" Offset="1" />
-    </LinearGradientBrush>
-
-    <LinearGradientBrush x:Key="StudioRailSurface" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#E1EBF8" Offset="0" />
-        <GradientStop Color="#EFF0FA" Offset="1" />
-    </LinearGradientBrush>
-
-    <LinearGradientBrush x:Key="StudioPanelHeaderSurface" StartPoint="0,0" EndPoint="1,0">
-        <GradientStop Color="#EAF1FC" Offset="0" />
-        <GradientStop Color="#F5F6FC" Offset="1" />
-    </LinearGradientBrush>
-
-    <LinearGradientBrush x:Key="StudioHorizon" StartPoint="0,0" EndPoint="1,0">
-        <GradientStop Color="#209AB4" Offset="0" />
-        <GradientStop Color="#6889CC" Offset="0.48" />
-        <GradientStop Color="#8560C5" Offset="1" />
-    </LinearGradientBrush>
-
-    <DrawingBrush x:Key="StudioBackdropGrid" TileMode="Tile" Stretch="None"
-                  ViewportUnits="Absolute" Viewport="0,0,32,32"
-                  ViewboxUnits="Absolute" Viewbox="0,0,32,32">
-        <DrawingBrush.Drawing>
-            <GeometryDrawing Geometry="M0.5,0.5 H32 M0.5,0.5 V32">
-                <GeometryDrawing.Pen>
-                    <Pen Brush="#20486BA2" Thickness="1" />
-                </GeometryDrawing.Pen>
-            </GeometryDrawing>
-        </DrawingBrush.Drawing>
-    </DrawingBrush>
+    <SolidColorBrush x:Key="StudioBackdrop" Color="{StaticResource StudioWashMiddle}" />
+    <SolidColorBrush x:Key="StudioChrome" Color="{StaticResource StudioChromeEnd}" />
+    <SolidColorBrush x:Key="StudioRailSurface" Color="{StaticResource StudioWashStart}" />
+    <SolidColorBrush x:Key="StudioPanelHeaderSurface" Color="{StaticResource StudioWashEnd}" />
 </ResourceDictionary>

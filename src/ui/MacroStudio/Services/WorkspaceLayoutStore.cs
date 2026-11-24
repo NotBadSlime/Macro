@@ -45,8 +45,8 @@ public sealed record WorkspacePanelLayout(
 }
 
 public sealed record WorkspaceDockSizes(
-    double LeftWidth = 260,
-    double RightWidth = 390,
+    double LeftWidth = 218,
+    double RightWidth = 550,
     double BottomHeight = 230);
 
 public sealed record WorkspaceLayout(

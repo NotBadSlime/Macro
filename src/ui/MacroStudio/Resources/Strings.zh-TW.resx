@@ -306,6 +306,24 @@
   <data name="AddMacroHint" xml:space="preserve"><value>把左側巨集拖到序列裡，可以複製它的步驟。</value></data>
   <data name="StepProperties" xml:space="preserve"><value>屬性</value></data>
   <data name="StepPropertiesHint" xml:space="preserve"><value>選擇一個步驟後可視化編輯。</value></data>
+  <data name="StepTableNumber" xml:space="preserve"><value>序號</value></data>
+  <data name="StepTableStart" xml:space="preserve"><value>開始</value></data>
+  <data name="StepTableAction" xml:space="preserve"><value>動作</value></data>
+  <data name="StepTableParameter" xml:space="preserve"><value>參數</value></data>
+  <data name="StepTableStartHint" xml:space="preserve"><value>計畫開始時間，單位為秒。巢狀步驟顯示第一輪。橫線表示開始時間取決於執行情況。</value></data>
+  <data name="StepTablePlannedAt" xml:space="preserve"><value>計畫在 {0} 秒開始</value></data>
+  <data name="StepTableUnknownTime" xml:space="preserve"><value>開始時間由執行情況決定</value></data>
+  <data name="StepTableKeyboard" xml:space="preserve"><value>鍵盤</value></data>
+  <data name="StepTableMedia" xml:space="preserve"><value>媒體鍵</value></data>
+  <data name="StepTableBranch" xml:space="preserve"><value>分支</value></data>
+  <data name="StepTableGroupEnd" xml:space="preserve"><value>結束</value></data>
+  <data name="StepTableDown" xml:space="preserve"><value>按下</value></data>
+  <data name="StepTableUp" xml:space="preserve"><value>抬起</value></data>
+  <data name="StepTableTap" xml:space="preserve"><value>按下並抬起</value></data>
+  <data name="StepTableMouseLeft" xml:space="preserve"><value>左鍵</value></data>
+  <data name="StepTableMouseRight" xml:space="preserve"><value>右鍵</value></data>
+  <data name="StepTableMouseMiddle" xml:space="preserve"><value>中鍵</value></data>
+  <data name="StepTableCopyFailed" xml:space="preserve"><value>無法複製這一步。</value></data>
   <data name="Key" xml:space="preserve"><value>鍵位</value></data>
   <data name="Action" xml:space="preserve"><value>動作</value></data>
   <data name="MoveMode" xml:space="preserve"><value>移動模式</value></data>
@@ -752,8 +770,11 @@
   <data name="StudioCommandSearch" xml:space="preserve"><value>搜尋命令</value></data>
   <data name="StudioNoMatchingCommands" xml:space="preserve"><value>沒有符合的命令</value></data>
   <data name="StudioTabConditions" xml:space="preserve"><value>條件</value></data>
-  <data name="StudioTabActions" xml:space="preserve"><value>動作</value></data>
+  <data name="StudioTabActions" xml:space="preserve"><value>動作庫</value></data>
   <data name="StudioTabPlayback" xml:space="preserve"><value>播放</value></data>
-  <data name="SequenceOverview" xml:space="preserve"><value>步驟概覽</value></data>
-  <data name="SequenceOverviewHint" xml:space="preserve"><value>點選概覽可跳到對應步驟。也可以用方向鍵切換，Home 和 End 跳到首尾。</value></data>
+  <data name="StudioLibrary" xml:space="preserve"><value>巨集庫</value></data>
+  <data name="StudioStepProperties" xml:space="preserve"><value>步驟屬性</value></data>
+  <data name="StudioTabProperties" xml:space="preserve"><value>屬性</value></data>
+  <data name="StudioMacroPlayback" xml:space="preserve"><value>巨集播放設定</value></data>
+  <data name="StudioAddAction" xml:space="preserve"><value>新增動作</value></data>
 </root>
