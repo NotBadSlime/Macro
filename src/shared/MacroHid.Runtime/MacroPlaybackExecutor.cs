@@ -443,6 +443,11 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
             return new PlaybackRunResult(PlaybackRunStatus.InputUnavailable, 0, 0, Cancelled: false, InputStats: null);
         }
 
+        if (options.Mode != PlaybackMode.FixedCount && document.Steps.Count == 0 && document.EffectiveConditions.Count == 0)
+        {
+            return new PlaybackRunResult(PlaybackRunStatus.Completed, 0, 0, cancellationToken.IsCancellationRequested, InputStats: null);
+        }
+
         if (inputSink is SendInputMacroSink sendInput)
         {
             sendInput.ModifierChordHold = options.PressFloor.ModifierChordHold;
@@ -1065,7 +1070,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         bool applyStepWindows = true,
         PlaybackPauseCoordinator? pauseCoordinator = null,
         ConditionTimeline? timeline = null,
-        InputPressFloor? pressFloor = null)
+        InputPressFloor? pressFloor = null,
+        ConditionMonitorMode monitorMode = ConditionMonitorMode.MainTimeline)
     {
         var monitors = new List<ConditionMonitor>();
         var conditionWindows = applyStepWindows
@@ -1080,14 +1086,18 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 continue;
             }
 
-            if (!cond.HasActivationConstraint)
+            if (!cond.HasActivationConstraint && monitorMode == ConditionMonitorMode.MainTimeline)
             {
                 continue;
             }
 
             var intervals = ConditionActivationSchedule.Resolve(cond, conditionWindows, qpcFrequency);
+            if (intervals.Count == 0 && monitorMode != ConditionMonitorMode.MainTimeline && !cond.HasTimeRange)
+                intervals = [new ConditionTimeInterval(TimeSpan.Zero, null, cond.TimeBase)];
             if (intervals.Count == 0)
             {
+                if (monitorMode != ConditionMonitorMode.MainTimeline)
+                    timeline?.MarkFinished(index, macroStartTick);
                 continue;
             }
 
@@ -1105,7 +1115,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 timeline,
                 index,
                 intervals,
-                pressFloor));
+                pressFloor,
+                mode: monitorMode));
         }
         return monitors;
     }
@@ -1122,6 +1133,13 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         var qpcFrequency = clock.Frequency;
         var delayStrategy = configuredDelayStrategy ?? new QpcPlaybackDelayStrategy(clock, options.Precision, options.PressFloor.Generation);
         var iterationsTarget = options.Mode == PlaybackMode.FixedCount ? options.Count : int.MaxValue;
+        var conditionOnly = IsConditionOnly(document);
+        var continuousConditions = conditionOnly && options.Mode != PlaybackMode.FixedCount;
+        var monitorMode = !conditionOnly ? ConditionMonitorMode.MainTimeline : continuousConditions
+            ? ConditionMonitorMode.ContinuousConditions : ConditionMonitorMode.FixedConditionIteration;
+        var conditionLoopDelay = continuousConditions
+            ? TimeSpan.FromMilliseconds(Math.Clamp(document.EffectiveConditions.Min(condition => condition.EffectivePollInterval.TotalMilliseconds), 1, int.MaxValue))
+            : TimeSpan.Zero;
         var iterationsCompleted = 0;
         var actionsSubmitted = 0;
         var sequence = 1u;
@@ -1131,6 +1149,9 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         {
             while (iterationsCompleted < iterationsTarget)
             {
+                // Gate-only cycles and cycles explicitly stopped by their conditions still need a polling delay.
+                if (continuousConditions && iterationsCompleted > 0)
+                    cancellationToken.WaitHandle.WaitOne(conditionLoopDelay);
                 cancellationToken.ThrowIfCancellationRequested();
                 var gateStartTick = clock.GetTimestamp();
                 var timeline = new ConditionTimeline(
@@ -1182,7 +1203,7 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     iterationCancellation.Cancel();
                 }
 
-                using var pauseCoordinator = new PlaybackPauseCoordinator(clock);
+                using var pauseCoordinator = conditionOnly ? null : new PlaybackPauseCoordinator(clock);
                 var monitors = CreateConditionMonitors(
                     document,
                     conditionEvaluator,
@@ -1193,7 +1214,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     StopIteration,
                     pauseCoordinator: pauseCoordinator,
                     timeline: timeline,
-                    pressFloor: options.PressFloor);
+                    pressFloor: options.PressFloor,
+                    monitorMode: monitorMode);
                 var runner = new ManagedMacroControlFlowRunner(
                     inputSink,
                     delayStrategy,
@@ -1209,16 +1231,30 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 try
                 {
                     ActivateAllMonitors(monitors);
-                    flow = runner.Run(
-                        document,
-                        iterationStartTick,
-                        qpcFrequency,
-                        iterationToken,
-                        options.NoWait,
-                        ref sequence,
-                        ref actionsSubmitted);
-                    CompleteAllMonitorsAfterCurrentEvaluation(monitors);
+                    if (conditionOnly)
+                    {
+                        // These monitors own the timeline. Keep their activation windows intact
+                        // across polls and stop promptly when this run or iteration is cancelled.
+                        if (continuousConditions && monitors.Count > 0)
+                        {
+                            iterationToken.WaitHandle.WaitOne();
+                            iterationToken.ThrowIfCancellationRequested();
+                        }
+                    }
+                    else
+                    {
+                        flow = runner.Run(
+                            document,
+                            iterationStartTick,
+                            qpcFrequency,
+                            iterationToken,
+                            options.NoWait,
+                            ref sequence,
+                            ref actionsSubmitted);
+                        CompleteAllMonitorsAfterCurrentEvaluation(monitors);
+                    }
                     WaitForTriggeredConditionActions(monitors, iterationToken);
+                    if (conditionOnly) iterationToken.ThrowIfCancellationRequested();
                     DeactivateAllMonitors(monitors);
                 }
                 catch (OperationCanceledException) when (
@@ -1308,10 +1344,14 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 
     private bool RequiresManagedControlFlow(MacroDocument document, PlaybackExecutionOptions options)
     {
-        return MacroControlFlowInspector.RequiresManagedExecution(document, macroResolver)
+        return IsConditionOnly(document)
+            || MacroControlFlowInspector.RequiresManagedExecution(document, macroResolver)
             || ConditionActionsRequireManagedControlFlow(document)
             || (HasPauseMainTimelineCondition(document) && !CanAttemptNativeIteration(options));
     }
+
+    private static bool IsConditionOnly(MacroDocument document)
+        => document.Steps.Count == 0 && document.EffectiveConditions.Count > 0;
 
     private bool ConditionActionsRequireManagedControlFlow(MacroDocument document)
     {

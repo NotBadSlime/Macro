@@ -2,6 +2,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
+using MacroHid.Converter;
 using MacroHid.Runtime;
 
 namespace MacroStudio;
@@ -19,8 +20,7 @@ public partial class MainWindow
 
     private static string[] GetSupportedMacroFiles(IEnumerable<string> paths)
     {
-        return paths.Where(path => File.Exists(path) && Path.GetExtension(path).ToLowerInvariant()
-                is ".mcrx" or ".xml" or ".lua" or ".xmbcs" or ".mq" or ".txt" or ".json")
+        return paths.Where(path => (MacroImportFiles.IsSupportedMacro(path) || MacroImportFiles.IsZip(path)) && File.Exists(path))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }

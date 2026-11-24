@@ -54,6 +54,16 @@ internal static class UiSnapshot
                     Render(new Window { Width = 400, Height = 760, Content = palette, WindowStyle = WindowStyle.None,
                             Background = (Brush)Application.Current.FindResource("InspectorBackground") },
                         Path.Combine(directory, $"palette-{suffix}.png"));
+                    var playback = new PlaybackPanel();
+                    playback.ApplyLocalization();
+                    playback.SetPlaybackControls(MacroHid.Core.PlaybackSettings.Default with
+                    {
+                        Mode = MacroHid.Core.PlaybackMode.ToggleLoop,
+                        RunAsDaemon = true
+                    });
+                    Render(new Window { Width = 400, Height = 400, Content = playback, WindowStyle = WindowStyle.None,
+                            Background = (Brush)Application.Current.FindResource("InspectorBackground") },
+                        Path.Combine(directory, $"playback-{suffix}.png"));
                 }
             }
             catch (Exception ex)

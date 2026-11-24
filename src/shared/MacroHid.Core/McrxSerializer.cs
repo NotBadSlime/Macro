@@ -74,6 +74,11 @@ public static class McrxSerializer
             result["stopTrigger"] = playback.StopTrigger.ToString();
         }
 
+        if (playback.RunAsDaemon)
+        {
+            result["runAsDaemon"] = true;
+        }
+
         if (!string.IsNullOrWhiteSpace(playback.ProcessFilter))
         {
             result["processFilter"] = playback.ProcessFilter.Trim();

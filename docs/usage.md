@@ -85,6 +85,8 @@ GitHub Release `v1.6.0` 提供 Windows x64 安装包和便携 ZIP。便携包须
 - 条件序列持续检查条件。
 - 条件成立时执行该条件的 then-actions。
 
+基础序列可以留空。添加至少一条条件后，可以直接运行条件宏，也可以运行基础序列为空的普通宏。在循环模式下，程序会持续检查条件，并在各条件的时间窗口内执行命中的动作。按次数播放时，没有结束时间的条件每轮检查一次。
+
 条件可以包含：
 
 - 条件名称。
@@ -103,7 +105,7 @@ GitHub Release `v1.6.0` 提供 Windows x64 安装包和便携 ZIP。便携包须
 
 条件运行边界：
 
-- 每条条件在一次播放迭代中最多触发一次；进入下一次“播放 N 次”或循环播放迭代时，会创建新的条件监听并重新判断。
+- 有基础动作或按次数播放时，每条条件在一次播放迭代中最多触发一次。基础序列为空且以循环模式运行时，条件动作执行完毕后继续检查。
 - 条件动作可以调用其他宏。被调用宏中的“停止本层宏动作”只退出该次嵌套调用，后续条件动作仍会继续。
 - “停止本轮播放”会结束宏1当前轮的基础序列，但保留外层循环；下一轮会创建新的条件监听。
 - 条件动作直接或通过嵌套宏执行“停止本次播放”时，会终止基础序列和整个外层循环。
@@ -116,6 +118,10 @@ GitHub Release `v1.6.0` 提供 Windows x64 安装包和便携 ZIP。便携包须
 - 播放 N 次：触发后播放指定次数，默认 1。
 - 按下后循环：按一次开始循环，再按一次停止。
 - 按住后循环：按住触发键时循环，松开停止。
+
+在播放控制面板勾选「作为守护宏运行」，即可让该宏与其他宏同时运行。例如，把仅含条件的守护宏设为「按下循环」，开启监听后按触发键开始持续检查，再按一次停止。也可以点击「立即运行」启动循环，选中该守护宏后用「停止」结束。强制停止键和退出软件会停止所有播放。
+
+并行运行使用前台播放模式。后台窗口播放每次运行一个宏。守护宏和仅含条件的宏使用当前版播放引擎。多个宏向同一个窗口发出的按键会交错执行，编排时应避免同时给同一个键发送互相冲突的动作。
 
 触发键支持单键、组合键、Ctrl、Alt、Shift、Win、F1–F24、完整数字小键盘（`Numpad0`–`Numpad9`、`NumpadDivide/Multiply/Minus/Plus/Decimal/Enter`）、主键盘符号键（`Minus/Equal/LeftBracket/RightBracket/Backslash/Semicolon/Quote/Grave/Comma/Period/Slash`）以及标准鼠标 1–5 键（左、右、中、X1、X2）。数字小键盘在 Num Lock 开启或关闭时都按物理小键盘键识别。进程筛选可指定前台窗口进程名，例如 `YuanShen.exe`；只有当前前台进程匹配时该宏才会触发。标题栏的“暂停监听”会停止宏触发键监听，但不会清除已保存的热键，也不会关掉「全局运行」里的取色快捷键。捕获触发键、步骤按键或取色快捷键时会暂时停掉全部全局热键；点击“恢复监听”后，会恢复到暂停前的监听集合。取色默认 `UpArrow`，会复制坐标和 `#RRGGBB` 并短暂显示；与宏触发键冲突时会提示并跳过该宏。序列顶部的宏路径（`数据库 > 文件夹 > 宏名`）回车后会让宏数据库跳到对应位置。
 
@@ -132,6 +138,8 @@ MCRX JSON 面板显示当前宏的原始 JSON。修改 JSON 后，合法内容�
 ### 7. 导入和导出
 
 宏数据库中提供导入/导出：
+
+将普通宏文件或导出的 `.zip` 从资源管理器拖到主窗口，或用「导入宏」一次选中多个文件。程序会读取包内支持的宏文件，将主宏及依赖子宏一起放入当前文件夹。在宏库管理页拖入时，导入所选宏库。ZIP 上限为 64 MiB，每包最多 4,096 个条目，单个宏最多 16 MiB，包内读取的宏文件合计最多 64 MiB。
 
 - 导入：`.mcrx`、MacroConverter XML、Razer Synapse XML、Lua/Logitech Lua、XMouse、QMacro、GIMacros JSON、耕地机 `.txt`；文件选择器支持多选批量导入。耕地机脚本按命名 `{ }` 路段导入为一条宏（路段名写成注释），坐标 0–65535 映射到当前虚拟桌面；`map`/`book` 分别为 M / F1，`tpc` 展开为选点点击加常见确认点（约 `54231,60979`）。与按键精灵 `.txt` 冲突时，识别到耕地机函数则优先按耕地机导入。对 `.mcrx` 主宏+子宏会一起导入并重映射 `macro.call` 引用。对于雷云 XML，可同时选择主宏和子宏；程序也会搜索同目录文件，自动识别 GUID 引用、先导入子宏，再在主宏中保留嵌套“调用宏”动作。
 - 导出：点击导出打开向导选择格式；默认推荐 `MacroHID MCRX`。可多选宏后导出到同一目录（夹外依赖会写入「依赖子宏」）。导出宏文件夹时可选择两个子文件夹或 ZIP，自动打包文件夹内宏与依赖子宏；分享请带上「宏文件夹 + 依赖子宏」。
@@ -216,6 +224,8 @@ Each macro can also have condition directives. After playback starts:
 - The condition sequence monitors its conditions.
 - When a condition is met, its then-actions are executed.
 
+The base sequence can be empty. With at least one condition, you can run a condition macro on its own or run a regular macro with an empty base sequence. Loop modes keep checking conditions and execute actions according to each condition's time window. In fixed-count playback, conditions with no end time are checked once per iteration.
+
 A condition can include:
 
 - Name.
@@ -234,7 +244,7 @@ For cross-window OCR, use: bring QQ to front → OCR extract text (regex-capture
 
 Condition runtime boundaries:
 
-- A condition triggers at most once per playback iteration. The next fixed-count or loop iteration creates a new monitor and evaluates it again.
+- When there are base actions or playback uses a fixed count, a condition triggers at most once per iteration. When the base sequence is empty and playback loops, monitoring resumes after the condition actions finish.
 - Then-actions may call other macros. Stop-current-layer inside a called macro returns only from that nested call, and later then-actions continue.
 - Stop-current-iteration ends Macro 1's current base iteration but keeps the outer loop alive; the next iteration creates a fresh condition monitor.
 - Stop-this-playback, whether direct or inside a called macro, cancels the base sequence and the entire outer loop.
@@ -247,6 +257,10 @@ Each macro supports three modes:
 - Fixed count: play N times, default 1.
 - Toggle loop: press once to start looping, press again to stop.
 - Hold loop: loop while the trigger is held, stop when released.
+
+Select **Run as a daemon macro** in Playback Control to let that macro run alongside other macros. For a condition-only daemon, choose **Toggle loop**, start listening, and use its trigger to start or stop continuous monitoring. **Run Now** also starts the loop. Select the daemon and use **Stop** to end its run. The force stop key and closing the app stop all runs.
+
+Concurrent runs use foreground playback. Window-targeted playback remains exclusive. Daemon and condition-only macros use the current playback engine. Inputs sent to the same window can interleave, so avoid concurrent actions on the same key when they conflict.
 
 Triggers support single keys, chords, Ctrl, Alt, Shift, Win, F1–F24, the full numpad (`Numpad0`–`Numpad9`, divide, multiply, minus, plus, decimal, and enter), main-keyboard OEM symbol keys, and standard mouse buttons 1–5 (left, right, middle, X1, and X2). Physical numpad keys are distinguished even when Num Lock is off. The process filter can restrict playback to a foreground process such as `YuanShen.exe`; the macro triggers only when the current foreground process matches. The title-bar **Pause listening** control stops all trigger listening without clearing saved hotkeys. Capturing a trigger or step key auto-pauses listening; **Resume** restores the previous listening set.
 
@@ -264,6 +278,7 @@ The MCRX JSON panel shows the current macro document. Valid edits update the bas
 
 Import/export lives in the macro library:
 
+- Drag exported ZIPs and ordinary macro files from File Explorer into the main window, or select multiple files in the import picker. Supported macros and dependencies in each ZIP are imported together into the current folder. Drops on the library manager go to the selected library. Limits per ZIP are 64 MiB compressed, 4,096 entries, 16 MiB per macro, and 64 MiB total macro data after decompression.
 - Import: `.mcrx`, MacroConverter XML, Razer Synapse XML, Lua/Logitech Lua, XMouse, QMacro, GIMacros JSON, and GengDiJi `.txt` scripts. GengDiJi named `{ }` route blocks become one macro with comment labels; 0–65535 coordinates map to the virtual desktop, and `tpc` expands to a waypoint click plus a common confirm click. The file picker supports multi-select batch import. For `.mcrx` main/submacro sets, MacroStudio imports them together and remaps `macro.call` references. For Razer XML, select the main macro and submacros together—or keep them in the same folder—and MacroStudio automatically resolves GUID references, imports submacros first, and preserves nested macro-call actions in the main macro.
 - Export: open the export wizard to choose a format; prefer `MacroHID MCRX`. Multi-select macros to export them into the same folder (out-of-folder dependencies land under Dependencies). Folder export can write two subfolders or a ZIP and automatically packs macros plus dependencies—share the folder together with its Dependencies package.
 

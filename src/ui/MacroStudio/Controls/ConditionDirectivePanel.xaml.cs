@@ -73,7 +73,7 @@ public partial class ConditionDirectivePanel : UserControl
     public bool HasValidationErrors => selectedIndex >= 0
         && selectedIndex < conditions.Count
         && conditions[selectedIndex].ExecutionMode != ConditionExecutionMode.GateMainSequence
-        && (!conditions[selectedIndex].HasActivationConstraint
+        && (stepChoices.Count > 0 && !conditions[selectedIndex].HasActivationConstraint
             || !TryReadTimeWindow(out _, out _)
             || conditions[selectedIndex].Condition is TextMatcher { UseRegex: true } text
             && !PaddleOcrBridge.IsValidRegex(text.ExpectedText, out _));
@@ -230,6 +230,7 @@ public partial class ConditionDirectivePanel : UserControl
         {
             loadingEditor = previousLoadingEditor;
         }
+        RefreshActivationValidity(selectedIndex);
     }
 
     private static StepChoice CreateUnlimitedStepChoice() =>
@@ -1300,13 +1301,8 @@ public partial class ConditionDirectivePanel : UserControl
             return;
         }
 
-        var valid = conditions[editIndex].HasActivationConstraint && TryReadTimeWindow(out _, out _);
-        SetTimeWindowValidity(valid);
-        if (!conditions[editIndex].HasActivationConstraint)
-        {
-            TimeWindowErrorText.Text = LocalizationService.Get("ConditionActivationInvalid");
-            TimeWindowErrorText.Visibility = Visibility.Visible;
-        }
+        var hasActivation = stepChoices.Count == 0 || conditions[editIndex].HasActivationConstraint;
+        SetTimeWindowValidity(hasActivation && TryReadTimeWindow(out _, out _));
     }
 
     private void PickRegion_Click(object sender, RoutedEventArgs e)

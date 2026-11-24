@@ -79,7 +79,16 @@ public static class McrxParser
             throw new JsonException("'playback.stopTrigger' must be different from 'playback.trigger'.");
         }
 
-        return new PlaybackSettings(trigger, mode, count, processFilter.Trim(), precision, affinityMask, stopTrigger);
+        var runAsDaemon = playbackElement.TryGetProperty("runAsDaemon", out var daemonElement)
+            ? daemonElement.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => throw new JsonException("'playback.runAsDaemon' must be a Boolean.")
+            }
+            : false;
+
+        return new PlaybackSettings(trigger, mode, count, processFilter.Trim(), precision, affinityMask, stopTrigger, runAsDaemon);
     }
 
     public static HotkeyGesture ParseHotkeyGesture(string? value)

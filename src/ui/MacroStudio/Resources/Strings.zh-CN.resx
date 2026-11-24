@@ -47,6 +47,8 @@
   <data name="Mode" xml:space="preserve"><value>模式</value></data>
   <data name="Count" xml:space="preserve"><value>次数</value></data>
   <data name="ModeToggleLoop" xml:space="preserve"><value>按下循环</value></data>
+  <data name="RunAsDaemon" xml:space="preserve"><value>作为守护宏运行</value></data>
+  <data name="RunAsDaemonHint" xml:space="preserve"><value>允许此宏与普通宏同时运行。</value></data>
   <data name="ModeHoldLoop" xml:space="preserve"><value>按住循环</value></data>
   <data name="ModeFixedCount" xml:space="preserve"><value>播放 N 次</value></data>
   <data name="ModeFixedCountSummary" xml:space="preserve"><value>播放 {0} 次</value></data>
@@ -56,6 +58,7 @@
   <data name="StopListeningAll" xml:space="preserve"><value>全部停止</value></data>
   <data name="RunNow" xml:space="preserve"><value>立即运行</value></data>
   <data name="RunNowOnceHint" xml:space="preserve"><value>立即运行只播放一轮，不会启动无限循环。鼠标被带走时按 Esc 停止。</value></data>
+  <data name="RunNowConfiguredModeHint" xml:space="preserve"><value>选择循环模式时，立即运行会持续播放，可用停止按钮结束。</value></data>
   <data name="Stop" xml:space="preserve"><value>停止</value></data>
   <data name="PlaybackStatusIdle" xml:space="preserve"><value>播放：空闲</value></data>
   <data name="PlaybackStatusListening" xml:space="preserve"><value>播放：监听中</value></data>
@@ -157,11 +160,13 @@
   <data name="ConversionExportFailed" xml:space="preserve"><value>导出失败：{0}</value></data>
   <data name="ImportMacroTitle" xml:space="preserve"><value>导入宏</value></data>
   <data name="ExportMacroTitle" xml:space="preserve"><value>导出宏</value></data>
-  <data name="ConverterImportFileFilter" xml:space="preserve"><value>支持的宏文件 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|所有文件 (*.*)|*.*</value></data>
+  <data name="ConverterImportFileFilter" xml:space="preserve"><value>宏文件和 ZIP 压缩包|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json;*.zip|所有文件 (*.*)|*.*</value></data>
+  <data name="ConversionZipNoMacros" xml:space="preserve"><value>ZIP 压缩包里没有找到支持的宏文件。</value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>宏数据库管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新建</value></data>
   <data name="NewMacroFile" xml:space="preserve"><value>宏文件</value></data>
   <data name="NewConditionMacroFile" xml:space="preserve"><value>条件宏</value></data>
+  <data name="ConditionMacroNeedsConditions" xml:space="preserve"><value>独立运行条件宏需要至少一条条件，且主序列为空。</value></data>
   <data name="ExtractConditionPack" xml:space="preserve"><value>提取到宏库</value></data>
   <data name="ExtractConditionPackHelp" xml:space="preserve"><value>将选中的条件（含触发后动作）提取为条件宏；未选中时提取全部。原宏中的条件会保留。</value></data>
   <data name="ExtractConditionPackEmpty" xml:space="preserve"><value>没有可提取的条件。</value></data>
@@ -706,7 +711,7 @@
   <data name="PlaybackVersionHelp" xml:space="preserve"><value>选择用哪个发行版的代码播放宏。旧版本运行当时的原始代码，当时的问题也会保留；它之后才加入的效果卡片（断网、锁帧等）由当前版本代为执行。测核与系统延迟检查始终使用当前版本。</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（当前，推荐）</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安装缺少该版本的引擎文件，播放会失败，请重新安装完整安装包。</value></data>
-  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0（当前）：新增 Max（抢占）精度档；Max 在屏幕关闭、睡眠和待机前后自动退回极限档；短宏播放期间禁止 .NET 垃圾回收，循环时只在两轮之间回收；新增「高级设置」，可调这些规则；其余同 2.0.4：版本切换器，同一时间只运行一个宏，冷启动首次热键约 250 微秒，SendInput 耗时补偿，测核避开中断密集的核心。</value></data>
+  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0（当前）：新增 Max（抢占）精度档；Max 在屏幕关闭、睡眠和待机前后自动退回极限档；短宏播放期间禁止 .NET 垃圾回收，循环时只在两轮之间回收；新增「高级设置」，可调这些规则；其余同 2.0.4：版本切换器，普通宏可与守护宏并行，冷启动首次热键约 250 微秒，SendInput 耗时补偿，测核避开中断密集的核心。</value></data>
   <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（当前）：新增版本切换器；移除并行卡片，同一时间只运行一个宏；引擎同 2.0.3：冷启动首次热键从约 2 毫秒降到约 250 微秒；按键时长从 SendInput 开始时起算；SendInput 耗时补偿；可选热键启动对齐与 Raw Input 热键；测核避开中断密集的核心；系统延迟检查。</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：循环末尾的等待不再被丢弃，周期等于写下的总时长；默认间隔只推迟这一次抬起，不再推迟整条时间线；修复「宏基础控制」确定后设置不生效。</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（测试版）：热键入口与启动预热——启动时预热播放路径，低抖动热键待命时保持计时器分辨率；增加诊断追踪。播放时间线与 2.0.0 相同。</value></data>
@@ -716,8 +721,9 @@
   <data name="PlaybackVersionNotes141" xml:space="preserve"><value>1.4.1：极致档在测试核心选择、程序启动或过滤进程启动时测量核心，并把待命线程绑到测得的核心上。</value></data>
   <data name="PlaybackVersionNotes140" xml:space="preserve"><value>1.3.0 / 1.4.0（播放代码相同）：新增条件包、时间基准与启动门控条件；OCR 点击与取字、窗口激活、注释卡片；同一按键按下与抬起之间没有等待时自动保持 10ms；原生等待可随时取消。1.4.0 只改了界面与导出。</value></data>
   <data name="PlaybackVersionNotes120" xml:space="preserve"><value>1.2.0：最早可选的版本，支持按键、鼠标、等待、重复、调用宏与像素条件，原生精准播放。没有 OCR、窗口激活和注释卡片。之后的效果卡片（断网、锁帧等）由当前版本代为执行；等文字卡片无法使用。</value></data>
-  <data name="ParallelCardRemoved" xml:space="preserve"><value>并行卡片已移除（同一时间只允许运行一个宏）。请先删除宏「{0}」里的并行卡片再播放。</value></data>
-  <data name="OneMacroAtATime" xml:space="preserve"><value>另一个宏正在运行。同一时间只允许运行一个宏，请先停止它。</value></data>
+  <data name="ParallelCardRemoved" xml:space="preserve"><value>请先移除宏「{0}」中已不支持的并行卡片，再开始播放。</value></data>
+  <data name="OneMacroAtATime" xml:space="preserve"><value>另一个普通宏正在运行。请先停止它，再启动此宏。</value></data>
+  <data name="BackgroundPlaybackExclusive" xml:space="preserve"><value>后台窗口播放只能同时运行一个宏。请先停止正在播放的宏。</value></data>
   <data name="PlaybackVersionNextRun" xml:space="preserve"><value>下次开始监听或运行时生效；正在监听的宏会用所选版本重建。</value></data>
   <data name="PlaybackVersionChanges" xml:space="preserve"><value>这一版改了什么</value></data>
   <data name="PlaybackVersionCurrentBadge" xml:space="preserve"><value>当前</value></data>

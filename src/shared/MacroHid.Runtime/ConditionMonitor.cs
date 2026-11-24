@@ -7,6 +7,13 @@ public interface IConditionEvaluator
     bool Evaluate(IConditionMatcher matcher, CancellationToken cancellationToken = default);
 }
 
+internal enum ConditionMonitorMode
+{
+    MainTimeline,
+    FixedConditionIteration,
+    ContinuousConditions
+}
+
 public sealed class ConditionMonitor : IDisposable
 {
     private readonly ConditionalDirective directive;
@@ -27,6 +34,7 @@ public sealed class ConditionMonitor : IDisposable
     private readonly IPlaybackDelayStrategy delayStrategy;
     private readonly IPlaybackDelayStrategy pollingDelayStrategy;
     private readonly InputPressFloor pressFloor;
+    private readonly ConditionMonitorMode mode;
 
     private CancellationTokenSource cts = new();
     private Thread? monitorThread;
@@ -73,7 +81,8 @@ public sealed class ConditionMonitor : IDisposable
         int conditionIndex = -1,
         IReadOnlyList<ConditionTimeInterval>? activationIntervals = null,
         InputPressFloor? pressFloor = null,
-        Action? stopCurrentRequested = null)
+        Action? stopCurrentRequested = null,
+        ConditionMonitorMode mode = ConditionMonitorMode.MainTimeline)
     {
         this.directive = directive;
         this.evaluator = evaluator;
@@ -89,6 +98,7 @@ public sealed class ConditionMonitor : IDisposable
         this.timeline = timeline;
         this.conditionIndex = conditionIndex;
         this.pressFloor = pressFloor ?? InputPressFloor.Factory;
+        this.mode = mode;
         this.activationIntervals = activationIntervals
             ?? BuildLegacyIntervals(directive);
         v16 = PrecisionGenerations.UsesLegacyNativeEngine(PrecisionGenerations.Normalize(this.pressFloor.Generation));
@@ -194,12 +204,18 @@ public sealed class ConditionMonitor : IDisposable
             ? PrecisionPlaybackContext.Enter(precision, pressFloor.Generation)
             : PrecisionPlaybackContext.Enter(PrecisionMode.Balanced);
         var frequency = EffectiveFrequency();
-        var pollTicks = Math.Max(1, (long)Math.Round(directive.EffectivePollInterval.TotalSeconds * frequency, MidpointRounding.AwayFromZero));
+        var pollInterval = directive.EffectivePollInterval;
+        if (mode != ConditionMonitorMode.MainTimeline && pollInterval < TimeSpan.FromMilliseconds(1))
+            pollInterval = TimeSpan.FromMilliseconds(1);
+        var pollTicks = Math.Max(1, (long)Math.Round(pollInterval.TotalSeconds * frequency, MidpointRounding.AwayFromZero));
+        var continuous = mode == ConditionMonitorMode.ContinuousConditions;
+        var evaluateOnce = mode == ConditionMonitorMode.FixedConditionIteration
+            && activationIntervals.Any(interval => interval.End is null);
         var nextPollTick = clock.GetTimestamp();
 
         try
         {
-            while (!cancellationToken.IsCancellationRequested && active && !triggered)
+            while (!cancellationToken.IsCancellationRequested && active && (!triggered || continuous))
             {
                 try
                 {
@@ -215,13 +231,20 @@ public sealed class ConditionMonitor : IDisposable
                             ? pauseCoordinator?.Pause()
                             : null;
                         ExecuteThenSteps(cancellationToken);
-                        return;
+                        if (!continuous) return;
+                        // Release conditions anchored to this condition after its first actions finish.
+                        timeline?.MarkFinished(conditionIndex, clock.GetTimestamp());
+                        nextPollTick = clock.GetTimestamp() + pollTicks;
+                    }
+                    else
+                    {
+                        if (evaluateOnce) return;
+                        nextPollTick += pollTicks;
+                        // Skip missed polls instead of repeatedly running expensive OCR to catch up.
+                        var now = clock.GetTimestamp();
+                        if ((!v16 || continuous) && nextPollTick <= now) nextPollTick = now + pollTicks;
                     }
 
-                    nextPollTick += pollTicks;
-                    // Skip missed polls instead of repeatedly running expensive OCR to catch up.
-                    var now = clock.GetTimestamp();
-                    if (!v16 && nextPollTick <= now) nextPollTick = now + pollTicks;
                     pollingDelayStrategy.WaitUntil(nextPollTick, frequency, cancellationToken, noWait: false);
                 }
                 catch (OperationCanceledException)

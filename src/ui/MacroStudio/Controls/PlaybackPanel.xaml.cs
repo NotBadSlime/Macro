@@ -37,6 +37,10 @@ public partial class PlaybackPanel : UserControl
 
     public string TriggerText => TriggerTextBox.Text.Trim();
     public string CountText => PlaybackCountTextBox.Text;
+    public bool RunAsDaemon => RunAsDaemonCheckBox.IsChecked == true;
+
+    public void SetRunNowHint(bool continuous) =>
+        RunNowButton.ToolTip = L(continuous ? "RunNowConfiguredModeHint" : "RunNowOnceHint");
 
     public PlaybackMode GetSelectedPlaybackMode()
     {
@@ -58,6 +62,7 @@ public partial class PlaybackPanel : UserControl
         {
             TriggerTextBox.Text = settings.Trigger?.ToString() ?? string.Empty;
             PlaybackCountTextBox.Text = settings.Count.ToString();
+            RunAsDaemonCheckBox.IsChecked = settings.RunAsDaemon;
             foreach (var item in PlaybackModeBox.Items.OfType<ComboBoxItem>())
             {
                 if (string.Equals(item.Tag?.ToString(), ToPlaybackModeText(settings.Mode), StringComparison.Ordinal))
@@ -85,6 +90,7 @@ public partial class PlaybackPanel : UserControl
         CaptureTriggerButton.IsEnabled = !value;
         PlaybackModeBox.IsEnabled = !value;
         PlaybackCountTextBox.IsEnabled = !value && GetSelectedPlaybackMode() == PlaybackMode.FixedCount;
+        RunAsDaemonCheckBox.IsEnabled = !value;
     }
 
     public void SetPlaybackStatus(string text)
@@ -106,6 +112,8 @@ public partial class PlaybackPanel : UserControl
         TriggerSupportHintText.Text = L("TriggerSupportHint");
         ModeLabelText.Text = L("Mode");
         PlaybackCountLabelText.Text = L("Count");
+        RunAsDaemonCheckBox.Content = L("RunAsDaemon");
+        RunAsDaemonCheckBox.ToolTip = L("RunAsDaemonHint");
         StartListeningButton.Content = L("StartListening");
         StopListeningButton.Content = L("StopListening");
         RunNowButton.Content = L("RunNow");
@@ -274,6 +282,8 @@ public partial class PlaybackPanel : UserControl
     {
         NotifyPlaybackSettingsEdited();
     }
+
+    private void RunAsDaemon_Changed(object sender, RoutedEventArgs e) => NotifyPlaybackSettingsEdited();
 
     private void NotifyPlaybackSettingsEdited()
     {

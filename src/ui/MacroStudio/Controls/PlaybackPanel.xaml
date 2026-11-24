@@ -7,6 +7,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -71,7 +72,17 @@
                 <TextBox x:Name="PlaybackCountTextBox" Height="30" Text="1" TextChanged="PlaybackSettings_TextChanged" />
             </StackPanel>
 
-            <Grid Grid.Row="3" Grid.ColumnSpan="3" Margin="0,12,0,0">
+            <CheckBox x:Name="RunAsDaemonCheckBox"
+                      Grid.Row="3"
+                      Grid.ColumnSpan="3"
+                      HorizontalAlignment="Left"
+                      Margin="0,8,0,0"
+                      Content="作为守护宏运行"
+                      ToolTip="允许此宏与普通宏同时运行。"
+                      Checked="RunAsDaemon_Changed"
+                      Unchecked="RunAsDaemon_Changed" />
+
+            <Grid Grid.Row="4" Grid.ColumnSpan="3" Margin="0,12,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />

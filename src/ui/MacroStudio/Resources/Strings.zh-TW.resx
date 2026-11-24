@@ -47,6 +47,8 @@
   <data name="Mode" xml:space="preserve"><value>模式</value></data>
   <data name="Count" xml:space="preserve"><value>次數</value></data>
   <data name="ModeToggleLoop" xml:space="preserve"><value>按下循環</value></data>
+  <data name="RunAsDaemon" xml:space="preserve"><value>作為守護巨集執行</value></data>
+  <data name="RunAsDaemonHint" xml:space="preserve"><value>允許此巨集與一般巨集同時執行。</value></data>
   <data name="ModeHoldLoop" xml:space="preserve"><value>按住循環</value></data>
   <data name="ModeFixedCount" xml:space="preserve"><value>播放 N 次</value></data>
   <data name="ModeFixedCountSummary" xml:space="preserve"><value>播放 {0} 次</value></data>
@@ -56,6 +58,7 @@
   <data name="StopListeningAll" xml:space="preserve"><value>全部停止</value></data>
   <data name="RunNow" xml:space="preserve"><value>立即執行</value></data>
   <data name="RunNowOnceHint" xml:space="preserve"><value>立即執行只播放一輪，不會啟動無限循環。滑鼠被帶走時按 Esc 停止。</value></data>
+  <data name="RunNowConfiguredModeHint" xml:space="preserve"><value>選擇循環模式時，立即執行會持續播放，可用停止按鈕結束。</value></data>
   <data name="Stop" xml:space="preserve"><value>停止</value></data>
   <data name="PlaybackStatusIdle" xml:space="preserve"><value>播放：閒置</value></data>
   <data name="PlaybackStatusListening" xml:space="preserve"><value>播放：監聽中</value></data>
@@ -157,11 +160,13 @@
   <data name="ConversionExportFailed" xml:space="preserve"><value>匯出失敗：{0}</value></data>
   <data name="ImportMacroTitle" xml:space="preserve"><value>匯入巨集</value></data>
   <data name="ExportMacroTitle" xml:space="preserve"><value>匯出巨集</value></data>
-  <data name="ConverterImportFileFilter" xml:space="preserve"><value>支援的巨集檔案 (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|所有檔案 (*.*)|*.*</value></data>
+  <data name="ConverterImportFileFilter" xml:space="preserve"><value>巨集檔案和 ZIP 壓縮檔|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json;*.zip|所有檔案 (*.*)|*.*</value></data>
+  <data name="ConversionZipNoMacros" xml:space="preserve"><value>ZIP 壓縮檔中找不到支援的巨集檔案。</value></data>
   <data name="MacroLibrary" xml:space="preserve"><value>巨集資料庫管理</value></data>
   <data name="NewMacro" xml:space="preserve"><value>新增</value></data>
   <data name="NewMacroFile" xml:space="preserve"><value>宏檔案</value></data>
   <data name="NewConditionMacroFile" xml:space="preserve"><value>條件宏</value></data>
+  <data name="ConditionMacroNeedsConditions" xml:space="preserve"><value>獨立執行條件巨集需要至少一條條件，且主序列為空。</value></data>
   <data name="ExtractConditionPack" xml:space="preserve"><value>提取到宏庫</value></data>
   <data name="ExtractConditionPackHelp" xml:space="preserve"><value>將選中的條件（含觸發後動作）提取為條件宏；未選中時提取全部。原宏中的條件會保留。</value></data>
   <data name="ExtractConditionPackEmpty" xml:space="preserve"><value>沒有可提取的條件。</value></data>
@@ -706,7 +711,7 @@
   <data name="PlaybackVersionHelp" xml:space="preserve"><value>選擇用哪個發行版的程式碼播放巨集。舊版本執行當時的原始程式碼，當時的問題也會保留；它之後才加入的效果卡片（斷網、鎖幀等）由目前版本代為執行。測核與系統延遲檢查始終使用目前版本。</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（目前，推薦）</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安裝缺少該版本的引擎檔案，播放會失敗，請重新安裝完整安裝包。</value></data>
-  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0（目前）：新增 Max（搶佔）精度檔；Max 在螢幕關閉、睡眠和待機前後自動退回極限檔；短巨集播放期間禁止 .NET 記憶體回收，循環時只在兩輪之間回收；新增「進階設定」，可調這些規則；其餘同 2.0.4：版本切換器，同一時間只執行一個巨集，冷啟動首次熱鍵約 250 微秒，SendInput 耗時補償，測核避開中斷密集的核心。</value></data>
+  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0（目前）：新增 Max（搶佔）精度檔；Max 在螢幕關閉、睡眠和待機前後自動退回極限檔；短巨集播放期間禁止 .NET 記憶體回收，循環時只在兩輪之間回收；新增「進階設定」，可調這些規則；其餘同 2.0.4：版本切換器，一般巨集可與守護巨集並行，冷啟動首次熱鍵約 250 微秒，SendInput 耗時補償，測核避開中斷密集的核心。</value></data>
   <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（目前）：新增版本切換器；移除並行卡片，同一時間只執行一個巨集；引擎同 2.0.3：冷啟動首次熱鍵從約 2 毫秒降到約 250 微秒；按鍵時長從 SendInput 開始時起算；SendInput 耗時補償；可選熱鍵啟動對齊與 Raw Input 熱鍵；測核避開中斷密集的核心；系統延遲檢查。</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：迴圈末尾的等待不再被丟棄，週期等於寫下的總時長；預設間隔只推遲這一次放開，不再推遲整條時間線；修復「巨集基礎控制」確定後設定不生效。</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（測試版）：熱鍵入口與啟動預熱——啟動時預熱播放路徑，低抖動熱鍵待命時保持計時器解析度；增加診斷追蹤。播放時間線與 2.0.0 相同。</value></data>
@@ -716,8 +721,9 @@
   <data name="PlaybackVersionNotes141" xml:space="preserve"><value>1.4.1：極致檔在測試核心選擇、程式啟動或過濾行程啟動時測量核心，並把待命執行緒綁到測得的核心上。</value></data>
   <data name="PlaybackVersionNotes140" xml:space="preserve"><value>1.3.0 / 1.4.0（播放程式碼相同）：新增條件包、時間基準與啟動門控條件；OCR 點擊與取字、視窗啟用、註解卡片；同一按鍵按下與放開之間沒有等待時自動保持 10ms；原生等待可隨時取消。1.4.0 只改了介面與匯出。</value></data>
   <data name="PlaybackVersionNotes120" xml:space="preserve"><value>1.2.0：最早可選的版本，支援按鍵、滑鼠、等待、重複、呼叫巨集與像素條件，原生精準播放。沒有 OCR、視窗啟用和註解卡片。之後的效果卡片（斷網、鎖幀等）由目前版本代為執行；等文字卡片無法使用。</value></data>
-  <data name="ParallelCardRemoved" xml:space="preserve"><value>並行卡片已移除（同一時間只允許執行一個巨集）。請先刪除巨集「{0}」裡的並行卡片再播放。</value></data>
-  <data name="OneMacroAtATime" xml:space="preserve"><value>另一個巨集正在執行。同一時間只允許執行一個巨集，請先停止它。</value></data>
+  <data name="ParallelCardRemoved" xml:space="preserve"><value>請先移除巨集「{0}」中已不支援的並行卡片，再開始播放。</value></data>
+  <data name="OneMacroAtATime" xml:space="preserve"><value>另一個一般巨集正在執行。請先停止它，再啟動此巨集。</value></data>
+  <data name="BackgroundPlaybackExclusive" xml:space="preserve"><value>背景視窗播放同時只能執行一個巨集。請先停止正在播放的巨集。</value></data>
   <data name="PlaybackVersionNextRun" xml:space="preserve"><value>下次開始監聽或執行時生效；正在監聽的巨集會用所選版本重建。</value></data>
   <data name="PlaybackVersionChanges" xml:space="preserve"><value>這一版改了什麼</value></data>
   <data name="PlaybackVersionCurrentBadge" xml:space="preserve"><value>目前</value></data>

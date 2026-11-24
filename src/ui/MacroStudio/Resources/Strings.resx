@@ -224,6 +224,8 @@
   <data name="Count" xml:space="preserve">
     <value>Count</value>
   </data>
+  <data name="RunAsDaemon" xml:space="preserve"><value>Run as a daemon macro</value></data>
+  <data name="RunAsDaemonHint" xml:space="preserve"><value>Allow this macro to run alongside a regular macro.</value></data>
   <data name="ModeToggleLoop" xml:space="preserve">
     <value>Toggle loop</value>
   </data>
@@ -254,6 +256,7 @@
   <data name="RunNowOnceHint" xml:space="preserve">
     <value>Run Now plays one pass and does not start an infinite loop. Press Esc if the pointer is stuck.</value>
   </data>
+  <data name="RunNowConfiguredModeHint" xml:space="preserve"><value>Run Now starts continuous playback when a loop mode is selected. Use Stop to end the run.</value></data>
   <data name="Stop" xml:space="preserve">
     <value>Stop</value>
   </data>
@@ -445,8 +448,9 @@
     <value>Export macro</value>
   </data>
   <data name="ConverterImportFileFilter" xml:space="preserve">
-    <value>Supported macro files (*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json)|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json|All files (*.*)|*.*</value>
+    <value>Macro files and ZIP archives|*.mcrx;*.xml;*.lua;*.xmbcs;*.mq;*.txt;*.json;*.zip|All files (*.*)|*.*</value>
   </data>
+  <data name="ConversionZipNoMacros" xml:space="preserve"><value>No supported macros were found in the ZIP.</value></data>
   <data name="ConversionBatchImported" xml:space="preserve"><value>Imported {0} of {1} macros.</value></data>
   <data name="ConversionBatchImportFailed" xml:space="preserve"><value>{0} macro files could not be imported. See the conversion panel for details.</value></data>
   <data name="ConversionImportErrorTitle" xml:space="preserve"><value>Macro import failed</value></data>
@@ -458,6 +462,7 @@
   <data name="NewMacro" xml:space="preserve"><value>New</value></data>
   <data name="NewMacroFile" xml:space="preserve"><value>Macro file</value></data>
   <data name="NewConditionMacroFile" xml:space="preserve"><value>Condition macro</value></data>
+  <data name="ConditionMacroNeedsConditions" xml:space="preserve"><value>To run a condition macro directly, add at least one condition and leave the main sequence empty.</value></data>
   <data name="ExtractConditionPack" xml:space="preserve"><value>Extract to library</value></data>
   <data name="ExtractConditionPackHelp" xml:space="preserve"><value>Extract selected conditions (including then-actions) as a condition macro. If nothing is selected, extracts all.</value></data>
   <data name="ExtractConditionPackEmpty" xml:space="preserve"><value>No conditions to extract.</value></data>
@@ -1006,7 +1011,7 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="PlaybackVersionHelp" xml:space="preserve"><value>Choose which release&apos;s code plays your macros. An earlier release runs its original code, known problems included; effect cards added after it (network cut, frame lock, ...) are run by the current version. Core testing and the latency check always use the current version.</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0} (current, recommended)</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>This installation does not include that release&apos;s engine files; playback will fail. Reinstall the full package.</value></data>
-  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0 (current): new Max (preemption) precision; Max falls back to Extreme around display off, sleep and standby; short macros play without .NET garbage collection, a loop collects only between passes; new Advanced settings to tune these rules; otherwise as 2.0.4: version switcher, one macro at a time, cold first hotkey about a quarter millisecond, SendInput cost compensation, core selection avoids interrupt-heavy cores.</value></data>
+  <data name="PlaybackVersionNotes210" xml:space="preserve"><value>2.1.0 (current): new Max (preemption) precision; Max falls back to Extreme around display off, sleep and standby; short macros play without .NET garbage collection, a loop collects only between passes; new Advanced settings to tune these rules; otherwise as 2.0.4: version switcher, daemon macros can run alongside a regular macro, cold first hotkey about a quarter millisecond, SendInput cost compensation, core selection avoids interrupt-heavy cores.</value></data>
   <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4 (current): new version switcher; parallel card removed, one macro runs at a time; engine as in 2.0.3: cold first hotkey from about 2 ms down to a quarter of a millisecond; key holds counted from the start of SendInput; SendInput cost compensation; optional hotkey start alignment and Raw Input hotkeys; core selection avoids interrupt-heavy cores; system latency check.</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2: the trailing wait of a loop is no longer dropped (the period equals the written total); the default hold delays only that release instead of the whole timeline; fixed basic-control settings not applying after OK.</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1 (test build): hotkey entry and start-up warm-up — the playback path is warmed at start-up and the timer resolution is kept up while a precise hotkey waits; diagnostics. The playback timeline is the same as 2.0.0.</value></data>
@@ -1016,8 +1021,9 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="PlaybackVersionNotes141" xml:space="preserve"><value>1.4.1: Ultra measures cores when you test a selection or when the app or a filtered process starts, and pins its standby threads to the measured cores.</value></data>
   <data name="PlaybackVersionNotes140" xml:space="preserve"><value>1.3.0 / 1.4.0 (same playback code): condition packs, time bases and start-up gate conditions; OCR click and text extraction, window activation and comment cards; a press and release of the same key with no wait between are held 10 ms; native waits can be cancelled at any time. 1.4.0 changed only the UI and export.</value></data>
   <data name="PlaybackVersionNotes120" xml:space="preserve"><value>1.2.0: the earliest selectable release — keys, mouse, waits, repeat, macro calls and pixel conditions with precise native playback. No OCR, window activation or comment cards. Later effect cards (network cut, frame lock, ...) are run by the current version; wait-for-text cannot be used.</value></data>
-  <data name="ParallelCardRemoved" xml:space="preserve"><value>The parallel card has been removed (only one macro runs at a time). Delete the parallel card in macro &quot;{0}&quot; before playing it.</value></data>
-  <data name="OneMacroAtATime" xml:space="preserve"><value>Another macro is running. Only one macro runs at a time; stop it first.</value></data>
+  <data name="ParallelCardRemoved" xml:space="preserve"><value>Delete the unsupported parallel card in macro &quot;{0}&quot; before playing it.</value></data>
+  <data name="OneMacroAtATime" xml:space="preserve"><value>Another regular macro is running. Stop it before starting this macro.</value></data>
+  <data name="BackgroundPlaybackExclusive" xml:space="preserve"><value>Window-targeted playback can only run one macro at a time. Stop the active macro to continue.</value></data>
   <data name="PlaybackVersionNextRun" xml:space="preserve"><value>Applies from the next listening start or run; listening macros are rebuilt with the chosen release.</value></data>
   <data name="PlaybackVersionChanges" xml:space="preserve"><value>What changed in this release</value></data>
   <data name="PlaybackVersionCurrentBadge" xml:space="preserve"><value>Current</value></data>

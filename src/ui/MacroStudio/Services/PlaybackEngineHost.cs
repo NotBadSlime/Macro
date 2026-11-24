@@ -101,10 +101,10 @@ internal static class PlaybackEngineHost
     public static IMacroPlaybackExecutor Prepare(SendInputMacroSink inputSink, MacroDocument document,
         Func<string, MacroDocument?> resolver, PlaybackExecutionOptions options, bool immediate, PlaybackVersionInfo version)
     {
-        // Parallel cards were removed: one macro runs at a time. Old macros still open, but do not play until it is deleted.
+        // Legacy parallel cards are still rejected. Daemon playback runs separate macro controllers.
         if (ParallelCards.FindIn(document, resolver) is { } owner)
             throw new NotSupportedException(LocalizationService.Format("ParallelCardRemoved", owner));
-        if (version.Folder is not null)
+        if (version.Folder is not null && !document.Playback.RunAsDaemon && !MainWindow.IsConditionOnly(document))
             return LegacyPreparedExecutor.Prepare(version, document, resolver, options, immediate);
         var executor = new MacroPlaybackExecutor(inputSink, macroResolver: resolver);
         try { executor.Prepare(document, options); return executor; }

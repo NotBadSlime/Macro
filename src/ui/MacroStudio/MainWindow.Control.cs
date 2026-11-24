@@ -43,7 +43,8 @@ public partial class MainWindow
             }
             if (request.Command == "status")
             {
-                if (request.RunId is null) return new(true, "ok", Jobs: externalJobs.List(), Busy: OtherMacroIsActive(null) || preparingImmediate);
+                if (request.RunId is null) return new(true, "ok", Jobs: externalJobs.List(),
+                    Busy: preparingImmediate || macroRecorder is not null || IsPlaybackBlocked(null, background: runtimePrecisionSettings.BackgroundWindow));
                 return externalJobs.Get(request.RunId) is { } job ? new(true, "ok", Job: job) : ControlResponse.Fail("not_found", "Task was not found (Studio may have restarted).");
             }
             if (request.Command == "stop")
@@ -65,76 +66,44 @@ public partial class MainWindow
             if (matches.Length == 0) return ControlResponse.Fail("not_found", "Macro was not found.");
             if (matches.Length > 1) return ControlResponse.Fail("ambiguous", "Several macros match. Use the macro ID.");
             var selected = matches[0];
-            if (selected.IsConditionMacro) return ControlResponse.Fail("invalid", "A condition macro cannot be run as a standalone sequence.");
             // Freeze the saved document at acceptance; never switch the user's active editor.
             var document = libraryStore.ReadMacro(selected.Id);
+            if (!CanPlayStandalone(document)) return ControlResponse.Fail("invalid", L("ConditionMacroNeedsConditions"));
             var frozen = CaptureResolver(document, selected.Id);
             var macro = new ControlMacro(selected.Id, selected.Name, library.Groups.Single(g => g.Id == selected.GroupId).Name, selected.Folder);
             var group = library.Groups.Single(g => g.Id == selected.GroupId);
             var jobSnapshot = externalJobs.Schedule(macro, request.DelayMilliseconds,
-                (token, started) => RunExternalMacroAsync(document, frozen.Resolver, group, request, token, started));
+                (token, started) => RunExternalMacroAsync(document, selected.Id, frozen.Resolver, group, request, token, started));
             return new(true, "accepted", Job: jobSnapshot);
         }
         catch (ArgumentException ex) { return ControlResponse.Fail("invalid", ex.Message); }
         catch (Exception ex) { AppLog.Error("Control", "Command failed", ex); return ControlResponse.Fail("failed", ex.Message); }
     }
 
-    private async Task<ControlExecution> RunExternalMacroAsync(MacroDocument document, Func<string, MacroDocument?> resolver,
+    private async Task<ControlExecution> RunExternalMacroAsync(MacroDocument document, string macroId, Func<string, MacroDocument?> resolver,
         MacroLibraryGroup group, ControlRequest request, CancellationToken cancellation, Action started)
     {
         if (shutdownStarted || shutdownQueued) return new("cancelled");
-        if (macroRecorder is not null || preparingImmediate || OtherMacroIsActive(null)) return new("busy", "Studio is recording, preparing or playing another macro.");
-        using var preparation = TrackPreparation();
-        preparingImmediate = true;
-        IMacroPlaybackExecutor? prepared = null;
-        MacroPlaybackController? controller = null;
-        try
+        if (macroRecorder is not null || preparingImmediate)
+            return new("busy", "Studio is recording or preparing another macro.");
+        cancellation.ThrowIfCancellationRequested();
+        var options = CreateExternalPlaybackOptions(CreatePlaybackOptions(document), request) with
         {
-            cancellation.ThrowIfCancellationRequested();
-            var epoch = Interlocked.Read(ref stopEpoch);
-            var options = CreateExternalPlaybackOptions(CreatePlaybackOptions(document), request) with
-            {
-                BackgroundProcess = BackgroundProcessSelection.Resolve(runtimePrecisionSettings.BackgroundProcess, group.IsGlobal ? string.Empty : group.ProcessFilter)
-            };
-            var version = runtimePrecisionSettings.Version;
-            // Historical engines derive mode/count from the document itself. Override
-            // only this execution snapshot; never persist command options to the library.
-            document = CreateExternalPlaybackDocument(document, options);
-            if (!options.BackgroundWindow && !MacroLibraryActivationFilter.Matches(group.IsGlobal ? string.Empty : group.ProcessFilter, ForegroundProcessService.GetForegroundProcessName()))
-                return new("failed", "The foreground process does not match this macro library's process filter.");
-            if (immediateController is not null) await immediateController.DisposeAsync();
-            cancellation.ThrowIfCancellationRequested();
-            // External commands already specify their mode. Legacy immediate preparation
-            // would convert ToggleLoop back into one iteration.
-            prepared = await Task.Run(() => PlaybackEngineHost.Prepare(inputSink, document, resolver, options, immediate: false, version), cancellation);
-            cancellation.ThrowIfCancellationRequested();
-            Task<PlaybackRunResult> completion;
-            lock (triggerGate)
-            {
-                if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) return new("cancelled");
-                if (OtherMacroIsActive(null)) return new("busy", "Another macro is running.");
-                playbackController = immediateController = controller = new(document, prepared, options);
-                prepared = null;
-                runNowEmergencyStopArmed = true;
-                RefreshKeyboardHook();
-                using var initialCancel = cancellation.Register(controller.Stop);
-                _ = controller.RunNowAsync();
-                completion = controller.WhenIdleAsync();
-            }
-            using var stop = cancellation.Register(controller.Stop);
-            started();
-            UpdatePlaybackStatus();
-            WatchPlayback(controller);
-            var result = await completion;
-            return new(result.Cancelled || cancellation.IsCancellationRequested ? "cancelled"
-                : result.Status == PlaybackRunStatus.Completed ? "completed" : "failed", controller.LastError?.Message ?? (result.Status == PlaybackRunStatus.Completed ? null : result.Status.ToString()));
-        }
-        finally
-        {
-            (prepared as IDisposable)?.Dispose();
-            try { if (controller is not null) await controller.DisposeAsync(); }
-            finally { preparingImmediate = false; }
-        }
+            BackgroundProcess = BackgroundProcessSelection.Resolve(runtimePrecisionSettings.BackgroundProcess, group.IsGlobal ? string.Empty : group.ProcessFilter)
+        };
+        // Historical engines also read playback settings from the snapshotted MCRX.
+        document = CreateExternalPlaybackDocument(document, options);
+        if (!options.BackgroundWindow && !MacroLibraryActivationFilter.Matches(group.IsGlobal ? string.Empty : group.ProcessFilter, ForegroundProcessService.GetForegroundProcessName()))
+            return new("failed", "The foreground process does not match this macro library's process filter.");
+        var playback = await StartDirectPlaybackAsync(document, macroId, resolver, options, immediate: false, cancellation);
+        if (playback is null) return new("busy", "The macro is already active or conflicts with another playback.");
+
+        using var stop = cancellation.Register(playback.Controller.Stop);
+        started();
+        var result = await playback.Completion;
+        return new(result.Cancelled || cancellation.IsCancellationRequested ? "cancelled"
+            : result.Status == PlaybackRunStatus.Completed ? "completed" : "failed",
+            playback.Controller.LastError?.Message ?? (result.Status == PlaybackRunStatus.Completed ? null : result.Status.ToString()));
     }
 
     private void GlobalCommandSettings_Click(object sender, RoutedEventArgs e) => new Controls.GlobalCommandDialog { Owner = this }.ShowDialog();

@@ -314,6 +314,9 @@ public partial class SequencePanel : UserControl
 
     public MacroDocument GetCurrentDocument() => parsedDocument ??= McrxParser.Parse(EditorText);
 
+    public void SetRunNowHint(bool continuous) =>
+        RunNowHeaderButton.ToolTip = L(continuous ? "RunNowConfiguredModeHint" : "RunNowOnceHint");
+
     public IReadOnlyList<StepChoice> GetStepChoices() => StepSequenceControl.GetStepChoices();
 
     public void InsertSteps(IReadOnlyList<MacroStep> stepsToInsert) => StepSequenceControl.InsertSteps(stepsToInsert);

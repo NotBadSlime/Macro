@@ -894,7 +894,7 @@ public partial class MacroLibraryPanel : UserControl
     private void ExplorerContextMenu_Opened(object sender, RoutedEventArgs e)
     {
         var selected = GetSelectedExplorerNodes();
-        ExplorerCopyExternalCommandMenuItem.IsEnabled = selected.Count == 1 && selected[0].Item is { IsConditionMacro: false };
+        ExplorerCopyExternalCommandMenuItem.IsEnabled = selected.Count == 1 && selected[0].Item is not null;
         var kind = selected.Count == 0
             ? ExplorerContextMenuKind.Blank
             : selected.Count == 1 && selected[0].IsFolder
@@ -1380,7 +1380,7 @@ public partial class MacroLibraryPanel : UserControl
     private void MacroTreeContextMenu_Opened(object sender, RoutedEventArgs e)
     {
         var node = contextMenuTargetNode ?? GetSelectedNode();
-        CopyExternalCommandMenuItem.IsEnabled = node?.Item is { IsConditionMacro: false };
+        CopyExternalCommandMenuItem.IsEnabled = node?.Item is not null;
         RenameMenuItem.IsEnabled = node is not null && node.Item?.IsLocked != true;
         CopyMenuItem.IsEnabled = showingDatabaseContents && node is not null && !node.IsGroup;
         DeleteMenuItem.IsEnabled = CanDeleteNode(node);
@@ -1392,7 +1392,7 @@ public partial class MacroLibraryPanel : UserControl
     private void CopyExternalCommand_Click(object sender, RoutedEventArgs e)
     {
         var node = contextMenuTargetNode ?? (showingDatabaseContents ? GetSelectedExplorerNodes().FirstOrDefault() : GetSelectedNode());
-        if (node?.Item is not { IsConditionMacro: false } item) return;
+        if (node?.Item is not { } item) return;
         Clipboard.SetText($"MacroCtl run --id \"{item.Id}\" --delay 3s");
         ResultMessage?.Invoke(L("ExternalCommandCopied"));
     }
@@ -2427,21 +2427,15 @@ public partial class MacroLibraryPanel : UserControl
             RefreshTree();
         }
 
-        var selectedFiles = new List<SmartImportFile>();
+        var sourcePaths = fileNames.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var looseFiles = new List<SmartImportFile>();
         var failureMessages = new List<string>();
-        foreach (var fileName in fileNames.Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var fileName in sourcePaths.Where(path => !MacroImportFiles.IsZip(path)))
         {
             try
             {
                 var content = File.ReadAllText(fileName);
-                var format = MacroConversionService.DetectFormat(content, fileName);
-                MacroConversionService.TryGetRazerMacroGuid(content, out var razerGuid);
-                selectedFiles.Add(new SmartImportFile(
-                    Path.GetFullPath(fileName),
-                    Path.GetFileName(fileName),
-                    content,
-                    format,
-                    string.IsNullOrWhiteSpace(razerGuid) ? null : razerGuid));
+                looseFiles.Add(CreateSmartImportFile(Path.GetFullPath(fileName), Path.GetFileName(fileName), content));
             }
             catch (Exception ex)
             {
@@ -2449,96 +2443,39 @@ public partial class MacroLibraryPanel : UserControl
             }
         }
 
-        var auxiliaryFiles = BuildSmartImportCatalog(selectedFiles);
-        var modulesByGuid = auxiliaryFiles
-            .Select(file => MacroConversionService.TryGetRazerMacroGuid(file.Content, out var guid)
-                ? (Guid: guid, File: file)
-                : (Guid: string.Empty, File: file))
-            .Where(item => !string.IsNullOrWhiteSpace(item.Guid))
-            .GroupBy(item => item.Guid, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First().File, StringComparer.OrdinalIgnoreCase);
-        var referencedModuleGuids = ResolveReferencedRazerModuleClosure(selectedFiles, modulesByGuid);
-        var selectedModuleGuids = selectedFiles
-            .Where(file => file.RazerGuid is not null && referencedModuleGuids.Contains(file.RazerGuid))
-            .Select(file => file.RazerGuid!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
         var importedCount = 0;
         var automaticallyDetectedCount = 0;
         var diagnosticLines = new List<string>();
         string? singleSourceFormat = null;
         var singleStepCount = 0;
         MacroLibraryItem? lastImportedMacro = null;
-        var pendingDocuments = new List<MacroDocument>();
+        MacroLibraryItem? lastImportedDocument = null;
 
-        foreach (var guid in referencedModuleGuids)
+        if (looseFiles.Count > 0) ImportBatch(looseFiles, archiveName: null);
+        foreach (var zipPath in sourcePaths.Where(MacroImportFiles.IsZip))
         {
-            if (!modulesByGuid.TryGetValue(guid, out var module)) continue;
+            var archiveName = Path.GetFileName(zipPath);
+            List<SmartImportFile> entries;
             try
             {
-                var imported = ImportRazerWithNestedCalls(module, auxiliaryFiles);
-                lastImportedMacro = StoreRazerMacro(imported, module.Content);
-                importedCount++;
-                if (!selectedModuleGuids.Contains(guid)) automaticallyDetectedCount++;
-                diagnosticLines.Add($"{module.FileName}: {FormatDiagnostics(imported.Diagnostics)}");
+                entries = MacroImportFiles.ReadZip(zipPath)
+                    .Select(entry => CreateSmartImportFile(entry.FileName, entry.FileName, entry.Content))
+                    .Where(entry => entry.Format != MacroConversionFormat.Auto)
+                    .ToList();
+                if (entries.Count == 0) throw new InvalidDataException(L("ConversionZipNoMacros"));
             }
             catch (Exception ex)
             {
-                failureMessages.Add(FormatImportFailure(module.FileName, ex));
+                failureMessages.Add(FormatImportFailure(archiveName, ex));
+                continue;
             }
+
+            // Remap calls within each archive as a unit so two exports can reuse macro names.
+            ImportBatch(entries, archiveName);
         }
 
-        foreach (var file in selectedFiles.Where(file => file.RazerGuid is null || !referencedModuleGuids.Contains(file.RazerGuid)))
-        {
-            try
-            {
-                var import = file.Format == MacroConversionFormat.RazerSynapseXml
-                    ? ImportRazerWithNestedCalls(new AuxiliaryMacroFile(file.DisplayName, file.Content), auxiliaryFiles)
-                    : MacroConversionService.ImportToMcrx(new MacroImportRequest(
-                        file.Content,
-                        file.FullPath,
-                        file.Format,
-                        auxiliaryFiles));
-                if (file.Format == MacroConversionFormat.RazerSynapseXml)
-                {
-                    lastImportedMacro = StoreRazerMacro(import, file.Content);
-                }
-                else
-                {
-                    pendingDocuments.Add(import.Document);
-                }
-
-                importedCount++;
-                singleSourceFormat = import.SourceFormat.ToString();
-                singleStepCount = import.Document.Steps.Count;
-                diagnosticLines.Add($"{file.DisplayName}: {FormatDiagnostics(import.Diagnostics)}");
-            }
-            catch (Exception ex)
-            {
-                failureMessages.Add(FormatImportFailure(file.DisplayName, ex));
-            }
-        }
-
-        foreach (var dependency in MacroConversionService.CollectReferencedMcrxDocuments(pendingDocuments, auxiliaryFiles))
-        {
-            pendingDocuments.Add(dependency);
-            importedCount++;
-            automaticallyDetectedCount++;
-        }
-
-        if (pendingDocuments.Count > 0)
-        {
-            var importedItems = state.LibraryStore.ImportMacros(
-                pendingDocuments,
-                GetCurrentFolder(),
-                CurrentDatabaseGroupId,
-                LoadNeighborLibraryReferenceMap(selectedFiles));
-            if (importedItems.Count > 0)
-            {
-                lastImportedMacro = importedItems[^1];
-                ImportApplied?.Invoke(state.LibraryStore.ReadMacro(lastImportedMacro.Id));
-            }
-        }
+        if (lastImportedDocument is not null)
+            ImportApplied?.Invoke(state.LibraryStore.ReadMacro(lastImportedDocument.Id));
 
         if (lastImportedMacro is not null)
         {
@@ -2547,9 +2484,9 @@ public partial class MacroLibraryPanel : UserControl
             MacroSelected?.Invoke(lastImportedMacro.Id);
         }
 
-        var message = selectedFiles.Count == 1 && importedCount == 1 && automaticallyDetectedCount == 0
+        var message = sourcePaths.Length == 1 && importedCount == 1 && automaticallyDetectedCount == 0
             ? LF("ConversionImported", singleSourceFormat ?? L("Macro"), singleStepCount)
-            : LF("ConversionSmartImported", importedCount, selectedFiles.Count, automaticallyDetectedCount);
+            : LF("ConversionSmartImported", importedCount, sourcePaths.Length, automaticallyDetectedCount);
         var details = diagnosticLines.Concat(failureMessages).ToList();
         ConversionText.Text = details.Count == 0
             ? message
@@ -2567,6 +2504,102 @@ public partial class MacroLibraryPanel : UserControl
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+
+        void ImportBatch(IReadOnlyList<SmartImportFile> selectedFiles, string? archiveName)
+        {
+            string DisplayName(string file) => archiveName is null ? file : $"{archiveName} / {file}";
+            var auxiliaryFiles = BuildSmartImportCatalog(selectedFiles, includeNeighbors: archiveName is null);
+            var modulesByGuid = auxiliaryFiles
+                .Select(file => MacroConversionService.TryGetRazerMacroGuid(file.Content, out var guid)
+                    ? (Guid: guid, File: file)
+                    : (Guid: string.Empty, File: file))
+                .Where(item => !string.IsNullOrWhiteSpace(item.Guid))
+                .GroupBy(item => item.Guid, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First().File, StringComparer.OrdinalIgnoreCase);
+            var referencedModuleGuids = ResolveReferencedRazerModuleClosure(selectedFiles, modulesByGuid);
+            var selectedModuleGuids = selectedFiles
+                .Where(file => file.RazerGuid is not null && referencedModuleGuids.Contains(file.RazerGuid))
+                .Select(file => file.RazerGuid!)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var pendingDocuments = new List<MacroDocument>();
+
+            foreach (var guid in referencedModuleGuids)
+            {
+                if (!modulesByGuid.TryGetValue(guid, out var module)) continue;
+                try
+                {
+                    var imported = ImportRazerWithNestedCalls(module, auxiliaryFiles);
+                    lastImportedMacro = StoreRazerMacro(imported, module.Content);
+                    importedCount++;
+                    if (!selectedModuleGuids.Contains(guid)) automaticallyDetectedCount++;
+                    diagnosticLines.Add($"{DisplayName(module.FileName)}: {FormatDiagnostics(imported.Diagnostics)}");
+                }
+                catch (Exception ex)
+                {
+                    failureMessages.Add(FormatImportFailure(DisplayName(module.FileName), ex));
+                }
+            }
+
+            foreach (var file in selectedFiles.Where(file => file.RazerGuid is null || !referencedModuleGuids.Contains(file.RazerGuid)))
+            {
+                try
+                {
+                    var import = file.Format == MacroConversionFormat.RazerSynapseXml
+                        ? ImportRazerWithNestedCalls(new AuxiliaryMacroFile(file.DisplayName, file.Content), auxiliaryFiles)
+                        : MacroConversionService.ImportToMcrx(new MacroImportRequest(
+                            file.Content,
+                            file.SourcePath,
+                            file.Format,
+                            auxiliaryFiles));
+                    if (file.Format == MacroConversionFormat.RazerSynapseXml)
+                    {
+                        lastImportedMacro = StoreRazerMacro(import, file.Content);
+                    }
+                    else
+                    {
+                        pendingDocuments.Add(import.Document);
+                    }
+
+                    importedCount++;
+                    singleSourceFormat = import.SourceFormat.ToString();
+                    singleStepCount = import.Document.Steps.Count;
+                    diagnosticLines.Add($"{DisplayName(file.DisplayName)}: {FormatDiagnostics(import.Diagnostics)}");
+                }
+                catch (Exception ex)
+                {
+                    failureMessages.Add(FormatImportFailure(DisplayName(file.DisplayName), ex));
+                }
+            }
+
+            foreach (var dependency in MacroConversionService.CollectReferencedMcrxDocuments(pendingDocuments, auxiliaryFiles))
+            {
+                pendingDocuments.Add(dependency);
+                importedCount++;
+                automaticallyDetectedCount++;
+            }
+
+            if (pendingDocuments.Count > 0)
+            {
+                var importedItems = state.LibraryStore.ImportMacros(
+                    pendingDocuments,
+                    GetCurrentFolder(),
+                    CurrentDatabaseGroupId,
+                    archiveName is null ? LoadNeighborLibraryReferenceMap(selectedFiles) : null);
+                if (importedItems.Count > 0)
+                {
+                    lastImportedMacro = importedItems[^1];
+                    lastImportedDocument = lastImportedMacro;
+                }
+            }
+        }
+    }
+
+    private static SmartImportFile CreateSmartImportFile(string sourcePath, string displayName, string content)
+    {
+        var format = MacroConversionService.DetectFormat(content, sourcePath);
+        MacroConversionService.TryGetRazerMacroGuid(content, out var razerGuid);
+        return new SmartImportFile(sourcePath, displayName, content, format, string.IsNullOrWhiteSpace(razerGuid) ? null : razerGuid);
     }
 
     private MacroImportResult ImportRazerWithNestedCalls(
@@ -2595,17 +2628,19 @@ public partial class MacroLibraryPanel : UserControl
             && (item.MatchesReference(guid) || string.Equals(item.Name, imported.Document.Name, StringComparison.CurrentCultureIgnoreCase)));
         return existing is not null
             ? state.LibraryStore.AddAliasesToMacro(existing.Id, aliases)
-            : state.LibraryStore.CreateMacro(imported.Document, aliases: aliases, groupId: targetGroupId);
+            : state.LibraryStore.CreateMacro(imported.Document, folder: GetCurrentFolder(), aliases: aliases, groupId: targetGroupId);
     }
 
-    private static IReadOnlyList<AuxiliaryMacroFile> BuildSmartImportCatalog(IReadOnlyList<SmartImportFile> selectedFiles)
+    private static IReadOnlyList<AuxiliaryMacroFile> BuildSmartImportCatalog(
+        IReadOnlyList<SmartImportFile> selectedFiles, bool includeNeighbors)
     {
         var files = selectedFiles
             .Select(file => new AuxiliaryMacroFile(file.DisplayName, file.Content))
             .ToList();
-        foreach (var selectedFile in selectedFiles)
+        if (includeNeighbors)
         {
-            files.AddRange(LoadConversionAuxiliaryFiles(selectedFile.FullPath));
+            foreach (var selectedFile in selectedFiles)
+                files.AddRange(LoadConversionAuxiliaryFiles(selectedFile.SourcePath));
         }
 
         return files
@@ -2639,7 +2674,7 @@ public partial class MacroLibraryPanel : UserControl
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var directory in selectedFiles
-            .Select(file => Path.GetDirectoryName(file.FullPath))
+            .Select(file => Path.GetDirectoryName(file.SourcePath))
             .Where(directory => !string.IsNullOrWhiteSpace(directory))
             .Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -2681,21 +2716,11 @@ public partial class MacroLibraryPanel : UserControl
         }
 
         var selectedFullPath = Path.GetFullPath(selectedFileName);
-        var supportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".json",
-            ".mcrx",
-            ".xml",
-            ".lua",
-            ".xmbcs",
-            ".mq",
-            ".txt"
-        };
         var files = new List<AuxiliaryMacroFile>();
         foreach (var file in Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories))
         {
             if (string.Equals(Path.GetFullPath(file), selectedFullPath, StringComparison.OrdinalIgnoreCase)
-                || !supportedExtensions.Contains(Path.GetExtension(file)))
+                || !MacroImportFiles.IsSupportedMacro(file))
             {
                 continue;
             }
@@ -3724,7 +3749,7 @@ public partial class MacroLibraryPanel : UserControl
     private sealed record MacroLibraryClipboardItem(MacroLibraryClipboardKind Kind, string Value, string GroupId);
 
     private sealed record SmartImportFile(
-        string FullPath,
+        string SourcePath,
         string DisplayName,
         string Content,
         MacroConversionFormat Format,

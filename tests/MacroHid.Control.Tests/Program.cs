@@ -123,6 +123,13 @@ try
     Check(Send(new("run", Id: item.Id, Count: 0, RequestId: Guid.NewGuid().ToString())).Code == "invalid", "Invalid wire count accepted.");
     Check(Send(new("run", Id: item.Id, Count: 2, Loop: true, RequestId: Guid.NewGuid().ToString())).Code == "invalid", "Conflicting wire loop/count accepted.");
     Check(Send(new("run", Id: "missing", RequestId: Guid.NewGuid().ToString())).Code == "not_found", "Missing macro not reported.");
+    var conditionMacro = store.CreateMacro(new MacroDocument(1, "守护条件宏", PlaybackSettings.Default with { RunAsDaemon = true }, [],
+        [new("test", "test", -1, -1, new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(1, 2, 3), 0), [])],
+        Kind: MacroKind.Condition), groupId: group.Id);
+    var conditionJob = Send(new("run", Id: conditionMacro.Id, DelayMilliseconds: 60000, RequestId: Guid.NewGuid().ToString(), Loop: true));
+    Check(conditionJob.Ok && Send(new("stop", RunId: conditionJob.Job!.RunId)).Ok,
+        "A standalone condition macro should accept an external loop request and stop by job ID.");
+    Check((await Finished(routerJobs, conditionJob.Job!.RunId)).State == "cancelled", "Condition-only job was not cancelled.");
     Set("preparingImmediate", true);
     var busyRun = Send(new("run", Id: item.Id, RequestId: Guid.NewGuid().ToString()));
     Check(busyRun.Ok && (await Finished(routerJobs, busyRun.Job!.RunId)).State == "busy", "Studio did not reject execution at deadline when preparing another macro.");

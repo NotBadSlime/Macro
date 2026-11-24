@@ -24,7 +24,6 @@ public partial class MainWindow : Window
 {
     private readonly MacroLibraryStore libraryStore = new(MacroLibraryStore.GetDefaultRoot());
     private readonly MacroEditorState editorState;
-    private readonly SendInputMacroSink inputSink = new();
     private readonly ActionTemplateInsertGate actionTemplateInsertGate = new();
     private readonly DispatcherTimer autoSaveTimer;
     private readonly DispatcherTimer coreSelectionTimer;
@@ -1214,6 +1213,7 @@ public partial class MainWindow : Window
         if (editorState.IsEditLocked) return;
         try
         {
+            RefreshRunNowHint();
             ScheduleAutoSave();
         }
         catch (Exception ex)
@@ -1345,13 +1345,7 @@ public partial class MainWindow : Window
 
     private bool IsCoreSelectionBlocked()
     {
-        if (playbackController?.Status is PlaybackStatus.Running or PlaybackStatus.Stopping)
-        {
-            return true;
-        }
-
-        return listeningControllers.Values.Any(controller =>
-            controller.Status is PlaybackStatus.Running or PlaybackStatus.Stopping);
+        lock (triggerGate) return playbackRuns.Active.Any();
     }
 
     private static string[] QueryRunningProcessNames()
@@ -1909,7 +1903,6 @@ public partial class MainWindow : Window
     {
         listening = false;
         StopListeningControllers();
-        playbackController?.Stop();
         if (listeningPaused)
         {
             pausedListeningIds.Clear();
@@ -1939,7 +1932,7 @@ public partial class MainWindow : Window
         {
             pausedListeningIds.Clear();
             pausedListeningIds.AddRange(listeningControllers.Keys);
-            OnStopPlayback();
+            StopAllPlayback();
             listening = false;
             StopListeningControllers();
             RefreshKeyboardHook();
@@ -2136,6 +2129,7 @@ public partial class MainWindow : Window
             listeningMacroNames[id] = candidate.Document.Name;
             listeningGroupProcessFilters[id] = candidate.GroupProcessFilter;
             listeningBindings[id] = candidate.Trigger;
+            listeningPlaybackModes[id] = (candidate.Document.Playback.RunAsDaemon, optionsById[id].BackgroundWindow);
         }
         listening = listeningControllers.Count > 0;
         RefreshKeyboardHook();
@@ -2152,6 +2146,7 @@ public partial class MainWindow : Window
     {
         listeningUpdateGeneration++;
         listeningBindings.Clear();
+        listeningPlaybackModes.Clear();
         listeningFingerprints.Clear();
         foreach (var controller in listeningControllers.Values)
         {
@@ -2169,6 +2164,7 @@ public partial class MainWindow : Window
     {
         listeningUpdateGeneration++;
         listeningBindings.Remove(id);
+        listeningPlaybackModes.Remove(id);
         listeningFingerprints.Remove(id);
         if (!listeningControllers.Remove(id, out var controller))
         {
@@ -2203,8 +2199,12 @@ public partial class MainWindow : Window
         }
         foreach (var pair in listeningBindings) bindings.Add(new(pair.Key, pair.Value));
         Volatile.Write(ref hotkeyRoutes, listeningControllers.ToDictionary(pair => pair.Key,
-            pair => new HotkeyRoute(pair.Value, listeningGroupProcessFilters.GetValueOrDefault(pair.Key, ""),
-                listeningMacroNames.GetValueOrDefault(pair.Key, ""), runtimePrecisionSettings.BackgroundWindow)));
+            pair =>
+            {
+                var mode = listeningPlaybackModes.GetValueOrDefault(pair.Key);
+                return new HotkeyRoute(pair.Value, listeningGroupProcessFilters.GetValueOrDefault(pair.Key, ""),
+                    listeningMacroNames.GetValueOrDefault(pair.Key, ""), mode.Background, mode.Daemon);
+            }));
         listening = listeningControllers.Count > 0;
         UpdatePrecisionWarmLease();
         if (bindings.Count == 0) { keyboardHook?.Stop(); return; }
@@ -2245,7 +2245,7 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            if (item.IsConditionMacro || document.IsConditionMacro)
+            if (!CanPlayStandalone(document))
             {
                 continue;
             }
@@ -2286,6 +2286,8 @@ public partial class MainWindow : Window
         var item = snapshot.Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
         var document = libraryStore.ReadMacro(item.Id);
+        if (!CanPlayStandalone(document))
+            throw new InvalidOperationException(L("ConditionMacroNeedsConditions"));
         if (document.Playback.Trigger is not { } trigger)
         {
             throw new InvalidOperationException(L("ChooseTriggerBeforeListening"));
@@ -2588,64 +2590,46 @@ public partial class MainWindow : Window
     private async void OnRunNow()
     {
         if (shutdownStarted || preparingImmediate) return;
-        if (immediateController is { Status: PlaybackStatus.Running or PlaybackStatus.Stopping })
-        { SetStatus(L("PlaybackStatusStopping")); return; }
-        using var preparation = TrackPreparation();
-        preparingImmediate = true;
-        IMacroPlaybackExecutor? prepared = null;
-        long epoch = Interlocked.Read(ref stopEpoch);
         try
         {
             if (macroRecorder is not null) StopMacroRecording(insertSteps: true, restoreWindow: true);
             var document = GetDocumentWithPlayback();
-            var id = activeEditorMacroId;
-            var options = CreatePlaybackOptions(document).ForImmediateRun();
-            runNowEmergencyStopArmed = true;
-            RefreshKeyboardHook();
-            if (immediateController is not null) await immediateController.DisposeAsync();
-            var version = runtimePrecisionSettings.Version;
-            prepared = await Task.Run(() => {
-                var frozen = CaptureResolver(document, id);
-                return PlaybackEngineHost.Prepare(inputSink, document, frozen.Resolver, options, immediate: true, version);
-            });
-            if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) { DisarmRunNowEmergencyStop(); return; }
-            lock (triggerGate)
+            if (!CanPlayStandalone(document))
+                throw new InvalidOperationException(L("ConditionMacroNeedsConditions"));
+            var id = activeEditorMacroId ?? editorState.SelectedMacroId;
+            var options = CreatePlaybackOptions(document);
+            var continuous = ShouldRunNowContinuously(document);
+            options = continuous ? options with { Mode = PlaybackMode.ToggleLoop } : options.ForImmediateRun();
+            var started = await StartDirectPlaybackAsync(document, id, resolver: null, options, immediate: !continuous);
+            if (started is null)
             {
-                if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) return;
-                if (OtherMacroIsActive(null))
-                {
-                    DisarmRunNowEmergencyStop();
-                    SetStatus(L("OneMacroAtATime"), StatusLevel.Warning);
-                    return;
-                }
-                playbackController = immediateController = new(document, prepared, options);
-                prepared = null;
-                _ = playbackController.RunNowAsync();
+                lock (triggerGate)
+                    SetStatus(L(playbackRuns.Find(id) is not null ? "PlaybackStatusRunning"
+                        : options.BackgroundWindow || playbackRuns.Active.Any(run => run.Background) ? "BackgroundPlaybackExclusive"
+                        : "OneMacroAtATime"), StatusLevel.Warning);
+                return;
             }
-            PlaybackPanelControl.SetPlaybackResult(L("RunNowOnceHint"));
-            UpdatePlaybackStatus();
-            WatchPlayback(playbackController);
+            if (!started.Completion.IsCompleted)
+                PlaybackPanelControl.SetPlaybackResult(L(continuous ? "RunNowConfiguredModeHint" : "RunNowOnceHint"));
         }
+        catch (OperationCanceledException) { UpdatePlaybackStatus(); }
         catch (Exception ex)
         {
             AppLog.Error("Playback", "Start failed", ex);
-            DisarmRunNowEmergencyStop();
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
         }
-        finally { (prepared as IDisposable)?.Dispose(); preparingImmediate = false; }
     }
 
-    private void DisarmRunNowEmergencyStop()
-    {
-        if (!runNowEmergencyStopArmed)
-        {
-            return;
-        }
+    internal static bool CanPlayStandalone(MacroDocument document) =>
+        !document.IsConditionMacro || IsConditionOnly(document);
 
-        runNowEmergencyStopArmed = false;
-        RefreshKeyboardHook();
-    }
+    internal static bool IsConditionOnly(MacroDocument document) =>
+        document.Steps.Count == 0 && document.EffectiveConditions.Count > 0;
+
+    internal static bool ShouldRunNowContinuously(MacroDocument document) =>
+        document.Playback.Mode is PlaybackMode.ToggleLoop or PlaybackMode.HoldLoop
+        && (document.Playback.RunAsDaemon || IsConditionOnly(document));
 
     private PlaybackExecutionOptions CreatePlaybackOptions(MacroDocument document)
     {
@@ -2687,14 +2671,21 @@ public partial class MainWindow : Window
 
     private void OnStopPlayback()
     {
-        RequestAllStops();
-        DisarmRunNowEmergencyStop();
-
-        PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
-
+        lock (triggerGate)
+        {
+            playbackRuns.Find(activeEditorMacroId ?? editorState.SelectedMacroId)?.Controller.Stop();
+            // Cancel an incomplete direct start for the editor as well.
+            if (preparingImmediate && string.Equals(preparingMacroId, activeEditorMacroId ?? editorState.SelectedMacroId, StringComparison.OrdinalIgnoreCase))
+                Interlocked.Increment(ref stopEpoch);
+        }
         UpdatePlaybackStatus();
-        if (playbackController is not null)
-            WatchPlayback(playbackController);
+    }
+
+    private void StopAllPlayback()
+    {
+        RequestAllStops();
+        PlaybackInputSafetyRegistry.ReleaseAllActiveInputs();
+        UpdatePlaybackStatus();
     }
 
     private void OnImportApplied(MacroDocument document)
@@ -2751,7 +2742,7 @@ public partial class MainWindow : Window
         try
         {
             macroRecordingTargetsCondition = targetsCondition;
-            OnStopPlayback();
+            StopAllPlayback();
 
             // Recording input must not also activate macros that are listening.
             coreHotkeysSuspended = true;
@@ -2982,7 +2973,10 @@ public partial class MainWindow : Window
         if (!int.TryParse(PlaybackPanelControl.CountText, out var count) || count < 1) count = 1;
 
         var document = SequencePanelControl.GetCurrentDocument();
-        var settings = document.Playback with { Trigger = trigger, Mode = mode, Count = count };
+        var settings = document.Playback with
+        {
+            Trigger = trigger, Mode = mode, Count = count, RunAsDaemon = PlaybackPanelControl.RunAsDaemon
+        };
         if (settings != document.Playback) SequencePanelControl.SetEditorDocument(document with { Playback = settings });
     }
 
@@ -2991,11 +2985,21 @@ public partial class MainWindow : Window
         try
         {
             ConditionPanel.SetStepChoices(SequencePanelControl.GetStepChoices());
+            RefreshRunNowHint();
         }
         catch
         {
             ConditionPanel.SetStepChoices([]);
         }
+    }
+
+    private void RefreshRunNowHint()
+    {
+        var continuous = PlaybackPanelControl.GetSelectedPlaybackMode() is PlaybackMode.ToggleLoop or PlaybackMode.HoldLoop
+            && (PlaybackPanelControl.RunAsDaemon
+                || (SequencePanelControl.GetStepChoices().Count == 0 && ConditionPanel.Conditions.Count > 0));
+        SequencePanelControl.SetRunNowHint(continuous);
+        PlaybackPanelControl.SetRunNowHint(continuous);
     }
 
     private MacroDocument? ResolveMacroForPlayback(string name)
@@ -3029,23 +3033,26 @@ public partial class MainWindow : Window
         if (!Volatile.Read(ref hotkeyRoutes).TryGetValue(e.Id, out var route)) return;
         long epoch = Interlocked.Read(ref stopEpoch);
         if (!route.Background && !MacroLibraryActivationFilter.Matches(route.Filter, ForegroundProcessService.GetForegroundProcessName())) return;
+        long run;
+        Task<PlaybackRunResult> completion;
         lock (triggerGate)
         {
             if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch)) return;
-            // One macro at a time: while any other macro is running or stopping, its hotkey is ignored. The running macro's
-            // own hotkey still reaches it (toggle stop, hold release).
-            if (OtherMacroIsActive(route.Controller)) return;
-            route.Controller.TriggerPressedAsync(e.CallbackQpc);
+            if (!Volatile.Read(ref hotkeyRoutes).TryGetValue(e.Id, out var current) || current != route
+                || playbackRuns.BlocksStart(e.Id, route.Daemon, route.Background, route.Controller)) return;
+            _ = route.Controller.TriggerPressedAsync(e.CallbackQpc);
+            run = route.Controller.RunId;
+            if (run == 0) return;
+            playbackRuns.Track(e.Id, route.Daemon, route.Background, direct: false, route.Controller, run);
             heldControllers[e.Id] = route.Controller;
+            completion = route.Controller.WhenIdleAsync();
         }
-        long run = route.Controller.RunId;
-        var completion = route.Controller.WhenIdleAsync();
         Dispatcher.BeginInvoke(() => {
-            if (epoch != Interlocked.Read(ref stopEpoch) || run != route.Controller.RunId) return;
+            ObservePlayback(route.Controller, run, completion);
+            if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch) || run != route.Controller.RunId) return;
             playbackController = route.Controller;
             UpdatePlaybackStatus();
-            SetStatus(route.Controller.Status == PlaybackStatus.Stopping ? L("PlaybackStatusStopping") : route.Name);
-            ObservePlayback(route.Controller, run, completion);
+            if (route.Controller.Status == PlaybackStatus.Running) SetStatus(route.Name);
         });
     }
 
@@ -3054,32 +3061,31 @@ public partial class MainWindow : Window
         if (heldControllers.TryRemove(e.Id, out var controller)) controller.TriggerReleased();
     }
 
-    // Under triggerGate. True when a macro other than this one is running or stopping (listening macros and "run now").
-    private bool OtherMacroIsActive(MacroPlaybackController? self)
-    {
-        static bool Active(MacroPlaybackController? c) => c?.Status is PlaybackStatus.Running or PlaybackStatus.Stopping;
-        foreach (var other in Volatile.Read(ref hotkeyRoutes).Values)
-            if (!ReferenceEquals(other.Controller, self) && Active(other.Controller)) return true;
-        var immediate = Volatile.Read(ref immediateController);
-        return !ReferenceEquals(immediate, self) && Active(immediate);
-    }
-
     private void ObservePlayback(MacroPlaybackController controller, long run, Task<PlaybackRunResult> completion)
     {
-        if (run == 0) return;
         var observed = observedRuns.GetValue(controller, _ => new());
-        if (observed.Value == run) return;
+        if (observed.Value >= run) return;
         observed.Value = run;
         _ = WatchPlaybackAsync(controller, run, completion);
     }
-    private void WatchPlayback(MacroPlaybackController controller)
-        => ObservePlayback(controller, controller.RunId, controller.WhenIdleAsync());
-
     private async Task WatchPlaybackAsync(MacroPlaybackController controller, long run, Task<PlaybackRunResult> completion)
     {
-        var result = await completion;
-        if (shutdownStarted || run != controller.RunId || !ReferenceEquals(playbackController, controller)) return;
-        if (ReferenceEquals(immediateController, controller)) DisarmRunNowEmergencyStop();
+        PlaybackRunResult result;
+        try { result = await completion; }
+        catch (Exception ex)
+        {
+            AppLog.Error("Playback", "Completion failed", ex);
+            result = new(PlaybackRunStatus.Failed, 0, 0, false, null);
+        }
+
+        PlaybackRunRegistry.Run? finished;
+        lock (triggerGate) finished = playbackRuns.Finish(controller, run);
+        if (finished is { Direct: true }) RetireController(controller);
+        if (shutdownStarted) return;
+        RefreshDirectStopBinding();
+        if (run != controller.RunId || !ReferenceEquals(playbackController, controller)) return;
+        UpdatePlaybackStatus();
+        if (!ReferenceEquals(playbackController, controller)) return;
         if (result.Status == PlaybackRunStatus.Failed)
         {
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
@@ -3088,14 +3094,17 @@ public partial class MainWindow : Window
         }
         else
         {
-            UpdatePlaybackStatus();
             PlaybackPanelControl.SetPlaybackResult(LocalizationService.Format("LastResultRunSummary", result.IterationsCompleted, result.ActionsSubmitted, result.Cancelled));
-            SetStatus(listening ? L("Listening") : L("Idle"));
         }
     }
 
     private void UpdatePlaybackStatus()
     {
+        lock (triggerGate)
+        {
+            if (playbackController?.Status is not (PlaybackStatus.Running or PlaybackStatus.Stopping))
+                playbackController = playbackRuns.Active.OrderBy(run => run.Daemon).FirstOrDefault()?.Controller ?? playbackController;
+        }
         if (playbackController is null)
         {
             PlaybackPanelControl.SetPlaybackStatus(listening ? L("PlaybackStatusListening") : L("PlaybackStatusIdle"));
@@ -3525,6 +3534,7 @@ public partial class MainWindow : Window
         JsonPanel.ApplyLocalization();
         ActionPalette.ApplyLocalization();
         PlaybackPanelControl.ApplyLocalization();
+        RefreshRunNowHint();
         UpdatePauseListeningButton();
     }
 

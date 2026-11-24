@@ -33,7 +33,8 @@ public sealed record PlaybackSettings(
     string ProcessFilter = "",
     PrecisionMode Precision = PrecisionMode.ExtremeDuringPlayback,
     string AffinityMask = "",
-    HotkeyGesture? StopTrigger = null)
+    HotkeyGesture? StopTrigger = null,
+    bool RunAsDaemon = false)
 {
     public static PlaybackSettings Default { get; } = new(
         null,

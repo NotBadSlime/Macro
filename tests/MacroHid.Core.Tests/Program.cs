@@ -55,6 +55,8 @@ var tests = new (string Name, Action Body)[]
 {
     ("Unlocker config formatting, conflicts, leases, crash recovery and KY3 patch", UnlockerConfigTests.Run),
     ("Playback listening follows the editor when library selection is cleared or changed", PlaybackListeningSelectionTests.Run),
+    ("Condition-only playback runs fixed and continuous modes", ConditionOnlyPlaybackTests.Run),
+    ("Daemon macros share foreground playback and stop independently", DaemonPlaybackTests.Run),
     ("Compact BGRA frames retain leases and reduce conversion allocation", PerformanceProfileTests.CompactPixels),
     ("Integral NCC preserves threshold decisions and winning coordinates", PerformanceProfileTests.MatchingBoundaries),
     ("Playback trace retains raw QPC timestamps and run identity", PerformanceProfileTests.TraceEvents),
@@ -1080,9 +1082,10 @@ static void LegacyEnginesRunThroughTheCurrentController()
     Assert.Contains("if (executor is LegacyPreparedExecutor prepared) legacy = new LegacyRoute(prepared);", controller);
     Assert.Contains("route.Controller.TriggerPressedAsync()", controller);
     Assert.Contains("route.Controller.TriggerReleased()", controller);
-    Assert.Contains("PlaybackEngineHost.Prepare(inputSink, candidate.Document", scheduling);
+    Assert.Contains("PlaybackEngineHost.Prepare(new SendInputMacroSink(), candidate.Document", scheduling);
     Assert.Contains("+ version.Id", scheduling);
-    Assert.Contains("PlaybackEngineHost.Prepare(inputSink, document, frozen.Resolver, options, immediate: true, version)", main);
+    Assert.Contains("PlaybackEngineHost.Prepare(new SendInputMacroSink(), document", scheduling);
+    Assert.Contains("StartDirectPlaybackAsync(document, id, resolver: null, options", main);
     Assert.Contains("PlaybackEngineHost.Activate(runtimePrecision)", app);
     Assert.Contains("PlaybackEngineHost.Shutdown()", app);
     Assert.DoesNotContain("NativePlaybackWarmup.", main);
@@ -5924,8 +5927,8 @@ static void MacroStudioKeepsPlaybackListeningButtonsBelowModeControls()
     var libraryXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
 
     var playbackRowDefinitions = playbackXaml.Split("<RowDefinition").Length - 1;
-    Assert.True(playbackRowDefinitions >= 4);
-    Assert.Contains("<Grid Grid.Row=\"3\"", playbackXaml);
+    Assert.True(playbackRowDefinitions >= 5);
+    Assert.Contains("<Grid Grid.Row=\"4\"", playbackXaml);
     Assert.True(playbackXaml.IndexOf("PlaybackModeBox", StringComparison.Ordinal) < playbackXaml.IndexOf("StartListeningButton", StringComparison.Ordinal));
     Assert.Contains("StartListeningButton", playbackXaml);
     Assert.Contains("StopListeningButton", playbackXaml);
@@ -5997,11 +6000,10 @@ static void MacroStudioSupportsMultiSelectDragFeedbackAndConditionOnlyPixel()
     Assert.Contains("Tag=\"TextWhen\"", actionPaletteXaml);
     Assert.Contains("Tag=\"WeakNetStart\"", actionPaletteXaml);
     Assert.Contains("Tag=\"WeakNetStop\"", actionPaletteXaml);
-    // The parallel card was removed from the palette (one macro at a time); existing ones refuse to play.
+    // Daemons run separate macros without restoring the old parallel action card.
     Assert.DoesNotContain("Tag=\"Parallel\"", actionPaletteXaml);
     Assert.DoesNotContain("AddParallel", actionPaletteCode);
     Assert.Contains("ParallelCards.FindIn(document, resolver)", EngineHostSource());
-    Assert.Contains("if (OtherMacroIsActive(route.Controller)) return;", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs")));
     Assert.True(ParallelCards.Contains([new RepeatStep(1, [new ParallelStep(new ParallelBranchStep("a", []), new ParallelBranchStep("b", []))])]));
     Assert.True(!ParallelCards.Contains([new WaitStep(TimeSpan.FromMilliseconds(1))]));
     Assert.Contains("AddConditionButton", conditionXaml);
@@ -6719,7 +6721,7 @@ static void MacroStudioMovesConversionIntoMacroLibraryAndRemovesDiagnosticsContr
     Assert.Contains("PreserveRazerModuleCalls: true", libraryCode);
     Assert.DoesNotContain("ImportRazerModules_Click", libraryCode);
     Assert.Contains("AddAliasesToMacro", libraryCode);
-    Assert.Contains("CreateMacro(imported.Document, aliases:", libraryCode);
+    Assert.Contains("CreateMacro(imported.Document, folder: GetCurrentFolder(), aliases:", libraryCode);
     Assert.Contains("ImportApplied", libraryCode);
     Assert.Contains("DocumentRequested", libraryCode);
     Assert.Contains("ResultMessage", libraryCode);
@@ -6732,7 +6734,7 @@ static void MacroStudioPreservesRazerModuleCallsWhenImportingMainMacros()
 {
     var libraryCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml.cs"));
 
-    Assert.Contains("BuildSmartImportCatalog(selectedFiles)", libraryCode);
+    Assert.Contains("BuildSmartImportCatalog(selectedFiles, includeNeighbors: archiveName is null)", libraryCode);
     Assert.Contains("ResolveReferencedRazerModuleClosure(selectedFiles, modulesByGuid)", libraryCode);
     Assert.Contains("StoreRazerMacro", libraryCode);
     Assert.DoesNotContain("razerModuleFiles", libraryCode);
@@ -7352,7 +7354,9 @@ static void RuntimeKeepsExternalConditionDirectivesOnNativeTimeline()
     Assert.Contains("RequestStopIteration", executorCode);
     Assert.Contains("out bool stopIterationRequested", executorCode);
     Assert.DoesNotContain("condition ranges require managed step activation", executorCode);
-    Assert.DoesNotContain("document.EffectiveConditions.Count == 0", executorCode);
+    var prepare = executorCode[executorCode.IndexOf("private NativePlaybackPreparedPlan? TryCreateNativePreparedPlan", StringComparison.Ordinal)..];
+    prepare = prepare[..prepare.IndexOf("\n    private ", 1, StringComparison.Ordinal)];
+    Assert.DoesNotContain("document.EffectiveConditions.Count == 0", prepare);
     Assert.Contains("inline PixelWhen requires managed step activation", executorCode);
     Assert.Contains("ContainsPixelWhen(document.Steps)", executorCode);
 }
@@ -7617,7 +7621,7 @@ static void PlaybackControllerUsesSuppliedExecutionOptions()
     Assert.Contains("RunAndResetAsync(currentExecutor, currentDocument, options", controller);
     Assert.DoesNotContain("document.Playback.Precision)", controller);
     Assert.Contains("var options = CreatePlaybackOptions(document)", mainWindow);
-    Assert.Contains("new(document, prepared, options)", mainWindow);
+    Assert.Contains("new(document, prepared, options)", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.Scheduling.cs")));
 }
 
 static void RunNowPlaysLoopModesOnceAndEscCanStopIt()
@@ -7638,7 +7642,7 @@ static void RunNowPlaysLoopModesOnceAndEscCanStopIt()
     Assert.Equal(3, counted.Count);
 
     var mainWindow = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
-    Assert.Contains("CreatePlaybackOptions(document).ForImmediateRun()", mainWindow);
+    Assert.Contains("options.ForImmediateRun()", mainWindow);
     Assert.Contains("CoreHotkeys.EmergencyStopId", mainWindow);
     Assert.Contains("HidKey.Escape", mainWindow);
     Assert.Contains("MouseCursorUnclip", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "SendInputMacroSink.cs")));
