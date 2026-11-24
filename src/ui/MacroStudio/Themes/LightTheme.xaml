@@ -52,13 +52,17 @@
     <SolidColorBrush x:Key="RailSelectionGlow" Color="#1A614AF5" />
     <SolidColorBrush x:Key="SelectionBandBrush" Color="#28614AF5" />
 
-    <SolidColorBrush x:Key="StudioPrimaryFill" Color="#5A45D7" />
+    <LinearGradientBrush x:Key="StudioPrimaryFill" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#146786" Offset="0" />
+        <GradientStop Color="#3E55C8" Offset="0.57" />
+        <GradientStop Color="#593BC6" Offset="1" />
+    </LinearGradientBrush>
     <SolidColorBrush x:Key="StudioSuccess" Color="#136F57" />
     <SolidColorBrush x:Key="StudioDimmer" Color="#9027334F" />
-    <Color x:Key="StudioWashStart">#DDE6FA</Color>
+    <Color x:Key="StudioWashStart">#D5E8F8</Color>
     <Color x:Key="StudioWashMiddle">#E9EDF8</Color>
-    <Color x:Key="StudioWashEnd">#E8DFF9</Color>
-    <Color x:Key="StudioChromeEnd">#EBE6FA</Color>
+    <Color x:Key="StudioWashEnd">#EBE1F8</Color>
+    <Color x:Key="StudioChromeEnd">#E9DFF7</Color>
 
     <LinearGradientBrush x:Key="StudioBackdrop" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Color="{StaticResource StudioWashStart}" Offset="0" />
@@ -70,4 +74,43 @@
         <GradientStop Color="{StaticResource StudioWashMiddle}" Offset="0.56" />
         <GradientStop Color="{StaticResource StudioChromeEnd}" Offset="1" />
     </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="StudioSignal" Color="#066481" />
+    <SolidColorBrush x:Key="StudioChromeEdge" Color="#ADBFD9" />
+    <SolidColorBrush x:Key="StudioToolbarSurface" Color="#D6F6F9FF" />
+    <SolidColorBrush x:Key="StudioStatusSurface" Color="#F1F5FC" />
+    <SolidColorBrush x:Key="StudioBrandMark" Color="#E4FAFF" />
+
+    <LinearGradientBrush x:Key="StudioBrandSurface" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#1E5C88" Offset="0" />
+        <GradientStop Color="#5641A5" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="StudioRailSurface" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#E1EBF8" Offset="0" />
+        <GradientStop Color="#EFF0FA" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="StudioPanelHeaderSurface" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#EAF1FC" Offset="0" />
+        <GradientStop Color="#F5F6FC" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="StudioHorizon" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#209AB4" Offset="0" />
+        <GradientStop Color="#6889CC" Offset="0.48" />
+        <GradientStop Color="#8560C5" Offset="1" />
+    </LinearGradientBrush>
+
+    <DrawingBrush x:Key="StudioBackdropGrid" TileMode="Tile" Stretch="None"
+                  ViewportUnits="Absolute" Viewport="0,0,32,32"
+                  ViewboxUnits="Absolute" Viewbox="0,0,32,32">
+        <DrawingBrush.Drawing>
+            <GeometryDrawing Geometry="M0.5,0.5 H32 M0.5,0.5 V32">
+                <GeometryDrawing.Pen>
+                    <Pen Brush="#20486BA2" Thickness="1" />
+                </GeometryDrawing.Pen>
+            </GeometryDrawing>
+        </DrawingBrush.Drawing>
+    </DrawingBrush>
 </ResourceDictionary>

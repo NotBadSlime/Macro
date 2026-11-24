@@ -5,6 +5,142 @@
              xmlns:controls="clr-namespace:MacroStudio.Controls"
              Tag="{StaticResource ActionPaletteDragAdornerStyle}"
              SizeChanged="ActionPalette_SizeChanged">
+    <UserControl.Resources>
+        <Style x:Key="StudioActionTile" TargetType="Button" BasedOn="{StaticResource ActionPaletteCommandStyle}">
+            <Setter Property="MinHeight" Value="56" />
+            <Setter Property="Margin" Value="0,0,4,7" />
+            <Setter Property="Padding" Value="7,5,8,5" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{DynamicResource PanelBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10">
+                            <Grid>
+                                <Border Background="{DynamicResource StudioChrome}"
+                                        CornerRadius="9"
+                                        Opacity="0.55"
+                                        IsHitTestVisible="False" />
+                                <Border x:Name="TileHover"
+                                        Background="{DynamicResource ActionHoverOverlay}"
+                                        CornerRadius="9"
+                                        Opacity="0"
+                                        IsHitTestVisible="False" />
+                                <Border x:Name="TileEdge"
+                                        Background="{DynamicResource Accent}"
+                                        Width="2"
+                                        CornerRadius="1"
+                                        HorizontalAlignment="Left"
+                                        Margin="1,9,0,9"
+                                        Opacity="0"
+                                        IsHitTestVisible="False" />
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="Stretch"
+                                                  VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
+                                <Setter TargetName="TileHover" Property="Opacity" Value="0.78" />
+                                <Setter TargetName="TileEdge" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                                <Setter TargetName="TileHover" Property="Opacity" Value="0.78" />
+                                <Setter TargetName="TileEdge" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="TileHover" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StudioActionSection" TargetType="controls:CollapsibleSection">
+            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="controls:CollapsibleSection">
+                        <Border Background="{DynamicResource PanelBackground}"
+                                BorderBrush="{DynamicResource PanelBorder}"
+                                BorderThickness="1"
+                                CornerRadius="12">
+                            <DockPanel>
+                                <Button x:Name="PART_ToggleButton"
+                                        DockPanel.Dock="Top"
+                                        Content="{TemplateBinding Header}"
+                                        Foreground="{TemplateBinding Foreground}"
+                                        Margin="0"
+                                        Padding="10,0"
+                                        Height="38"
+                                        Cursor="Hand"
+                                        HorizontalContentAlignment="Stretch">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="SectionHeader"
+                                                    Background="{DynamicResource StudioChrome}"
+                                                    CornerRadius="11,11,0,0"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <DockPanel LastChildFill="True">
+                                                    <Border DockPanel.Dock="Left"
+                                                            Background="{TemplateBinding Foreground}"
+                                                            Width="16"
+                                                            Height="2"
+                                                            CornerRadius="1"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,8,0" />
+                                                    <Path x:Name="SectionArrow"
+                                                          DockPanel.Dock="Right"
+                                                          Data="M 0 0 L 5 5 L 10 0"
+                                                          Stroke="{TemplateBinding Foreground}"
+                                                          StrokeThickness="1.5"
+                                                          StrokeStartLineCap="Round"
+                                                          StrokeEndLineCap="Round"
+                                                          VerticalAlignment="Center"
+                                                          Margin="8,0,2,0"
+                                                          RenderTransformOrigin="0.5,0.5" />
+                                                    <ContentPresenter VerticalAlignment="Center"
+                                                                      TextBlock.Foreground="{DynamicResource PrimaryText}"
+                                                                      TextBlock.FontWeight="SemiBold" />
+                                                </DockPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=controls:CollapsibleSection}}" Value="True">
+                                                    <Setter TargetName="SectionArrow" Property="RenderTransform">
+                                                        <Setter.Value>
+                                                            <RotateTransform Angle="180" />
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="SectionHeader" Property="Background" Value="{DynamicResource Hover}" />
+                                                </Trigger>
+                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                    <Setter TargetName="SectionHeader" Property="Background" Value="{DynamicResource Selection}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                <Border x:Name="PART_ContentHost" Padding="8,7,4,2">
+                                    <ContentPresenter />
+                                </Border>
+                            </DockPanel>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <StackPanel Margin="2,0">
         <DockPanel Margin="0,0,0,12" LastChildFill="True">
             <Button x:Name="ActionColorSettingsButton"
@@ -74,11 +210,11 @@
                    AutomationProperties.LiveSetting="Polite"
                    Visibility="Collapsed" />
 
-        <controls:CollapsibleSection x:Name="BasicActionsSection" Header="基础功能" IsExpanded="True">
+        <controls:CollapsibleSection x:Name="BasicActionsSection" Style="{StaticResource StudioActionSection}" Foreground="{DynamicResource AccentBlue}" Header="基础功能" IsExpanded="True">
         <primitives:UniformGrid x:Name="BasicCommandGrid" Columns="1">
             <Button x:Name="AddDelayButton"
                     Tag="Delay"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -88,7 +224,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.Delay}"
                                               Foreground="{DynamicResource SecondaryText}" />
                     </Border>
@@ -101,7 +237,7 @@
 
             <Button x:Name="AddKeyboardButton"
                     Tag="Keyboard"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -111,7 +247,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.Keyboard}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -124,7 +260,7 @@
 
             <Button x:Name="AddMouseButton"
                     Tag="MouseButton"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -134,7 +270,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.MouseButton}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
@@ -147,7 +283,7 @@
 
             <Button x:Name="AddMouseMoveButton"
                     Tag="MouseMove"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -157,7 +293,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.MouseMove}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
@@ -170,7 +306,7 @@
 
             <Button x:Name="AddWheelButton"
                     Tag="MouseWheel"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -180,7 +316,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.MouseWheel}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
@@ -193,7 +329,7 @@
 
             <Button x:Name="AddTextButton"
                     Tag="Text"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -203,7 +339,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.Text}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
@@ -216,7 +352,7 @@
 
             <Button x:Name="AddCommentButton"
                     Tag="Comment"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -226,7 +362,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGray}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.Comment}"
                                               Foreground="{DynamicResource SecondaryText}" />
                     </Border>
@@ -239,7 +375,7 @@
 
             <Button x:Name="AddMacroButton"
                     Tag="Macro"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -249,7 +385,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGreen}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.MacroCall}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -262,11 +398,11 @@
         </primitives:UniformGrid>
         </controls:CollapsibleSection>
 
-        <controls:CollapsibleSection x:Name="AdvancedActionsSection" Header="高级功能" IsExpanded="True">
+        <controls:CollapsibleSection x:Name="AdvancedActionsSection" Style="{StaticResource StudioActionSection}" Foreground="{DynamicResource Accent}" Header="高级功能" IsExpanded="True">
         <primitives:UniformGrid x:Name="AdvancedCommandGrid" Columns="1">
             <Button x:Name="AddWindowActivateButton"
                     Tag="WindowActivate"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -276,7 +412,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeGreen}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.Window}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -289,7 +425,7 @@
 
             <Button x:Name="AddOcrExtractTextButton"
                     Tag="OcrExtractText"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -299,7 +435,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.OcrText}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
@@ -312,7 +448,7 @@
 
             <Button x:Name="AddOcrClickButton"
                     Tag="OcrClick"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -322,7 +458,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgePurple}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.OcrClick}"
                                               Foreground="{DynamicResource AccentPink}" />
                     </Border>
@@ -335,7 +471,7 @@
 
             <Button x:Name="AddPixelButton"
                     Tag="Pixel"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -345,7 +481,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgePink}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.Pixel}"
                                               Foreground="{DynamicResource AccentPink}" />
                     </Border>
@@ -358,7 +494,7 @@
 
             <Button x:Name="AddTextWhenButton"
                     Tag="TextWhen"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -368,7 +504,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.TextWhen}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
@@ -381,7 +517,7 @@
 
             <Button x:Name="AddNetLimitStartButton"
                     Tag="NetLimitStart"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -391,7 +527,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.NetworkRate}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
@@ -404,7 +540,7 @@
 
             <Button x:Name="AddNetLimitStopButton"
                     Tag="NetLimitStop"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -414,7 +550,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeBlue}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.NetworkRateOff}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
@@ -427,7 +563,7 @@
 
             <Button x:Name="AddNetLimiterStartButton"
                     Tag="NetLimiterStart"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -437,7 +573,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeTeal}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.NetworkRate}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
@@ -450,7 +586,7 @@
 
             <Button x:Name="AddNetLimiterStopButton"
                     Tag="NetLimiterStop"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -460,7 +596,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeTeal}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.NetworkRateOff}"
                                               Foreground="{DynamicResource AccentBlue}" />
                     </Border>
@@ -473,7 +609,7 @@
 
             <Button x:Name="AddWeakNetStartButton"
                     Tag="WeakNetStart"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -483,7 +619,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.WeakNet}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
@@ -496,7 +632,7 @@
 
             <Button x:Name="AddWeakNetStopButton"
                     Tag="WeakNetStop"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -506,7 +642,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.WeakNetOff}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
@@ -519,7 +655,7 @@
 
             <Button x:Name="AddClockShiftButton"
                     Tag="ClockShift"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -529,7 +665,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.ClockShift}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
@@ -542,7 +678,7 @@
 
             <Button x:Name="AddClockRestoreButton"
                     Tag="ClockRestore"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -552,7 +688,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.ClockRestore}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
@@ -566,12 +702,12 @@
         </controls:CollapsibleSection>
 
         <!-- YSR 解帧分组 -->
-        <controls:CollapsibleSection x:Name="YsrUnlockerSection" Header="锁帧模块" IsExpanded="True">
+        <controls:CollapsibleSection x:Name="YsrUnlockerSection" Style="{StaticResource StudioActionSection}" Foreground="{DynamicResource StudioSuccess}" Header="锁帧模块" IsExpanded="True">
         <primitives:UniformGrid x:Name="YsrCommandGrid" Columns="1">
             <!-- YSR 切帧按钮 -->
             <Button x:Name="AddYsrFpsToggleButton"
                     Tag="YsrFpsStart"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -581,7 +717,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.FrameLock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -594,13 +730,13 @@
 
             <!-- RTSS 锁帧 按钮 -->
             <Button x:Name="AddYsrFpsStopButton" Tag="YsrFpsStop"
-                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.FrameUnlock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -612,13 +748,13 @@
             </Button>
 
             <Button x:Name="AddKy3FpsStartButton" Tag="Ky3FpsStart"
-                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.FrameLock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -630,13 +766,13 @@
             </Button>
 
             <Button x:Name="AddKy3FpsStopButton" Tag="Ky3FpsStop"
-                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.FrameUnlock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -647,13 +783,13 @@
                 </Grid>
             </Button>
             <Button x:Name="AddFufuFpsStartButton" Tag="FufuFpsStart"
-                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.FrameLock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -665,13 +801,13 @@
             </Button>
 
             <Button x:Name="AddFufuFpsStopButton" Tag="FufuFpsStop"
-                    Style="{StaticResource ActionPaletteCommandStyle}" Click="ActionPalette_Click"
+                    Style="{StaticResource StudioActionTile}" Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.FrameUnlock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -684,7 +820,7 @@
 
             <Button x:Name="AddFrameLockStartButton"
                     Tag="FrameLockStart"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -694,7 +830,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.FrameLock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -707,7 +843,7 @@
 
             <Button x:Name="AddFrameLockStopButton"
                     Tag="FrameLockStop"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -717,7 +853,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeMint}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.FrameUnlock}"
                                               Foreground="{DynamicResource Accent}" />
                     </Border>
@@ -730,11 +866,11 @@
         </primitives:UniformGrid>
         </controls:CollapsibleSection>
 
-        <controls:CollapsibleSection x:Name="LoopActionsSection" Header="循环控制" IsExpanded="True">
+        <controls:CollapsibleSection x:Name="LoopActionsSection" Style="{StaticResource StudioActionSection}" Foreground="{DynamicResource AccentPink}" Header="循环控制" IsExpanded="True">
         <primitives:UniformGrid x:Name="LoopCommandGrid" Columns="1">
             <Button x:Name="AddLoopButton"
                     Tag="Loop"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -744,7 +880,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeRed}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.Loop}"
                                               Foreground="{DynamicResource Danger}" />
                     </Border>
@@ -757,7 +893,7 @@
 
             <Button x:Name="AddStopCurrentButton"
                     Tag="StopCurrent"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -767,7 +903,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeAmber}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.StopCurrent}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
@@ -780,7 +916,7 @@
 
             <Button x:Name="AddStopIterationButton"
                     Tag="StopIteration"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -790,7 +926,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeOrange}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.StopIteration}"
                                               Foreground="{DynamicResource AccentOrange}" />
                     </Border>
@@ -803,7 +939,7 @@
 
             <Button x:Name="AddStopAllButton"
                     Tag="StopAll"
-                    Style="{StaticResource ActionPaletteCommandStyle}"
+                    Style="{StaticResource StudioActionTile}"
                     Click="ActionPalette_Click"
                     PreviewMouseLeftButtonDown="ActionPalette_PreviewMouseLeftButtonDown"
                     PreviewMouseMove="ActionPalette_PreviewMouseMove">
@@ -813,7 +949,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource ActionPaletteIconBadgeStyle}" Background="{DynamicResource BadgeRed}">
-                        <controls:ActionGlyph Width="19" Height="19"
+                        <controls:ActionGlyph Width="21" Height="21"
                                               Data="{x:Static controls:ActionIcons.StopAll}"
                                               Foreground="{DynamicResource Danger}" />
                     </Border>

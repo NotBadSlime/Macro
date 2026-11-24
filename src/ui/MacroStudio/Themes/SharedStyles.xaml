@@ -199,9 +199,48 @@
     <Style x:Key="CommandBarButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="Height" Value="32" />
-        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="Margin" Value="1,0" />
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Surface" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}" CornerRadius="7">
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="CommandIcon" DockPanel.Dock="Left" VerticalAlignment="Center"
+                                       Margin="0,0,7,0" Foreground="{DynamicResource StudioSignal}" FontSize="13"
+                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"
+                                       Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                            <ContentPresenter VerticalAlignment="Center"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              RecognizesAccessKey="True" />
+                        </DockPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Tag" Value="{x:Null}">
+                            <Setter TargetName="CommandIcon" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Surface" Property="Background" Value="{DynamicResource Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Surface" Property="Background" Value="{DynamicResource Selection}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style x:Key="SequenceToolbarButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
@@ -322,14 +361,15 @@
     </Style>
 
     <Style x:Key="ToolWindowRailButton" TargetType="ToggleButton">
-        <Setter Property="Width" Value="38" />
-        <Setter Property="Height" Value="38" />
-        <Setter Property="Margin" Value="0,0,0,6" />
+        <Setter Property="Width" Value="41" />
+        <Setter Property="Height" Value="41" />
+        <Setter Property="Margin" Value="0,0,0,5" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol" />
         <Setter Property="FontSize" Value="16" />
@@ -351,9 +391,9 @@
                             <Border x:Name="ActiveMark"
                                     Width="3"
                                     HorizontalAlignment="Left"
-                                    Margin="2,8,0,8"
+                                    Margin="2,9,0,9"
                                     CornerRadius="2"
-                                    Background="{DynamicResource Accent}"
+                                    Background="{DynamicResource StudioSignal}"
                                     Opacity="0" />
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
@@ -367,10 +407,13 @@
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelRaised}" />
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource StudioChromeEdge}" />
                             <Setter TargetName="ActiveMark" Property="Opacity" Value="1" />
                             <Setter TargetName="Glow" Property="Opacity" Value="1" />
-                            <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+                            <Setter Property="Foreground" Value="{DynamicResource StudioSignal}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -382,6 +425,13 @@
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
         <Setter Property="Foreground" Value="#FFFFFF" />
         <Setter Property="Background" Value="{DynamicResource StudioPrimaryFill}" />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" Foreground="White" />
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource PrimaryHover}" />
@@ -402,29 +452,34 @@
 
     <!-- WindowControlButton -->
     <Style x:Key="WindowControlButton" TargetType="Button">
-        <Setter Property="Width" Value="40" />
+        <Setter Property="Width" Value="34" />
         <Setter Property="Height" Value="32" />
         <Setter Property="Margin" Value="2,0,0,0" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol" />
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="12" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Root"
                             Background="{TemplateBinding Background}"
-                            CornerRadius="9">
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Hover}" />
+                            <Setter Property="Background" Value="{DynamicResource Hover}" />
                             <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -610,10 +665,19 @@
     </Style>
 
     <Style x:Key="ToolWindowHeaderStyle" TargetType="Border">
-        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Background" Value="{DynamicResource StudioPanelHeaderSurface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
-        <Setter Property="Padding" Value="13,9" />
+        <Setter Property="Padding" Value="13,7" />
+    </Style>
+
+    <Style x:Key="ToolWindowHeaderGlyph" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource StudioSignal}" />
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="IsHitTestVisible" Value="False" />
     </Style>
 
     <Style x:Key="ToolWindowTitle" TargetType="TextBlock">
@@ -714,10 +778,10 @@
     </Style>
 
     <Style x:Key="StudioSearchButton" TargetType="Button" BasedOn="{StaticResource CommandBarButton}">
-        <Setter Property="Height" Value="35" />
+        <Setter Property="Height" Value="38" />
         <Setter Property="Padding" Value="11,0" />
-        <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+        <Setter Property="Background" Value="{DynamicResource StudioToolbarSurface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource StudioChromeEdge}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -725,7 +789,7 @@
 
     <Style x:Key="StudioFooterButton" TargetType="Button" BasedOn="{StaticResource CommandBarButton}">
         <Setter Property="Height" Value="25" />
-        <Setter Property="Margin" Value="7,0,0,0" />
+        <Setter Property="Margin" Value="4,0,0,0" />
         <Setter Property="Padding" Value="8,0" />
         <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
         <Setter Property="FontSize" Value="11" />

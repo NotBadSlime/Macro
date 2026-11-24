@@ -35,118 +35,135 @@
                     Background="{DynamicResource StudioChrome}"
                     BorderBrush="{DynamicResource ChromeBorder}"
                     BorderThickness="0,0,0,1"
-                    Padding="16,10,10,10"
                     MouseLeftButtonDown="TopChromeBar_MouseLeftButtonDown">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="36" Height="36" CornerRadius="11" Margin="0,0,11,0">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#815AFF" Offset="0" />
-                                    <GradientStop Color="#4430AC" Offset="1" />
-                                </LinearGradientBrush>
-                            </Border.Background>
-                            <Viewbox Width="23" Height="23">
-                                <Path Data="M2,16 L7,16 10,7 14,21 17,12 22,12" Stroke="White"
-                                      StrokeThickness="2.25" StrokeLineJoin="Round"
-                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                            </Viewbox>
-                        </Border>
-                        <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                            <TextBlock Text="MacroHID Studio" Foreground="{DynamicResource PrimaryText}"
-                                       FontSize="16" FontWeight="Bold" />
-                            <TextBlock x:Name="EditionLabelText" Text="UI 优化版" Foreground="{DynamicResource Accent}"
-                                       FontSize="11" FontWeight="SemiBold" />
+                    <Border Height="2" DockPanel.Dock="Top" IsHitTestVisible="False"
+                            Background="{DynamicResource StudioHorizon}" />
+                    <DockPanel Margin="15,9,10,9">
+                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Width="38" Height="38" CornerRadius="10" Margin="0,0,10,0"
+                                    Background="{DynamicResource StudioBrandSurface}"
+                                    BorderBrush="{DynamicResource StudioChromeEdge}" BorderThickness="1">
+                                <Grid>
+                                    <Rectangle Height="1" Margin="7,0" VerticalAlignment="Top"
+                                               Fill="{DynamicResource StudioHorizon}" />
+                                    <Viewbox Width="24" Height="24">
+                                        <Path Data="M2,15 L7,15 10,6 14,21 17,11 22,11"
+                                              Stroke="{DynamicResource StudioBrandMark}" StrokeThickness="2"
+                                              StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Viewbox>
+                                </Grid>
+                            </Border>
+                            <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                                <TextBlock Text="MacroHID Studio" Foreground="{DynamicResource PrimaryText}"
+                                           FontSize="17" FontWeight="Bold" />
+                                <TextBlock x:Name="EditionLabelText" Text="UI 优化版" Foreground="{DynamicResource StudioSignal}"
+                                           FontSize="11" FontWeight="SemiBold" />
+                            </StackPanel>
+                            <Border VerticalAlignment="Center" Padding="2"
+                                    Background="{DynamicResource StudioToolbarSurface}"
+                                    BorderBrush="{DynamicResource StudioChromeEdge}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="OpenButton" Style="{StaticResource CommandBarButton}"
+                                            Content="打开宏文件" Tag="&#xE838;" Click="OpenMacro_Click" />
+                                    <Button x:Name="SaveButton" Style="{StaticResource CommandBarButton}"
+                                            Content="另存当前宏" Tag="&#xE792;" Click="SaveMacro_Click" />
+                                    <Button x:Name="WindowMenuButton"
+                                            Style="{StaticResource CommandBarButton}"
+                                            Content="窗口" Tag="&#xE737;"
+                                            Click="WindowMenu_Click">
+                                        <Button.ContextMenu>
+                                            <ContextMenu x:Name="WindowMenuContext">
+                                                <MenuItem x:Name="ShowPanelsMenuItem" Header="显示">
+                                                    <MenuItem x:Name="ShowLibraryMenuItem" Header="宏数据库" Tag="library" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                                    <MenuItem x:Name="ShowSequenceMenuItem" Header="序列" Tag="sequence" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                                    <MenuItem x:Name="ShowConditionMenuItem" Header="条件序列" Tag="conditions" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                                    <MenuItem x:Name="ShowJsonMenuItem" Header="MCRX JSON" Tag="json" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                                    <MenuItem x:Name="ShowActionMenuItem" Header="动作面板" Tag="actions" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                                    <MenuItem x:Name="ShowPlaybackMenuItem" Header="播放控制" Tag="playback" IsCheckable="True" Click="WindowPanelVisibility_Click" />
+                                                </MenuItem>
+                                                <MenuItem x:Name="FloatPanelsMenuItem" Header="浮动">
+                                                    <MenuItem Header="宏数据库" Tag="library" Click="FloatPanel_Click" />
+                                                    <MenuItem Header="序列" Tag="sequence" Click="FloatPanel_Click" />
+                                                    <MenuItem Header="条件序列" Tag="conditions" Click="FloatPanel_Click" />
+                                                    <MenuItem x:Name="FloatJsonMenuItem" Header="MCRX JSON" Tag="json" Click="FloatPanel_Click" />
+                                                    <MenuItem Header="动作面板" Tag="actions" Click="FloatPanel_Click" />
+                                                    <MenuItem Header="播放控制" Tag="playback" Click="FloatPanel_Click" />
+                                                </MenuItem>
+                                                <MenuItem x:Name="DockPanelsMenuItem" Header="停靠">
+                                                    <MenuItem Header="宏数据库" Tag="library" Click="DockPanel_Click" />
+                                                    <MenuItem Header="序列" Tag="sequence" Click="DockPanel_Click" />
+                                                    <MenuItem Header="条件序列" Tag="conditions" Click="DockPanel_Click" />
+                                                    <MenuItem x:Name="DockJsonMenuItem" Header="MCRX JSON" Tag="json" Click="DockPanel_Click" />
+                                                    <MenuItem Header="动作面板" Tag="actions" Click="DockPanel_Click" />
+                                                    <MenuItem Header="播放控制" Tag="playback" Click="DockPanel_Click" />
+                                                </MenuItem>
+                                                <Separator />
+                                                <MenuItem x:Name="ResetWorkspaceLayoutMenuItem" Header="重置布局" Click="ResetWorkspaceLayout_Click" />
+                                                <MenuItem x:Name="GlobalCommandMenuItem" Header="全局命令" Click="GlobalCommandSettings_Click" />
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
-                        <Rectangle Width="1" Height="25" Margin="0,0,8,0" Fill="{DynamicResource ChromeBorder}" />
-                        <Button x:Name="OpenButton" Style="{StaticResource CommandBarButton}"
-                                Content="打开宏文件" Click="OpenMacro_Click" />
-                        <Button x:Name="SaveButton" Style="{StaticResource CommandBarButton}"
-                                Content="另存当前宏" Click="SaveMacro_Click" />
-                        <Button x:Name="WindowMenuButton"
-                                Style="{StaticResource CommandBarButton}"
-                                Content="窗口"
-                                Click="WindowMenu_Click">
-                            <Button.ContextMenu>
-                                <ContextMenu x:Name="WindowMenuContext">
-                                    <MenuItem x:Name="ShowPanelsMenuItem" Header="显示">
-                                        <MenuItem x:Name="ShowLibraryMenuItem" Header="宏数据库" Tag="library" IsCheckable="True" Click="WindowPanelVisibility_Click" />
-                                        <MenuItem x:Name="ShowSequenceMenuItem" Header="序列" Tag="sequence" IsCheckable="True" Click="WindowPanelVisibility_Click" />
-                                        <MenuItem x:Name="ShowConditionMenuItem" Header="条件序列" Tag="conditions" IsCheckable="True" Click="WindowPanelVisibility_Click" />
-                                        <MenuItem x:Name="ShowJsonMenuItem" Header="MCRX JSON" Tag="json" IsCheckable="True" Click="WindowPanelVisibility_Click" />
-                                        <MenuItem x:Name="ShowActionMenuItem" Header="动作面板" Tag="actions" IsCheckable="True" Click="WindowPanelVisibility_Click" />
-                                        <MenuItem x:Name="ShowPlaybackMenuItem" Header="播放控制" Tag="playback" IsCheckable="True" Click="WindowPanelVisibility_Click" />
-                                    </MenuItem>
-                                    <MenuItem x:Name="FloatPanelsMenuItem" Header="浮动">
-                                        <MenuItem Header="宏数据库" Tag="library" Click="FloatPanel_Click" />
-                                        <MenuItem Header="序列" Tag="sequence" Click="FloatPanel_Click" />
-                                        <MenuItem Header="条件序列" Tag="conditions" Click="FloatPanel_Click" />
-                                        <MenuItem x:Name="FloatJsonMenuItem" Header="MCRX JSON" Tag="json" Click="FloatPanel_Click" />
-                                        <MenuItem Header="动作面板" Tag="actions" Click="FloatPanel_Click" />
-                                        <MenuItem Header="播放控制" Tag="playback" Click="FloatPanel_Click" />
-                                    </MenuItem>
-                                    <MenuItem x:Name="DockPanelsMenuItem" Header="停靠">
-                                        <MenuItem Header="宏数据库" Tag="library" Click="DockPanel_Click" />
-                                        <MenuItem Header="序列" Tag="sequence" Click="DockPanel_Click" />
-                                        <MenuItem Header="条件序列" Tag="conditions" Click="DockPanel_Click" />
-                                        <MenuItem x:Name="DockJsonMenuItem" Header="MCRX JSON" Tag="json" Click="DockPanel_Click" />
-                                        <MenuItem Header="动作面板" Tag="actions" Click="DockPanel_Click" />
-                                        <MenuItem Header="播放控制" Tag="playback" Click="DockPanel_Click" />
-                                    </MenuItem>
-                                    <Separator />
-                                    <MenuItem x:Name="ResetWorkspaceLayoutMenuItem" Header="重置布局" Click="ResetWorkspaceLayout_Click" />
-                                    <MenuItem x:Name="GlobalCommandMenuItem" Header="全局命令" Click="GlobalCommandSettings_Click" />
-                                </ContextMenu>
-                            </Button.ContextMenu>
+
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="PauseListeningButton" Style="{StaticResource CommandBarButton}"
+                                    Content="暂停监听" Margin="0,0,4,0" Click="PauseListeningButton_Click" />
+                            <TextBlock x:Name="LanguageLabelText" Text="语言" Visibility="Collapsed" />
+                            <ComboBox x:Name="LanguageComboBox" Width="96" Height="32" Margin="0,0,3,0"
+                                      AutomationProperties.LabeledBy="{Binding ElementName=LanguageLabelText}"
+                                      SelectionChanged="LanguageComboBox_SelectionChanged" />
+                            <Button x:Name="ThemeToggleButton" Style="{StaticResource WindowControlButton}"
+                                    Content="&#xE706;" Click="ThemeToggle_Click" ToolTip="Toggle theme" />
+                            <Rectangle Width="1" Height="20" Margin="5,0" Fill="{DynamicResource StudioChromeEdge}" />
+                            <Button x:Name="MinimizeWindowButton" Style="{StaticResource WindowControlButton}"
+                                    Content="&#xE921;" ToolTip="最小化" Click="MinimizeWindow_Click" />
+                            <Button x:Name="MaximizeWindowButton" Style="{StaticResource WindowControlButton}"
+                                    Content="&#xE922;" ToolTip="最大化" Click="MaximizeWindow_Click" />
+                            <Button x:Name="CloseWindowButton" Style="{StaticResource CloseWindowButton}"
+                                    Content="&#xE8BB;" ToolTip="关闭" Click="CloseWindow_Click" />
+                        </StackPanel>
+
+                        <Button x:Name="CommandSearchButton" Style="{StaticResource StudioSearchButton}"
+                                MaxWidth="340" Margin="12,0" Click="CommandSearchButton_Click">
+                            <DockPanel VerticalAlignment="Center">
+                                <TextBlock DockPanel.Dock="Left" Text="&#xE721;" Margin="0,0,9,0"
+                                           FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" />
+                                <Border DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,1" CornerRadius="4"
+                                        BorderBrush="{DynamicResource StudioChromeEdge}" BorderThickness="1"
+                                        Background="{DynamicResource StudioToolbarSurface}">
+                                    <TextBlock Text="Ctrl+K" FontFamily="Consolas" FontSize="10"
+                                               Foreground="{DynamicResource StudioSignal}" />
+                                </Border>
+                                <TextBlock x:Name="CommandSearchLabel" Text="查找命令" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
                         </Button>
-                    </StackPanel>
-
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="PauseListeningButton" Style="{StaticResource CommandBarButton}"
-                                Content="暂停监听" Margin="0,0,4,0" Click="PauseListeningButton_Click" />
-                        <TextBlock x:Name="LanguageLabelText" Text="语言" Visibility="Collapsed" />
-                        <ComboBox x:Name="LanguageComboBox" Width="96" Height="32" Margin="0,0,3,0"
-                                  AutomationProperties.LabeledBy="{Binding ElementName=LanguageLabelText}"
-                                  SelectionChanged="LanguageComboBox_SelectionChanged" />
-                        <Button x:Name="ThemeToggleButton" Style="{StaticResource WindowControlButton}"
-                                Content="&#xE706;" Click="ThemeToggle_Click" ToolTip="Toggle theme" />
-                        <Rectangle Width="1" Height="25" Margin="5,0" Fill="{DynamicResource ChromeBorder}" />
-                        <Button x:Name="MinimizeWindowButton" Style="{StaticResource WindowControlButton}"
-                                Content="&#xE921;" ToolTip="最小化" Click="MinimizeWindow_Click" />
-                        <Button x:Name="MaximizeWindowButton" Style="{StaticResource WindowControlButton}"
-                                Content="&#xE922;" ToolTip="最大化" Click="MaximizeWindow_Click" />
-                        <Button x:Name="CloseWindowButton" Style="{StaticResource CloseWindowButton}"
-                                Content="&#xE8BB;" ToolTip="关闭" Click="CloseWindow_Click" />
-                    </StackPanel>
-
-                    <Button x:Name="CommandSearchButton" Style="{StaticResource StudioSearchButton}"
-                            MaxWidth="320" Margin="12,0" Click="CommandSearchButton_Click">
-                        <DockPanel VerticalAlignment="Center">
-                            <TextBlock DockPanel.Dock="Left" Text="&#xE721;" Margin="0,0,9,0"
-                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" />
-                            <TextBlock DockPanel.Dock="Right" Text="Ctrl+K" FontFamily="Consolas"
-                                       Margin="8,0,0,0" Foreground="{DynamicResource Accent}" />
-                            <TextBlock x:Name="CommandSearchLabel" Text="查找命令" TextTrimming="CharacterEllipsis" />
-                        </DockPanel>
-                    </Button>
+                    </DockPanel>
                 </DockPanel>
             </Border>
 
-            <Border DockPanel.Dock="Bottom" Background="{DynamicResource ChromeBackground}"
-                    BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="15,3">
+            <Border DockPanel.Dock="Bottom" Background="{DynamicResource StudioStatusSurface}"
+                    BorderBrush="{DynamicResource StudioChromeEdge}" BorderThickness="0,1,0,0" Padding="14,3">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <TextBlock x:Name="PerformanceStatusText" FontSize="11" VerticalAlignment="Center"
-                                   Foreground="{DynamicResource SecondaryText}" MaxWidth="370" TextTrimming="CharacterEllipsis" />
+                                   Foreground="{DynamicResource SecondaryText}" MaxWidth="370" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                        <Rectangle Width="1" Height="14" Margin="9,0,1,0" Fill="{DynamicResource ChromeBorder}" />
                         <Button x:Name="OpenLogsButton" Style="{StaticResource StudioFooterButton}"
-                                Content="打开日志" Click="OpenLogs_Click" />
+                                Tag="&#xE9D5;" Content="打开日志" Click="OpenLogs_Click" />
                         <Button x:Name="UnlockerSettingsButton" Style="{StaticResource StudioFooterButton}"
-                                Content="解帧器设置" Click="UnlockerSettings_Click" />
+                                Tag="&#xE713;" Content="解帧器设置" Click="UnlockerSettings_Click" />
                     </StackPanel>
-                    <Ellipse x:Name="StatusDot" DockPanel.Dock="Left" Width="7" Height="7"
-                             Margin="2,0,9,0" VerticalAlignment="Center" Fill="{DynamicResource StudioSuccess}" />
-                    <TextBlock x:Name="StatusText" Foreground="{DynamicResource SecondaryText}" FontSize="12"
-                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <Grid DockPanel.Dock="Left" Width="17" Height="17" Margin="2,0,8,0" VerticalAlignment="Center">
+                        <Ellipse Stroke="{Binding Fill, ElementName=StatusDot}" Opacity="0.4" />
+                        <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{DynamicResource StudioSuccess}" />
+                    </Grid>
+                    <TextBlock x:Name="StatusText" Foreground="{DynamicResource PrimaryText}" FontSize="12"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
                 </DockPanel>
             </Border>
 
@@ -156,10 +173,12 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
+                <Rectangle Grid.ColumnSpan="2" Fill="{DynamicResource StudioBackdropGrid}" IsHitTestVisible="False" />
+
                 <Border x:Name="ToolWindowRail"
                         Grid.Column="0"
-                        Background="{DynamicResource ChromeBackground}"
-                        BorderBrush="{DynamicResource ChromeBorder}"
+                        Background="{DynamicResource StudioRailSurface}"
+                        BorderBrush="{DynamicResource StudioChromeEdge}"
                         BorderThickness="0,0,1,0">
                     <StackPanel x:Name="WorkspaceRailButtons" Margin="7,14,7,8" VerticalAlignment="Top">
                             <ToggleButton x:Name="LibraryToolButton"
@@ -224,6 +243,7 @@
                                             <Button Tag="library" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
                                             <Button Tag="library" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
                                         </StackPanel>
+                                        <TextBlock DockPanel.Dock="Left" Text="&#xE8B7;" Style="{StaticResource ToolWindowHeaderGlyph}" />
                                         <TextBlock x:Name="LibraryToolTitle" Text="宏数据库" Style="{StaticResource ToolWindowTitle}" />
                                     </DockPanel>
                                 </Border>
@@ -249,6 +269,7 @@
                                             <Button Tag="sequence" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
                                             <Button Tag="sequence" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
                                         </StackPanel>
+                                        <TextBlock DockPanel.Dock="Left" Text="&#xE8FD;" Style="{StaticResource ToolWindowHeaderGlyph}" />
                                         <TextBlock x:Name="SequenceToolTitle" Text="序列" Style="{StaticResource ToolWindowTitle}" />
                                     </DockPanel>
                                 </Border>
@@ -315,6 +336,7 @@
                                                     <Button Tag="conditions" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
                                                     <Button Tag="conditions" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
                                                 </StackPanel>
+                                                <TextBlock DockPanel.Dock="Left" Text="&#xE9D9;" Style="{StaticResource ToolWindowHeaderGlyph}" />
                                                 <TextBlock x:Name="ConditionToolTitle" Text="条件序列" Style="{StaticResource ToolWindowTitle}" />
                                             </DockPanel>
                                         </Border>
@@ -332,6 +354,7 @@
                                                     <Button Tag="actions" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
                                                     <Button Tag="actions" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
                                                 </StackPanel>
+                                                <TextBlock DockPanel.Dock="Left" Text="&#xE8A7;" Style="{StaticResource ToolWindowHeaderGlyph}" />
                                                 <TextBlock x:Name="ActionPaletteToolTitle" Text="动作面板" Style="{StaticResource ToolWindowTitle}" />
                                             </DockPanel>
                                         </Border>
@@ -354,6 +377,7 @@
                                                     <Button Tag="playback" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
                                                     <Button Tag="playback" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
                                                 </StackPanel>
+                                                <TextBlock DockPanel.Dock="Left" Text="&#xE768;" Style="{StaticResource ToolWindowHeaderGlyph}" />
                                                 <TextBlock x:Name="PlaybackToolTitle" Text="播放控制" Style="{StaticResource ToolWindowTitle}" />
                                             </DockPanel>
                                         </Border>
@@ -392,6 +416,7 @@
                                             <Button Tag="json" Content="&#xE740;" ToolTip="浮动" Style="{StaticResource ToolWindowChromeButton}" Click="FloatPanelFromHeader_Click" />
                                             <Button Tag="json" Content="&#xE711;" ToolTip="关闭" Style="{StaticResource ToolWindowChromeButton}" Click="CloseWorkspacePanel_Click" />
                                         </StackPanel>
+                                        <TextBlock DockPanel.Dock="Left" Text="&#xE943;" Style="{StaticResource ToolWindowHeaderGlyph}" />
                                         <TextBlock x:Name="JsonToolTitle" Text="MCRX JSON" Style="{StaticResource ToolWindowTitle}" />
                                     </DockPanel>
                                 </Border>

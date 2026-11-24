@@ -1038,7 +1038,7 @@ public partial class MainWindow : Window
         try
         {
             editorState.SelectedMacroId = id;
-            activeEditorMacroId = id;
+            SetActiveEditorMacroId(id);
             libraryStore.SetSelected(id);
             var document = libraryStore.ReadMacro(id);
             SequencePanelControl.SetEditorDocument(document);
@@ -1122,7 +1122,7 @@ public partial class MainWindow : Window
             libraryStore.DeleteMacro(id);
             editorState.ReloadLibrary();
             editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
-            activeEditorMacroId = editorState.SelectedMacroId;
+            SetActiveEditorMacroId(editorState.SelectedMacroId);
             LibraryPanel.RefreshList();
 
             if (editorState.SelectedMacroId is not null)
@@ -1186,7 +1186,7 @@ public partial class MainWindow : Window
 
             editorState.ReloadLibrary();
             editorState.SelectedMacroId = editorState.LibrarySnapshot.SelectedMacroId;
-            activeEditorMacroId = editorState.SelectedMacroId;
+            SetActiveEditorMacroId(editorState.SelectedMacroId);
             LibraryPanel.RefreshList();
             if (editorState.SelectedMacroId is not null)
             {
@@ -1457,7 +1457,7 @@ public partial class MainWindow : Window
             item = libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
         }
 
-        activeEditorMacroId = item.Id;
+        SetActiveEditorMacroId(item.Id);
         if (editorState.SelectedMacroId is null
             || string.Equals(editorState.SelectedMacroId, item.Id, StringComparison.OrdinalIgnoreCase)
             || libraryStore.TryGetItem(editorState.SelectedMacroId)?.IsConditionMacro != true)
@@ -2649,6 +2649,7 @@ public partial class MainWindow : Window
             AppLog.Error("Playback", "Start failed", ex);
             PlaybackPanelControl.SetPlaybackStatus(L("PlaybackStatusError"));
             PlaybackPanelControl.SetPlaybackResult(ex.Message);
+            SequencePanelControl.SetOverviewPlaybackStatus(PlaybackStatus.Error, "PlaybackStatusError");
         }
     }
 
@@ -2729,7 +2730,7 @@ public partial class MainWindow : Window
             : null;
         item ??= libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
         editorState.SelectedMacroId = item.Id;
-        activeEditorMacroId = item.Id;
+        SetActiveEditorMacroId(item.Id);
         LibraryPanel.RefreshList();
         RefreshLibraryListeningState();
         SequencePanelControl.SetEditorDocument(document);
@@ -3114,6 +3115,7 @@ public partial class MainWindow : Window
         if (finished is { Direct: true }) RetireController(controller);
         if (shutdownStarted) return;
         RefreshDirectStopBinding();
+        RefreshEditorPlaybackVisual();
         if (run != controller.RunId || !ReferenceEquals(playbackController, controller)) return;
         UpdatePlaybackStatus();
         if (!ReferenceEquals(playbackController, controller)) return;
@@ -3131,6 +3133,7 @@ public partial class MainWindow : Window
 
     private void UpdatePlaybackStatus()
     {
+        RefreshEditorPlaybackVisual();
         lock (triggerGate)
         {
             if (playbackController?.Status is not (PlaybackStatus.Running or PlaybackStatus.Stopping))
@@ -3144,6 +3147,25 @@ public partial class MainWindow : Window
 
         PlaybackPanelControl.SetPlaybackStatus(L(PlaybackStatusResourceKey(playbackController.Status)));
         SetStatus(L(StatusResourceKey(playbackController.Status)));
+    }
+
+    private void SetActiveEditorMacroId(string? macroId)
+    {
+        if (string.Equals(activeEditorMacroId, macroId, StringComparison.OrdinalIgnoreCase)) return;
+        activeEditorMacroId = macroId;
+        RefreshEditorPlaybackVisual();
+    }
+
+    private void RefreshEditorPlaybackVisual()
+    {
+        PlaybackStatus status;
+        lock (triggerGate)
+        {
+            status = playbackRuns.Find(activeEditorMacroId ?? editorState.SelectedMacroId)?.Controller.Status
+                ?? PlaybackStatus.Idle;
+        }
+
+        SequencePanelControl.SetOverviewPlaybackStatus(status, PlaybackStatusResourceKey(status));
     }
 
     private enum StatusLevel { Info, Warning, Error }

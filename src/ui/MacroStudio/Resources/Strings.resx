@@ -1054,4 +1054,6 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="StudioTabConditions" xml:space="preserve"><value>Conditions</value></data>
   <data name="StudioTabActions" xml:space="preserve"><value>Actions</value></data>
   <data name="StudioTabPlayback" xml:space="preserve"><value>Playback</value></data>
+  <data name="SequenceOverview" xml:space="preserve"><value>Step overview</value></data>
+  <data name="SequenceOverviewHint" xml:space="preserve"><value>Select a step in the overview to reveal it. Use Left and Right to move, or Home and End to jump.</value></data>
 </root>

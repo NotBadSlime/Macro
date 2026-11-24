@@ -12,7 +12,14 @@
         <Canvas Width="24" Height="24">
             <Path Data="{Binding Data, ElementName=GlyphRoot}"
                   Stroke="{Binding Foreground, ElementName=GlyphRoot}"
-                  StrokeThickness="1.65"
+                  Opacity="0.14"
+                  StrokeThickness="4.2"
+                  StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round"
+                  StrokeLineJoin="Round" />
+            <Path Data="{Binding Data, ElementName=GlyphRoot}"
+                  Stroke="{Binding Foreground, ElementName=GlyphRoot}"
+                  StrokeThickness="1.85"
                   StrokeStartLineCap="Round"
                   StrokeEndLineCap="Round"
                   StrokeLineJoin="Round" />

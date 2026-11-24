@@ -44,6 +44,8 @@ internal static class UiSnapshot
                             Path.Combine(directory, "workspace-compact-dark.png"), CheckCompactWorkspace);
                         Render(new MainWindow(studioLibrary, isWorkspacePreview: true) { Width = 1280, Height = 790 },
                             Path.Combine(directory, "command-search-dark.png"), DemonstrateCommandSearch);
+                        Render(new MainWindow(studioLibrary, isWorkspacePreview: true) { Width = 1380, Height = 846 },
+                            Path.Combine(directory, "workspace-running-dark.png"), DemonstrateRunningOverview);
                     }
                     var settings = RuntimePrecisionSettings.Default;
                     Render(new LatencyCheckDialog(), Path.Combine(directory, $"latency-{suffix}.png"));
@@ -100,8 +102,10 @@ internal static class UiSnapshot
             { "version": 1, "name": "Capture workspace", "steps": [
                 { "type": "key.tap", "key": "PrintScreen", "holdMs": 35 },
                 { "type": "wait", "ms": 240 },
+                { "type": "mouse.move", "mode": "relative", "x": 25, "y": -10, "durationMs": 0 },
                 { "type": "key.tap", "key": "V", "modifiers": ["LeftCtrl"], "holdMs": 32 },
                 { "type": "wait", "ms": 120 },
+                { "type": "key.text", "text": "MacroHID" },
                 { "type": "key.tap", "key": "S", "modifiers": ["LeftCtrl"], "holdMs": 32 }
             ] }
             """);
@@ -140,6 +144,33 @@ internal static class UiSnapshot
             throw new InvalidOperationException("Command search did not find the JSON editor.");
         }
         query.Clear();
+    }
+
+    private static void DemonstrateRunningOverview(Window window)
+    {
+        var main = (MainWindow)window;
+        var sequence = main.SequencePanelControl;
+        var overview = sequence.SequenceOverviewChart;
+        var keyboard = System.Windows.Input.Keyboard.PrimaryDevice;
+        var source = PresentationSource.FromVisual(overview)
+            ?? throw new InvalidOperationException("The sequence overview has no presentation source.");
+        overview.RaiseEvent(new System.Windows.Input.KeyEventArgs(keyboard, source, Environment.TickCount, System.Windows.Input.Key.End)
+        {
+            RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent
+        });
+        if (sequence.SelectedStepIndex != sequence.GetCurrentDocument().Steps.Count - 1)
+        {
+            throw new InvalidOperationException("The sequence overview could not navigate to the last step.");
+        }
+        overview.RaiseEvent(new System.Windows.Input.KeyEventArgs(keyboard, source, Environment.TickCount, System.Windows.Input.Key.Home)
+        {
+            RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent
+        });
+        if (sequence.SelectedStepIndex != 0)
+        {
+            throw new InvalidOperationException("The sequence overview could not navigate to the first step.");
+        }
+        sequence.SetOverviewPlaybackStatus(MacroHid.Runtime.PlaybackStatus.Running, "PlaybackStatusRunning");
     }
 
     private static void Render(Window window, string path, Action<Window>? prepare = null)

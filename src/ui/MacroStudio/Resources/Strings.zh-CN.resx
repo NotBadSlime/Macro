@@ -754,4 +754,6 @@
   <data name="StudioTabConditions" xml:space="preserve"><value>条件</value></data>
   <data name="StudioTabActions" xml:space="preserve"><value>动作</value></data>
   <data name="StudioTabPlayback" xml:space="preserve"><value>播放</value></data>
+  <data name="SequenceOverview" xml:space="preserve"><value>步骤概览</value></data>
+  <data name="SequenceOverviewHint" xml:space="preserve"><value>点击概览可跳到对应步骤。也可以用方向键切换，Home 和 End 跳到首尾。</value></data>
 </root>

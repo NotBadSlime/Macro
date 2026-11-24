@@ -9975,7 +9975,7 @@ static void MacroStudioMacroLibraryKeepsViewportStableWhileRefreshingAndDragging
 
     Assert.Contains("<Grid.RowDefinitions>", libraryXaml);
     Assert.Contains("Grid.Row=\"1\"", libraryXaml);
-    Assert.Contains("MinHeight=\"220\"", libraryXaml);
+    Assert.Contains("MinHeight=\"144\"", libraryXaml);
     Assert.Contains("LibraryToolsScrollViewer", libraryXaml);
     Assert.Contains("PreviewMouseWheel=\"MacroTreeView_PreviewMouseWheel\"", libraryXaml);
     Assert.Contains("DragOver=\"MacroTreeView_DragOver\"", libraryXaml);

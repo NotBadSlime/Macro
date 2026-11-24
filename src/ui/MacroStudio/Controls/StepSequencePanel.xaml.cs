@@ -1717,6 +1717,14 @@ public partial class StepSequencePanel : UserControl
         SelectStepPath([stepIndex]);
     }
 
+    internal void RevealTopLevelStep(int stepIndex)
+    {
+        SelectStepIndex(stepIndex);
+        if (StepList.SelectedItem is not StepDisplayItem selected) return;
+        StepList.ScrollIntoView(selected);
+        Activated?.Invoke();
+    }
+
     private void SelectStepPath(IReadOnlyList<int> stepPath)
     {
         var pathText = ToPathText(stepPath);
