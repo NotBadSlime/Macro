@@ -5,8 +5,9 @@ public partial class MainWindow
 {
     private int jsonRevision;
     private bool jsonValid = true;
-    private Task pendingAutoSave = Task.CompletedTask;
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> saveRevisions = new();
+    private MacroLibraryRevision? activeLibraryRevision;
+    private bool hasUnsavedMacroChanges;
+    private bool hasSharedLibraryConflict;
     private async void QueueJsonValidation(string text)
     {
         int revision = ++jsonRevision;
@@ -29,10 +30,15 @@ public partial class MainWindow
     }
     private MacroLibraryItem SaveCurrentRevision(string id, MacroDocument document)
     {
-        lock (libraryStore.SyncRoot)
+        if (activeEditorMacroId == id && activeLibraryRevision is { } expected)
         {
-            saveRevisions.AddOrUpdate(id, 1, (_, current) => current + 1);
-            return libraryStore.SaveMacro(id, document);
+            var item = libraryStore.SaveMacro(id, document, expected, out var saved);
+            activeLibraryRevision = saved;
+            hasUnsavedMacroChanges = false;
+            hasSharedLibraryConflict = false;
+            return item;
         }
+
+        return libraryStore.SaveMacro(id, document);
     }
 }

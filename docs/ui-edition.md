@@ -1,6 +1,6 @@
 # MacroHID Studio
 
-MacroHID Studio 可与同版本号的正式版并列安装。Studio 使用自己的宏库、设置和工作区布局。
+MacroHID Studio 可与正式版并列安装。两个界面共用宏库，分别保存设置和工作区布局。
 
 工作台默认使用暖纸色主题，也可切换到暖石墨。使用顶部的按键提示打开命令搜索，再用方向键选中命令、Enter 执行，或按 Esc 关闭。
 
@@ -12,13 +12,18 @@ MacroHID Studio 可与同版本号的正式版并列安装。Studio 使用自己
 | --- | --- | --- |
 | 默认安装目录 | `%ProgramFiles%\MacroHID` | `%ProgramFiles%\MacroHID Studio` |
 | 开始菜单 | MacroHID | MacroHID Studio |
-| 用户数据 | `%APPDATA%\MacroHID` | `%APPDATA%\MacroHID-UI` |
+| 宏库 | `%APPDATA%\MacroHID\MacroLibrary` | `%APPDATA%\MacroHID\MacroLibrary` |
+| 设置和界面数据 | `%APPDATA%\MacroHID` | `%APPDATA%\MacroHID-UI` |
 | 全局命令 | `MacroCtl` | `MacroCtlUI` |
 | 便携版解压根目录 | `MacroHID` | `MacroHID-Studio` |
 
-Studio 启动时会检查当前 Windows 用户的 `%APPDATA%\MacroHID\MacroLibrary`。发现已有宏时，会自动把宏、分组和文件夹复制到自己的宏库。Studio 中已有的同 ID 宏会保留，复制完成后两套宏库各自保存。自动复制只执行一次。旧宏库尚未建立、为空或复制失败时，下次启动会再次检查。
+## 共享宏库
 
-之后可把从正式版导出的宏文件或 ZIP 拖入 Studio 窗口。如果在两个版本中使用同一个系统热键，可只在当前使用的版本启用监听。
+在任一界面新增、保存或删除宏，都会修改 `%APPDATA%\MacroHID\MacroLibrary` 中的同一份数据。Studio 会自动刷新。正式版已经打开时，点击宏列表后按 `F5`，或右键选择「刷新」。要重新读取正在编辑的宏，双击该宏即可。已经启动的正式版宏监听可重新启动，以读取新设置。
+
+正式版打开宏后会保留自己的编辑状态，切换宏时可能保存该状态。同一个宏请一次只在一个界面中编辑。在两个版本中使用同一个系统热键时，可只在当前使用的版本启用监听。
+
+此前 Studio 专用宏库的文件仍在 `%APPDATA%\MacroHID-UI\MacroLibrary`。可将其中需要的 `.mcrx` 文件导入共享宏库。卸载 Studio 时会保留共享宏库。卸载正式版时，选择保留用户数据可继续在 Studio 使用这些宏。
 
 ## 本机打包
 

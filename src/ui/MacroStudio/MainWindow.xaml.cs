@@ -75,18 +75,12 @@ public partial class MainWindow : Window
     }
 
     public MainWindow() : this(
-        new MacroLibraryStore(MacroLibraryStore.GetDefaultRoot()),
-        isWorkspacePreview: false,
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID", "MacroLibrary"))
+        new MacroLibraryStore(MacroLibraryStore.GetDefaultRoot(), shareWithFormalEdition: true),
+        isWorkspacePreview: false)
     {
     }
 
     internal MainWindow(MacroLibraryStore libraryStore, bool isWorkspacePreview)
-        : this(libraryStore, isWorkspacePreview, legacyLibraryDirectory: null)
-    {
-    }
-
-    internal MainWindow(MacroLibraryStore libraryStore, bool isWorkspacePreview, string? legacyLibraryDirectory)
     {
         this.libraryStore = libraryStore;
         this.isWorkspacePreview = isWorkspacePreview;
@@ -131,7 +125,8 @@ public partial class MainWindow : Window
         if (!isWorkspacePreview) WarmUpRuntimePrecision();
         InitializeWorkspacePanels();
         ApplyLocalization();
-        InitializeMacroLibrary(legacyLibraryDirectory);
+        InitializeMacroLibrary();
+        StartSharedLibraryWatcher();
         if (isWorkspacePreview) return;
         coreSelectionTimer.Start();
         PollAutomaticCoreSelection();
@@ -1193,41 +1188,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private void InitializeMacroLibrary(string? legacyLibraryDirectory)
+    private void InitializeMacroLibrary()
     {
-        string? importStatus = null;
-        string? sampleId = null;
-        var importStatusLevel = StatusLevel.Info;
-        if (legacyLibraryDirectory is not null)
-        {
-            try
-            {
-                var imported = libraryStore.ImportLegacyLibraryIfNeeded(legacyLibraryDirectory);
-                if (imported is { ImportedCount: > 0 } or { ImportedGroupCount: > 0 } or { ImportedFolderCount: > 0 })
-                {
-                    importStatus = LocalizationService.Format("LegacyLibraryImported", imported.ImportedCount, imported.ImportedGroupCount);
-                }
-
-                if (imported is { ImportedCount: > 0 }) sampleId = GetUneditedSampleId();
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("Library", "Automatic import from the older MacroHID library failed", ex);
-                importStatus = L("LegacyLibraryImportFailed");
-                importStatusLevel = StatusLevel.Warning;
-            }
-        }
-
         editorState.ReloadLibrary();
-        if (editorState.LibrarySnapshot.Items.Count == 0)
+        if (!libraryStore.SharesFormalLibrary && editorState.LibrarySnapshot.Items.Count == 0)
         {
             libraryStore.CreateMacro(McrxParser.Parse(SampleMacro));
             editorState.ReloadLibrary();
         }
 
         var snapshot = editorState.LibrarySnapshot;
-        var firstImportedId = sampleId is null ? null : snapshot.Items.FirstOrDefault(item => item.Id != sampleId)?.Id;
-        editorState.SelectedMacroId = firstImportedId ?? snapshot.SelectedMacroId ?? snapshot.Items.FirstOrDefault()?.Id;
+        editorState.SelectedMacroId = snapshot.SelectedMacroId ?? snapshot.Items.FirstOrDefault()?.Id;
 
         LibraryPanel.RefreshList();
 
@@ -1235,49 +1206,43 @@ public partial class MainWindow : Window
         {
             LoadMacroFromLibrary(editorState.SelectedMacroId, revealInLibrary: true);
         }
-        else
-        {
-            SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
-            SetConditionWorkspaceMode(false);
-            SequencePanelControl.SetLibraryPath(string.Empty);
-            SequencePanelControl.ClearUndoHistory();
-            RefreshConditionStepChoices();
-            ApplyEditLock(false);
-        }
-
-        if (importStatus is not null) SetStatus(importStatus, importStatusLevel);
+        else ResetEmptyMacroEditor();
     }
 
-    private string? GetUneditedSampleId()
+    private void ResetEmptyMacroEditor()
     {
-        // The library panel still has its pre-import snapshot at this point.
-        if (editorState.LibrarySnapshot.Items is not [var item] || item.Name != "baseline"
-            || item.IsLocked || item.GroupId != MacroLibraryStore.GlobalGroupId || !string.IsNullOrEmpty(item.Folder))
-        {
-            return null;
-        }
-
-        try
-        {
-            var existing = libraryStore.ReadMacro(item.Id) with { Id = null };
-            return McrxSerializer.Serialize(existing) == McrxSerializer.Serialize(McrxParser.Parse(SampleMacro)) ? item.Id : null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or JsonException)
-        {
-            return null;
-        }
+        editorState.SelectedMacroId = null;
+        activeEditorMacroId = null;
+        activeLibraryRevision = null;
+        hasUnsavedMacroChanges = false;
+        hasSharedLibraryConflict = false;
+        autoSaveTimer.Stop();
+        SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
+        if (!jsonValid) OnSequenceEditorTextChanged(SequencePanelControl.EditorText);
+        PlaybackPanelControl.SetPlaybackControls(PlaybackSettings.Default);
+        SetConditionWorkspaceMode(false);
+        SequencePanelControl.SetLibraryPath(string.Empty);
+        SequencePanelControl.ClearUndoHistory();
+        RefreshConditionStepChoices();
+        ConditionPanel.LoadConditions([]);
+        ApplyEditLock(false);
     }
 
-    private void LoadMacroFromLibrary(string id, bool revealInLibrary = false)
+    private void LoadMacroFromLibrary(string id, bool revealInLibrary = false, bool focusName = true, bool reportErrors = true)
     {
         try
         {
+            var document = libraryStore.ReadMacro(id, out var revision);
             editorState.SelectedMacroId = id;
             activeEditorMacroId = id;
+            activeLibraryRevision = revision;
+            hasUnsavedMacroChanges = false;
+            hasSharedLibraryConflict = false;
+            autoSaveTimer.Stop();
             libraryStore.SetSelected(id);
-            var document = libraryStore.ReadMacro(id);
             SetConditionWorkspaceMode(document.IsConditionMacro, showSettings: true);
             SequencePanelControl.SetEditorDocument(document);
+            if (!jsonValid) OnSequenceEditorTextChanged(SequencePanelControl.EditorText);
             if (document.Steps.Count > 0) SequencePanelControl.SelectedStepIndex = 0;
             SequencePanelControl.ClearUndoHistory();
             PlaybackPanelControl.SetPlaybackControls(document.Playback);
@@ -1290,9 +1255,9 @@ public partial class MainWindow : Window
             ApplyEditLock(item?.IsLocked == true);
             SetLibraryPathForItem(item, document.Name, revealInLibrary);
             SetStatus(document.Name);
-            if (!standaloneConditionEditor) SequencePanelControl.FocusMacroNameEditor();
+            if (focusName && !standaloneConditionEditor) SequencePanelControl.FocusMacroNameEditor();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (reportErrors)
         {
             AppLog.Error("MainWindow", "Operation failed", ex);
             SetErrorStatus(ex);
@@ -1302,7 +1267,7 @@ public partial class MainWindow : Window
     private void OnMacroSelected(string id)
     {
         ClearMacroNavigationStackUnlessSuppressed();
-        SaveActiveEditorBeforeSwitch(id);
+        if (!SaveActiveEditorBeforeSwitch(id)) return;
         LoadMacroFromLibrary(id);
         RefreshMacroNavigationUi();
     }
@@ -1310,7 +1275,7 @@ public partial class MainWindow : Window
     private void OnMacroCreated(MacroLibraryItem item)
     {
         ClearMacroNavigationStack();
-        SaveActiveEditorBeforeSwitch(item.Id);
+        if (!SaveActiveEditorBeforeSwitch(item.Id)) return;
         editorState.SelectedMacroId = item.Id;
         LoadMacroFromLibrary(item.Id);
         RefreshMacroNavigationUi();
@@ -1321,14 +1286,12 @@ public partial class MainWindow : Window
         try
         {
             ClearMacroNavigationStack();
-            var source = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
-            var document = source?.IsLocked == true
-                ? libraryStore.ReadMacro(id)
-                : SequencePanelControl.GetCurrentDocument();
-            if (source?.IsLocked != true)
+            if (id == activeEditorMacroId && hasUnsavedMacroChanges && !editorState.IsEditLocked)
             {
-                SaveCurrentRevision(id, document);
+                SaveCurrentRevision(id, GetDocumentWithPlayback());
             }
+
+            var document = libraryStore.ReadMacro(id);
             var item = libraryStore.DuplicateMacro(id, $"{document.Name} Copy");
             editorState.SelectedMacroId = item.Id;
             LibraryPanel.RefreshList();
@@ -1366,14 +1329,7 @@ public partial class MainWindow : Window
             if (editorState.SelectedMacroId is not null)
                 LoadMacroFromLibrary(editorState.SelectedMacroId);
             else
-            {
-                SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
-                SetConditionWorkspaceMode(false);
-                SequencePanelControl.ClearUndoHistory();
-                RefreshConditionStepChoices();
-                ConditionPanel.LoadConditions([]);
-                ApplyEditLock(false);
-            }
+                ResetEmptyMacroEditor();
 
             OnLibraryStructureEdited();
             SetStatus(LocalizationService.Format("MacroDeleted", name));
@@ -1432,14 +1388,7 @@ public partial class MainWindow : Window
                 LoadMacroFromLibrary(editorState.SelectedMacroId);
             }
             else
-            {
-                SequencePanelControl.SetEditorDocument(new MacroDocument(1, "Macro 1", PlaybackSettings.Default, []));
-                SetConditionWorkspaceMode(false);
-                SequencePanelControl.ClearUndoHistory();
-                RefreshConditionStepChoices();
-                ConditionPanel.LoadConditions([]);
-                ApplyEditLock(false);
-            }
+                ResetEmptyMacroEditor();
 
             OnLibraryStructureEdited();
             SetStatus(LocalizationService.Format("SelectedItemsDeleted", deletable.Count));
@@ -1680,21 +1629,29 @@ public partial class MainWindow : Window
         var existingItem = targetMacroId is null
             ? null
             : libraryStore.Load().Items.FirstOrDefault(candidate => string.Equals(candidate.Id, targetMacroId, StringComparison.OrdinalIgnoreCase));
-        if (existingItem?.IsLocked == true)
+        if (existingItem?.IsLocked == true && (targetMacroId != activeEditorMacroId || !hasUnsavedMacroChanges))
         {
             if (updateStatus) SetStatus(L("MacroLockedReadOnly"));
             return;
         }
 
+        if (targetMacroId == activeEditorMacroId && activeLibraryRevision is not null && !hasUnsavedMacroChanges)
+        {
+            if (updateStatus) SetStatus(L("LibrarySaved"));
+            return;
+        }
+
         var document = GetDocumentWithPlayback();
         MacroLibraryItem item;
-        if (targetMacroId is not null && existingItem is not null)
+        if (targetMacroId is not null && (existingItem is not null || (targetMacroId == activeEditorMacroId && activeLibraryRevision is not null)))
         {
             item = SaveCurrentRevision(targetMacroId, document);
         }
         else
         {
             item = libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
+            activeLibraryRevision = libraryStore.GetRevision(item.Id);
+            hasUnsavedMacroChanges = false;
         }
 
         activeEditorMacroId = item.Id;
@@ -1716,32 +1673,19 @@ public partial class MainWindow : Window
     private void ScheduleAutoSave()
     {
         if (editorState.IsEditLocked) return;
+        hasUnsavedMacroChanges = true;
+        if (hasSharedLibraryConflict) return;
         autoSaveTimer.Stop();
         autoSaveTimer.Start();
     }
 
-    private async void PerformDebouncedAutoSave()
+    private void PerformDebouncedAutoSave()
     {
         autoSaveTimer.Stop();
-        if (!jsonValid || shutdownStarted) return;
+        if (!jsonValid || shutdownStarted || !hasUnsavedMacroChanges) return;
         try
         {
-            var id = activeEditorMacroId;
-            if (id is null) { AutoSaveCurrentMacro(false); return; }
-            var document = GetDocumentWithPlayback();
-            var revision = saveRevisions.AddOrUpdate(id, 1, (_, current) => current + 1);
-            var previous = pendingAutoSave;
-            pendingAutoSave = Task.Run(async () => {
-                try { await previous.ConfigureAwait(false); } catch { }
-                lock (libraryStore.SyncRoot)
-                {
-                    if (saveRevisions.GetValueOrDefault(id) != revision || libraryStore.TryGetItem(id) is null) return;
-                    libraryStore.SaveMacro(id, document);
-                }
-            });
-            await pendingAutoSave;
-            if (shutdownStarted || saveRevisions.GetValueOrDefault(id) != revision) return;
-            if (activeEditorMacroId == id) LibraryPanel.RefreshList();
+            AutoSaveCurrentMacro(updateStatus: false);
             RestartListeningWithCurrentSettings();
         }
         catch (Exception ex) { AppLog.Error("AutoSave", "Save failed", ex); SetErrorStatus(ex); }
@@ -1777,7 +1721,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!TrySaveActiveEditorForNavigation(target.Id))
+        if (!TrySaveActiveEditorForNavigation())
         {
             return;
         }
@@ -1820,7 +1764,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!TrySaveActiveEditorForNavigation(previous.Id))
+        if (!TrySaveActiveEditorForNavigation())
         {
             macroNavigationStack.Push(previousId);
             RefreshMacroNavigationUi();
@@ -1841,26 +1785,24 @@ public partial class MainWindow : Window
         RefreshMacroNavigationUi();
     }
 
-    private bool TrySaveActiveEditorForNavigation(string? nextMacroId)
+    private bool TrySaveActiveEditorForNavigation()
     {
-        if (activeEditorMacroId is not { } activeId
-            || string.Equals(activeId, nextMacroId, StringComparison.OrdinalIgnoreCase))
+        if (hasSharedLibraryConflict)
         {
-            return true;
+            SetStatus(L("SharedLibraryEditConflict"), StatusLevel.Warning);
+            return false;
         }
-
+        if (!jsonValid)
+        {
+            SetStatus(L("SharedLibraryInvalidJson"), StatusLevel.Warning);
+            return false;
+        }
+        if (!hasUnsavedMacroChanges) return true;
         autoSaveTimer.Stop();
-        var activeItem = libraryStore.Load().Items.FirstOrDefault(item =>
-            string.Equals(item.Id, activeId, StringComparison.OrdinalIgnoreCase));
-        if (activeItem is null || activeItem.IsLocked)
-        {
-            return true;
-        }
-
         try
         {
-            SaveCurrentRevision(activeId, GetDocumentWithPlayback());
-            return true;
+            AutoSaveCurrentMacro(updateStatus: false);
+            return !hasUnsavedMacroChanges;
         }
         catch (Exception ex)
         {
@@ -1889,31 +1831,15 @@ public partial class MainWindow : Window
         SequencePanelControl.SetCanReturnPreviousMacro(macroNavigationStack.Count > 0);
     }
 
-    private void SaveActiveEditorBeforeSwitch(string? nextMacroId)
+    private bool SaveActiveEditorBeforeSwitch(string? nextMacroId)
     {
-        if (activeEditorMacroId is not { } activeId
-            || string.Equals(activeId, nextMacroId, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        if (macroRecordingTargetsCondition && macroRecorder is not null) OnStopRecording();
-        autoSaveTimer.Stop();
-        var activeItem = libraryStore.Load().Items.FirstOrDefault(item => string.Equals(item.Id, activeId, StringComparison.OrdinalIgnoreCase));
-        if (activeItem is null || activeItem.IsLocked)
-        {
-            return;
-        }
-
-        try
-        {
-            SaveCurrentRevision(activeId, GetDocumentWithPlayback());
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("MainWindow", "Operation failed", ex);
-            SetErrorStatus(ex);
-        }
+        if (activeEditorMacroId != nextMacroId && macroRecordingTargetsCondition && macroRecorder is not null) OnStopRecording();
+        if (TrySaveActiveEditorForNavigation()) return true;
+        var selected = activeEditorMacroId is { } id ? libraryStore.TryGetItem(id)?.Id : null;
+        editorState.SelectedMacroId = selected;
+        libraryStore.SetSelected(selected);
+        LibraryPanel.RefreshList();
+        return false;
     }
 
     private void OnEditLockChanged(bool isLocked)
@@ -2970,25 +2896,14 @@ public partial class MainWindow : Window
     private void OnImportApplied(MacroDocument document)
     {
         ClearMacroNavigationStack();
-        SaveActiveEditorBeforeSwitch(nextMacroId: null);
+        if (!SaveActiveEditorBeforeSwitch(nextMacroId: null)) return;
         var item = !string.IsNullOrWhiteSpace(document.Id)
             ? libraryStore.Load().Items.FirstOrDefault(candidate =>
                 string.Equals(candidate.Id, document.Id, StringComparison.OrdinalIgnoreCase))
             : null;
         item ??= libraryStore.CreateMacro(document, groupId: LibraryPanel.CurrentDatabaseGroupId);
-        editorState.SelectedMacroId = item.Id;
-        activeEditorMacroId = item.Id;
-        LibraryPanel.RefreshList();
+        LoadMacroFromLibrary(item.Id);
         RefreshLibraryListeningState();
-        SetConditionWorkspaceMode(document.IsConditionMacro, showSettings: true);
-        SequencePanelControl.SetEditorDocument(document);
-        SequencePanelControl.ClearUndoHistory();
-        PlaybackPanelControl.SetPlaybackControls(document.Playback);
-        RefreshConditionStepChoices();
-        ConditionPanel.LoadConditions(document.EffectiveConditions);
-        RefreshRunNowHint();
-        SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
-        ApplyEditLock(false);
         SetStatus(L("ConversionApplied"));
     }
 
@@ -3418,6 +3333,11 @@ public partial class MainWindow : Window
     /// <summary>Shows a failure in the status pill: the message only (full exception goes to the log), marked as an error.</summary>
     private void SetErrorStatus(Exception ex)
     {
+        if (ex is MacroLibraryConflictException)
+        {
+            MarkSharedLibraryConflict();
+            return;
+        }
         var message = (ex is AggregateException { InnerException: { } inner } ? inner : ex).Message;
         var firstLine = message.Split('\n', 2)[0].Trim();
         SetStatus(LocalizationService.Format("StatusErrorPrefix", firstLine), StatusLevel.Error);
@@ -3718,6 +3638,7 @@ public partial class MainWindow : Window
         if (RejectLockedEdit()) return;
         var dialog = new OpenFileDialog { Filter = L("MacroFileFilter"), Title = L("OpenMacroTitle") };
         if (DialogOwnerService.ShowDialogSafe(dialog, this) != true) return;
+        if (!TrySaveActiveEditorForNavigation()) return;
 
         try
         {
@@ -3736,6 +3657,7 @@ public partial class MainWindow : Window
             RefreshRunNowHint();
             SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             CheckAndWarnConflicts(document);
+            hasUnsavedMacroChanges = true;
             SetStatus(Path.GetFileName(dialog.FileName));
         }
         catch (Exception ex)
@@ -3756,8 +3678,15 @@ public partial class MainWindow : Window
         var dialog = new SaveFileDialog { Filter = L("MacroFileFilter"), Title = L("SaveMacroTitle"), DefaultExt = ".mcrx" };
         if (DialogOwnerService.ShowDialogSafe(dialog, this) == true)
         {
-            ApplyPlaybackSettingsToEditor();
-            File.WriteAllText(dialog.FileName, SequencePanelControl.EditorText);
+            var text = jsonValid ? McrxSerializer.Serialize(GetDocumentWithPlayback()) : JsonPanel.EditorText;
+            File.WriteAllText(dialog.FileName, text);
+            if (hasSharedLibraryConflict || !jsonValid)
+            {
+                if (activeEditorMacroId is { } id && libraryStore.TryGetItem(id) is not null)
+                    LoadMacroFromLibrary(id, focusName: false);
+                else
+                    ResetEmptyMacroEditor();
+            }
             SetStatus(Path.GetFileName(dialog.FileName));
         }
     }
@@ -3851,6 +3780,9 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        sharedLibraryClosed = true;
+        sharedLibraryRefreshTimer?.Stop();
+        sharedLibraryWatcher?.Dispose();
         SaveWorkspaceLayout();
         windowSource?.RemoveHook(WindowProcedure);
         windowSource = null;

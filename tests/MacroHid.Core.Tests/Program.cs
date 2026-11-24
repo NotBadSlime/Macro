@@ -430,11 +430,11 @@ var tests = new (string Name, Action Body)[]
     ("Macro library store persists condition macros and clones packs", MacroLibraryStorePersistsConditionMacrosAndClonesPacks),
     ("Macro library store persists edit locks", MacroLibraryStorePersistsEditLocks),
     ("Macro library store resolves external aliases", MacroLibraryStoreResolvesExternalAliases),
-    ("Legacy library import preserves macro identity, folders, and Studio edits", LegacyLibraryDirectoryImportTests.PreservesLibraryAndStudioEdits),
-    ("Legacy library automatic import runs once after finding the old catalogue", LegacyLibraryDirectoryImportTests.AutomaticImportRunsOnce),
-    ("Legacy library automatic import keeps existing copies and records that it ran", LegacyLibraryDirectoryImportTests.KeepsExistingImportedCopies),
-    ("Legacy library import rejects an invalid source without changing Studio", LegacyLibraryDirectoryImportTests.RejectsInvalidSourceWithoutChanges),
-    ("Legacy library import handles destination filenames without replacing them", LegacyLibraryDirectoryImportTests.HandlesFileNameCollisions),
+    ("Studio shared macro library uses the formal edition directory", SharedMacroLibraryTests.UsesFormalLibraryDirectory),
+    ("Studio shared macro library shows both editions' changes", SharedMacroLibraryTests.MutationsAreVisibleAcrossEditions),
+    ("Studio shared macro library keeps the formal edition selection", SharedMacroLibraryTests.KeepsFormalSelection),
+    ("Studio shared macro library reads the old catalogue without rewriting it", SharedMacroLibraryTests.SharedReadsDoNotRewriteLegacyIndex),
+    ("Studio shared macro library rejects a stale editor save", SharedMacroLibraryTests.DetectsStaleStudioSave),
     ("Macro library import preserves nested macro call identity", MacroLibraryImportPreservesNestedMacroCallIdentity),
     ("Macro library import remaps nested calls onto existing aliases", MacroLibraryImportRemapsNestedCallsOntoExistingAliases),
     ("Macro library import remaps nested calls onto existing names from extra map", MacroLibraryImportRemapsNestedCallsOntoExistingNamesFromExtraMap),
@@ -5180,6 +5180,7 @@ static void MacroStudioSupportsMacroCallSelectionAndPlaybackAutosave()
     var playbackXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackPanel.xaml"));
     var playbackCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackPanel.xaml.cs"));
     var mainWindowCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.xaml.cs"));
+    var editingCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MainWindow.Editing.cs"));
 
     Assert.Contains("OpenInlineStepEditor", stepSequenceCode);
     Assert.Contains("case MacroCallStep", stepEditorCode);
@@ -5192,7 +5193,8 @@ static void MacroStudioSupportsMacroCallSelectionAndPlaybackAutosave()
     Assert.Contains("PlaybackSettingsEdited", playbackCode);
     Assert.Contains("OnPlaybackSettingsEdited", mainWindowCode);
     Assert.Contains("AutoSaveCurrentMacro", mainWindowCode);
-    Assert.Contains("libraryStore.SaveMacro", mainWindowCode);
+    Assert.Contains("SaveCurrentRevision", mainWindowCode);
+    Assert.Contains("libraryStore.SaveMacro(id, document, expected, out var saved)", editingCode);
 }
 
 static void MacroStudioExposesGlobalPrecisionSelectorInMacroLibrary()
@@ -7886,6 +7888,8 @@ static void InstallerPreservesUserDataUnlessExplicitlyConfirmed()
     Assert.Contains("MB_DEFBUTTON2", iss);
     Assert.Contains("IDNO", iss);
     Assert.Contains("ExpandConstant('{userappdata}\\MacroHID-UI')", iss);
+    Assert.DoesNotContain("ExpandConstant('{userappdata}\\MacroHID')", iss);
+    Assert.DoesNotContain("ExpandConstant('{userappdata}\\MacroHID\\MacroLibrary')", iss);
     Assert.Contains("DelTree(UserDataPath, True, True, True)", iss);
     Assert.Contains("DisableDirPage=no", iss);
     Assert.Contains("AlwaysShowDirOnReadyPage=yes", iss);
@@ -10458,8 +10462,13 @@ static void MacroStudioScopesDeleteShortcutsAndPreservesImportedConditions()
     var undoIndex = mainWindow.IndexOf("private void OnSequenceUndoApplied", StringComparison.Ordinal);
     Assert.True(importIndex >= 0 && undoIndex > importIndex);
     var importBody = mainWindow[importIndex..undoIndex];
-    Assert.Contains("ConditionPanel.LoadConditions(document.EffectiveConditions)", importBody);
-    Assert.Contains("SequencePanelControl.SetConditionHighlights(document.EffectiveConditions", importBody);
+    Assert.Contains("LoadMacroFromLibrary(item.Id)", importBody);
+    var loadIndex = mainWindow.IndexOf("private void LoadMacroFromLibrary", StringComparison.Ordinal);
+    var selectIndex = mainWindow.IndexOf("private void OnMacroSelected", StringComparison.Ordinal);
+    Assert.True(loadIndex >= 0 && selectIndex > loadIndex);
+    var loadBody = mainWindow[loadIndex..selectIndex];
+    Assert.Contains("ConditionPanel.LoadConditions(document.EffectiveConditions)", loadBody);
+    Assert.Contains("SequencePanelControl.SetConditionHighlights(document.EffectiveConditions", loadBody);
 }
 
 static void McrxRoundTripsWeakNetParallelAndTextConditions()

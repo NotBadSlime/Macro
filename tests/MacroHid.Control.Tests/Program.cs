@@ -95,7 +95,8 @@ Console.WriteLine("PASS real Windows pipe roundtrips, malformed lengths, reconne
 
 var uiRoamingDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID-UI");
 var uiLocalDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MacroHID-UI");
-Check(MacroLibraryStore.GetDefaultRoot() == Path.Combine(uiRoamingDirectory, "MacroLibrary"), "UI macro library uses the wrong profile.");
+var formalMacroLibrary = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID", "MacroLibrary");
+Check(MacroLibraryStore.GetDefaultRoot() == formalMacroLibrary, "Studio must use the formal edition macro library.");
 Check(AppLog.DirectoryPath == Path.Combine(uiRoamingDirectory, "log"), "UI logs use the wrong profile.");
 Check(GlobalCommand.BinDirectory == Path.Combine(uiLocalDirectory, "bin"), "The registration uses the wrong profile.");
 Check(GlobalCommand.CommandName == "MacroCtlUI" && typeof(MacroCtlProgram).Assembly.GetName().Name == "MacroCtlUI",
@@ -115,7 +116,7 @@ await using (var standardServer = new ControlPipeServer(standardPipe))
         ControlPipe.SendAsync(new ControlRequest("status"), pipeName: standardPipe));
     Check(responses[0].Code == "ui" && responses[1].Code == "standard", "Both editions must route independently.");
 }
-Console.WriteLine("PASS UI Edition profile, CLI name and separate Windows pipe ownership");
+Console.WriteLine("PASS Studio shared macro library, separate settings, CLI name and Windows pipe ownership");
 
 
 // Exercise the actual Studio command router against an isolated library without

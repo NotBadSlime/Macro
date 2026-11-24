@@ -207,7 +207,13 @@ public partial class MainWindow
     private async void FinishShutdownAsync()
     {
         if (shutdownStarted) return;
-        if (autoSaveTimer.IsEnabled && jsonValid) PerformDebouncedAutoSave();
+        if (!TrySaveActiveEditorForNavigation())
+        {
+            shutdownQueued = false;
+            exitConfirmed = false;
+            if (isInTray) RestoreFromTray();
+            return;
+        }
         shutdownStarted = true;
         await ((App)Application.Current).StopControlServerAsync();
         UpdatePrecisionWarmLease();
@@ -226,7 +232,6 @@ public partial class MainWindow
         try
         {
             await cleanup;
-            await pendingAutoSave;
             shutdownFinished = true;
             Close();
         }

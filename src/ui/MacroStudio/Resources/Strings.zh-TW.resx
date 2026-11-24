@@ -540,8 +540,9 @@
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>已解除鎖定所選的 {0} 個巨集。</value></data>
   <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>可一次選取主巨集和子巨集；程式會自動識別檔案間的參照並建立巢狀巨集。匯出巨集資料夾時會一併打包相依子巨集，分享請帶上「巨集資料夾 + 相依子巨集」。</value></data>
   <data name="ConversionSmartImported" xml:space="preserve"><value>已匯入 {0} 個巨集（選取 {1} 個檔案，自動識別 {2} 個子巨集）。</value></data>
-  <data name="LegacyLibraryImported" xml:space="preserve"><value>已從舊版巨集庫複製 {0} 個巨集和 {1} 個群組。</value></data>
-  <data name="LegacyLibraryImportFailed" xml:space="preserve"><value>自動複製舊版巨集庫失敗。可透過「開啟記錄」查看詳細資料。</value></data>
+  <data name="SharedLibraryEditConflict" xml:space="preserve"><value>共用巨集已在磁碟上變更。目前的編輯仍在 Studio，可用「另存目前巨集」保留一份。</value></data>
+  <data name="SharedLibraryInvalidJson" xml:space="preserve"><value>請修正 JSON 驗證錯誤，或用「另存目前巨集」保留草稿。</value></data>
+  <data name="SharedLibraryMacroRemoved" xml:space="preserve"><value>目前巨集已從共用巨集庫移除。</value></data>
   <data name="AddOcrExtractText" xml:space="preserve"><value>OCR 取得文字</value></data>
   <data name="AddOcrExtractTextHint" xml:space="preserve"><value>從混合文字中擷取內容到剪貼簿</value></data>
   <data name="TemplateOcrExtractText" xml:space="preserve"><value>OCR 取得文字</value></data>

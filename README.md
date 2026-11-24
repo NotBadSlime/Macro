@@ -4,7 +4,7 @@
 
 MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。目的是把各大宏软件的宏集中到一处使用，集百家之长：导入雷云、罗技 Lua、按键精灵、耕地机等常见格式后，在同一套编辑器和触发体系里一起跑。通过 Windows `SendInput` 发送输入，不安装驱动、不改 Secure Boot。适合合法的本机桌面自动化；控制管理员窗口时，请以管理员身份启动本软件。
 
-宏数据默认保存在 `%APPDATA%\MacroHID-UI\MacroLibrary`。卸载时默认保留，重新安装后仍可继续使用。
+Studio 和正式版读取并保存同一套宏库 `%APPDATA%\MacroHID\MacroLibrary`。Studio 会自动刷新从磁盘读到的改动。正式版已打开时，在宏列表中按 `F5` 刷新列表，再双击宏重新打开编辑器。 [共享宏库与并存说明](docs/ui-edition.md#共享宏库)
 
 外部启动可使用 `MacroCtlUI run --id "宏ID" --delay 3s`，无需触发键。通过「窗口 → 全局命令」可注册到当前用户 PATH，宏右键菜单可复制启动命令。 [外部控制说明](docs/external-control.md)
 

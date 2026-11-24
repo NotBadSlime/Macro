@@ -547,8 +547,9 @@
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>已解锁所选的 {0} 个宏。</value></data>
   <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>可一次选择主宏和子宏；程序会自动识别文件间的引用并建立嵌套宏。导出宏文件夹时会一并打包依赖子宏，分享请带上「宏文件夹 + 依赖子宏」。</value></data>
   <data name="ConversionSmartImported" xml:space="preserve"><value>已导入 {0} 个宏（选择 {1} 个文件，自动识别 {2} 个子宏）。</value></data>
-  <data name="LegacyLibraryImported" xml:space="preserve"><value>已从旧版宏库复制 {0} 个宏和 {1} 个分组。</value></data>
-  <data name="LegacyLibraryImportFailed" xml:space="preserve"><value>自动复制旧版宏库失败。可通过「打开日志」查看详情。</value></data>
+  <data name="SharedLibraryEditConflict" xml:space="preserve"><value>共享宏已在磁盘上更改。当前编辑仍在 Studio 中，可用「另存当前宏」保存一份。</value></data>
+  <data name="SharedLibraryInvalidJson" xml:space="preserve"><value>请修正 JSON 校验错误，或用「另存当前宏」保留草稿。</value></data>
+  <data name="SharedLibraryMacroRemoved" xml:space="preserve"><value>当前宏已从共享宏库移除。</value></data>
   <data name="AddOcrExtractText" xml:space="preserve"><value>OCR 获取文本</value></data>
   <data name="AddOcrExtractTextHint" xml:space="preserve"><value>从混合文字中提取内容到剪贴板</value></data>
   <data name="TemplateOcrExtractText" xml:space="preserve"><value>OCR 获取文本</value></data>

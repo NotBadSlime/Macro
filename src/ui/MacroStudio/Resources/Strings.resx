@@ -827,8 +827,9 @@
   <data name="SelectedMacrosUnlocked" xml:space="preserve"><value>Unlocked {0} selected macro(s).</value></data>
   <data name="ConversionAutoDetectHelp" xml:space="preserve"><value>Select main macros and submacros together. References between files are detected automatically. Folder export packs dependency macros too—share the folder plus its Dependencies package.</value></data>
   <data name="ConversionSmartImported" xml:space="preserve"><value>Imported {0} macro(s) from {1} selected file(s); {2} submacro(s) were detected automatically.</value></data>
-  <data name="LegacyLibraryImported" xml:space="preserve"><value>Copied {0} macros and {1} groups from the previous MacroHID library.</value></data>
-  <data name="LegacyLibraryImportFailed" xml:space="preserve"><value>Could not copy the previous MacroHID library. Open Logs for details.</value></data>
+  <data name="SharedLibraryEditConflict" xml:space="preserve"><value>The shared macro changed on disk. Your edits are still in the editor. Use Save As to keep a separate file.</value></data>
+  <data name="SharedLibraryInvalidJson" xml:space="preserve"><value>Fix the JSON validation error or use Save As to keep your draft.</value></data>
+  <data name="SharedLibraryMacroRemoved" xml:space="preserve"><value>The macro was removed from the shared library.</value></data>
   <data name="AddOcrExtractText" xml:space="preserve"><value>OCR extract text</value></data>
   <data name="AddOcrExtractTextHint" xml:space="preserve"><value>Extract text from mixed OCR content to the clipboard</value></data>
   <data name="TemplateOcrExtractText" xml:space="preserve"><value>OCR extract text</value></data>

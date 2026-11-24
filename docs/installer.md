@@ -49,15 +49,15 @@ artifacts\packages-ui\MacroHID-Studio-Portable-x64.zip
 
 ### 安装后的数据位置
 
-MacroStudio 的宏数据库位于：
+Studio 与正式版共用当前 Windows 用户的宏库：
 
 ```text
-%APPDATA%\MacroHID-UI\MacroLibrary
+%APPDATA%\MacroHID\MacroLibrary
 ```
 
-每个宏仍以普通 `.mcrx` 文件保存，`library.json` 保存文件夹、排序、选择状态、触发键、播放模式和更新时间等索引信息。
+宏保存在 `.mcrx` 文件中，`library.json` 记录宏条目、分组、文件夹和排序。Studio 会自动刷新磁盘改动。正式版已打开时，可在宏列表中按 `F5`，再双击宏重新读取其内容。
 
-卸载时默认保留该目录，以便重新安装后继续使用。普通卸载会询问是否同时清除宏数据库、设置和界面布局；只有连续两次确认才会删除 `%APPDATA%\MacroHID-UI`，静默卸载始终保留用户数据。
+卸载时默认保留该目录，以便两个界面继续使用。Studio 的普通卸载只会询问是否清除 `%APPDATA%\MacroHID-UI` 下的设置、界面布局和此前 Studio 单独保存的宏，连续两次确认后才删除该专用目录。静默卸载始终保留用户数据。卸载正式版时，选择保留用户数据以继续在 Studio 使用共享宏库。
 
 ### 无驱动说明
 
@@ -68,7 +68,7 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 - 不需要测试签名模式。
 - 不需要关闭或修改 Secure Boot。
 - 不使用 `pnputil`、`devcon`、VHF/KMDF 或 IOCTL。
-- 卸载时不会卸载驱动或修改系统启动策略；用户数据默认保留，也可在卸载确认中主动清除。
+- 卸载时不会卸载驱动或修改系统启动策略。用户数据默认保留，可以在卸载确认中主动清除 Studio 的专用数据。
 
 ### 从网上下载后被拦截
 
@@ -152,15 +152,15 @@ Build and launch immediately:
 
 ### User Data
 
-MacroStudio stores the local macro database in:
+Studio and the standard edition use the same macro library for the current Windows user:
 
 ```text
-%APPDATA%\MacroHID-UI\MacroLibrary
+%APPDATA%\MacroHID\MacroLibrary
 ```
 
-Each macro is stored as a normal `.mcrx` file. `library.json` stores folders, ordering, selection state, trigger keys, playback modes, and timestamps.
+Macros are stored as `.mcrx` files. `library.json` records macro entries, groups, folders, and their order. Studio refreshes the library when the files change. In an open standard edition window, press `F5` in the macro list and double-click a macro to reload its contents.
 
-Uninstall keeps this directory by default so a later reinstall can reuse it. Interactive uninstall asks whether to remove the macro database, settings, and workspace layout, and requires a second confirmation before deleting `%APPDATA%\MacroHID-UI`. Silent uninstall always preserves user data.
+Studio uninstall preserves the shared macro library. The interactive uninstaller asks whether to delete Studio-specific settings, workspace layout, and macros previously stored separately under `%APPDATA%\MacroHID-UI`. It requires a second confirmation before deleting that directory. Silent uninstall always preserves user data. When uninstalling the standard edition, choose to keep its user data to continue using the shared library in Studio.
 
 ### No Driver
 
@@ -171,7 +171,7 @@ MacroHID uses Windows `SendInput` only:
 - No test-signing mode is required.
 - Secure Boot does not need to be changed.
 - `pnputil`, `devcon`, VHF/KMDF, and IOCTL paths are not used.
-- Uninstall does not remove a driver or modify boot policy. User data is preserved by default and can be explicitly removed from the uninstall confirmation.
+- Uninstall does not remove a driver or modify boot policy. User data is preserved by default. The uninstall confirmation can remove Studio-specific data.
 
 ### Blocked after downloading from the internet
 

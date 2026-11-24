@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 
 namespace MacroHid.Core;
@@ -113,16 +112,26 @@ public sealed partial class MacroLibraryStore
 
     private readonly string rootDirectory;
     private readonly string indexPath;
+    private readonly bool shareWithFormalEdition;
+    private (bool Set, string? Id) localSelection;
 
-    public MacroLibraryStore(string rootDirectory)
+    public MacroLibraryStore(string rootDirectory) : this(rootDirectory, shareWithFormalEdition: false)
+    {
+    }
+
+    public MacroLibraryStore(string rootDirectory, bool shareWithFormalEdition)
     {
         this.rootDirectory = rootDirectory;
         indexPath = Path.Combine(rootDirectory, "library.json");
+        this.shareWithFormalEdition = shareWithFormalEdition;
     }
+
+    public string RootDirectory => rootDirectory;
+    public bool SharesFormalLibrary => shareWithFormalEdition;
 
     public static string GetDefaultRoot()
     {
-        return Path.Combine(ApplicationStorage.RoamingDirectory, "MacroLibrary");
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID", "MacroLibrary");
     }
 
     public MacroLibrarySnapshot Load()
@@ -132,7 +141,9 @@ public sealed partial class MacroLibraryStore
             var index = LoadIndex();
             return new MacroLibrarySnapshot(
                 index.Items.AsReadOnly(),
-                index.SelectedMacroId,
+                shareWithFormalEdition && localSelection.Set
+                    ? index.Items.FirstOrDefault(item => item.Id == localSelection.Id)?.Id
+                    : index.SelectedMacroId,
                 index.Folders.AsReadOnly(),
                 index.Groups.AsReadOnly(),
                 index.GroupFolders.AsReadOnly());
@@ -178,9 +189,8 @@ public sealed partial class MacroLibraryStore
 
             EnsureGroupFolder(index, item.GroupId, item.Folder);
             index.Items.Add(item);
-            index.SelectedMacroId = item.Id;
-            SaveDocumentFile(item, document with { Name = item.Name, Kind = kind });
-            SaveIndex(index);
+            SetIndexSelection(index, item.Id);
+            SaveIndex(index, item, document with { Name = item.Name, Kind = kind });
             return item;
         }
     }
@@ -284,16 +294,45 @@ public sealed partial class MacroLibraryStore
     {
         lock (SyncRoot)
         {
-            var item = FindItem(LoadIndex(), id);
-            var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(item)));
-            // Prefer index kind when older .mcrx files omit kind.
-            return document.Kind == item.Kind
-                ? document
-                : document with { Kind = item.Kind != MacroKind.Normal ? item.Kind : document.Kind };
+            var (item, content) = ReadCurrentMacro(id);
+            return ParseCurrentMacro(item, content);
         }
     }
 
+    public MacroDocument ReadMacro(string id, out MacroLibraryRevision revision)
+    {
+        lock (SyncRoot)
+        {
+            var (item, content) = ReadCurrentMacro(id);
+            revision = CreateRevision(item, content);
+            return ParseCurrentMacro(item, content);
+        }
+    }
+
+    private (MacroLibraryItem Item, string Content) ReadCurrentMacro(string id)
+    {
+        var item = FindItem(LoadIndex(), id);
+        var path = GetMacroPath(item);
+        var content = shareWithFormalEdition ? ReadSharedFile(path) : File.ReadAllText(path);
+        return (item, content ?? throw new FileNotFoundException("The selected macro file was not found.", path));
+    }
+
+    private static MacroDocument ParseCurrentMacro(MacroLibraryItem item, string content)
+    {
+        var document = McrxParser.Parse(content);
+        // Prefer index kind when older .mcrx files omit kind.
+        return document.Kind == item.Kind
+            ? document
+            : document with { Kind = item.Kind != MacroKind.Normal ? item.Kind : document.Kind };
+    }
+
     public MacroLibraryItem SaveMacro(string id, MacroDocument document)
+        => SaveMacroCore(id, document, null, out _);
+
+    public MacroLibraryItem SaveMacro(string id, MacroDocument document, MacroLibraryRevision expectedRevision, out MacroLibraryRevision savedRevision)
+        => SaveMacroCore(id, document, expectedRevision, out savedRevision);
+
+    private MacroLibraryItem SaveMacroCore(string id, MacroDocument document, MacroLibraryRevision? expectedRevision, out MacroLibraryRevision savedRevision)
     {
         lock (SyncRoot)
         {
@@ -301,10 +340,12 @@ public sealed partial class MacroLibraryStore
             var itemIndex = index.Items.FindIndex(item => item.Id == id);
             if (itemIndex < 0)
             {
+                if (expectedRevision is not null) throw new MacroLibraryConflictException();
                 throw new KeyNotFoundException($"Macro '{id}' was not found.");
             }
 
             var previous = index.Items[itemIndex];
+            if (expectedRevision is not null && !MatchesRevision(previous, expectedRevision)) throw new MacroLibraryConflictException();
             EnsureMacroIsEditable(previous);
             var updated = previous with
             {
@@ -313,9 +354,10 @@ public sealed partial class MacroLibraryStore
                 UpdatedAt = DateTimeOffset.UtcNow
             };
             index.Items[itemIndex] = updated;
-            index.SelectedMacroId = updated.Id;
-            SaveDocumentFile(updated, document with { Name = updated.Name, Kind = updated.Kind });
-            SaveIndex(index);
+            SetIndexSelection(index, updated.Id);
+            var payload = document with { Name = updated.Name, Kind = updated.Kind };
+            var text = SaveIndex(index, updated, payload, expectedRevision)!;
+            savedRevision = CreateRevision(updated, text);
             return updated;
         }
     }
@@ -339,11 +381,12 @@ public sealed partial class MacroLibraryStore
                 UpdatedAt = DateTimeOffset.UtcNow
             };
             index.Items[itemIndex] = updated;
-            index.SelectedMacroId = updated.Id;
+            SetIndexSelection(index, updated.Id);
 
-            var document = McrxParser.Parse(File.ReadAllText(GetMacroPath(updated)));
-            SaveDocumentFile(updated, document with { Name = updated.Name });
-            SaveIndex(index);
+            var content = shareWithFormalEdition ? ReadSharedFile(GetMacroPath(previous)) : File.ReadAllText(GetMacroPath(previous));
+            if (content is null) throw new FileNotFoundException("The selected macro file was not found.", GetMacroPath(previous));
+            var document = McrxParser.Parse(content);
+            SaveIndex(index, updated, document with { Name = updated.Name }, shareWithFormalEdition ? CreateRevision(previous, content) : null);
             return updated;
         }
     }
@@ -400,14 +443,10 @@ public sealed partial class MacroLibraryStore
             EnsureMacroIsEditable(item);
             index.Items.RemoveAll(candidate => candidate.Id == id);
 
-            var path = GetMacroPath(item);
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-
-            index.SelectedMacroId = index.Items.FirstOrDefault()?.Id;
-            SaveIndex(index);
+            SetIndexSelection(index, index.Items.FirstOrDefault()?.Id);
+            if (shareWithFormalEdition) SaveIndex(index);
+            File.Delete(GetMacroPath(item));
+            if (!shareWithFormalEdition) SaveIndex(index);
         }
     }
 
@@ -567,19 +606,16 @@ public sealed partial class MacroLibraryStore
                 string.Equals(candidate.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(candidate.Name, normalized, StringComparison.Ordinal));
 
+            List<MacroLibraryItem> removed = [];
             if (deleteMacros)
             {
-                var removed = index.Items
+                removed = index.Items
                     .Where(item => string.Equals(item.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
                         && string.Equals(item.Folder, normalized, StringComparison.Ordinal))
                     .ToList();
-                foreach (var item in removed)
+                if (!shareWithFormalEdition)
                 {
-                    var path = GetMacroPath(item);
-                    if (File.Exists(path))
-                    {
-                        File.Delete(path);
-                    }
+                    foreach (var item in removed) File.Delete(GetMacroPath(item));
                 }
 
                 index.Items.RemoveAll(item => string.Equals(item.GroupId, normalizedGroupId, StringComparison.OrdinalIgnoreCase)
@@ -606,6 +642,10 @@ public sealed partial class MacroLibraryStore
             }
 
             SaveIndex(index);
+            if (shareWithFormalEdition)
+            {
+                foreach (var item in removed) File.Delete(GetMacroPath(item));
+            }
         }
     }
 
@@ -653,6 +693,12 @@ public sealed partial class MacroLibraryStore
                 _ = FindItem(index, id);
             }
 
+            if (shareWithFormalEdition)
+            {
+                localSelection = (true, id);
+                return;
+            }
+
             index.SelectedMacroId = id;
             SaveIndex(index);
         }
@@ -660,6 +706,7 @@ public sealed partial class MacroLibraryStore
 
     private MacroLibraryIndex LoadIndex()
     {
+        if (shareWithFormalEdition) return ReadSharedIndex();
         Directory.CreateDirectory(rootDirectory);
         if (!File.Exists(indexPath))
         {
@@ -724,17 +771,38 @@ public sealed partial class MacroLibraryStore
         return changed;
     }
 
-    private void SaveIndex(MacroLibraryIndex index)
+    private void SetIndexSelection(MacroLibraryIndex index, string? id)
+    {
+        if (shareWithFormalEdition) index.PendingLocalSelection = (true, id);
+        else index.SelectedMacroId = id;
+    }
+
+    private string? SaveIndex(MacroLibraryIndex index, MacroLibraryItem? item = null, MacroDocument? document = null, MacroLibraryRevision? expectedRevision = null)
     {
         Directory.CreateDirectory(rootDirectory);
         NormalizeIndex(index);
-        File.WriteAllText(indexPath, JsonSerializer.Serialize(index, Options));
-    }
+        var catalog = JsonSerializer.Serialize(index, Options);
+        var text = item is not null && document is not null ? McrxSerializer.Serialize(document with { Id = item.Id }) : null;
+        if (shareWithFormalEdition)
+        {
+            WriteSharedIndex(index, catalog, item, text, expectedRevision);
+            if (index.PendingLocalSelection.Set) localSelection = index.PendingLocalSelection;
+        }
+        else
+        {
+            if (item is not null && text is not null)
+            {
+                var path = GetMacroPath(item);
+                if (expectedRevision is not null && (ReadSharedFile(path) is not { } existing || HashContent(existing) != expectedRevision.ContentHash))
+                {
+                    throw new MacroLibraryConflictException();
+                }
+                File.WriteAllText(path, text);
+            }
+            File.WriteAllText(indexPath, catalog);
+        }
 
-    private void SaveDocumentFile(MacroLibraryItem item, MacroDocument document)
-    {
-        Directory.CreateDirectory(rootDirectory);
-        File.WriteAllText(GetMacroPath(item), McrxSerializer.Serialize(document with { Id = item.Id }));
+        return text;
     }
 
     private static IReadOnlyList<string> MergeAliases(IReadOnlyList<string>? aliases, string? identity)
@@ -749,6 +817,14 @@ public sealed partial class MacroLibraryStore
 
     private string GetMacroPath(MacroLibraryItem item)
     {
+        if (shareWithFormalEdition && (string.IsNullOrWhiteSpace(item.FileName)
+            || Path.GetFileName(item.FileName) != item.FileName
+            || item.FileName.IndexOfAny(['/', '\\', ':']) >= 0
+            || item.FileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || !Path.GetExtension(item.FileName).Equals(".mcrx", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidDataException("The shared macro library contains an invalid document filename.");
+        }
         return Path.Combine(rootDirectory, item.FileName);
     }
 
@@ -987,7 +1063,8 @@ public sealed partial class MacroLibraryStore
 
         public string? SelectedMacroId { get; set; }
 
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public bool LegacyLibraryImported { get; set; }
+        internal string? SourceText { get; set; }
+
+        internal (bool Set, string? Id) PendingLocalSelection { get; set; }
     }
 }
