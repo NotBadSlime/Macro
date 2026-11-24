@@ -20,10 +20,10 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $artifactRoot = Join-Path $repoRoot "artifacts"
-$installerFileName = "MacroHID-UI-Setup-x64.exe"
-$portableFileName = "MacroHID-UI-Portable-x64.zip"
-$checksumFileName = "MacroHID-UI-SHA256SUMS.txt"
-$portableFolder = "MacroHID-UI"
+$installerFileName = "MacroHID-Studio-Setup-x64.exe"
+$portableFileName = "MacroHID-Studio-Portable-x64.zip"
+$checksumFileName = "MacroHID-Studio-SHA256SUMS.txt"
+$portableFolder = "MacroHID-Studio"
 $commandExecutable = "MacroCtl\MacroCtlUI.exe"
 $packageRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     Join-Path $artifactRoot "packages-ui"
@@ -168,7 +168,7 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 root = fso.GetParentFolderName(WScript.ScriptFullName)
 exe = fso.BuildPath(fso.BuildPath(root, "MacroStudio"), "MacroStudio.exe")
 If Not fso.FileExists(exe) Then
-    MsgBox "找不到 MacroStudio\MacroStudio.exe。请把快捷方式留在解压后的 MacroHID-UI 根目录。", 16, "MacroHID UI Edition"
+    MsgBox "找不到 MacroStudio\MacroStudio.exe。请在解压后的 $portableFolder 目录运行。", 16, "MacroHID Studio"
     WScript.Quit 1
 End If
 Set shell = CreateObject("WScript.Shell")
@@ -233,7 +233,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $inputRoot -Force
     Remove-InstallerDebugArtifacts $inputRoot
     if (-not (Test-Path (Join-Path $inputRoot $commandExecutable))) {
-        throw "UI Edition control command missing: $commandExecutable"
+        throw "MacroHID Studio control command missing: $commandExecutable"
     }
 
     $isccArgs = @(
@@ -285,7 +285,7 @@ try {
     $localExe = Join-Path $localStudio "MacroStudio.exe"
     if (-not (Test-Path -LiteralPath $localExe)) { throw "Standalone executable missing: $localExe" }
     if (-not (Test-Path (Join-Path $localRoot $commandExecutable))) {
-        throw "Standalone UI Edition control command missing: $commandExecutable"
+        throw "Standalone MacroHID Studio control command missing: $commandExecutable"
     }
     # Recheck after publishing in case a user started the old build meanwhile.
     Confirm-StopBuildProcesses @($fixedLocalRoot, $packageRoot)
@@ -316,10 +316,10 @@ try {
     }
     if (-not $SkipShortcut) {
         New-Item -ItemType Directory -Path $ShortcutDirectory -Force | Out-Null
-        $shortcutName = "MacroHID UI Edition.lnk"
+        $shortcutName = "MacroHID Studio.lnk"
         $desktopShortcut = Join-Path $ShortcutDirectory $shortcutName
         New-PortableRootShortcut -ShortcutPath $desktopShortcut -TargetPath $localExe `
-            -WorkingDirectory $localStudio -Description "MacroHID UI Edition $Version local standalone build"
+            -WorkingDirectory $localStudio -Description "MacroHID Studio $Version"
         Write-Host "Shortcut: $desktopShortcut"
     }
     Write-Host "Installer created: $installer"

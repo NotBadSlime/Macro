@@ -1,21 +1,21 @@
-# MacroHID 使用说明
+# MacroHID Studio 使用说明
 
-本分支提供 **MacroHID UI 优化版**。它使用新的工作台、深浅主题和命令搜索，独立安装并保存自己的宏库。按 `Ctrl+K` 查找界面命令，动作面板也可按名称或分类查找动作。两版的下载文件可放在同一个 Release。 [UI 优化版打包与并存说明](docs/ui-edition.md)
+**MacroHID Studio** 是 MacroHID 的桌面工作台版本，可以与正式版并行安装。支持深浅主题，按 `Ctrl+K` 可查找界面命令，动作库支持按名称或分类查找动作。打开独立条件宏后，中央展示规则和触发动作，右侧展示所选规则的设置。 [Studio 打包与并存说明](docs/ui-edition.md)
 
 MacroHID 是 Windows 10/11 x64 上的本机键鼠宏工具。目的是把各大宏软件的宏集中到一处使用，集百家之长：导入雷云、罗技 Lua、按键精灵、耕地机等常见格式后，在同一套编辑器和触发体系里一起跑。通过 Windows `SendInput` 发送输入，不安装驱动、不改 Secure Boot。适合合法的本机桌面自动化；控制管理员窗口时，请以管理员身份启动本软件。
 
-宏数据默认保存在 `%APPDATA%\MacroHID\MacroLibrary`。卸载时默认保留，重新安装后仍可继续使用。
+宏数据默认保存在 `%APPDATA%\MacroHID-UI\MacroLibrary`。卸载时默认保留，重新安装后仍可继续使用。
 
-外部启动可使用 `MacroCtl run --id "宏ID" --delay 3s`，无需触发键。新版 Studio 的「窗口 → 全局命令」可注册到当前用户 PATH，宏右键菜单可复制启动命令；详见 [外部控制说明](docs/external-control.md)。
+外部启动可使用 `MacroCtlUI run --id "宏ID" --delay 3s`，无需触发键。通过「窗口 → 全局命令」可注册到当前用户 PATH，宏右键菜单可复制启动命令。 [外部控制说明](docs/external-control.md)
 
-运行日志、界面报错、异常堆栈和锁帧诊断统一写入 `%APPDATA%\MacroHID\log`，源码版和安装版使用相同路径。点击顶部「打开日志」即可查看；反馈问题时请提供出错时间和对应的 `runtime-*.log`（有轮转文件时一并提供）。每次启动创建独立日志，单文件约 4 MB，保留两份轮转备份；启动时清理超过 14 天的旧日志。日志包含宏名称、文件路径和错误详情，不记录完整宏内容或逐键输入。旧版 `crash.log` 和 `memory-fps-diagnostic.log` 不迁移、不删除。
+运行日志、界面报错、异常堆栈和锁帧诊断统一写入 `%APPDATA%\MacroHID-UI\log`，源码版和安装版使用相同路径。点击顶部「打开日志」即可查看；反馈问题时请提供出错时间和对应的 `runtime-*.log`（有轮转文件时一并提供）。每次启动创建独立日志，单文件约 4 MB，保留两份轮转备份；启动时清理超过 14 天的旧日志。日志包含宏名称、文件路径和错误详情，不记录完整宏内容或逐键输入。旧版 `crash.log` 和 `memory-fps-diagnostic.log` 不迁移、不删除。
 
-源码一键打包：双击根目录的 `打包.cmd`，默认同时生成安装包、便携包、免安装本地运行版，安装包与便携包固定放在 `artifacts/packages`，本地运行版固定放在 `artifacts/local-run`，并更新桌面 `Start Item` 目录中的“MacroHID 本地版”快捷方式。详见 [打包说明](docs/packaging.md)。
+双击根目录的 `打包.cmd` 可同时生成安装包、便携包和本地运行版。安装包与便携包位于 `artifacts/packages-ui`，本地运行版位于 `artifacts/local-run-ui`。脚本会更新桌面 `Start Item` 目录中的「MacroHID Studio」快捷方式。 [打包说明](docs/packaging.md)
 
-当前正式版是 **2.2.0**（[发布说明](docs/releases/2.2.0.md)）。安装文件在 GitHub [Releases](https://github.com/NotBadSlime/Macro/releases)：
+MacroHID Studio 当前版本是 **2.2.0**。 [GitHub Releases](https://github.com/NotBadSlime/Macro/releases)
 
-- `MacroHID-Setup-x64.exe`：安装包。从浏览器下载后，请先右键该文件 → 属性 → 勾选「解除锁定」→ 确定，再双击安装。若弹出「无法在临时目录中执行文件 / Error 4551」或 Windows 安全中心提示「无法确认发布者」，按 [安装说明里的解除拦截步骤](docs/installer.md#从网上下载后被拦截) 处理，或改下便携包。
-- `MacroHID-Portable-x64.zip`：解压后得到与安装版相同的 `MacroHID` 目录，双击根目录里的 `MacroStudio.cmd` 即可。zip 同样先解除锁定再解压。
+- `MacroHID-Studio-Setup-x64.exe` 为安装包。如果 Windows 在安装时拦截文件，可按对应步骤处理。 [安装说明](docs/installer.md#从网上下载后被拦截)
+- `MacroHID-Studio-Portable-x64.zip` 为便携包。解压后运行 `MacroHID-Studio` 目录内的 `MacroStudio.cmd`。
 
 需要先安装 [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（x64）。安装包不内置运行时。控制管理员窗口时，请以管理员身份运行 MacroStudio。
 

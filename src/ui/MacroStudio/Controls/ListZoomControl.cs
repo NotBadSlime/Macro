@@ -36,8 +36,18 @@ public sealed class ListZoomControl : StackPanel
 
     private Button CreateButton(string text, double width, string hint)
     {
-        var button = new Button { Content = text, Width = width, Height = 26,
-            Padding = new Thickness(0), Margin = new Thickness(2, 0, 0, 0), FontSize = 12, ToolTip = hint };
+        var button = new Button
+        {
+            Content = text,
+            Width = width,
+            Height = 26,
+            MinWidth = 0,
+            MinHeight = 0,
+            Padding = new Thickness(0),
+            Margin = new Thickness(2, 0, 0, 0),
+            FontSize = 12,
+            ToolTip = hint
+        };
         Children.Add(button);
         return button;
     }

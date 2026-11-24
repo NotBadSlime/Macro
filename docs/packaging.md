@@ -1,4 +1,4 @@
-# UI 优化版一键打包
+# MacroHID Studio 一键打包
 
 双击仓库根目录的 `打包.cmd`，或运行 `scripts/Build-Installer.ps1`。`scripts/Build-LocalRun.ps1` 也进入同一完整流程。
 
@@ -6,12 +6,12 @@
 
 | 产物 | 相对项目根目录的路径 |
 | --- | --- |
-| 安装包 | `artifacts/packages-ui/MacroHID-UI-Setup-x64.exe` |
-| 便携包 | `artifacts/packages-ui/MacroHID-UI-Portable-x64.zip` |
-| 校验文件 | `artifacts/packages-ui/MacroHID-UI-SHA256SUMS.txt` |
+| 安装包 | `artifacts/packages-ui/MacroHID-Studio-Setup-x64.exe` |
+| 便携包 | `artifacts/packages-ui/MacroHID-Studio-Portable-x64.zip` |
+| 校验文件 | `artifacts/packages-ui/MacroHID-Studio-SHA256SUMS.txt` |
 | 本地运行程序 | `artifacts/local-run-ui/MacroStudio/MacroStudio.exe` |
 
-快捷方式固定放在 `D:\360MoveData\Users\12849\Desktop\Start Item\MacroHID UI Edition.lnk`，指向上述本地运行程序。整个本地运行目录包含 .NET 运行库和 OCR 组件，不要单独移动 EXE。安装包、便携包仍需 .NET 8 Desktop Runtime x64。便携包解压后运行根目录的 `MacroStudio.cmd`，也可以直接运行 `MacroStudio/MacroStudio.exe`。
+快捷方式固定放在 `D:\360MoveData\Users\12849\Desktop\Start Item\MacroHID Studio.lnk`，指向上述本地运行程序。整个本地运行目录包含 .NET 运行库和 OCR 组件，移动时请保留完整目录。安装包、便携包仍需 .NET 8 Desktop Runtime x64。便携包解压后运行 `MacroHID-Studio` 根目录下的 `MacroStudio.cmd`，也可以直接运行 `MacroStudio/MacroStudio.exe`。
 
 打包前以及替换产物前，脚本检查构建目录和输出目录内运行的程序。若有占用，会弹出确认框，列出程序名、PID、完整路径。请先保存工作；选择“否”会取消，选择“是”后请求退出，10 秒仍未退出则终止该程序。不按进程名批量结束其他目录里的软件。无法读取的受保护进程或其他文件占用仍可能导致打包失败，此时应手动解除占用再运行。
 

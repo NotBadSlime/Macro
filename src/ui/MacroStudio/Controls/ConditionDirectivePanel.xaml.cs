@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -36,10 +37,15 @@ public partial class ConditionDirectivePanel : UserControl
     private bool thenActionSequenceActive;
     private bool isReadOnly;
     private bool isRecording;
+    private (bool CanUndo, bool CanRedo) actionHistoryAvailability;
     private bool conditionListDragInProgress;
     private ScrollViewer? conditionListScrollViewer;
     private IntPtr conditionDragMouseHookHandle;
     private readonly LowLevelMouseProc conditionDragMouseHookProc;
+    private ContentControl? standaloneSettingsHost;
+    private double combinedActionsHeight;
+    private (GridLength List, GridLength Editor) combinedSplit;
+    private (GridLength List, GridLength Editor) standaloneSplit = (new(1, GridUnitType.Star), new(2.65, GridUnitType.Star));
 
     private static IReadOnlyList<Brush> conditionColors => AccentPalette.Conditions;
 
@@ -48,6 +54,8 @@ public partial class ConditionDirectivePanel : UserControl
     public event EventHandler? PickRegionRequested;
     public event Action<MacroRecordingMode>? RecordingStartRequested;
     public event Action? RecordingStopRequested;
+    public event Action? UndoRequested;
+    public event Action? RedoRequested;
     public event Action<string>? StatusMessageRequested;
     public event Action<IReadOnlyList<ConditionalDirective>, string>? ExtractConditionPackRequested;
     public event Action<string>? MacroLibraryDroppedOnConditionList;
@@ -67,6 +75,82 @@ public partial class ConditionDirectivePanel : UserControl
     private void ConditionDirectivePanel_Unloaded(object sender, RoutedEventArgs e)
     {
         EndConditionListDragInteraction();
+    }
+
+    internal void SetStandaloneSettingsHost(ContentControl? settingsHost)
+    {
+        if (ReferenceEquals(standaloneSettingsHost, settingsHost)) return;
+
+        ThenActionPalettePopup.IsOpen = false;
+        if (standaloneSettingsHost is not null)
+        {
+            standaloneSplit = (ConditionListRow.Height, ConditionEditorRow.Height);
+            standaloneSettingsHost.Content = null;
+            ConditionLayoutRoot.Children.Add(ConditionSettingsView);
+            StandaloneActionsHost.Children.Remove(ThenActionsSection);
+            EditorGrid.Children.Add(ThenActionsSection);
+        }
+        else
+        {
+            combinedActionsHeight = ThenActionSequenceHost.Height;
+            combinedSplit = (ConditionListRow.Height, ConditionEditorRow.Height);
+        }
+
+        standaloneSettingsHost = settingsHost;
+        var standalone = settingsHost is not null;
+        if (settingsHost is not null)
+        {
+            // Retain ElementName lookups for the settings controls after moving to the inspector.
+            NameScope.SetNameScope(ConditionSettingsView, NameScope.GetNameScope(this));
+            ConditionLayoutRoot.Children.Remove(ConditionSettingsView);
+            settingsHost.Content = ConditionSettingsView;
+            EditorGrid.Children.Remove(ThenActionsSection);
+            StandaloneActionsHost.Children.Add(ThenActionsSection);
+            ThenActionsSection.SetBinding(VisibilityProperty, new Binding(nameof(Visibility)) { Source = EditorBorder });
+        }
+        else
+        {
+            BindingOperations.ClearBinding(ThenActionsSection, VisibilityProperty);
+            NameScope.SetNameScope(ConditionSettingsView, null);
+        }
+
+        Grid.SetRow(ThenActionsSection, standalone ? 0 : 3);
+        var columnSpan = standalone ? 1 : 2;
+        Grid.SetColumnSpan(ConditionTitleBar, columnSpan);
+        Grid.SetColumnSpan(ThenActionsLabelText, columnSpan);
+        foreach (var commands in new[] { ConditionCommands, ThenActionsCommands })
+        {
+            Grid.SetRow(commands, standalone ? 0 : 1);
+            Grid.SetColumn(commands, standalone ? 1 : 0);
+            Grid.SetColumnSpan(commands, columnSpan);
+            commands.HorizontalAlignment = standalone ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        }
+        ConditionCommands.Margin = standalone ? new Thickness(0) : new Thickness(0, 8, 0, 0);
+        ConditionListRow.MinHeight = standalone ? 78 : 96;
+        var split = standalone ? standaloneSplit : combinedSplit;
+        ConditionListRow.Height = split.List;
+        ConditionEditorRow.Height = split.Editor;
+        ThenActionsSection.Margin = standalone ? new Thickness(0) : new Thickness(0, 0, 0, 12);
+        ThenActionSequenceHost.Height = standalone ? double.NaN : combinedActionsHeight;
+        ThenActionSequence.SetTitle(standalone ? string.Empty : LocalizationService.Get("ConditionTriggeredActionSequenceTitle"));
+        ThenActionSequence.SetSelectionSummaryVisible(!standalone);
+        ThenActionsResizeThumb.Visibility = standalone ? Visibility.Collapsed : Visibility.Visible;
+        StandaloneActionsHost.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+        StandaloneEmptySettingsLayer.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+        EditorBorder.Margin = standalone ? new Thickness(0) : new Thickness(0, 10, 0, 0);
+
+        Grid.SetRow(RegionSettingsSection, standalone ? 2 : 6);
+        Grid.SetRow(PixelOptionsPanel, standalone ? 3 : 7);
+        Grid.SetRow(TextOptionsPanel, standalone ? 3 : 7);
+        Grid.SetRow(ExecutionModeSection, standalone ? 4 : 2);
+        Grid.SetRow(StepRangeSection, standalone ? 5 : 4);
+        Grid.SetRow(TimeWindowSection, standalone ? 6 : 5);
+
+        if (TryGetSelectedCondition(out _, out var condition))
+        {
+            UpdateExecutionModeVisibility(condition.ExecutionMode);
+        }
+        ConditionEditorScrollViewer.ScrollToTop();
     }
 
     public IReadOnlyList<ConditionalDirective> Conditions => conditions;
@@ -96,7 +180,11 @@ public partial class ConditionDirectivePanel : UserControl
         ThenActionsLabelText.Text = LocalizationService.Get("ThenActionsTitle");
         ThenActionsHintText.Text = LocalizationService.Get("ThenActionsHint");
         AddThenActionButton.Content = LocalizationService.Get("AddThenAction");
-        ThenActionEmptyHintText.Text = LocalizationService.Get("ThenActionEmptyHint");
+        ThenActionSequence.ApplyLocalization();
+        ThenActionSequence.SetTitle(standaloneSettingsHost is null ? LocalizationService.Get("ConditionTriggeredActionSequenceTitle") : string.Empty);
+        ThenActionSequence.SetEmptyHint(LocalizationService.Get("ThenActionEmptyHint"));
+        StandaloneActionsEmptyHintText.Text = LocalizationService.Get("SelectConditionBeforeThenAction");
+        StandaloneSettingsEmptyHintText.Text = LocalizationService.Get("ConditionSettingsEmptyHint");
         GateModeHintText.Text = LocalizationService.Get("ConditionGateModeHint");
         ConditionStepRangeLabelText.Text = LocalizationService.Get("ConditionStepRangeTitle");
         ConditionStepRangeHintText.Text = LocalizationService.Get("ConditionStepRangeOrTimeHint");
@@ -118,7 +206,6 @@ public partial class ConditionDirectivePanel : UserControl
         RecordThenActionsButton.Content = LocalizationService.Get(isRecording ? "StopRecording" : "StartRecording");
         RecordThenActionsButton.ToolTip = LocalizationService.Get("RecordingHelp");
         ThenActionPalette.ApplyLocalization();
-        UpdateThenActionEmptyHint();
         RefreshList();
     }
 
@@ -159,6 +246,7 @@ public partial class ConditionDirectivePanel : UserControl
         UpdateRegexValidity();
         AddThenActionButton.IsEnabled = !value;
         ThenActionSequence.SetReadOnly(value || isRecording);
+        UpdateActionHistoryAvailability();
         ThenActionPalette.SetReadOnly(value || isRecording);
         UpdateRecordingButtonState();
         if (value)
@@ -174,6 +262,7 @@ public partial class ConditionDirectivePanel : UserControl
         ConditionList.IsEnabled = !recording;
         AddThenActionButton.IsEnabled = !isReadOnly && !recording;
         ThenActionSequence.SetReadOnly(isReadOnly || recording);
+        UpdateActionHistoryAvailability();
         ThenActionPalette.SetReadOnly(isReadOnly || recording);
         if (recording)
         {
@@ -182,6 +271,18 @@ public partial class ConditionDirectivePanel : UserControl
 
         ApplyLocalization();
         UpdateRecordingButtonState();
+    }
+
+    internal void SetActionHistoryAvailability(bool canUndo, bool canRedo)
+    {
+        actionHistoryAvailability = (canUndo, canRedo);
+        UpdateActionHistoryAvailability();
+    }
+
+    private void UpdateActionHistoryAvailability()
+    {
+        ThenActionSequence.SetCanUndo(actionHistoryAvailability.CanUndo);
+        ThenActionSequence.SetCanRedo(actionHistoryAvailability.CanRedo);
     }
 
     public bool InsertRecordedThenSteps(IReadOnlyList<MacroStep> steps)
@@ -200,10 +301,10 @@ public partial class ConditionDirectivePanel : UserControl
     {
         editorState = state;
         ThenActionSequence.Initialize(state);
-        ThenActionSequence.SetTitle("触发动作");
         ThenActionSequence.Activated += () => thenActionSequenceActive = true;
-        ThenActionSequence.BeforeStepsChanged += () => { };
         ThenActionSequence.StepsChanged += OnThenActionSequenceStepsChanged;
+        ThenActionSequence.UndoRequested += () => UndoRequested?.Invoke();
+        ThenActionSequence.RedoRequested += () => RedoRequested?.Invoke();
         ThenActionSequence.ActionTemplateDropped += OnThenActionTemplateDropped;
         ThenActionSequence.MacroLibraryDropped += OnThenMacroLibraryDropped;
     }
@@ -236,20 +337,20 @@ public partial class ConditionDirectivePanel : UserControl
     private static StepChoice CreateUnlimitedStepChoice() =>
         new(-1, LocalizationService.Get("ConditionStepRangeUnlimited"), []);
 
-    public void LoadConditions(IReadOnlyList<ConditionalDirective>? directives)
+    public void LoadConditions(IReadOnlyList<ConditionalDirective>? directives, bool preserveSelection = false)
     {
+        var selectedId = preserveSelection && TryGetSelectedCondition(out _, out var selected)
+            ? selected.Id
+            : null;
         conditions = directives != null ? new List<ConditionalDirective>(directives) : [];
-        RefreshList();
-        if (conditions.Count == 0)
+        selectedIndex = selectedId is null ? -1 : conditions.FindIndex(condition => condition.Id == selectedId);
+        if (selectedIndex < 0 && conditions.Count > 0)
         {
-            selectedIndex = -1;
-            EditorBorder.Visibility = Visibility.Collapsed;
-            EditorGrid.Visibility = Visibility.Collapsed;
-            ThenActionSequence.SetSteps([]);
-            return;
+            selectedIndex = 0;
         }
-
-        ConditionList.SelectedIndex = 0;
+        RefreshList();
+        // RefreshList suppresses SelectionChanged, including when a different document reuses index 0.
+        ReloadSelectedCondition(scrollThenActionsIntoView: false);
     }
 
     public Brush GetConditionColor(int index)
@@ -325,7 +426,7 @@ public partial class ConditionDirectivePanel : UserControl
         var newCond = new ConditionalDirective(
             ConditionalDirective.NewId(),
             $"条件 {conditions.Count + 1}",
-            firstChoice?.Index ?? 0, firstChoice?.Index ?? 0,
+            firstChoice?.Index ?? -1, firstChoice?.Index ?? -1,
             new PixelMatcher(ScreenRegion.FromSinglePixel(0, 0), new RgbColor(255, 0, 0), 10),
             [],
             StartStepPath: firstPath,
@@ -438,22 +539,33 @@ public partial class ConditionDirectivePanel : UserControl
         selectedIndex = ConditionList.SelectedIndex >= 0
             ? ConditionList.SelectedIndex
             : GetSelectedConditionIndexes().FirstOrDefault(-1);
+        ReloadSelectedCondition(scrollThenActionsIntoView: true);
+    }
+
+    private void ReloadSelectedCondition(bool scrollThenActionsIntoView)
+    {
+        ThenActionPalettePopup.IsOpen = false;
+        ThenActionSequence.CloseInlineStepEditorOnExternalPointerDown(null);
+        DeactivateThenActionSequence();
+        ThenActionSequence.RestoreViewState(new StepSequencePanel.ViewState([], 0));
+        ConditionEditorScrollViewer.ScrollToTop();
         if (TryGetSelectedCondition(out var index, out var directive))
         {
             LoadEditor(directive);
             EditorBorder.Visibility = Visibility.Visible;
             EditorGrid.Visibility = Visibility.Visible;
-            UpdateThenActionEmptyHint();
             ConditionSelectionChanged?.Invoke(this,
                 new ConditionSelectionChangedEventArgs(index, directive));
-            Dispatcher.BeginInvoke(new Action(ScrollThenActionsIntoView), System.Windows.Threading.DispatcherPriority.Loaded);
+            if (scrollThenActionsIntoView)
+            {
+                Dispatcher.BeginInvoke(new Action(ScrollThenActionsIntoView), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
         }
         else
         {
             EditorBorder.Visibility = Visibility.Collapsed;
             EditorGrid.Visibility = Visibility.Collapsed;
             ThenActionSequence.SetSteps([]);
-            UpdateThenActionEmptyHint();
             ConditionSelectionChanged?.Invoke(this, new ConditionSelectionChangedEventArgs(-1, null));
         }
     }
@@ -811,10 +923,7 @@ public partial class ConditionDirectivePanel : UserControl
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         if (conditions.Count == 0)
         {
-            EditorBorder.Visibility = Visibility.Collapsed;
-            EditorGrid.Visibility = Visibility.Collapsed;
-            ThenActionSequence.SetSteps([]);
-            ConditionSelectionChanged?.Invoke(this, new ConditionSelectionChangedEventArgs(-1, null));
+            ReloadSelectedCondition(scrollThenActionsIntoView: false);
             return;
         }
 
@@ -1077,7 +1186,6 @@ public partial class ConditionDirectivePanel : UserControl
 
         ThenActionSequence.SetSteps(cond.ThenSteps);
         loadingEditor = false;
-        UpdateThenActionEmptyHint();
     }
 
     private void UpdateTypeVisibility(string type)
@@ -1188,10 +1296,10 @@ public partial class ConditionDirectivePanel : UserControl
     private void UpdateExecutionModeVisibility(ConditionExecutionMode mode)
     {
         var isGate = mode == ConditionExecutionMode.GateMainSequence;
-        ThenActionsSection.Visibility = Visibility.Visible;
         GateModeHintText.Visibility = isGate ? Visibility.Visible : Visibility.Collapsed;
-        ThenActionsHintText.Visibility = isGate ? Visibility.Collapsed : Visibility.Visible;
-        StepRangeSection.Visibility = isGate ? Visibility.Collapsed : Visibility.Visible;
+        ThenActionsHintText.Visibility = isGate || standaloneSettingsHost is not null ? Visibility.Collapsed : Visibility.Visible;
+        StepRangeSection.Visibility = isGate || (standaloneSettingsHost is not null && stepChoices.Count == 0)
+            ? Visibility.Collapsed : Visibility.Visible;
         TimeWindowSection.Visibility = isGate ? Visibility.Collapsed : Visibility.Visible;
         if (isGate)
         {
@@ -1524,7 +1632,7 @@ public partial class ConditionDirectivePanel : UserControl
         var valid = !useRegex || PaddleOcrBridge.IsValidRegex(ExpectedTextBox.Text, out error);
         RegexErrorText.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
         RegexErrorText.Text = valid ? "正则表达式无效" : $"正则表达式无效：{error}";
-        ExpectedTextBox.BorderBrush = valid ? null : Brushes.Red;
+        SetFieldValidity(ExpectedTextBox, valid);
         ExpectedTextBox.ToolTip = valid ? null : error;
         ContainsCheckBox.IsEnabled = !isReadOnly && !useRegex;
     }
@@ -1589,13 +1697,16 @@ public partial class ConditionDirectivePanel : UserControl
         ThenActionSequence.DeactivateSequence();
     }
 
-    public bool TryInsertActionTemplateIntoActiveCondition(MacroActionTemplateKind kind)
+    public bool TryInsertActionTemplateIntoActiveCondition(MacroActionTemplateKind kind, bool useSelectedCondition = false)
     {
-        if (isReadOnly || !IsThenActionSequenceActive)
+        if (isReadOnly || isRecording || (useSelectedCondition
+            ? !TryGetSelectedCondition(out _, out _)
+            : !IsThenActionSequenceActive))
         {
             return false;
         }
 
+        thenActionSequenceActive = true;
         ThenActionSequence.InsertSteps(MacroActionTemplateFactory.CreateSteps(kind));
         return true;
     }
@@ -1643,7 +1754,6 @@ public partial class ConditionDirectivePanel : UserControl
         thenActionSequenceActive = true;
         ThenActionSequence.InsertSteps(MacroActionTemplateFactory.CreateSteps(kind));
         ThenActionPalettePopup.IsOpen = false;
-        UpdateThenActionEmptyHint();
     }
 
     private void ThenActionTemplate_Click(object sender, RoutedEventArgs e)
@@ -1745,22 +1855,14 @@ public partial class ConditionDirectivePanel : UserControl
         conditions[editIndex] = condition with { ThenSteps = ThenActionSequence.Steps.ToList() };
         // Avoid RefreshList/SelectedIndex here: rebuilding the condition list reloads the
         // then-action editor and clears multi-step insert selection mid-edit.
-        UpdateThenActionEmptyHint();
         ConditionsModified?.Invoke(this, EventArgs.Empty);
         ConditionSelectionChanged?.Invoke(this,
             new ConditionSelectionChangedEventArgs(editIndex, conditions[editIndex]));
     }
 
-    private void UpdateThenActionEmptyHint()
-    {
-        var showEmpty = EditorBorder.Visibility == Visibility.Visible
-            && ThenActionSequence.Steps.Count == 0;
-        ThenActionEmptyHintText.Visibility = showEmpty ? Visibility.Visible : Visibility.Collapsed;
-    }
-
     private void ScrollThenActionsIntoView()
     {
-        if (ThenActionsSection is null || ConditionEditorScrollViewer is null)
+        if (standaloneSettingsHost is not null || !ThenActionsSection.IsVisible)
         {
             return;
         }
@@ -1984,10 +2086,16 @@ public partial class ConditionDirectivePanel : UserControl
     private void SetTimeWindowValidity(bool valid)
     {
         TimeWindowErrorText.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
-        WindowStartMsBox.BorderBrush = valid ? null : Brushes.Red;
-        WindowEndMsBox.BorderBrush = valid ? null : Brushes.Red;
+        SetFieldValidity(WindowStartMsBox, valid);
+        SetFieldValidity(WindowEndMsBox, valid);
         WindowStartMsBox.ToolTip = valid ? null : "请输入非负毫秒，并确保结束时间不小于开始时间。";
         WindowEndMsBox.ToolTip = WindowStartMsBox.ToolTip;
+    }
+
+    private static void SetFieldValidity(TextBox field, bool valid)
+    {
+        if (valid) field.ClearValue(BorderBrushProperty);
+        else field.BorderBrush = Brushes.Red;
     }
 
     private static bool TryReadOptionalMs(string value, out TimeSpan? result)
@@ -1998,7 +2106,8 @@ public partial class ConditionDirectivePanel : UserControl
             return true;
         }
 
-        if (!double.TryParse(value.Trim(), out var ms) || ms < 0)
+        if (!double.TryParse(value.Trim(), out var ms)
+            || !double.IsFinite(ms) || ms < 0 || ms > TimeSpan.MaxValue.TotalMilliseconds)
         {
             return false;
         }

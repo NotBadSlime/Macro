@@ -10,7 +10,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <Version>2.2.0</Version>
-    <Product>MacroHID UI Edition</Product>
+    <Product>MacroHID Studio</Product>
+    <AssemblyTitle>MacroHID Studio</AssemblyTitle>
     <TargetFramework>net8.0-windows</TargetFramework>
     <NeutralLanguage>en-US</NeutralLanguage>
     <Nullable>enable</Nullable>

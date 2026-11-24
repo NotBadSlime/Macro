@@ -1,4 +1,4 @@
-# MacroHID UI Edition Installation / MacroHID UI 优化版安装说明
+# MacroHID Studio 安装说明 / Installation
 
 ## 中文
 
@@ -7,7 +7,7 @@
 - Windows 10/11 x64。
 - .NET 8 Desktop Runtime。当前发布采用框架依赖模式，安装包不内置 .NET 运行时。
 - 如果要控制管理员权限应用，请以管理员身份启动 MacroStudio 或 MacroRunner。
-- 安装向导会显示「选择目标位置」，可改安装目录；默认是 `C:\Program Files\MacroHID UI Edition`。覆盖安装时也会显示该页，并预填上次路径。
+- 安装向导会显示「选择目标位置」，可改安装目录；默认是 `C:\Program Files\MacroHID Studio`。覆盖安装时也会显示该页，并预填上次路径。
 
 ### 安装包构建
 
@@ -18,8 +18,8 @@
 输出文件：
 
 ```text
-artifacts\packages-ui\MacroHID-UI-Setup-x64.exe
-artifacts\packages-ui\MacroHID-UI-Portable-x64.zip
+artifacts\packages-ui\MacroHID-Studio-Setup-x64.exe
+artifacts\packages-ui\MacroHID-Studio-Portable-x64.zip
 ```
 
 安装包包含：
@@ -34,7 +34,7 @@ artifacts\packages-ui\MacroHID-UI-Portable-x64.zip
 
 ### 本机开发验证
 
-如果只是要在开发机上直接运行，不需要生成安装包：
+在开发机上构建本地运行版后，可以直接启动 EXE。
 
 ```powershell
 .\scripts\Build-LocalRun.ps1 -Configuration Release
@@ -72,7 +72,7 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 
 ### 从网上下载后被拦截
 
-从 GitHub 下载的 `MacroHID-UI-Setup-x64.exe` 会带上浏览器的「来自互联网」标记。安装程序还要在临时目录里再解出一份 `.tmp` 来执行。当前安装包没有向 CA 购买的代码签名证书，Windows 11 的智能应用控制 / 应用程序控制策略可能直接拦住这份临时文件。
+从 GitHub 下载的 `MacroHID-Studio-Setup-x64.exe` 会带上浏览器的「来自互联网」标记。安装程序还要在临时目录里再解出一份 `.tmp` 来执行。当前安装包没有向 CA 购买的代码签名证书，Windows 11 的智能应用控制 / 应用程序控制策略可能直接拦住这份临时文件。
 
 典型提示：
 
@@ -85,12 +85,12 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 1. **解除锁定后再装。** 右键安装包 → 属性 → 若有「解除锁定」则勾选 → 应用 → 确定。或在 PowerShell 中执行：
 
    ```powershell
-   Unblock-File -Path "$env:USERPROFILE\Downloads\MacroHID-UI-Setup-x64.exe"
+   Unblock-File -Path "$env:USERPROFILE\Downloads\MacroHID-Studio-Setup-x64.exe"
    ```
 
-   文件名若被改成 `MacroHID-UI-Setup-x64 (1).exe`，路径要写成实际文件名。然后右键「以管理员身份运行」。
+   文件名若被改成 `MacroHID-Studio-Setup-x64 (1).exe`，路径要写成实际文件名。然后右键「以管理员身份运行」。
 
-2. **改用便携包。** 在同一 Releases 页下载 `MacroHID-UI-Portable-x64.zip`，先对 zip 解除锁定，再解压。目录排布与安装版相同（`MacroStudio`、`MacroRunner`、`LatencyProbe`、`docs` 等）。双击 `MacroHID-UI` 根目录下的 `MacroStudio.cmd` 启动，不要把快捷方式单独拷走。
+2. **改用便携包。** 在同一 Releases 页下载 `MacroHID-Studio-Portable-x64.zip`，先对 zip 解除锁定，再解压。目录排布与安装版相同（`MacroStudio`、`MacroRunner`、`LatencyProbe`、`docs` 等）。双击 `MacroHID-Studio` 根目录下的 `MacroStudio.cmd` 启动，不要把快捷方式单独拷走。
 
 3. **仍被拦住。** 打开 Windows 安全中心 → 应用和浏览器控制 → **智能应用控制**。若处于「开」，未签名软件无法单独加白名单。可在确认文件来自本仓库 Releases 后，临时关掉智能应用控制再安装；微软说明关掉后有的版本不能再打开，除非重置系统，请自行权衡。
 
@@ -110,7 +110,7 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 - Windows 10/11 x64.
 - .NET 8 Desktop Runtime. Current builds are framework-dependent and do not bundle the .NET runtime.
 - To automate elevated applications, run MacroStudio or MacroRunner as Administrator.
-- The setup wizard shows Select Destination Location. The default is `C:\Program Files\MacroHID UI Edition`; upgrades still show this page and prefill the previous folder.
+- The setup wizard shows Select Destination Location. The default is `C:\Program Files\MacroHID Studio`; upgrades still show this page and prefill the previous folder.
 
 ### Build the Installer
 
@@ -121,8 +121,8 @@ MacroHID 当前版本完全使用 Windows `SendInput`：
 Output:
 
 ```text
-artifacts\packages-ui\MacroHID-UI-Setup-x64.exe
-artifacts\packages-ui\MacroHID-UI-Portable-x64.zip
+artifacts\packages-ui\MacroHID-Studio-Setup-x64.exe
+artifacts\packages-ui\MacroHID-Studio-Portable-x64.zip
 ```
 
 The setup package includes:
@@ -177,7 +177,7 @@ MacroHID uses Windows `SendInput` only:
 
 GitHub downloads carry Mark of the Web. Inno Setup then unpacks a `.tmp` helper under `%TEMP%`. This build is not Authenticode-signed, so Windows 11 Smart App Control may abort with Error 4551.
 
-Unblock the file first (`Properties` → Unblock, or `Unblock-File`), or use `MacroHID-UI-Portable-x64.zip` after unblocking the zip. See the Chinese section above for Smart App Control notes.
+Unblock the file first (`Properties` → Unblock, or `Unblock-File`), or use `MacroHID-Studio-Portable-x64.zip` after unblocking the zip. See the Chinese section above for Smart App Control notes.
 
 ### Troubleshooting
 

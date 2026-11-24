@@ -47,6 +47,7 @@ public partial class StepSequencePanel : UserControl
     private string inlineKeyCapturePath = string.Empty;
     private bool inlineCoordinatePickerActive;
     private bool isReadOnly;
+    private bool showSelectionSummary = true;
     private bool boxSelectionActive;
     private Point boxSelectionStartPoint;
     private Point boxSelectionLastPoint;
@@ -187,6 +188,17 @@ public partial class StepSequencePanel : UserControl
     public void SetTitle(string title)
     {
         SequenceTitleText.Text = title;
+    }
+
+    internal void SetEmptyHint(string hint)
+    {
+        EmptySequenceOverlayText.Text = hint;
+    }
+
+    internal void SetSelectionSummaryVisible(bool value)
+    {
+        showSelectionSummary = value;
+        SelectedStepText.Visibility = value && StepList.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void SetCanReturnPreviousMacro(bool canReturn)
@@ -522,7 +534,7 @@ public partial class StepSequencePanel : UserControl
         RefreshSelectedStepText();
         var empty = StepList.Items.Count == 0;
         EmptySequenceOverlay.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
-        SelectedStepText.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        SelectedStepText.Visibility = !empty && showSelectionSummary ? Visibility.Visible : Visibility.Collapsed;
         ScheduleStepInspectorRefresh();
     }
 

@@ -25,7 +25,7 @@
   <data name="CloseToTray" xml:space="preserve"><value>Minimize to tray</value></data>
   <data name="CloseToTrayHint" xml:space="preserve"><value>Hide the window. Macros that are already listening keep running.</value></data>
   <data name="CloseAndExit" xml:space="preserve"><value>Exit</value></data>
-  <data name="CloseAndExitHint" xml:space="preserve"><value>Stop playback and leave MacroHID.</value></data>
+  <data name="CloseAndExitHint" xml:space="preserve"><value>Stop playback and exit MacroHID Studio.</value></data>
   <data name="RememberCloseChoice" xml:space="preserve"><value>Remember this choice</value></data>
   <data name="CloseButtonBehavior" xml:space="preserve"><value>Close button</value></data>
   <data name="CloseButtonAsk" xml:space="preserve"><value>Ask every time</value></data>
@@ -789,6 +789,8 @@
   <data name="ThenActionsHint" xml:space="preserve"><value>Actions to run when the condition matches. Click “Add action” or drag from the action palette.</value></data>
   <data name="AddThenAction" xml:space="preserve"><value>Add action</value></data>
   <data name="ThenActionEmptyHint" xml:space="preserve"><value>No actions yet. Click “Add action” above to start.</value></data>
+  <data name="ConditionTriggeredActionSequenceTitle" xml:space="preserve"><value>Trigger actions</value></data>
+  <data name="ConditionSettingsEmptyHint" xml:space="preserve"><value>Select a condition to edit its settings.</value></data>
   <data name="SelectConditionBeforeThenAction" xml:space="preserve"><value>Select a condition first, then add actions.</value></data>
   <data name="ConditionGateModeHint" xml:space="preserve"><value>Waits for each gate in list order from play/trigger until it matches. Then-actions run before the next gate. The main sequence starts only after every gate has passed. Step and time ranges do not apply.</value></data>
   <data name="ConditionGateRangeHint" xml:space="preserve"><value>From play/trigger</value></data>
@@ -1066,7 +1068,6 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="GlobalCommandHint" xml:space="preserve"><value>Register MacroCtlUI for your Windows user. Reopen terminals after registration. The registered Studio path is shown above. Moving a portable folder requires registration again.</value></data>
   <data name="CopyExternalCommand" xml:space="preserve"><value>Copy external start command</value></data>
   <data name="ExternalCommandCopied" xml:space="preserve"><value>External start command copied (3-second delay).</value></data>
-  <data name="StudioEditionName" xml:space="preserve"><value>UI Edition</value></data>
   <data name="StudioCommandSearch" xml:space="preserve"><value>Search commands</value></data>
   <data name="StudioNoMatchingCommands" xml:space="preserve"><value>No matching commands</value></data>
   <data name="StudioTabConditions" xml:space="preserve"><value>Conditions</value></data>
@@ -1076,5 +1077,6 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="StudioStepProperties" xml:space="preserve"><value>Step properties</value></data>
   <data name="StudioTabProperties" xml:space="preserve"><value>Properties</value></data>
   <data name="StudioMacroPlayback" xml:space="preserve"><value>Macro playback</value></data>
+  <data name="StudioStandaloneConditionSettings" xml:space="preserve"><value>Condition settings</value></data>
   <data name="StudioAddAction" xml:space="preserve"><value>Add action</value></data>
 </root>

@@ -10,7 +10,7 @@
 #define AppVersion "2.2.0"
 #endif
 
-#define AppName "MacroHID UI Edition"
+#define AppName "MacroHID Studio"
 #define AppPublisher "MacroHID"
 #define AppExeName "MacroStudio.exe"
 #define CommandExeName "MacroCtlUI.exe"
@@ -26,11 +26,12 @@ DisableDirPage=no
 AlwaysShowDirOnReadyPage=yes
 UsePreviousAppDir=yes
 DisableProgramGroupPage=yes
+UsePreviousGroup=no
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=MacroHID-UI-Setup-x64
+OutputBaseFilename=MacroHID-Studio-Setup-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -44,12 +45,12 @@ Name: "chinesesimp"; MessagesFile: "compiler:Default.isl,Languages\ChineseSimpli
 Name: "chinesetrad"; MessagesFile: "compiler:Default.isl,Languages\ChineseTraditional.isl"
 
 [CustomMessages]
-english.CreateDesktopShortcut=Create a desktop shortcut for MacroHID UI Edition
+english.CreateDesktopShortcut=Create a desktop shortcut for MacroHID Studio
 english.EnableGlobalCommand=Enable the MacroCtlUI command for the current Windows user
 chinesesimp.EnableGlobalCommand=为当前 Windows 用户启用 MacroCtlUI 全局命令
 chinesetrad.EnableGlobalCommand=為目前 Windows 使用者啟用 MacroCtlUI 全域命令
-chinesesimp.CreateDesktopShortcut=创建 MacroHID UI 优化版桌面快捷方式
-chinesetrad.CreateDesktopShortcut=建立 MacroHID UI 版桌面捷徑
+chinesesimp.CreateDesktopShortcut=创建 MacroHID Studio 桌面快捷方式
+chinesetrad.CreateDesktopShortcut=建立 MacroHID Studio 桌面捷徑
 english.ShortcutsGroup=Shortcuts:
 chinesesimp.ShortcutsGroup=快捷方式：
 chinesetrad.ShortcutsGroup=捷徑：
@@ -59,12 +60,12 @@ chinesetrad.MacroRunnerSampleShortcut=MacroRunner 試跑範例
 english.DocumentationShortcut=Documentation
 chinesesimp.DocumentationShortcut=文档
 chinesetrad.DocumentationShortcut=文件
-english.LaunchMacroStudio=Launch MacroHID UI Edition
-chinesesimp.LaunchMacroStudio=启动 MacroHID UI 优化版
-chinesetrad.LaunchMacroStudio=啟動 MacroHID UI 版
-english.DeleteUserDataCaption=MacroHID UI Edition user data
-chinesesimp.DeleteUserDataCaption=MacroHID UI 优化版用户数据
-chinesetrad.DeleteUserDataCaption=MacroHID UI 版使用者資料
+english.LaunchMacroStudio=Launch MacroHID Studio
+chinesesimp.LaunchMacroStudio=启动 MacroHID Studio
+chinesetrad.LaunchMacroStudio=啟動 MacroHID Studio
+english.DeleteUserDataCaption=MacroHID Studio user data
+chinesesimp.DeleteUserDataCaption=MacroHID Studio 用户数据
+chinesetrad.DeleteUserDataCaption=MacroHID Studio 使用者資料
 english.DeleteUserDataPrompt=Also delete this user's macro database, settings, and workspace layout?%n%nChoose No to keep them for a later reinstall. Keeping data is recommended.
 chinesesimp.DeleteUserDataPrompt=是否同时删除当前用户的宏数据库、设置和界面布局？%n%n选择“否”会保留数据，重新安装后仍可继续使用。建议保留。
 chinesetrad.DeleteUserDataPrompt=是否同時刪除目前使用者的巨集資料庫、設定和介面配置？%n%n選擇「否」會保留資料，重新安裝後仍可繼續使用。建議保留。
@@ -75,9 +76,9 @@ english.DeleteUserDataFailed=Some user data could not be deleted. You can remove
 chinesesimp.DeleteUserDataFailed=部分用户数据无法删除，可稍后手动清理：%n%1
 chinesetrad.DeleteUserDataFailed=部分使用者資料無法刪除，可稍後手動清理：%n%1
 
-english.StableInstallDirectory=This directory already contains MacroHID. Choose a separate directory for MacroHID UI Edition.
-chinesesimp.StableInstallDirectory=此目录已包含 MacroHID。请选择独立目录安装 MacroHID UI 优化版。
-chinesetrad.StableInstallDirectory=此目錄已包含 MacroHID。請選擇獨立目錄安裝 MacroHID UI 版。
+english.StableInstallDirectory=This directory already contains MacroHID. Choose a separate directory for MacroHID Studio.
+chinesesimp.StableInstallDirectory=此目录已包含 MacroHID。请选择独立目录安装 MacroHID Studio。
+chinesetrad.StableInstallDirectory=此目錄已包含 MacroHID。請選擇獨立目錄安裝 MacroHID Studio。
 
 [Tasks]
 Name: "globalcommand"; Description: "{cm:EnableGlobalCommand}"; GroupDescription: "{cm:ShortcutsGroup}"

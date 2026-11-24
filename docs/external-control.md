@@ -7,7 +7,7 @@
 在 Studio 顶部的「窗口 → 全局命令」中点击「注册全局命令」，随后重新打开终端。也可从完整程序目录运行：
 
 ```powershell
-& ".\MacroCtl\MacroCtlUI.exe" register --studio "D:\Apps\MacroHID UI Edition\MacroStudio\MacroStudio.exe"
+& ".\MacroCtl\MacroCtlUI.exe" register --studio "D:\Apps\MacroHID Studio\MacroStudio\MacroStudio.exe"
 MacroCtlUI doctor
 ```
 

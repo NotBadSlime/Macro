@@ -1,4 +1,4 @@
-name: Build UI Edition
+name: Build MacroHID Studio
 
 on:
   push:
@@ -85,7 +85,7 @@ jobs:
       - name: Upload .NET artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MacroHID-UI-dotnet-${{ github.sha }}
+          name: MacroHID-Studio-dotnet-${{ github.sha }}
           path: artifacts
 
   installer:
@@ -144,17 +144,17 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MacroHID-UI-installer-${{ github.sha }}
+          name: MacroHID-Studio-installer-${{ github.sha }}
           if-no-files-found: error
           path: |
-            artifacts/packages-ui/MacroHID-UI-Setup-x64.exe
-            artifacts/packages-ui/MacroHID-UI-Portable-x64.zip
-            artifacts/packages-ui/MacroHID-UI-SHA256SUMS.txt
+            artifacts/packages-ui/MacroHID-Studio-Setup-x64.exe
+            artifacts/packages-ui/MacroHID-Studio-Portable-x64.zip
+            artifacts/packages-ui/MacroHID-Studio-SHA256SUMS.txt
 
       - name: Upload standalone desktop artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MacroHID-UI-standalone-${{ github.sha }}
+          name: MacroHID-Studio-standalone-${{ github.sha }}
           if-no-files-found: error
           retention-days: 7
           path: artifacts/local-run-ui

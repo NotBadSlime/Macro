@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:MacroStudio.Controls"
-        Title="MacroHID Studio · UI Edition"
+        Title="MacroHID Studio"
         Height="900"
         Width="1440"
         MinHeight="560"
@@ -50,12 +50,9 @@
                                     </Viewbox>
                                 </Grid>
                             </Border>
-                            <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                                <TextBlock Text="MacroHID Studio" Foreground="{DynamicResource PrimaryText}"
-                                           FontSize="17" FontWeight="Bold" />
-                                <TextBlock x:Name="EditionLabelText" Text="UI 优化版" Foreground="{DynamicResource StudioSignal}"
-                                           FontSize="11" FontWeight="SemiBold" />
-                            </StackPanel>
+                            <TextBlock x:Name="BrandTitleText" Text="MacroHID Studio" Margin="0,0,16,0"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource PrimaryText}"
+                                       FontSize="17" FontWeight="Bold" />
                             <Border VerticalAlignment="Center" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1,0,0,0" Padding="8,0,0,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Button x:Name="OpenButton" Style="{StaticResource CommandBarButton}"
@@ -252,6 +249,9 @@
                                     Background="{DynamicResource InspectorBackground}"
                                     BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,0,1">
                                 <UniformGrid x:Name="RightToolTabs" Rows="1">
+                                    <ToggleButton x:Name="StandaloneConditionRightToolButton" Tag="conditions" Visibility="Collapsed"
+                                                  Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click"
+                                                  Content="属性" />
                                     <ToggleButton x:Name="PropertiesRightToolButton" Tag="properties" ToolTip="步骤属性"
                                                   Style="{StaticResource RightToolTabStyle}" Click="RightToolButton_Click"
                                                   Content="属性" />
@@ -308,8 +308,25 @@
                                             </DockPanel>
                                         </Border>
                                         <ContentControl x:Name="ConditionPanelHost" AutomationProperties.AutomationId="ConditionSequenceColumn">
-                                            <controls:ConditionDirectivePanel x:Name="ConditionPanel" />
+                                            <ContentControl x:Name="CombinedConditionEditorHost" HorizontalContentAlignment="Stretch"
+                                                            VerticalContentAlignment="Stretch">
+                                                <controls:ConditionDirectivePanel x:Name="ConditionPanel" />
+                                            </ContentControl>
                                         </ContentControl>
+                                    </DockPanel>
+                                </Border>
+
+                                <Border x:Name="StandaloneConditionSettingsChrome" Grid.ColumnSpan="2" Visibility="Collapsed">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Top" Style="{StaticResource ToolWindowHeaderStyle}">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left" Text="&#xE713;" Style="{StaticResource ToolWindowHeaderGlyph}" />
+                                                <TextBlock x:Name="StandaloneConditionSettingsTitle" Text="条件设置" Style="{StaticResource ToolWindowTitle}" />
+                                            </DockPanel>
+                                        </Border>
+                                        <ContentControl x:Name="StandaloneConditionSettingsHost" Margin="0,8,0,0"
+                                                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                                        AutomationProperties.AutomationId="StandaloneConditionSettings" />
                                     </DockPanel>
                                 </Border>
 

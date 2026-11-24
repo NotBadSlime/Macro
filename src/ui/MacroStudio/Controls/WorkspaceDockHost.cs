@@ -16,6 +16,7 @@ public sealed class WorkspaceDockHost : Grid
     private ColumnDefinition? rightColumn;
     private double leftMinimum;
     private double rightMinimum;
+    private double? defaultRightWidth;
     private double viewportWidth = double.PositiveInfinity;
     private RowDefinition? bottomRow;
     private FrameworkElement? leftSplitter;
@@ -69,6 +70,12 @@ public sealed class WorkspaceDockHost : Grid
     {
         viewportWidth = width;
         MaxWidth = width;
+        FitSideColumns();
+    }
+
+    internal void SetDefaultRightWidth(double? width)
+    {
+        defaultRightWidth = width;
         FitSideColumns();
     }
 
@@ -146,7 +153,9 @@ public sealed class WorkspaceDockHost : Grid
         var compact = viewportWidth < 1170;
         var defaults = new WorkspaceDockSizes();
         var leftPreference = compact && lastDockSizes.LeftWidth == defaults.LeftWidth ? 180 : lastDockSizes.LeftWidth;
-        var rightPreference = compact && lastDockSizes.RightWidth == defaults.RightWidth ? 300 : lastDockSizes.RightWidth;
+        var rightPreference = lastDockSizes.RightWidth == defaults.RightWidth
+            ? compact ? 300 : defaultRightWidth ?? defaults.RightWidth
+            : lastDockSizes.RightWidth;
         var desiredLeft = leftVisible ? Math.Max(minimumLeft, leftPreference) : 0;
         var desiredRight = rightVisible ? Math.Max(minimumRight, rightPreference) : 0;
         var flexible = desiredLeft + desiredRight - minimumLeft - minimumRight;

@@ -109,6 +109,7 @@ public partial class SequencePanel : UserControl
         AddStepActionButton.Content = "＋ " + L("StudioAddAction");
         RunNowHeaderButton.ToolTip = L("RunNowOnceHint");
         StopHeaderButton.Content = L("Stop");
+        StandaloneConditionLabel.Text = L("ConditionMacroFileType");
         RecordInputButton.Content = L(isRecording ? "StopRecording" : "StartRecording");
         RecordInputButton.ToolTip = L("RecordingHelp");
         RecordingStatusText.Text = isRecording ? L("RecordingActive") : string.Empty;
@@ -127,6 +128,21 @@ public partial class SequencePanel : UserControl
         MacroLockButton.Content = isReadOnly ? L("UnlockMacro") : L("LockMacro");
         MacroLockButton.ToolTip = isReadOnly ? L("UnlockMacroHelp") : L("LockMacroHelp");
         StepSequenceControl.ApplyLocalization();
+    }
+
+    internal void SetStandaloneConditionEditor(ConditionDirectivePanel? panel)
+    {
+        StandaloneConditionEditorHost.Content = panel;
+        var standalone = panel is not null;
+        var sequenceVisibility = standalone ? Visibility.Collapsed : Visibility.Visible;
+        var conditionVisibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+        MainStepsHost.Visibility = sequenceVisibility;
+        SequenceStats.Visibility = sequenceVisibility;
+        AddStepActionButton.Visibility = sequenceVisibility;
+        RecordInputButton.Visibility = sequenceVisibility;
+        DelayAdjustSection.Visibility = sequenceVisibility;
+        StandaloneConditionEditorHost.Visibility = conditionVisibility;
+        StandaloneConditionLabel.Visibility = conditionVisibility;
     }
 
     public void SetReadOnly(bool value)
@@ -591,10 +607,13 @@ public partial class SequencePanel : UserControl
             : string.Join(" ~ ", [FormatDuration(range.Min), FormatDuration(range.Max)]);
     }
 
+    internal event Action<bool, bool>? EditHistoryChanged;
+
     private void UpdateUndoButtonState()
     {
         StepSequenceControl.SetCanUndo(CanUndo);
         StepSequenceControl.SetCanRedo(CanRedo);
+        EditHistoryChanged?.Invoke(CanUndo, CanRedo);
     }
 
     private static void PushSnapshot(List<string> stack, string snapshot)

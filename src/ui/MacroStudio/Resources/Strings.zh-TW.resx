@@ -4,7 +4,7 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
-  <data name="AppTitle" xml:space="preserve"><value>MacroHID 工作室</value></data>
+  <data name="AppTitle" xml:space="preserve"><value>MacroHID Studio</value></data>
   <data name="Minimize" xml:space="preserve"><value>最小化</value></data>
   <data name="MinimizeToTray" xml:space="preserve"><value>最小化到托盤</value></data>
   <data name="CloseWindow" xml:space="preserve"><value>關閉</value></data>
@@ -13,7 +13,7 @@
   <data name="CloseToTray" xml:space="preserve"><value>最小化到托盤</value></data>
   <data name="CloseToTrayHint" xml:space="preserve"><value>視窗收進托盤，已經在監聽的巨集會繼續執行。</value></data>
   <data name="CloseAndExit" xml:space="preserve"><value>結束程式</value></data>
-  <data name="CloseAndExitHint" xml:space="preserve"><value>停止播放並結束 MacroHID。</value></data>
+  <data name="CloseAndExitHint" xml:space="preserve"><value>停止播放並結束 MacroHID Studio。</value></data>
   <data name="RememberCloseChoice" xml:space="preserve"><value>記住我的選擇</value></data>
   <data name="CloseButtonBehavior" xml:space="preserve"><value>關閉按鈕</value></data>
   <data name="CloseButtonAsk" xml:space="preserve"><value>每次詢問</value></data>
@@ -502,6 +502,8 @@
   <data name="ThenActionsHint" xml:space="preserve"><value>條件成立後要跑的動作寫在這裡。點「新增動作」或從右側拖入。</value></data>
   <data name="AddThenAction" xml:space="preserve"><value>新增動作</value></data>
   <data name="ThenActionEmptyHint" xml:space="preserve"><value>還沒有動作。點上方「新增動作」開始。</value></data>
+  <data name="ConditionTriggeredActionSequenceTitle" xml:space="preserve"><value>觸發動作</value></data>
+  <data name="ConditionSettingsEmptyHint" xml:space="preserve"><value>選取一條條件以編輯設定。</value></data>
   <data name="SelectConditionBeforeThenAction" xml:space="preserve"><value>請先選取一條條件，再新增動作。</value></data>
   <data name="ConditionGateModeHint" xml:space="preserve"><value>按列表顺序逐个等待门闩，从按下播放/触发起直到条件成立；成立后可先跑该门闩的触发后动作，全部通过后再开主序列。无需设置步骤或时间范围。</value></data>
   <data name="ConditionGateRangeHint" xml:space="preserve"><value>按下播放起</value></data>
@@ -766,7 +768,6 @@
   <data name="GlobalCommandHint" xml:space="preserve"><value>為目前 Windows 使用者註冊 MacroCtlUI。註冊後重新開啟終端即可使用。上方顯示關聯的 Studio 路徑，移動可攜目錄後需重新註冊。</value></data>
   <data name="CopyExternalCommand" xml:space="preserve"><value>複製外部啟動命令</value></data>
   <data name="ExternalCommandCopied" xml:space="preserve"><value>已複製外部啟動命令（延遲 3 秒）。</value></data>
-  <data name="StudioEditionName" xml:space="preserve"><value>UI 最佳化版</value></data>
   <data name="StudioCommandSearch" xml:space="preserve"><value>搜尋命令</value></data>
   <data name="StudioNoMatchingCommands" xml:space="preserve"><value>沒有符合的命令</value></data>
   <data name="StudioTabConditions" xml:space="preserve"><value>條件</value></data>
@@ -776,5 +777,6 @@
   <data name="StudioStepProperties" xml:space="preserve"><value>步驟屬性</value></data>
   <data name="StudioTabProperties" xml:space="preserve"><value>屬性</value></data>
   <data name="StudioMacroPlayback" xml:space="preserve"><value>巨集播放設定</value></data>
+  <data name="StudioStandaloneConditionSettings" xml:space="preserve"><value>條件設定</value></data>
   <data name="StudioAddAction" xml:space="preserve"><value>新增動作</value></data>
 </root>

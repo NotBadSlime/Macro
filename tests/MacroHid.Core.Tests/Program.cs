@@ -2574,7 +2574,7 @@ static void MacroStudioExposesStartupGateConditionExecutionMode()
     Assert.Contains("evaluator.Evaluate(gate.Condition, cancellationToken)", executor);
     Assert.Contains("GateMainSequence", executor);
     Assert.Contains("ConditionExecutionMode.GateMainSequence", conditionCode);
-    Assert.Contains("ThenActionsSection.Visibility = Visibility.Visible", conditionCode);
+    Assert.DoesNotContain("ThenActionsSection.Visibility = Visibility.Collapsed", conditionCode);
     Assert.Contains("StepRangeSection", conditionXaml);
     Assert.Contains("UpdateExecutionModeVisibility", conditionCode);
     Assert.Contains("ResolveStartupGate", File.ReadAllText(Path.Combine("src", "shared", "MacroHid.Runtime", "ConditionActivationSchedule.cs")));
@@ -4379,7 +4379,7 @@ static void MacroHidReleaseVersionIsTwoTwoZero()
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
     Assert.Contains("#define AppVersion \"2.2.0\"", installer);
     Assert.Contains("[string]$Version = \"2.2.0\"", installerBuild);
-    Assert.Contains("当前正式版是 **2.2.0**", readme);
+    Assert.Contains("MacroHID Studio 当前版本是 **2.2.0**", readme);
     Assert.Contains("MacroHID 2.2.0 正式版", releaseNotes);
     Assert.Contains("<Version>2.2.0</Version>", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MacroStudio.csproj")));
 }
@@ -4556,7 +4556,8 @@ static void MacroStudioLaysOutBaseAndConditionalSequencesSideBySide()
     Assert.Contains("OnThenActionSequenceStepsChanged", conditionCode);
     Assert.Contains("EditorBorder.Visibility", conditionCode);
     Assert.Contains("ThenActionSequence.SetSteps", conditionCode);
-    Assert.Contains("ConditionList.SelectedIndex = 0", conditionCode);
+    Assert.Contains("selectedIndex = 0", conditionCode);
+    Assert.Contains("ReloadSelectedCondition(scrollThenActionsIntoView: false)", conditionCode);
 }
 
 static void MacroStudioOpensConditionThenActionEditor()
@@ -6571,6 +6572,7 @@ static void MacroStudioKeepsBottomSplitterHitTargetStableAtRuntime()
 static void MacroStudioConditionEditorContentScrollsWithoutClippingThenActions()
 {
     var conditionXaml = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml"));
+    var conditionCode = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "ConditionDirectivePanel.xaml.cs"));
 
     Assert.Contains("x:Name=\"ConditionListRow\" Height=\"*\"", conditionXaml);
     Assert.Contains("x:Name=\"ConditionEditorRow\" Height=\"2*\"", conditionXaml);
@@ -6588,7 +6590,8 @@ static void MacroStudioConditionEditorContentScrollsWithoutClippingThenActions()
     Assert.Contains("x:Name=\"ThenActionsSection\"", conditionXaml);
     Assert.Contains("x:Name=\"AddThenActionButton\"", conditionXaml);
     Assert.Contains("Content=\"添加动作\"", conditionXaml);
-    Assert.Contains("x:Name=\"ThenActionEmptyHintText\"", conditionXaml);
+    Assert.Contains("ThenActionSequence.SetEmptyHint(LocalizationService.Get(\"ThenActionEmptyHint\"))", conditionCode);
+    Assert.DoesNotContain("x:Name=\"ThenActionEmptyHintText\"", conditionXaml);
 }
 
 static void MacroStudioRefreshesJsonContentBeforeShowingToolWindow()
