@@ -4,7 +4,7 @@
 
 ## 1.6 发布包与编辑操作
 
-GitHub Release `v1.6.0` 提供 Windows x64 安装包和便携 ZIP。便携包须完整解压并保留目录结构；两种发布包均需要 .NET 8 Desktop Runtime x64。
+[GitHub 最新正式版](https://github.com/NotBadSlime/Macro/releases/latest)提供 Windows x64 安装包和便携 ZIP。便携包须完整解压并保留目录结构。两种发布包均需要 .NET 8 Desktop Runtime x64。
 
 点击卡片打开编辑后，焦点自动进入第一个可编辑文本框，跳过下拉框。Enter 保存；Alt+Enter 在多行文本框中插入换行。下拉列表展开时 Enter 先确认选项。输入不合法时显示错误并保留编辑界面。
 

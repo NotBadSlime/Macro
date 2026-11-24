@@ -593,7 +593,7 @@
                             <DockPanel LastChildFill="False">
                                 <TextBlock x:Name="PlaybackVersionButtonText" Text="播放版本" DockPanel.Dock="Left" VerticalAlignment="Center" />
                                 <Border DockPanel.Dock="Right" Style="{StaticResource SmallBadge}" Margin="8,0,0,0">
-                                    <TextBlock x:Name="PlaybackVersionValueText" Text="2.1.0" FontSize="11"
+                                    <TextBlock x:Name="PlaybackVersionValueText" FontSize="11"
                                                Foreground="{DynamicResource Accent}" />
                                 </Border>
                             </DockPanel>

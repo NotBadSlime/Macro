@@ -255,7 +255,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 2.1.0", MacroHidReleaseVersionIsTwoOneZero),
+    ("MacroHID release version is 2.2.0", MacroHidReleaseVersionIsTwoTwoZero),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -965,7 +965,7 @@ static void SettingsRoundTripAGeneration()
     var path = SettingsTempPath();
     try
     {
-        foreach (var (generation, version) in new[] { (PrecisionGeneration.Latest, "2.1.0"), (PrecisionGeneration.V2_0_2, "2.0.2"),
+        foreach (var (generation, version) in new[] { (PrecisionGeneration.Latest, PlaybackVersions.Current), (PrecisionGeneration.V2_0_2, "2.0.2"),
                      (PrecisionGeneration.V2_0, "2.0.1"), (PrecisionGeneration.V1_6, "1.6.0") })
         {
             File.WriteAllText(path, $"{{\"Generation\":\"{char.ToLowerInvariant(generation.ToString()[0]) + generation.ToString()[1..]}\",\"ZeroGapHoldMicroseconds\":7000}}");
@@ -987,6 +987,10 @@ static void SettingsRoundTripAGeneration()
         var unknown = RuntimePrecisionSettingsStore.Load(path);
         Assert.Equal(PlaybackVersions.Current, unknown.PlaybackVersion);
         Assert.Equal(PrecisionMode.Balanced, unknown.Precision);
+        File.WriteAllText(path, "{\"PlaybackVersion\":\"2.1.0\",\"ZeroGapHoldMicroseconds\":7000}");
+        var upgraded = RuntimePrecisionSettingsStore.Load(path);
+        Assert.Equal(PlaybackVersions.Current, upgraded.PlaybackVersion);
+        Assert.Equal(7000L, upgraded.ZeroGapHoldMicroseconds);
         // 1.3.0 and 1.4.0 share one engine.
         Assert.True(ReferenceEquals(PlaybackVersions.Resolve("1.4.0"), PlaybackVersions.Resolve("1.3.0")));
     }
@@ -1014,7 +1018,7 @@ static void PrecisionDialogOffersEveryGeneration()
     var code = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PlaybackVersionDialog.xaml.cs"));
     var precision = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "PrecisionControlDialog.xaml"));
     var library = File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "Controls", "MacroLibraryPanel.xaml"));
-    // The playback version has its own dialog (opened from 全局运行), listing PlaybackVersions (2.1.0 ... 1.2.0) with notes;
+    // The playback version has its own dialog (opened from 全局运行), listing the current and bundled legacy versions with notes;
     // 精度控制 no longer carries it.
     Assert.Contains("x:Name=\"PlaybackVersionButton\"", library);
     Assert.DoesNotContain("PrecisionGenerationBox", precision);
@@ -1027,7 +1031,7 @@ static void PrecisionDialogOffersEveryGeneration()
     Assert.Equal(PlaybackVersions.Current, PlaybackVersions.All[0].Id);
     Assert.True(PlaybackVersions.All[0].Folder is null);
     var ids = PlaybackVersions.All.Select(v => v.Id).ToArray();
-    Assert.Equal("2.1.0,2.0.2,2.0.1,2.0.0,1.6.0,1.5.0,1.4.1,1.4.0,1.2.0", string.Join(",", ids));
+    Assert.Equal("2.2.0,2.0.2,2.0.1,2.0.0,1.6.0,1.5.0,1.4.1,1.4.0,1.2.0", string.Join(",", ids));
     Assert.Equal(PlaybackVersions.Current, PlaybackVersions.Resolve("2.0.4").Id); // a 2.0.4 setting means the current engine
     foreach (var file in new[] { "Strings.resx", "Strings.zh-CN.resx", "Strings.zh-TW.resx" })
     {
@@ -4360,23 +4364,24 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsTwoOneZero()
+static void MacroHidReleaseVersionIsTwoTwoZero()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.1.0.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.2.0.md"));
 
-    Assert.Contains("<Version>2.1.0</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>2.1.0.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>2.1.0.0</FileVersion>", buildProps);
+    Assert.Contains("<Version>2.2.0</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>2.2.0.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>2.2.0.0</FileVersion>", buildProps);
+    Assert.Contains("<InformationalVersion>2.2.0</InformationalVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"2.1.0\"", installer);
-    Assert.Contains("[string]$Version = \"2.1.0\"", installerBuild);
-    Assert.Contains("当前正式版是 **2.1.0**", readme);
-    Assert.Contains("MacroHID 2.1.0 正式版", releaseNotes);
-    Assert.Contains("<Version>2.1.0</Version>", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MacroStudio.csproj")));
+    Assert.Contains("#define AppVersion \"2.2.0\"", installer);
+    Assert.Contains("[string]$Version = \"2.2.0\"", installerBuild);
+    Assert.Contains("当前正式版是 **2.2.0**", readme);
+    Assert.Contains("MacroHID 2.2.0 正式版", releaseNotes);
+    Assert.Contains("<Version>2.2.0</Version>", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MacroStudio.csproj")));
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()
