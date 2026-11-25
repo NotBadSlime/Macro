@@ -184,6 +184,9 @@
   <data name="SelectConditionMacroInLibraryFirst" xml:space="preserve"><value>請先在宏庫選中一個橙色條件宏。</value></data>
   <data name="ConditionMacroPickerTitle" xml:space="preserve"><value>選擇條件宏</value></data>
   <data name="InsertConditionMacro" xml:space="preserve"><value>插入</value></data>
+  <data name="InsertConditionMacroIntoCurrent" xml:space="preserve"><value>插入到目前的宏</value></data>
+  <data name="EditConditionMacro" xml:space="preserve"><value>編輯條件宏</value></data>
+  <data name="NormalMacroDropOnConditionsHint" xml:space="preserve"><value>此處可插入條件宏。請將一般宏拖曳到主序列。</value></data>
   <data name="NoConditionMacrosInDatabase" xml:space="preserve"><value>目前宏資料庫中沒有條件宏</value></data>
   <data name="FilterConditionMacrosPlaceholder" xml:space="preserve"><value>篩選條件宏名稱或資料夾</value></data>
   <data name="DatabaseRootFolder" xml:space="preserve"><value>根目錄</value></data>

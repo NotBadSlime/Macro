@@ -98,6 +98,9 @@ public static class LocalizationService
         return string.Format(CurrentCulture, Get(key), args);
     }
 
+    internal static string GetActionTemplateName(MacroActionTemplateKind kind) =>
+        Resources.GetString($"Template{kind}", CurrentCulture) ?? Get($"Add{kind}");
+
     private static void SetCurrentCulture(string cultureName, bool persist)
     {
         var normalized = NormalizeCultureName(cultureName);

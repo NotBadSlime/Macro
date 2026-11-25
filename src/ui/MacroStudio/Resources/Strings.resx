@@ -480,6 +480,9 @@
   <data name="SelectConditionMacroInLibraryFirst" xml:space="preserve"><value>Select an orange condition macro in the library first.</value></data>
   <data name="ConditionMacroPickerTitle" xml:space="preserve"><value>Select condition macro</value></data>
   <data name="InsertConditionMacro" xml:space="preserve"><value>Insert</value></data>
+  <data name="InsertConditionMacroIntoCurrent" xml:space="preserve"><value>Insert into current macro</value></data>
+  <data name="EditConditionMacro" xml:space="preserve"><value>Edit condition macro</value></data>
+  <data name="NormalMacroDropOnConditionsHint" xml:space="preserve"><value>Drop condition macros here. Drag regular macros to the main sequence.</value></data>
   <data name="NoConditionMacrosInDatabase" xml:space="preserve"><value>No condition macros in the current database</value></data>
   <data name="FilterConditionMacrosPlaceholder" xml:space="preserve"><value>Filter by name or folder</value></data>
   <data name="DatabaseRootFolder" xml:space="preserve"><value>Root</value></data>
@@ -928,14 +931,14 @@
   <data name="LibraryPathHelp" xml:space="preserve"><value>Database &gt; folder &gt; macro. Press Enter to jump the library to that file or folder.</value></data>
   <data name="LibraryPathNotFound" xml:space="preserve"><value>Could not find that database path.</value></data>
   <data name="ListeningColorSampleConflict" xml:space="preserve"><value>These macros use the color-sample hotkey and were not started: {0}</value></data>
-  <data name="AddKy3FpsStart" xml:space="preserve"><value>KY3 开启锁帧</value></data>
-  <data name="AddKy3FpsStop" xml:space="preserve"><value>KY3 恢复帧率</value></data>
-  <data name="AddKy3FpsStartHint" xml:space="preserve"><value>修改已有 KY3 解帧器目标值</value></data>
-  <data name="AddKy3FpsStopHint" xml:space="preserve"><value>恢复解帧器原目标值</value></data>
-  <data name="AddFufuFpsStart" xml:space="preserve"><value>Fufu 开启锁帧</value></data>
-  <data name="AddFufuFpsStop" xml:space="preserve"><value>Fufu 恢复帧率</value></data>
-  <data name="AddFufuFpsStartHint" xml:space="preserve"><value>进入游戏后修改 Fufu 解帧器目标值</value></data>
-  <data name="AddFufuFpsStopHint" xml:space="preserve"><value>恢复解帧器原目标值</value></data>
+  <data name="AddKy3FpsStart" xml:space="preserve"><value>KY3 Start Frame Lock</value></data>
+  <data name="AddKy3FpsStop" xml:space="preserve"><value>KY3 Restore Frame Rate</value></data>
+  <data name="AddKy3FpsStartHint" xml:space="preserve"><value>Set the target FPS in the existing KY3 unlocker</value></data>
+  <data name="AddKy3FpsStopHint" xml:space="preserve"><value>Restore the unlocker's previous target FPS</value></data>
+  <data name="AddFufuFpsStart" xml:space="preserve"><value>Fufu Start Frame Lock</value></data>
+  <data name="AddFufuFpsStop" xml:space="preserve"><value>Fufu Restore Frame Rate</value></data>
+  <data name="AddFufuFpsStartHint" xml:space="preserve"><value>Set the target FPS in Fufu after entering the game</value></data>
+  <data name="AddFufuFpsStopHint" xml:space="preserve"><value>Restore the unlocker's previous target FPS</value></data>
   <data name="OpenLogs" xml:space="preserve"><value>Open logs</value></data>
   <data name="PrecisionGeneration" xml:space="preserve">
     <value>Precision version</value>

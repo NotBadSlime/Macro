@@ -1455,6 +1455,7 @@
 
     <!-- Soft floating menus -->
     <Style TargetType="{x:Type ContextMenu}">
+        <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, Microsoft JhengHei UI" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="OverridesDefaultStyle" Value="True" />
         <Setter Property="Background" Value="{DynamicResource PanelBackground}" />

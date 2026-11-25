@@ -1928,9 +1928,10 @@ public partial class MainWindow : Window
     {
         if (RejectLockedEdit()) return;
         if (!actionTemplateInsertGate.TryAccept(kind)) return;
+        var insertedStatus = LocalizationService.Format("ActionInserted", LocalizationService.GetActionTemplateName(kind));
         if (ConditionPanel.TryInsertActionTemplateIntoActiveCondition(kind, useSelectedCondition: ConditionWorkspaceActive))
         {
-            SetStatus(LocalizationService.Format("ActionInserted", L($"Template{kind}")));
+            SetStatus(insertedStatus);
             return;
         }
 
@@ -1942,7 +1943,7 @@ public partial class MainWindow : Window
 
         SequencePanelControl.InsertSteps(MacroActionTemplateFactory.CreateSteps(kind));
         RefreshConditionStepChoices();
-        SetStatus(LocalizationService.Format("ActionInserted", L($"Template{kind}")));
+        SetStatus(insertedStatus);
     }
 
     private void OnActionTemplateDropped(MacroActionTemplateKind kind, string parentPathText, int insertIndex)

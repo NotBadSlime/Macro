@@ -14,7 +14,7 @@ public partial class ActionAppearanceDialog : Window
         ThemedDialogChrome.Apply(this);
         ApplyLocalization();
         ActionTypeBox.ItemsSource = ActionAppearanceService.EditableKinds
-            .Select(kind => new ActionKindOption(kind, GetKindName(kind)))
+            .Select(kind => new ActionKindOption(kind, LocalizationService.GetActionTemplateName(kind)))
             .ToList();
         ActionTypeBox.SelectedIndex = 0;
     }
@@ -86,17 +86,6 @@ public partial class ActionAppearanceDialog : Window
         PreviewIconBadge.Background = new SolidColorBrush(Color.FromArgb(38, icon.R, icon.G, icon.B));
         PreviewIconBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(100, icon.R, icon.G, icon.B));
         PreviewCard.Background = new SolidColorBrush(background);
-    }
-
-    private static string GetKindName(MacroActionTemplateKind kind)
-    {
-        return kind switch
-        {
-            MacroActionTemplateKind.StopCurrent => L("AddStopCurrent"),
-            MacroActionTemplateKind.StopIteration => L("AddStopIteration"),
-            MacroActionTemplateKind.StopAll => L("AddStopAll"),
-            _ => L($"Template{kind}")
-        };
     }
 
     private static string ToHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
