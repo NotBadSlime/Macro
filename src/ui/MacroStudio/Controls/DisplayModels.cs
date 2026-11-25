@@ -61,7 +61,7 @@ public sealed class MacroLibraryListEntry
         var subtitle = item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
         if (kind == MacroKind.Condition)
         {
-            subtitle = $"{LocalizationService.Get("ConditionMacroBadge")} · {subtitle}";
+            subtitle = $"{LocalizationService.Get("ConditionMacroFileType")} · {subtitle}";
         }
         else if (document?.Playback.Trigger is { } trigger)
         {
@@ -188,9 +188,11 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
         : Visibility.Visible;
     public Visibility LockVisibility => Item?.IsLocked == true ? Visibility.Visible : Visibility.Collapsed;
     public string LockToolTip => LocalizationService.Get("MacroLockedReadOnly");
+    public bool IsConditionMacro { get; private init; }
+    public Visibility ConditionBadgeVisibility => IsConditionMacro ? Visibility.Visible : Visibility.Collapsed;
     public string ExplorerTypeText => IsFolder
         ? LocalizationService.Get("FileFolderType")
-        : Item?.IsConditionMacro == true
+        : IsConditionMacro
             ? LocalizationService.Get("ConditionMacroFileType")
             : LocalizationService.Get("MacroFileType");
     public string ExplorerModifiedText => Item is null
@@ -297,7 +299,10 @@ public sealed class MacroLibraryTreeNode : INotifyPropertyChanged
             subtitle = string.Join(" · ", parts);
         }
 
-        return new MacroLibraryTreeNode(null, item, item.GroupId, item.Folder, entry.Title, subtitle, "\uE8A5", entry.Accent, entry.Weight, listenState, false, []);
+        return new MacroLibraryTreeNode(null, item, item.GroupId, item.Folder, entry.Title, subtitle, "\uE8A5", entry.Accent, entry.Weight, listenState, false, [])
+        {
+            IsConditionMacro = item.IsConditionMacro || document?.IsConditionMacro == true
+        };
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -431,11 +436,12 @@ public sealed partial class StepDisplayItem : INotifyPropertyChanged
 
     public static List<StepDisplayItem> FlattenWithExecutionOrdinals(
         IReadOnlyList<MacroStep> steps,
-        Func<string, string>? macroNameResolver = null)
+        Func<string, string>? macroNameResolver = null,
+        Func<string, MacroDocument?>? macroDocumentResolver = null)
     {
         var items = FlattenSteps(steps, macroNameResolver: macroNameResolver);
         AssignExecutionOrdinals(items);
-        AssignTableCells(steps, items, macroNameResolver);
+        AssignTableCells(steps, items, macroNameResolver, macroDocumentResolver);
         return items;
     }
 

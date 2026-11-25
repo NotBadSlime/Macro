@@ -142,6 +142,7 @@ var tests = new (string Name, Action Body)[]
     ("MCRX parser covers sequence stop controls and condition execution mode", McrxParserCoversSequenceStopsAndConditionExecutionMode),
     ("Playback executor waits for startup gate conditions before main sequence", PlaybackExecutorWaitsForStartupGateConditionsBeforeMainSequence),
     ("Playback executor waits for startup gates sequentially in list order", PlaybackExecutorWaitsForStartupGatesSequentiallyInListOrder),
+    ("Studio startup gate wait reports the blocking condition and clears on change or stop", ConditionOnlyPlaybackTests.ReportsActualStartupGateWait),
     ("MacroStudio exposes startup gate condition execution mode", MacroStudioExposesStartupGateConditionExecutionMode),
     ("MCRX parser covers playback hotkey settings", McrxParserCoversPlaybackHotkeySettings),
     ("MCRX parser covers playback precision mode", McrxParserCoversPlaybackPrecisionMode),
@@ -368,6 +369,7 @@ var tests = new (string Name, Action Body)[]
     ("MacroStudio drop indicator uses loop end when inserting after a loop", MacroStudioDropIndicatorUsesLoopEndWhenInsertingAfterALoop),
     ("MacroStudio displays random delay and total duration ranges", MacroStudioDisplaysRandomDelayAndTotalDurationRanges),
     ("Macro duration estimator includes nested macro calls", MacroDurationEstimatorIncludesNestedMacroCalls),
+    ("Studio table shows planned starts after macro calls", StudioTableShowsPlannedStartsAfterMacroCalls),
     ("OCR display text filters noise and collapses whitespace", OcrDisplayTextFiltersNoiseAndCollapsesWhitespace),
     ("Step display labels resolve macro call ids to names", StepDisplayLabelsResolveMacroCallIdsToNames),
     ("MacroStudio resolves macro call aliases for display and playback", MacroStudioResolvesMacroCallAliasesForDisplayAndPlayback),
@@ -7072,6 +7074,42 @@ static void MacroDurationEstimatorIncludesNestedMacroCalls()
 
     Assert.Equal(TimeSpan.FromMilliseconds(150), range.Min);
     Assert.Equal(TimeSpan.FromMilliseconds(150), range.Max);
+}
+
+static void StudioTableShowsPlannedStartsAfterMacroCalls()
+{
+    var fixedWait = new WaitStep(TimeSpan.FromMilliseconds(80));
+    var targets = new Dictionary<string, MacroDocument>
+    {
+        ["inner"] = new(1, "inner", [new WaitStep(TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(20))]),
+        ["outer"] = new(1, "outer", [fixedWait, new RepeatStep(2, [new MacroCallStep("inner")])]),
+        ["fixed"] = new(1, "fixed", [fixedWait]),
+        ["recursive"] = new(1, "recursive", [new MacroCallStep("recursive")]),
+        ["gated"] = new MacroDocument(1, "gated", [fixedWait]) with
+        {
+            Conditions = [new ConditionalDirective("gate", "gate", -1, -1,
+                new PixelMatcher(ScreenRegion.FromRect(0, 0, 1, 1), new RgbColor(255, 255, 255), 0),
+                [], ExecutionMode: ConditionExecutionMode.GateMainSequence)]
+        }
+    };
+
+    var planned = StepDisplayItem.FlattenWithExecutionOrdinals(
+        [new MacroCallStep("outer"), new MacroCallStep("fixed"), fixedWait],
+        macroDocumentResolver: name => targets.GetValueOrDefault(name));
+    Assert.Equal("0.000", planned[0].Table.Start);
+    Assert.Contains("0.100–0.120 s", planned[0].Table.Parameter);
+    Assert.Equal("0.100–0.120", planned[1].Table.Start);
+    Assert.Equal("0.180–0.200", planned[2].Table.Start);
+
+    foreach (var unknown in new[] { "missing", "recursive", "gated" })
+    {
+        var dynamic = StepDisplayItem.FlattenWithExecutionOrdinals(
+            [new MacroCallStep(unknown), new MacroCallStep("fixed")],
+            macroDocumentResolver: name => targets.GetValueOrDefault(name));
+        Assert.Equal("0.000", dynamic[0].Table.Start);
+        Assert.Equal("—", dynamic[1].Table.Start);
+        Assert.Contains("0.080 s", dynamic[1].Table.Parameter);
+    }
 }
 
 static void OcrDisplayTextFiltersNoiseAndCollapsesWhitespace()

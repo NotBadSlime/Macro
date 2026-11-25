@@ -20,7 +20,7 @@ public partial class MainWindow
             new("\ue8b7", L("WorkspacePanelLibrary"), "library database macros 宏庫 宏库", () => ShowPalettePanel("library")),
             new("\ue8fd", L("WorkspacePanelSequence"), "steps sequence editor 步骤 步驟", () => ShowPalettePanel("sequence")),
             new("\ue713", L("StudioStepProperties"), "properties inspector attributes 属性 屬性", () => ShowPalettePanel("properties")),
-            new("\ue9d9", L("WorkspacePanelConditions"), "conditions triggers 条件 條件", () => ShowPalettePanel("conditions")),
+            new("\ue9d9", L("WorkspacePanelConditions"), "conditions triggers 条件 條件", () => SetConditionEditorTab(true)),
             new("\ue8a7", L("WorkspacePanelActions"), "actions templates 动作 動作", () => ShowPalettePanel("actions")),
             new("\ue768", L("WorkspacePanelPlayback"), "playback run hotkeys 播放 触发鍵", () => ShowPalettePanel("playback")),
             new("\ue943", L("AdvancedJson"), "source code json", () => ShowPalettePanel("json")),
@@ -35,6 +35,7 @@ public partial class MainWindow
 
     private void ShowPalettePanel(string id)
     {
+        if (id == "sequence") SetConditionEditorTab(false);
         ToggleWorkspacePanelVisibility(id, true);
         if (workspacePanels.TryGetValue(id, out var panel))
         {

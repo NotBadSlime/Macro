@@ -58,6 +58,8 @@ public partial class MainWindow : Window
     private bool workspaceContentRendered;
     private bool macroRecordingTargetsCondition;
     private bool standaloneConditionEditor;
+    private bool attachedConditionsSelected;
+    private bool ConditionWorkspaceActive => standaloneConditionEditor || attachedConditionsSelected;
     private string standaloneRightTool = "conditions";
     private string activeRightToolPanelId = "properties";
     private string? activeEditorMacroId;
@@ -148,6 +150,7 @@ public partial class MainWindow : Window
         SequencePanelControl.StepSequenceControl.AttachStepInspector(
             WorkspaceStepInspector, () => ToggleWorkspacePanelVisibility("properties", true));
         ConditionPanel.Initialize(editorState);
+        SequencePanelControl.ConfigureConditionActionTiming(ConditionPanel);
 
         LibraryPanel.MacroSelected += OnMacroSelected;
         LibraryPanel.InsertConditionMacroRequested += OnConditionListMacroLibraryDropped;
@@ -171,6 +174,12 @@ public partial class MainWindow : Window
 
         SequencePanelControl.SaveLibraryRequested += OnSaveLibrary;
         SequencePanelControl.RunNowRequested += OnRunNow;
+        SequencePanelControl.EditorTabRequested += SetConditionEditorTab;
+        SequencePanelControl.StartupGateRequested += id =>
+        {
+            SetConditionEditorTab(true);
+            ConditionPanel.SelectCondition(id);
+        };
         SequencePanelControl.ShowActionsRequested += ShowWorkspaceActions;
         SequencePanelControl.StopRequested += OnStopPlayback;
         SequencePanelControl.RecordingStartRequested += OnStartRecording;
@@ -426,23 +435,14 @@ public partial class MainWindow : Window
 
     private void OpenWorkspaceTool_Click(object sender, RoutedEventArgs e)
     {
-        var id = ReferenceEquals(sender, ConditionWorkspaceButton) ? "conditions" : "json";
-        if (!workspacePanels.TryGetValue(id, out var panel)) return;
-        if (standaloneConditionEditor && id == "conditions")
+        if (ReferenceEquals(sender, ConditionWorkspaceButton))
         {
-            SelectRightToolPanel(id);
+            SetConditionEditorTab(true);
             return;
         }
 
-
-        if (id == "conditions" && panel.IsVisible && !panel.IsFloating && activeRightToolPanelId == id)
-        {
-            SelectRightToolPanel("properties");
-        }
-        else
-        {
-            ToggleWorkspacePanelVisibility(id, id == "conditions" || !panel.IsVisible);
-        }
+        if (workspacePanels.TryGetValue("json", out var panel))
+            ToggleWorkspacePanelVisibility("json", !panel.IsVisible);
     }
 
     private void ShowWorkspaceActions()
@@ -509,11 +509,11 @@ public partial class MainWindow : Window
         }
 
         panel.IsVisible = visible;
-        if (!visible && standaloneConditionEditor && standaloneRightTool == id)
+        if (!visible && ConditionWorkspaceActive && standaloneRightTool == id)
             standaloneRightTool = "conditions";
         if (visible && panel.DockRegion == WorkspaceDockRegion.Right && !panel.IsFloating)
         {
-            if (standaloneConditionEditor) standaloneRightTool = id;
+            if (ConditionWorkspaceActive) standaloneRightTool = id;
             else activeRightToolPanelId = id;
         }
 
@@ -610,7 +610,7 @@ public partial class MainWindow : Window
         ApplyWorkspaceDockRegion(panel, panel.DockRegion);
         if (panel.DockRegion == WorkspaceDockRegion.Right)
         {
-            if (standaloneConditionEditor) standaloneRightTool = id;
+            if (ConditionWorkspaceActive) standaloneRightTool = id;
             else activeRightToolPanelId = id;
         }
 
@@ -626,7 +626,9 @@ public partial class MainWindow : Window
     private void ResetWorkspaceLayout()
     {
         var restoreConditionEditor = standaloneConditionEditor;
+        var restoreConditionsTab = attachedConditionsSelected;
         SetConditionWorkspaceMode(false);
+        SetConditionEditorTab(false);
         WorkspaceLayoutStore.Reset();
         activeRightToolPanelId = "properties";
         workspaceLayout = new([], WorkspaceLayoutStore.CurrentVersion, new WorkspaceDockSizes());
@@ -641,6 +643,7 @@ public partial class MainWindow : Window
 
         activeRightToolPanelId = "properties";
         SetConditionWorkspaceMode(restoreConditionEditor);
+        if (restoreConditionsTab) SetConditionEditorTab(true);
         ApplyDockRegionVisibility();
         SaveWorkspaceLayout();
         SetStatus(L("WorkspaceLayoutReset"));
@@ -818,7 +821,7 @@ public partial class MainWindow : Window
 
     private void SelectRightToolPanel(string id)
     {
-        if (standaloneConditionEditor && id is "conditions" or "actions" or "playback")
+        if (ConditionWorkspaceActive && id is "conditions" or "actions" or "playback")
         {
             standaloneRightTool = id;
             ApplyDockRegionVisibility();
@@ -841,7 +844,18 @@ public partial class MainWindow : Window
     }
 
     private bool IsReservedConditionWorkspacePanel(string id) =>
-        standaloneConditionEditor && id is "sequence" or "properties" or "conditions";
+        ConditionWorkspaceActive && id is "sequence" or "properties" or "conditions";
+
+    private void SetConditionEditorTab(bool showConditions)
+    {
+        if (!standaloneConditionEditor && attachedConditionsSelected != showConditions)
+        {
+            attachedConditionsSelected = showConditions;
+            ApplyConditionEditorPlacement();
+        }
+
+        if (showConditions) SelectRightToolPanel("conditions");
+    }
 
     private void SetConditionWorkspaceMode(bool standalone, bool showSettings = false)
     {
@@ -852,10 +866,17 @@ public partial class MainWindow : Window
         }
 
         standaloneConditionEditor = standalone;
+        attachedConditionsSelected = false;
+        ApplyConditionEditorPlacement();
+    }
+
+    private void ApplyConditionEditorPlacement()
+    {
+        var showConditions = ConditionWorkspaceActive;
         standaloneRightTool = "conditions";
-        DockHost.SetDefaultRightWidth(standalone ? 390 : null);
+        DockHost.SetDefaultRightWidth(showConditions ? 390 : null);
         var sequence = workspacePanels["sequence"];
-        if (standalone)
+        if (showConditions)
         {
             foreach (var panel in workspacePanels.Values.Where(panel => IsReservedConditionWorkspacePanel(panel.Id)))
             {
@@ -868,11 +889,12 @@ public partial class MainWindow : Window
             sequence.DockContainer.Visibility = Visibility.Visible;
             CombinedConditionEditorHost.Content = null;
             ConditionPanel.SetStandaloneSettingsHost(StandaloneConditionSettingsHost);
-            SequencePanelControl.SetStandaloneConditionEditor(ConditionPanel);
+            SequencePanelControl.SetConditionEditor(ConditionPanel, standaloneConditionEditor);
         }
         else
         {
-            SequencePanelControl.SetStandaloneConditionEditor(null);
+            ConditionPanel.DeactivateThenActionSequence();
+            SequencePanelControl.SetConditionEditor(null, standalone: false);
             ConditionPanel.SetStandaloneSettingsHost(null);
             CombinedConditionEditorHost.Content = ConditionPanel;
             if (sequence.IsFloating) sequence.DockHost.Content = null;
@@ -880,7 +902,7 @@ public partial class MainWindow : Window
             if (workspaceContentRendered) RestorePendingFloatingPanels();
         }
 
-        ShowSequenceMenuItem.Visibility = standalone ? Visibility.Collapsed : Visibility.Visible;
+        ShowSequenceMenuItem.Visibility = showConditions ? Visibility.Collapsed : Visibility.Visible;
         ShowPropertiesMenuItem.Visibility = ShowSequenceMenuItem.Visibility;
         foreach (var item in FloatPanelsMenuItem.Items.OfType<MenuItem>().Concat(DockPanelsMenuItem.Items.OfType<MenuItem>()))
         {
@@ -899,7 +921,7 @@ public partial class MainWindow : Window
         StandaloneConditionRightToolButton.Content = L("StudioTabProperties");
         StandaloneConditionRightToolButton.ToolTip = settingsTitle;
         ConditionRightToolButton.ToolTip = WorkspaceTitle("WorkspacePanelConditions");
-        ConditionWorkspaceButton.ToolTip = standaloneConditionEditor ? settingsTitle : ConditionRightToolButton.ToolTip;
+        ConditionWorkspaceButton.ToolTip = ConditionWorkspaceActive ? settingsTitle : ConditionRightToolButton.ToolTip;
         ShowConditionMenuItem.Header = ConditionWorkspaceButton.ToolTip;
     }
 
@@ -934,7 +956,7 @@ public partial class MainWindow : Window
 
     private void ApplyRightToolPanelVisibility()
     {
-        if (standaloneConditionEditor)
+        if (ConditionWorkspaceActive)
         {
             ApplyConditionInspectorVisibility();
             return;
@@ -1002,7 +1024,7 @@ public partial class MainWindow : Window
     private void ApplyDockRegionVisibility()
     {
         var leftVisible = HasVisibleDockedPanel(WorkspaceDockRegion.Left);
-        var rightVisible = standaloneConditionEditor || HasVisibleDockedPanel(WorkspaceDockRegion.Right);
+        var rightVisible = ConditionWorkspaceActive || HasVisibleDockedPanel(WorkspaceDockRegion.Right);
         var bottomVisible = HasVisibleDockedPanel(WorkspaceDockRegion.Bottom);
 
         ApplyRightToolPanelVisibility();
@@ -1095,7 +1117,7 @@ public partial class MainWindow : Window
         SetShowMenuCheck(ShowJsonMenuItem, "json");
         SetShowMenuCheck(ShowActionMenuItem, "actions");
         SetShowMenuCheck(ShowPlaybackMenuItem, "playback");
-        if (standaloneConditionEditor) ShowConditionMenuItem.IsChecked = standaloneRightTool == "conditions";
+        if (ConditionWorkspaceActive) ShowConditionMenuItem.IsChecked = standaloneRightTool == "conditions";
         updatingWorkspaceMenu = false;
     }
 
@@ -1221,10 +1243,12 @@ public partial class MainWindow : Window
         if (!jsonValid) OnSequenceEditorTextChanged(SequencePanelControl.EditorText);
         PlaybackPanelControl.SetPlaybackControls(PlaybackSettings.Default);
         SetConditionWorkspaceMode(false);
+        SetConditionEditorTab(false);
         SequencePanelControl.SetLibraryPath(string.Empty);
         SequencePanelControl.ClearUndoHistory();
         RefreshConditionStepChoices();
         ConditionPanel.LoadConditions([]);
+        RefreshWorkspaceStartupGateWait();
         ApplyEditLock(false);
     }
 
@@ -1233,6 +1257,7 @@ public partial class MainWindow : Window
         try
         {
             var document = libraryStore.ReadMacro(id, out var revision);
+            var switchedMacro = !string.Equals(activeEditorMacroId, id, StringComparison.OrdinalIgnoreCase);
             editorState.SelectedMacroId = id;
             activeEditorMacroId = id;
             activeLibraryRevision = revision;
@@ -1241,6 +1266,7 @@ public partial class MainWindow : Window
             autoSaveTimer.Stop();
             libraryStore.SetSelected(id);
             SetConditionWorkspaceMode(document.IsConditionMacro, showSettings: true);
+            if (switchedMacro && !document.IsConditionMacro) SetConditionEditorTab(false);
             SequencePanelControl.SetEditorDocument(document);
             if (!jsonValid) OnSequenceEditorTextChanged(SequencePanelControl.EditorText);
             if (document.Steps.Count > 0) SequencePanelControl.SelectedStepIndex = 0;
@@ -1248,6 +1274,7 @@ public partial class MainWindow : Window
             PlaybackPanelControl.SetPlaybackControls(document.Playback);
             RefreshConditionStepChoices();
             ConditionPanel.LoadConditions(document.EffectiveConditions);
+            RefreshWorkspaceStartupGateWait();
             RefreshRunNowHint();
             SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             CheckAndWarnConflicts(document);
@@ -1901,13 +1928,13 @@ public partial class MainWindow : Window
     {
         if (RejectLockedEdit()) return;
         if (!actionTemplateInsertGate.TryAccept(kind)) return;
-        if (ConditionPanel.TryInsertActionTemplateIntoActiveCondition(kind, useSelectedCondition: standaloneConditionEditor))
+        if (ConditionPanel.TryInsertActionTemplateIntoActiveCondition(kind, useSelectedCondition: ConditionWorkspaceActive))
         {
             SetStatus(LocalizationService.Format("ActionInserted", L($"Template{kind}")));
             return;
         }
 
-        if (standaloneConditionEditor)
+        if (ConditionWorkspaceActive)
         {
             SetStatus(L("SelectConditionBeforeThenAction"));
             return;
@@ -3110,6 +3137,7 @@ public partial class MainWindow : Window
             SetConditionWorkspaceMode(document.IsConditionMacro);
             RefreshConditionStepChoices();
             ConditionPanel.LoadConditions(document.EffectiveConditions, preserveSelection: true);
+            RefreshWorkspaceStartupGateWait();
             RefreshRunNowHint();
             SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             OnStepSelectionChanged(SequencePanelControl.SelectedStepIndex);
@@ -3249,8 +3277,7 @@ public partial class MainWindow : Window
             ObservePlayback(route.Controller, run, completion);
             if (shutdownStarted || epoch != Interlocked.Read(ref stopEpoch) || run != route.Controller.RunId) return;
             playbackController = route.Controller;
-            UpdatePlaybackStatus();
-            if (route.Controller.Status == PlaybackStatus.Running) SetStatus(route.Name);
+            UpdatePlaybackStatus(route.Name);
         });
     }
 
@@ -3296,13 +3323,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdatePlaybackStatus()
+    private void UpdatePlaybackStatus(string? runningMacroName = null)
     {
         lock (triggerGate)
         {
             if (playbackController?.Status is not (PlaybackStatus.Running or PlaybackStatus.Stopping))
                 playbackController = playbackRuns.Active.OrderBy(run => run.Daemon).FirstOrDefault()?.Controller ?? playbackController;
         }
+        if (UpdateStartupGateStatus()) return;
         if (playbackController is null)
         {
             PlaybackPanelControl.SetPlaybackStatus(listening ? L("PlaybackStatusListening") : L("PlaybackStatusIdle"));
@@ -3310,7 +3338,8 @@ public partial class MainWindow : Window
         }
 
         PlaybackPanelControl.SetPlaybackStatus(L(PlaybackStatusResourceKey(playbackController.Status)));
-        SetStatus(L(StatusResourceKey(playbackController.Status)));
+        SetStatus(playbackController.Status == PlaybackStatus.Running && runningMacroName is not null
+            ? runningMacroName : L(StatusResourceKey(playbackController.Status)));
     }
 
     private enum StatusLevel { Info, Warning, Error }
@@ -3577,7 +3606,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!standaloneConditionEditor && SequencePanelControl.IsKeyboardFocusWithin
+        if (!ConditionWorkspaceActive && SequencePanelControl.IsKeyboardFocusWithin
             && !IsTextEditingSource(e.OriginalSource as DependencyObject)
             && SequencePanelControl.HandleExplorerShortcut(key, modifiers))
         {
@@ -3585,7 +3614,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!standaloneConditionEditor && (modifiers & ModifierKeys.Control) != 0
+        if (!ConditionWorkspaceActive && (modifiers & ModifierKeys.Control) != 0
             && key == Key.Delete
             && SequencePanelControl.IsKeyboardFocusWithin
             && !IsTextEditingSource(e.OriginalSource as DependencyObject))
@@ -3649,11 +3678,13 @@ public partial class MainWindow : Window
                 MacroConversionFormat.MacroHidMcrx));
             var document = imported.Document;
             SetConditionWorkspaceMode(document.IsConditionMacro, showSettings: true);
+            if (!document.IsConditionMacro) SetConditionEditorTab(false);
             SequencePanelControl.SetEditorDocument(document);
             SequencePanelControl.ClearUndoHistory();
             PlaybackPanelControl.SetPlaybackControls(document.Playback);
             RefreshConditionStepChoices();
             ConditionPanel.LoadConditions(document.EffectiveConditions);
+            RefreshWorkspaceStartupGateWait();
             RefreshRunNowHint();
             SequencePanelControl.SetConditionHighlights(document.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             CheckAndWarnConflicts(document);
@@ -3714,6 +3745,7 @@ public partial class MainWindow : Window
         LocalizationService.SetLanguage(cultureName);
         ApplyLocalization();
         LibraryPanel.RefreshList();
+        if (GetPlaybackStartupGateWait() is not null) UpdatePlaybackStatus();
     }
 
     private void ApplyLocalization()
@@ -3886,6 +3918,7 @@ public partial class MainWindow : Window
             SequencePanelControl.CaptureUndoSnapshot();
             SequencePanelControl.SetEditorDocument(updated);
             RefreshConditionStepChoices();
+            RefreshWorkspaceStartupGateWait();
             SequencePanelControl.SetConditionHighlights(updated.EffectiveConditions, i => ConditionPanel.GetConditionColor(i));
             CheckAndWarnConflicts(updated);
             ScheduleAutoSave();

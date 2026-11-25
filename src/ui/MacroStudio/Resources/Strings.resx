@@ -269,6 +269,8 @@
   <data name="PlaybackStatusListeningWithTrigger" xml:space="preserve">
     <value>Playback: Listening ({0})</value>
   </data>
+  <data name="PlaybackWaitingForStartupGate" xml:space="preserve"><value>{0} triggered · Waiting for {1}</value></data>
+  <data name="PlaybackUnnamedStartupGate" xml:space="preserve"><value>Unnamed startup condition</value></data>
   <data name="PlaybackStatusRunning" xml:space="preserve">
     <value>Playback: Running</value>
   </data>
@@ -750,6 +752,8 @@
   <data name="FileFolderType" xml:space="preserve"><value>File folder</value></data>
   <data name="MacroFileType" xml:space="preserve"><value>Macro</value></data>
   <data name="ConditionMacroFileType" xml:space="preserve"><value>Condition macro</value></data>
+  <data name="LibraryFilterAllMacros" xml:space="preserve"><value>All</value></data>
+  <data name="LibraryFilterNoConditionMacros" xml:space="preserve"><value>No matching condition macros</value></data>
   <data name="FolderItemCount" xml:space="preserve"><value>{0} item(s)</value></data>
   <data name="UpOneLevel" xml:space="preserve"><value>Back to parent</value></data>
   <data name="ViewDetails" xml:space="preserve"><value>Details</value></data>
@@ -1082,4 +1086,10 @@ Stalls &gt; 50 µs: {3}, &gt; 200 µs: {4}
   <data name="StudioMacroPlayback" xml:space="preserve"><value>Macro playback</value></data>
   <data name="StudioStandaloneConditionSettings" xml:space="preserve"><value>Condition settings</value></data>
   <data name="StudioAddAction" xml:space="preserve"><value>Add action</value></data>
+  <data name="StudioMainSequenceTab" xml:space="preserve"><value>Main sequence</value></data>
+  <data name="StudioConditionsTabCount" xml:space="preserve"><value>Conditions {0}</value></data>
+  <data name="StudioStartupGate" xml:space="preserve"><value>Startup gate · {0}</value></data>
+  <data name="StudioStartupGateCount" xml:space="preserve"><value>Startup gate · {0} +{1}</value></data>
+  <data name="StudioWaitingForGate" xml:space="preserve"><value>Waiting for · {0}</value></data>
+  <data name="StudioStartupGatesHelp" xml:space="preserve"><value>Playback starts after these conditions pass. Click to view the condition settings.</value></data>
 </root>

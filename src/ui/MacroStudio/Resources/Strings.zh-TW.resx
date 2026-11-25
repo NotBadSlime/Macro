@@ -64,6 +64,8 @@
   <data name="PlaybackStatusListening" xml:space="preserve"><value>播放：監聽中</value></data>
   <data name="PlaybackStatusListeningWithTrigger" xml:space="preserve"><value>播放：監聽中（{0}）</value></data>
   <data name="PlaybackStatusRunning" xml:space="preserve"><value>播放：執行中</value></data>
+  <data name="PlaybackWaitingForStartupGate" xml:space="preserve"><value>{0} 已觸發，正在等待「{1}」</value></data>
+  <data name="PlaybackUnnamedStartupGate" xml:space="preserve"><value>未命名開局條件</value></data>
   <data name="PlaybackStatusStopping" xml:space="preserve"><value>播放：停止中</value></data>
   <data name="PlaybackStatusFormat" xml:space="preserve"><value>播放：{0}</value></data>
   <data name="PlaybackStatusInputUnavailable" xml:space="preserve"><value>播放：輸入後端不可用</value></data>
@@ -463,6 +465,8 @@
   <data name="FileFolderType" xml:space="preserve"><value>資料夾</value></data>
   <data name="MacroFileType" xml:space="preserve"><value>巨集檔案</value></data>
   <data name="ConditionMacroFileType" xml:space="preserve"><value>條件宏</value></data>
+  <data name="LibraryFilterAllMacros" xml:space="preserve"><value>全部</value></data>
+  <data name="LibraryFilterNoConditionMacros" xml:space="preserve"><value>沒有符合的條件宏</value></data>
   <data name="FolderItemCount" xml:space="preserve"><value>{0} 個項目</value></data>
   <data name="UpOneLevel" xml:space="preserve"><value>返回上層</value></data>
   <data name="ViewDetails" xml:space="preserve"><value>詳細資料</value></data>
@@ -782,4 +786,10 @@
   <data name="StudioMacroPlayback" xml:space="preserve"><value>巨集播放設定</value></data>
   <data name="StudioStandaloneConditionSettings" xml:space="preserve"><value>條件設定</value></data>
   <data name="StudioAddAction" xml:space="preserve"><value>新增動作</value></data>
+  <data name="StudioMainSequenceTab" xml:space="preserve"><value>主序列</value></data>
+  <data name="StudioConditionsTabCount" xml:space="preserve"><value>條件 {0}</value></data>
+  <data name="StudioStartupGate" xml:space="preserve"><value>開局條件 · {0}</value></data>
+  <data name="StudioStartupGateCount" xml:space="preserve"><value>開局條件 · {0} +{1}</value></data>
+  <data name="StudioWaitingForGate" xml:space="preserve"><value>等待條件 · {0}</value></data>
+  <data name="StudioStartupGatesHelp" xml:space="preserve"><value>以下條件滿足後才會開始播放。點選即可查看條件設定。</value></data>
 </root>

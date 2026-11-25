@@ -174,7 +174,8 @@ internal static class UiSnapshot
         var main = (MainWindow)window;
         Click(main.ConditionWorkspaceButton);
         main.UpdateLayout();
-        if (!main.ConditionToolChrome.IsVisible || main.ActionPaletteToolChrome.IsVisible)
+        if (!main.ConditionPanel.IsVisible || !main.StandaloneConditionSettingsChrome.IsVisible ||
+            main.ActionPaletteToolChrome.IsVisible)
             throw new InvalidOperationException("The Conditions shortcut did not open the condition editor.");
         Click(main.JsonWorkspaceButton);
         main.UpdateLayout();

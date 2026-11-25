@@ -15,6 +15,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="LatencyProbe" />
     <InternalsVisibleTo Include="MacroHid.Core.Tests" />
+    <InternalsVisibleTo Include="MacroStudio" />
     <InternalsVisibleTo Include="YuanShenMouseProbe" />
   </ItemGroup>
 

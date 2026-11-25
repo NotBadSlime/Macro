@@ -35,6 +35,7 @@ public sealed class ConditionMonitor : IDisposable
     private readonly IPlaybackDelayStrategy pollingDelayStrategy;
     private readonly InputPressFloor pressFloor;
     private readonly ConditionMonitorMode mode;
+    internal Action<bool>? StartupGateWaitChanged { get; init; }
 
     private CancellationTokenSource cts = new();
     private Thread? monitorThread;
@@ -212,6 +213,13 @@ public sealed class ConditionMonitor : IDisposable
         var evaluateOnce = mode == ConditionMonitorMode.FixedConditionIteration
             && activationIntervals.Any(interval => interval.End is null);
         var nextPollTick = clock.GetTimestamp();
+        var waitingForStartupGate = false;
+        void ReportStartupGateWait(bool waiting)
+        {
+            if (StartupGateWaitChanged is null || waitingForStartupGate == waiting) return;
+            waitingForStartupGate = waiting;
+            StartupGateWaitChanged(waiting);
+        }
 
         try
         {
@@ -226,6 +234,7 @@ public sealed class ConditionMonitor : IDisposable
 
                     if (evaluator.Evaluate(directive.Condition, cancellationToken))
                     {
+                        ReportStartupGateWait(false);
                         triggered = true;
                         using var pauseLease = directive.ExecutionMode == ConditionExecutionMode.PauseMainTimeline
                             ? pauseCoordinator?.Pause()
@@ -239,6 +248,7 @@ public sealed class ConditionMonitor : IDisposable
                     else
                     {
                         if (evaluateOnce) return;
+                        ReportStartupGateWait(true);
                         nextPollTick += pollTicks;
                         // Skip missed polls instead of repeatedly running expensive OCR to catch up.
                         var now = clock.GetTimestamp();
@@ -255,6 +265,7 @@ public sealed class ConditionMonitor : IDisposable
         }
         finally
         {
+            ReportStartupGateWait(false);
             timeline?.MarkFinished(conditionIndex, clock.GetTimestamp());
         }
     }

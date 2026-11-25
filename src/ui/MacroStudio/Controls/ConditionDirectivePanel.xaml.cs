@@ -309,6 +309,11 @@ public partial class ConditionDirectivePanel : UserControl
         ThenActionSequence.MacroLibraryDropped += OnThenMacroLibraryDropped;
     }
 
+    internal void SetActionMacroResolvers(Func<string, string> nameResolver, Func<string, MacroDocument?> documentResolver) =>
+        ThenActionSequence.SetMacroResolvers(nameResolver, documentResolver);
+
+    internal void RefreshActionMacroReferences() => ThenActionSequence.RefreshMacroReferences();
+
     public void SetStepChoices(IReadOnlyList<StepChoice> choices)
     {
         var previousLoadingEditor = loadingEditor;
@@ -351,6 +356,15 @@ public partial class ConditionDirectivePanel : UserControl
         RefreshList();
         // RefreshList suppresses SelectionChanged, including when a different document reuses index 0.
         ReloadSelectedCondition(scrollThenActionsIntoView: false);
+    }
+
+    internal void SelectCondition(string id)
+    {
+        var index = conditions.FindIndex(condition => condition.Id == id);
+        if (index < 0) return;
+        ConditionList.SelectedIndex = index;
+        ConditionList.ScrollIntoView(ConditionList.Items[index]);
+        ConditionList.Focus();
     }
 
     public Brush GetConditionColor(int index)

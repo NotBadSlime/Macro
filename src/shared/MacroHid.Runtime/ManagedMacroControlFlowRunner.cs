@@ -25,6 +25,7 @@ internal sealed class ManagedMacroControlFlowRunner
     private readonly InputPressFloor pressFloor;
     private static readonly AsyncLocal<int> ConditionalCallDepth = new();
     private readonly PrecisionMode precision;
+    private readonly Action<MacroDocument, ConditionalDirective?>? startupGateWaitChanged;
 
     public ManagedMacroControlFlowRunner(
         IMacroInputSink inputSink,
@@ -38,7 +39,8 @@ internal sealed class ManagedMacroControlFlowRunner
         object? inputGate = null,
         int parallelDepth = 0,
         InputPressFloor? pressFloor = null,
-        PrecisionMode precision = PrecisionMode.Balanced)
+        PrecisionMode precision = PrecisionMode.Balanced,
+        Action<MacroDocument, ConditionalDirective?>? startupGateWaitChanged = null)
     {
         this.inputSink = inputSink;
         this.delayStrategy = delayStrategy;
@@ -52,6 +54,7 @@ internal sealed class ManagedMacroControlFlowRunner
         this.parallelDepth = parallelDepth;
         this.pressFloor = pressFloor ?? InputPressFloor.Factory;
         this.precision = precision;
+        this.startupGateWaitChanged = startupGateWaitChanged;
     }
 
     public MacroControlFlowResult Run(
@@ -587,10 +590,11 @@ internal sealed class ManagedMacroControlFlowRunner
             while (Interlocked.CompareExchange(ref outcome, value, old) != old);
             cancellation.Cancel();
         }
-        ConditionMonitor Create(ConditionalDirective condition, int index, IReadOnlyList<ConditionTimeInterval> intervals)
+        ConditionMonitor Create(ConditionalDirective condition, int index, IReadOnlyList<ConditionTimeInterval> intervals,
+            Action<bool>? onStartupGateWaitChanged = null)
             => new(condition, evaluator, inputSink, macroResolver, started, frequency,
                 precision, () => Stop(3), () => Stop(2), localPause, timeline, index, intervals, pressFloor,
-                stopCurrentRequested: () => Stop(1));
+                stopCurrentRequested: () => Stop(1)) { StartupGateWaitChanged = onStartupGateWaitChanged };
         try
         {
             // Gates belong to this call, not to the parent macro's time origin.
@@ -598,7 +602,8 @@ internal sealed class ManagedMacroControlFlowRunner
             {
                 var condition = target.EffectiveConditions[i];
                 if (condition.ExecutionMode != ConditionExecutionMode.GateMainSequence) continue;
-                var gate = Create(condition, i, ConditionActivationSchedule.ResolveStartupGate());
+                var gate = Create(condition, i, ConditionActivationSchedule.ResolveStartupGate(),
+                    startupGateWaitChanged is null ? null : waiting => startupGateWaitChanged(target, waiting ? condition : null));
                 monitors.Add(gate);
                 gate.Activate();
                 gate.WaitForTriggeredCompletion(cancellation.Token);
@@ -620,7 +625,8 @@ internal sealed class ManagedMacroControlFlowRunner
                 monitor.Activate();
             }
             var runner = new ManagedMacroControlFlowRunner(inputSink, delayStrategy, clock, pixelEvaluator,
-                macroResolver, localPause, textEvaluator, true, inputGate, parallelDepth, pressFloor, precision);
+                macroResolver, localPause, textEvaluator, true, inputGate, parallelDepth, pressFloor, precision,
+                startupGateWaitChanged);
             var flow = runner.Run(target, mainStart, frequency, cancellation.Token, noWait, ref sequence, ref submitted);
             if (!target.IsConditionMacro && target.Steps.Count > 0)
                 foreach (var monitor in monitors) monitor.CompleteAfterCurrentEvaluation();

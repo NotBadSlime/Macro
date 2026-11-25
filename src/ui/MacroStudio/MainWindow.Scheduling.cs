@@ -62,7 +62,8 @@ public partial class MainWindow
         {
             RefreshDirectStopBinding();
             prepared = await Task.Run(() => PlaybackEngineHost.Prepare(new SendInputMacroSink(), document,
-                resolver ?? CaptureResolver(document, macroId).Resolver, options, immediate, version), cancellation);
+                resolver ?? CaptureResolver(document, macroId).Resolver, options, immediate, version, OnStartupGateWaitChanged),
+                cancellation);
 
             MacroPlaybackController controller;
             Task<PlaybackRunResult> completion;
@@ -173,7 +174,7 @@ public partial class MainWindow
                 string fingerprint = captured.Fingerprint + options[candidate.Item.Id] + version.Id;
                 if (known.GetValueOrDefault(candidate.Item.Id) == fingerprint) continue;
                 var executor = PlaybackEngineHost.Prepare(new SendInputMacroSink(), candidate.Document, captured.Resolver,
-                    options[candidate.Item.Id], immediate: false, version);
+                    options[candidate.Item.Id], immediate: false, version, OnStartupGateWaitChanged);
                 prepared.Add(candidate.Item.Id, new(fingerprint, executor));
             }
             return prepared;

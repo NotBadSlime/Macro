@@ -86,6 +86,14 @@ public sealed class MacroPlaybackController : IDisposable, IAsyncDisposable
     private long runId;
     private volatile PlaybackStatus status;
     public PlaybackStatus Status => legacy is { } route ? ParseLegacyStatus(route.Controller.Status) : status;
+    internal StartupGateWait? WaitingStartupGate
+    {
+        get
+        {
+            lock (gate)
+                return Status == PlaybackStatus.Running ? (runningExecutor as MacroPlaybackExecutor)?.WaitingStartupGate : null;
+        }
+    }
     public long RunId => Interlocked.Read(ref runId);
     public PrecisionMode Precision { get { lock (gate) return executionOptions.Precision; } }
     public Exception? LastError { get; private set; }

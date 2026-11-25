@@ -36,6 +36,7 @@ public partial class StepSequencePanel : UserControl
     private IReadOnlyList<string> dragSelectionSnapshot = [];
     private MacroEditorState? state;
     private Func<string, string>? macroNameResolver;
+    private Func<string, MacroDocument?>? macroDocumentResolver;
     private Point stepDragStartPoint;
     private DateTime stepDragStartTime;
     private string stepDragStartPath = string.Empty;
@@ -130,11 +131,14 @@ public partial class StepSequencePanel : UserControl
         InlineStepEditor.CoordinatePickerFinished += OnInlineCoordinatePickerFinished;
     }
 
-    public void SetMacroNameResolver(Func<string, string>? resolver)
+    public void SetMacroResolvers(Func<string, string> nameResolver, Func<string, MacroDocument?> documentResolver)
     {
-        macroNameResolver = resolver;
+        macroNameResolver = nameResolver;
+        macroDocumentResolver = documentResolver;
         RefreshList(SelectedStepPath);
     }
+
+    internal void RefreshMacroReferences() => RefreshList(SelectedStepPath);
 
     private void StepSequencePanel_Loaded(object sender, RoutedEventArgs e)
     {
@@ -509,7 +513,7 @@ public partial class StepSequencePanel : UserControl
         double offset = scroll?.VerticalOffset ?? 0;
         var available = displayRows.GroupBy(item => (item.Identity, item.Kind)).ToDictionary(g => g.Key, g => new Queue<StepDisplayItem>(g));
         var desired = new List<StepDisplayItem>();
-        foreach (var item in StepDisplayItem.FlattenWithExecutionOrdinals(steps, macroNameResolver: ResolveMacroDisplayName))
+        foreach (var item in StepDisplayItem.FlattenWithExecutionOrdinals(steps, ResolveMacroDisplayName, macroDocumentResolver))
         {
             var model = MacroStepTreeEditor.GetAtPath(steps, item.StepPath);
             item.Identity = identities.GetValue(model, _ => new(++nextIdentity)).Value;

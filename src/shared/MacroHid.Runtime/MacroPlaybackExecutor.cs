@@ -293,6 +293,8 @@ public interface IMacroInputSink
     InputSubmissionStats? GetStats();
 }
 
+internal sealed record StartupGateWait(MacroDocument Document, ConditionalDirective Condition);
+
 public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
 {
     private readonly IMacroInputSink inputSink;
@@ -313,6 +315,15 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
     private readonly ConditionActionPlanCache.Store preparedConditions = new();
     private MacroDocument? conditionPreparedDocument;
     private PlaybackExecutionOptions? conditionPreparedOptions;
+    private StartupGateWait? startupGateWait;
+    internal StartupGateWait? WaitingStartupGate => Volatile.Read(ref startupGateWait);
+    internal event Action? StartupGateWaitChanged;
+
+    private void ReportStartupGateWait(MacroDocument document, ConditionalDirective? gate)
+    {
+        Volatile.Write(ref startupGateWait, gate is null ? null : new StartupGateWait(document, gate));
+        StartupGateWaitChanged?.Invoke();
+    }
 
     public MacroPlaybackExecutor(
         IMacroInputSink inputSink,
@@ -1226,7 +1237,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     textEvaluator: (step, token) => conditionEvaluator.Evaluate(
                         new TextMatcher(step.Region, step.ExpectedText, step.Contains, step.Language, step.UseRegex),
                         token),
-                    pressFloor: options.PressFloor, precision: options.Precision);
+                    pressFloor: options.PressFloor, precision: options.Precision,
+                    startupGateWaitChanged: StartupGateWaitChanged is null ? null : ReportStartupGateWait);
                 var flow = MacroControlFlowResult.Completed;
                 try
                 {
@@ -1386,6 +1398,20 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         CancellationToken cancellationToken,
         TimeSpan? pollInterval = null,
         IReadOnlyList<ConditionTimeInterval>? activationIntervals = null)
+        => WaitForStartupGates(gates, evaluator, clock, delayStrategy, triggerTick, qpcFrequency, cancellationToken,
+            pollInterval, activationIntervals, onWaitChanged: null);
+
+    private static bool WaitForStartupGates(
+        IReadOnlyList<ConditionalDirective> gates,
+        IConditionEvaluator evaluator,
+        IHighResolutionClock clock,
+        IPlaybackDelayStrategy delayStrategy,
+        long triggerTick,
+        long qpcFrequency,
+        CancellationToken cancellationToken,
+        TimeSpan? pollInterval,
+        IReadOnlyList<ConditionTimeInterval>? activationIntervals,
+        Action<ConditionalDirective?>? onWaitChanged)
     {
         if (gates.Count == 0)
         {
@@ -1399,46 +1425,60 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         var intervals = activationIntervals
             ?? BuildLegacyGateIntervals(gates);
 
-        while (true)
+        ConditionalDirective? reportedGate = null;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var now = clock.GetTimestamp();
-            var elapsedMs = (now - triggerTick) * 1000.0 / qpcFrequency;
-            if (ConditionActivationSchedule.IsPastAll(intervals, elapsedMs))
+            while (true)
             {
-                return false;
-            }
-
-            if (!ConditionActivationSchedule.Contains(intervals, elapsedMs))
-            {
-                var nextStart = ConditionActivationSchedule.NextStartAfter(intervals, elapsedMs);
-                if (nextStart is null)
+                cancellationToken.ThrowIfCancellationRequested();
+                var now = clock.GetTimestamp();
+                var elapsedMs = (now - triggerTick) * 1000.0 / qpcFrequency;
+                if (ConditionActivationSchedule.IsPastAll(intervals, elapsedMs))
                 {
                     return false;
                 }
 
-                var dueTick = triggerTick
-                    + (long)Math.Round(nextStart.Value.TotalSeconds * qpcFrequency, MidpointRounding.AwayFromZero);
-                delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait: false);
-                continue;
-            }
-
-            var allMatched = true;
-            foreach (var gate in gates)
-            {
-                if (!evaluator.Evaluate(gate.Condition, cancellationToken))
+                if (!ConditionActivationSchedule.Contains(intervals, elapsedMs))
                 {
-                    allMatched = false;
-                    break;
+                    var nextStart = ConditionActivationSchedule.NextStartAfter(intervals, elapsedMs);
+                    if (nextStart is null)
+                    {
+                        return false;
+                    }
+
+                    var dueTick = triggerTick
+                        + (long)Math.Round(nextStart.Value.TotalSeconds * qpcFrequency, MidpointRounding.AwayFromZero);
+                    delayStrategy.WaitUntil(dueTick, qpcFrequency, cancellationToken, noWait: false);
+                    continue;
                 }
-            }
 
-            if (allMatched)
-            {
-                return true;
-            }
+                ConditionalDirective? blockedGate = null;
+                foreach (var gate in gates)
+                {
+                    if (!evaluator.Evaluate(gate.Condition, cancellationToken))
+                    {
+                        blockedGate = gate;
+                        break;
+                    }
+                }
 
-            delayStrategy.WaitUntil(now + pollTicks, qpcFrequency, cancellationToken, noWait: false);
+                if (blockedGate is null)
+                {
+                    return true;
+                }
+
+                if (onWaitChanged is not null && !ReferenceEquals(reportedGate, blockedGate))
+                {
+                    reportedGate = blockedGate;
+                    onWaitChanged(blockedGate);
+                }
+
+                delayStrategy.WaitUntil(now + pollTicks, qpcFrequency, cancellationToken, noWait: false);
+            }
+        }
+        finally
+        {
+            if (reportedGate is not null) onWaitChanged?.Invoke(null);
         }
     }
 
@@ -1480,6 +1520,25 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
         ConditionTimeline? timeline = null,
         IReadOnlyList<ConditionalDirective>? allConditions = null,
         IReadOnlyList<StepTimeWindow>? stepTimeWindows = null)
+        => WaitForStartupGatesSequentially(gates, evaluator, clock, delayStrategy, qpcFrequency, cancellationToken,
+            onGatePassed, pollInterval, playbackTriggerTick, mainIterationTick, timeline, allConditions,
+            stepTimeWindows, onWaitChanged: null);
+
+    private static bool WaitForStartupGatesSequentially(
+        IReadOnlyList<ConditionalDirective> gates,
+        IConditionEvaluator evaluator,
+        IHighResolutionClock clock,
+        IPlaybackDelayStrategy delayStrategy,
+        long qpcFrequency,
+        CancellationToken cancellationToken,
+        Action<ConditionalDirective>? onGatePassed,
+        TimeSpan? pollInterval,
+        long? playbackTriggerTick,
+        long? mainIterationTick,
+        ConditionTimeline? timeline,
+        IReadOnlyList<ConditionalDirective>? allConditions,
+        IReadOnlyList<StepTimeWindow>? stepTimeWindows,
+        Action<ConditionalDirective?>? onWaitChanged)
     {
         var playbackTick = playbackTriggerTick ?? clock.GetTimestamp();
         var iterationTick = mainIterationTick ?? playbackTick;
@@ -1501,7 +1560,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                     qpcFrequency,
                     cancellationToken,
                     pollInterval,
-                    intervals))
+                    intervals,
+                    onWaitChanged))
             {
                 return false;
             }
@@ -1615,11 +1675,13 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                             throw new StartupGateStopIterationException();
                         }
                     },
+                    pollInterval: null,
                     playbackTriggerTick: playbackTriggerTick,
                     mainIterationTick: plannedIterationStartTick,
                     timeline: timeline,
                     allConditions: document.EffectiveConditions,
-                    stepTimeWindows: stepWindows))
+                    stepTimeWindows: stepWindows,
+                    onWaitChanged: StartupGateWaitChanged is null ? null : gate => ReportStartupGateWait(document, gate)))
             {
                 return StartupGateWaitResult.Failed;
             }
@@ -1659,7 +1721,8 @@ public sealed class MacroPlaybackExecutor : IMacroPlaybackExecutor, IDisposable
                 clock,
                 pixelEvaluator: null,
                 macroResolver,
-                pressFloor: pressFloor);
+                pressFloor: pressFloor,
+                startupGateWaitChanged: StartupGateWaitChanged is null ? null : ReportStartupGateWait);
             return runner.Run(
                 document,
                 clock.GetTimestamp(),

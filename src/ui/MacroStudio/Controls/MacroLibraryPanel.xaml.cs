@@ -175,6 +175,9 @@ public partial class MacroLibraryPanel : UserControl
         LibraryDisplaySettings.Header = $"{L("View")} / {L("SortBy")}";
         MacroSearchBox.ToolTip = L("SearchMacros");
         MacroSearchPlaceholderText.Text = L("SearchMacros");
+        AllMacrosFilterButton.Content = L("LibraryFilterAllMacros");
+        ConditionMacrosFilterButton.Content = L("ConditionMacroFileType");
+        ConditionFilterEmptyText.Text = L("LibraryFilterNoConditionMacros");
         GroupProcessFilterPlaceholderText.Text = L("ProcessFilterPlaceholder");
         RefreshConversionText();
 
@@ -495,6 +498,10 @@ public partial class MacroLibraryPanel : UserControl
         var groupItems = materializedItems
             .Where(item => string.Equals(item.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
             .ToList();
+        var conditionMacrosOnly = ConditionMacrosFilterButton.IsChecked == true;
+        IEnumerable<MacroLibraryTreeNode> CreateVisibleMacroNodes(IEnumerable<MacroLibraryItem> items) =>
+            items.Select(CreateMacroNode).Where(node => !conditionMacrosOnly || node.IsConditionMacro);
+
         var nodes = new List<MacroLibraryTreeNode>();
         if (string.IsNullOrWhiteSpace(currentDatabaseFolder))
         {
@@ -507,10 +514,14 @@ public partial class MacroLibraryPanel : UserControl
                 .OrderBy(folder => folder, StringComparer.CurrentCultureIgnoreCase);
             foreach (var folder in folderNames)
             {
-                var children = groupItems
-                    .Where(item => string.Equals(item.Folder, folder, StringComparison.Ordinal))
-                    .Select(CreateMacroNode)
+                var children = CreateVisibleMacroNodes(groupItems
+                    .Where(item => string.Equals(item.Folder, folder, StringComparison.Ordinal)))
                     .ToList();
+                if (conditionMacrosOnly && children.Count == 0)
+                {
+                    continue;
+                }
+
                 if (!string.IsNullOrWhiteSpace(search)
                     && !folder.Contains(search, StringComparison.CurrentCultureIgnoreCase)
                     && !children.Any(child => child.Title.Contains(search, StringComparison.CurrentCultureIgnoreCase)))
@@ -522,11 +533,11 @@ public partial class MacroLibraryPanel : UserControl
             }
         }
 
-        nodes.AddRange(groupItems
+        nodes.AddRange(CreateVisibleMacroNodes(groupItems
             .Where(item => string.Equals(item.Folder, currentDatabaseFolder, StringComparison.Ordinal))
             .Where(item => string.IsNullOrWhiteSpace(search)
-                || item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase))
-            .Select(CreateMacroNode));
+                || item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                || (conditionMacrosOnly && item.Folder.Contains(search, StringComparison.CurrentCultureIgnoreCase)))));
         return nodes;
     }
 
@@ -758,6 +769,8 @@ public partial class MacroLibraryPanel : UserControl
     }
 
     private void MacroSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshList();
+
+    private void MacroTypeFilter_Checked(object sender, RoutedEventArgs e) => RefreshList();
 
     private void LibrarySortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1362,6 +1375,9 @@ public partial class MacroLibraryPanel : UserControl
         ExplorerSelectionStatusText.Text = selectedCount > 0
             ? LF("ExplorerSelectedCount", selectedCount, totalCount)
             : LF("ExplorerItemCount", totalCount);
+        ConditionFilterEmptyText.Visibility = totalCount == 0 && ConditionMacrosFilterButton.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void QueueCommitRename(MacroLibraryTreeNode node)

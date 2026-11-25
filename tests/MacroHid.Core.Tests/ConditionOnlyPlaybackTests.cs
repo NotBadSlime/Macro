@@ -13,6 +13,56 @@ internal static class ConditionOnlyPlaybackTests
         GateOnlyLoopRepeatsItsActions();
     }
 
+    public static void ReportsActualStartupGateWait()
+    {
+        foreach (var nested in new[] { false, true })
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            using var changes = new BlockingCollection<string>();
+            var sink = new InertInputSink();
+            var owner = new MacroDocument(1, "gated macro", PlaybackSettings.Default, [Tap(HidKey.A)],
+                [Directive(1, []) with { ExecutionMode = ConditionExecutionMode.GateMainSequence },
+                 Directive(2, []) with { ExecutionMode = ConditionExecutionMode.GateMainSequence }]);
+            var document = nested
+                ? new MacroDocument(1, "root macro", PlaybackSettings.Default, [new MacroCallStep(owner.Name)])
+                : owner;
+            var allowed = 0;
+            var executor = new MacroPlaybackExecutor(sink,
+                livePixelEvaluator: pixel => pixel.Coordinate.X <= Volatile.Read(ref allowed),
+                macroResolver: name => name == owner.Name ? owner : null);
+            executor.StartupGateWaitChanged += () => changes.Add(executor.WaitingStartupGate?.Condition.Id ?? "");
+            var controller = new MacroPlaybackController(document, executor, Options(PlaybackMode.FixedCount));
+            try
+            {
+                controller.TriggerPressedAsync().GetAwaiter().GetResult();
+                Assert.Equal("condition-1", changes.Take(deadline.Token));
+                Assert.Equal(owner, controller.WaitingStartupGate?.Document);
+                Assert.Equal(0, sink.DownCount(HidKey.A));
+
+                Volatile.Write(ref allowed, 1);
+                Assert.Equal("", changes.Take(deadline.Token));
+                Assert.Equal("condition-2", changes.Take(deadline.Token));
+                Assert.Equal(0, sink.DownCount(HidKey.A));
+
+                controller.StopAsync().WaitAsync(deadline.Token).GetAwaiter().GetResult();
+                Assert.True(controller.WhenIdleAsync().GetAwaiter().GetResult().Cancelled);
+                Assert.Equal("", changes.Take(deadline.Token));
+                Assert.True(controller.WaitingStartupGate is null);
+                Assert.Equal(0, sink.DownCount(HidKey.A));
+
+                Volatile.Write(ref allowed, 2);
+                controller.TriggerPressedAsync().GetAwaiter().GetResult();
+                Assert.False(controller.WhenIdleAsync().WaitAsync(deadline.Token).GetAwaiter().GetResult().Cancelled);
+                Assert.Equal(1, sink.DownCount(HidKey.A));
+                Assert.False(changes.TryTake(out _));
+            }
+            finally
+            {
+                controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+            }
+        }
+    }
+
     private static void FixedIterationsEvaluateUnboundedConditionsOnce()
     {
         foreach (var kind in new[] { MacroKind.Normal, MacroKind.Condition })

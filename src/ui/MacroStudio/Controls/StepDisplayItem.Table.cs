@@ -38,58 +38,93 @@ public sealed partial class StepDisplayItem
     private static void AssignTableCells(
         IReadOnlyList<MacroStep> steps,
         IReadOnlyList<StepDisplayItem> rows,
-        Func<string, string>? macroNameResolver)
+        Func<string, string>? macroNameResolver,
+        Func<string, MacroDocument?>? macroDocumentResolver)
     {
+        var durations = new Dictionary<MacroDocument, ScheduleRange?>(ReferenceEqualityComparer.Instance);
+        var visiting = new HashSet<MacroDocument>(ReferenceEqualityComparer.Instance);
         var index = 0;
-        AssignSchedule(steps, rows, ref index, new ScheduleRange(0, 0), macroNameResolver);
+        AssignSchedule(steps, rows, ref index, new ScheduleRange(0, 0), macroNameResolver, ResolveMacroDuration);
+
+        ScheduleRange? ResolveMacroDuration(string reference)
+        {
+            if (macroDocumentResolver?.Invoke(reference) is not { } document || document.EffectiveConditions.Count > 0)
+                return null;
+            if (durations.TryGetValue(document, out var cached))
+                return cached;
+            if (visiting.Count >= 64 || !visiting.Add(document))
+                return null;
+
+            try
+            {
+                // A child call uses its sequence once, independent of its trigger playback mode.
+                var unusedIndex = 0;
+                return durations[document] = AssignSchedule(document.Steps, null, ref unusedIndex,
+                    new ScheduleRange(0, 0), null, ResolveMacroDuration);
+            }
+            finally
+            {
+                visiting.Remove(document);
+            }
+        }
     }
 
     private static ScheduleRange? AssignSchedule(
         IReadOnlyList<MacroStep> steps,
-        IReadOnlyList<StepDisplayItem> rows,
+        IReadOnlyList<StepDisplayItem>? rows,
         ref int index,
         ScheduleRange? cursor,
-        Func<string, string>? macroNameResolver)
+        Func<string, string>? macroNameResolver,
+        Func<string, ScheduleRange?> resolveMacroDuration)
     {
         foreach (var step in steps)
         {
-            AssignRow(rows[index++], step, cursor, macroNameResolver);
+            if (rows is null && cursor is null)
+                break;
+
+            var callDuration = step is MacroCallStep call ? resolveMacroDuration(call.Macro) : null;
+            AssignRow(rows, ref index, step, cursor, macroNameResolver, callDuration);
             switch (step)
             {
                 case RepeatStep repeat:
-                    var firstPass = AssignSchedule(repeat.Steps, rows, ref index, repeat.Count > 0 ? cursor : null, macroNameResolver);
+                    var firstPass = AssignSchedule(repeat.Steps, rows, ref index, repeat.Count > 0 ? cursor : null,
+                        macroNameResolver, resolveMacroDuration);
                     if (repeat.Count > 0)
                         cursor = RepeatSchedule(cursor, firstPass, repeat.Count);
-                    AssignRow(rows[index++], step, cursor, macroNameResolver);
+                    AssignRow(rows, ref index, step, cursor, macroNameResolver);
                     break;
 
                 case PixelWhenStep pixel:
-                    AssignSchedule(pixel.ThenSteps, rows, ref index, null, macroNameResolver);
+                    AssignSchedule(pixel.ThenSteps, rows, ref index, null, macroNameResolver, resolveMacroDuration);
                     cursor = null;
-                    AssignRow(rows[index++], step, cursor, macroNameResolver);
+                    AssignRow(rows, ref index, step, cursor, macroNameResolver);
                     break;
 
                 case TextWhenStep text:
-                    AssignSchedule(text.ThenSteps, rows, ref index, null, macroNameResolver);
+                    AssignSchedule(text.ThenSteps, rows, ref index, null, macroNameResolver, resolveMacroDuration);
                     cursor = null;
-                    AssignRow(rows[index++], step, cursor, macroNameResolver);
+                    AssignRow(rows, ref index, step, cursor, macroNameResolver);
                     break;
 
                 case ParallelStep parallel:
-                    var left = AssignSchedule([parallel.Left], rows, ref index, cursor, macroNameResolver);
-                    var right = AssignSchedule([parallel.Right], rows, ref index, cursor, macroNameResolver);
+                    var left = AssignSchedule([parallel.Left], rows, ref index, cursor, macroNameResolver, resolveMacroDuration);
+                    var right = AssignSchedule([parallel.Right], rows, ref index, cursor, macroNameResolver, resolveMacroDuration);
                     cursor = left is { } leftEnd && right is { } rightEnd
                         ? new ScheduleRange(Math.Max(leftEnd.Min, rightEnd.Min), Math.Max(leftEnd.Max, rightEnd.Max))
                         : null;
-                    AssignRow(rows[index++], step, cursor, macroNameResolver);
+                    AssignRow(rows, ref index, step, cursor, macroNameResolver);
                     break;
 
                 case ParallelBranchStep branch:
-                    cursor = AssignSchedule(branch.Steps, rows, ref index, cursor, macroNameResolver);
-                    AssignRow(rows[index++], step, cursor, macroNameResolver);
+                    cursor = AssignSchedule(branch.Steps, rows, ref index, cursor, macroNameResolver, resolveMacroDuration);
+                    AssignRow(rows, ref index, step, cursor, macroNameResolver);
                     break;
 
-                case MacroCallStep or OcrExtractTextStep or OcrClickStep or WindowActivateStep
+                case MacroCallStep:
+                    cursor = AdvanceSchedule(cursor, callDuration);
+                    break;
+
+                case OcrExtractTextStep or OcrClickStep or WindowActivateStep
                     or StopCurrentIterationStep or StopCurrentSequenceStep or StopAllSequencesStep:
                     cursor = null;
                     break;
@@ -98,15 +133,20 @@ public sealed partial class StepDisplayItem
                     if (cursor is { } previous)
                     {
                         var duration = MacroDurationEstimator.EstimateSteps([step]);
-                        cursor = new ScheduleRange(
-                            LimitTicks(previous.Min + (decimal)duration.Min.Ticks),
-                            LimitTicks(previous.Max + (decimal)duration.Max.Ticks));
+                        cursor = AdvanceSchedule(previous, new ScheduleRange(duration.Min.Ticks, duration.Max.Ticks));
                     }
                     break;
             }
         }
         return cursor;
     }
+
+    private static ScheduleRange? AdvanceSchedule(ScheduleRange? start, ScheduleRange? duration) =>
+        start is { } position && duration is { } span
+            ? new ScheduleRange(
+                LimitTicks(position.Min + (decimal)span.Min),
+                LimitTicks(position.Max + (decimal)span.Max))
+            : null;
 
     private static ScheduleRange? RepeatSchedule(ScheduleRange? start, ScheduleRange? firstEnd, int count)
     {
@@ -121,17 +161,24 @@ public sealed partial class StepDisplayItem
     private readonly record struct ScheduleRange(long Min, long Max);
 
     private static void AssignRow(
-        StepDisplayItem row,
+        IReadOnlyList<StepDisplayItem>? rows,
+        ref int index,
         MacroStep step,
         ScheduleRange? cursor,
-        Func<string, string>? macroNameResolver) =>
-        row.Table = BuildCells(row, step, cursor, macroNameResolver);
+        Func<string, string>? macroNameResolver,
+        ScheduleRange? callDuration = null)
+    {
+        if (rows is null) return;
+        var row = rows[index++];
+        row.Table = BuildCells(row, step, cursor, macroNameResolver, callDuration);
+    }
 
     private static StepTableCells BuildCells(
         StepDisplayItem row,
         MacroStep step,
         ScheduleRange? cursor,
-        Func<string, string>? macroNameResolver)
+        Func<string, string>? macroNameResolver,
+        ScheduleRange? callDuration)
     {
         string time = "";
         string description = "";
@@ -156,7 +203,8 @@ public sealed partial class StepDisplayItem
             MouseWheelStep wheel => (L("AddWheel"), $"V {wheel.Vertical} · H {wheel.Horizontal}"),
             TextStep text => (L("AddText"), TrimText(text.Text)),
             CommentStep note => (L("AddComment"), TrimText(note.Text)),
-            MacroCallStep call => (L("AddMacro"), ResolveMacroDisplayName(call.Macro, macroNameResolver)),
+            MacroCallStep call => (L("AddMacro"), JoinParameters(ResolveMacroDisplayName(call.Macro, macroNameResolver),
+                callDuration is { } planned ? FormatTime(planned) + " s" : null)),
             RepeatStep repeat => (L("AddLoop"), $"×{repeat.Count}"),
             ParallelStep => (L("AddParallel"), row.Badge),
             ParallelBranchStep branch => (L("StepTableBranch"), branch.Name),

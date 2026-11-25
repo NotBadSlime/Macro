@@ -12,6 +12,35 @@
             <Setter Property="FontSize" Value="14" />
             <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         </Style>
+        <Style x:Key="LibraryFilterOption" TargetType="RadioButton">
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="FilterOptionBorder" Background="Transparent" BorderBrush="Transparent"
+                                BorderThickness="1" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="FilterOptionBorder" Property="Background" Value="{DynamicResource Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="FilterOptionBorder" Property="Background" Value="{DynamicResource Selection}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FilterOptionBorder" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ExplorerRenameTextBoxStyle" TargetType="{x:Type TextBox}">
             <Setter Property="Visibility" Value="Collapsed" />
             <Setter Property="MinHeight" Value="24" />
@@ -245,6 +274,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding Icon}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"
                            Foreground="{Binding Accent}" VerticalAlignment="Center" />
@@ -258,7 +288,13 @@
                              Style="{StaticResource ExplorerRenameTextBoxStyle}"
                              VerticalAlignment="Center" Loaded="RenameTextBox_Loaded" KeyDown="RenameTextBox_KeyDown" LostFocus="RenameTextBox_LostFocus" />
                 </Grid>
-                <TextBlock Grid.Column="2"
+                <Border Grid.Column="2" Margin="0,0,4,0" Padding="4,1" CornerRadius="4"
+                        Visibility="{Binding ConditionBadgeVisibility}" Background="{DynamicResource BadgeAmber}"
+                        VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ExplorerTypeText}" Foreground="{DynamicResource AccentOrange}"
+                               FontSize="10" TextTrimming="CharacterEllipsis" MaxWidth="76" />
+                </Border>
+                <TextBlock Grid.Column="3"
                            Text="{Binding ExplorerTriggerText}"
                            Foreground="{DynamicResource SecondaryText}"
                            FontFamily="Cascadia Mono, Consolas"
@@ -266,7 +302,7 @@
                            MaxWidth="50"
                            TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center" />
-                <TextBlock Grid.Column="3"
+                <TextBlock Grid.Column="4"
                            Margin="4,0,0,0"
                            Text="&#xE72E;"
                            FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
@@ -376,6 +412,21 @@
                 </Grid>
 
                 <StackPanel x:Name="DatabaseOnlyControls">
+                    <Border Margin="0,0,0,4" Padding="2" CornerRadius="7" BorderThickness="1"
+                            BorderBrush="{DynamicResource ControlBorder}" Background="{DynamicResource ControlBackground}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <RadioButton x:Name="AllMacrosFilterButton" Content="全部" IsChecked="True"
+                                         Style="{StaticResource LibraryFilterOption}" GroupName="LibraryMacroType"
+                                         Checked="MacroTypeFilter_Checked" />
+                            <RadioButton x:Name="ConditionMacrosFilterButton" Grid.Column="1" Content="条件宏"
+                                         Style="{StaticResource LibraryFilterOption}" GroupName="LibraryMacroType"
+                                         Checked="MacroTypeFilter_Checked" />
+                        </Grid>
+                    </Border>
                     <Grid x:Name="DatabaseNavigationBar" Margin="8,2,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="20" />
@@ -520,6 +571,10 @@
                             </ContextMenu>
                         </ListView.ContextMenu>
                     </ListView>
+                    <TextBlock x:Name="ConditionFilterEmptyText" Grid.Row="1" Text="没有匹配的条件宏"
+                               Margin="8,10,8,0" VerticalAlignment="Top" TextWrapping="Wrap"
+                               Foreground="{DynamicResource SecondaryText}" FontSize="12"
+                               IsHitTestVisible="False" Visibility="Collapsed" />
                     <TextBlock x:Name="ExplorerSelectionStatusText"
                                Grid.Row="2"
                                Margin="4,5,4,0"

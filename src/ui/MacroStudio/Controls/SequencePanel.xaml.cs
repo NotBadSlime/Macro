@@ -19,6 +19,10 @@ public partial class SequencePanel : UserControl
     private bool isReadOnly;
     private bool isRecording;
     private bool compactHeader;
+    private IReadOnlyList<ConditionalDirective> startupGates = [];
+    private int conditionCount;
+    private string? waitingGateName;
+    private string? waitingGateId;
     private string editorText = string.Empty;
     private MacroDocument? parsedDocument;
     private Dictionary<string, MacroDocument?> estimateCache = new(StringComparer.OrdinalIgnoreCase);
@@ -32,6 +36,8 @@ public partial class SequencePanel : UserControl
 
     public event Action? SaveLibraryRequested;
     public event Action? RunNowRequested;
+    public event Action<bool>? EditorTabRequested;
+    public event Action<string>? StartupGateRequested;
     public event Action? ShowActionsRequested;
     public event Action? StopRequested;
     public event Action<MacroRecordingMode>? RecordingStartRequested;
@@ -88,7 +94,7 @@ public partial class SequencePanel : UserControl
     {
         state = editorState;
         StepSequenceControl.Initialize(editorState);
-        StepSequenceControl.SetMacroNameResolver(ResolveMacroDisplayName);
+        StepSequenceControl.SetMacroResolvers(ResolveMacroDisplayName, ResolveMacroForEstimate);
         StepSequenceControl.BeforeStepsChanged += CaptureUndoSnapshot;
         StepSequenceControl.StepsChanged += OnStepSequenceStepsChanged;
         StepSequenceControl.StepSelectionChanged += index => StepSelectionChanged?.Invoke(index);
@@ -102,9 +108,26 @@ public partial class SequencePanel : UserControl
         StepSequenceControl.ReturnPreviousMacroRequested += () => ReturnPreviousMacroRequested?.Invoke();
     }
 
+    internal void ConfigureConditionActionTiming(ConditionDirectivePanel panel) =>
+        panel.SetActionMacroResolvers(ResolveMacroDisplayName, ResolveMacroForEstimate);
+
+    internal void RefreshMacroReferences(ConditionDirectivePanel panel)
+    {
+        estimateCache.Clear();
+        estimateLibrary = state?.LibrarySnapshot;
+        if (parsedDocument is not { } document || MacroCallReferenceCollector.Collect(document).Count == 0)
+            return;
+
+        DurationText.Text = FormatDurationRange(MacroDurationEstimator.EstimateSteps(document.Steps, ResolveMacroForEstimate));
+        StepSequenceControl.RefreshMacroReferences();
+        panel.RefreshActionMacroReferences();
+    }
+
     public void ApplyLocalization()
     {
         SaveLibraryButton.Content = L("SaveLibrary");
+        UpdateEditorTabLabels();
+        RefreshStartupGateButton();
         RunNowHeaderButton.Content = L("RunNow");
         AddStepActionButton.Content = "＋ " + L("StudioAddAction");
         RunNowHeaderButton.ToolTip = L("RunNowOnceHint");
@@ -130,19 +153,73 @@ public partial class SequencePanel : UserControl
         StepSequenceControl.ApplyLocalization();
     }
 
-    internal void SetStandaloneConditionEditor(ConditionDirectivePanel? panel)
+    internal void SetConditionEditor(ConditionDirectivePanel? panel, bool standalone)
     {
-        StandaloneConditionEditorHost.Content = panel;
-        var standalone = panel is not null;
-        var sequenceVisibility = standalone ? Visibility.Collapsed : Visibility.Visible;
-        var conditionVisibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+        ConditionEditorHost.Content = panel;
+        var showingConditions = panel is not null;
+        var sequenceVisibility = showingConditions ? Visibility.Collapsed : Visibility.Visible;
         MainStepsHost.Visibility = sequenceVisibility;
-        SequenceStats.Visibility = sequenceVisibility;
+        SequenceStats.Visibility = standalone ? Visibility.Collapsed : Visibility.Visible;
         AddStepActionButton.Visibility = sequenceVisibility;
         RecordInputButton.Visibility = sequenceVisibility;
         DelayAdjustSection.Visibility = sequenceVisibility;
-        StandaloneConditionEditorHost.Visibility = conditionVisibility;
-        StandaloneConditionLabel.Visibility = conditionVisibility;
+        ConditionEditorHost.Visibility = showingConditions ? Visibility.Visible : Visibility.Collapsed;
+        StandaloneConditionLabel.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+        EditorTabs.Visibility = standalone ? Visibility.Collapsed : Visibility.Visible;
+        MainSequenceTab.IsChecked = !showingConditions;
+        ConditionsTab.IsChecked = showingConditions;
+    }
+
+    internal void SetStartupGateWait(string? name, string? id)
+    {
+        waitingGateName = name;
+        waitingGateId = id;
+        RefreshStartupGateButton();
+    }
+
+    private void UpdateEditorTabLabels()
+    {
+        MainSequenceTab.Content = L("StudioMainSequenceTab");
+        ConditionsTab.Content = LocalizationService.Format("StudioConditionsTabCount", conditionCount);
+    }
+
+    private void RefreshStartupGateButton()
+    {
+        StartupGateButton.Visibility = waitingGateName is not null || startupGates.Count > 0
+            ? Visibility.Visible : Visibility.Collapsed;
+        StartupGateButton.IsEnabled = waitingGateName is null || waitingGateId is not null;
+        if (waitingGateName is not null)
+        {
+            StartupGateHeaderText.Text = LocalizationService.Format("StudioWaitingForGate", waitingGateName);
+            StartupGateButton.ToolTip = StartupGateHeaderText.Text;
+            return;
+        }
+
+        StartupGateHeaderText.Text = startupGates.Count switch
+        {
+            0 => string.Empty,
+            1 => LocalizationService.Format("StudioStartupGate", StartupGateName(startupGates[0])),
+            _ => LocalizationService.Format("StudioStartupGateCount", StartupGateName(startupGates[0]), startupGates.Count - 1)
+        };
+        StartupGateButton.ToolTip = startupGates.Count == 0 ? null :
+            L("StudioStartupGatesHelp") + "\n" + string.Join("\n", startupGates.Select(StartupGateName));
+    }
+
+    internal static string StartupGateName(ConditionalDirective gate) =>
+        string.IsNullOrWhiteSpace(gate.Name) ? L("PlaybackUnnamedStartupGate") : gate.Name;
+
+    private void EditorTab_Click(object sender, RoutedEventArgs e)
+    {
+        var showConditions = ReferenceEquals(sender, ConditionsTab);
+        MainSequenceTab.IsChecked = !showConditions;
+        ConditionsTab.IsChecked = showConditions;
+        EditorTabRequested?.Invoke(showConditions);
+    }
+
+    private void StartupGateButton_Click(object sender, RoutedEventArgs e)
+    {
+        var conditionId = waitingGateId ?? startupGates.FirstOrDefault()?.Id;
+        if (conditionId is not null) StartupGateRequested?.Invoke(conditionId);
     }
 
     public void SetReadOnly(bool value)
@@ -315,6 +392,11 @@ public partial class SequencePanel : UserControl
             MacroNameBox.Text = document.Name;
             updatingMacroName = false;
             StepCountText.Text = scheduledCount.ToString();
+            conditionCount = document.EffectiveConditions.Count;
+            startupGates = document.EffectiveConditions.Where(condition =>
+                condition.ExecutionMode == ConditionExecutionMode.GateMainSequence).ToArray();
+            UpdateEditorTabLabels();
+            RefreshStartupGateButton();
             DurationText.Text = FormatDurationRange(MacroDurationEstimator.EstimateSteps(document.Steps, ResolveMacroForEstimate));
             StepSequenceControl.SetSteps(document.Steps);
         }
@@ -441,10 +523,12 @@ public partial class SequencePanel : UserControl
             return null;
         }
 
+        reference = reference.Trim();
         try
         {
             var current = GetCurrentDocument();
-            if (string.Equals(current.Name, reference, StringComparison.CurrentCultureIgnoreCase))
+            if (string.Equals(current.Name, reference, StringComparison.CurrentCultureIgnoreCase)
+                || string.Equals(current.Id, reference, StringComparison.OrdinalIgnoreCase))
             {
                 return current;
             }
@@ -456,7 +540,18 @@ public partial class SequencePanel : UserControl
 
         if (estimateCache.TryGetValue(reference, out var cached)) return cached;
         var item = ResolveLibraryItem(reference);
-        return estimateCache[reference] = item is null ? null : state?.LibraryStore.ReadMacro(item.Id);
+        if (item is null || state is null) return estimateCache[reference] = null;
+        if (estimateCache.TryGetValue(item.Id, out cached)) return estimateCache[reference] = cached;
+
+        try
+        {
+            return estimateCache[reference] = estimateCache[item.Id] = state.LibraryStore.ReadMacro(item.Id);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException
+            or System.Text.Json.JsonException or FormatException or KeyNotFoundException or InvalidOperationException)
+        {
+            return estimateCache[reference] = estimateCache[item.Id] = null;
+        }
     }
 
     private MacroLibraryItem? ResolveLibraryItem(string? reference)

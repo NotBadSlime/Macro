@@ -99,7 +99,8 @@ internal static class PlaybackEngineHost
     /// "new MacroPlaybackExecutor(inputSink, resolver); executor.Prepare(document, options)" of the selected release.
     /// </summary>
     public static IMacroPlaybackExecutor Prepare(SendInputMacroSink inputSink, MacroDocument document,
-        Func<string, MacroDocument?> resolver, PlaybackExecutionOptions options, bool immediate, PlaybackVersionInfo version)
+        Func<string, MacroDocument?> resolver, PlaybackExecutionOptions options, bool immediate, PlaybackVersionInfo version,
+        Action? startupGateWaitChanged = null)
     {
         // Legacy parallel cards are still rejected. Daemon playback runs separate macro controllers.
         if (ParallelCards.FindIn(document, resolver) is { } owner)
@@ -107,6 +108,7 @@ internal static class PlaybackEngineHost
         if (version.Folder is not null && !document.Playback.RunAsDaemon && !MainWindow.IsConditionOnly(document))
             return LegacyPreparedExecutor.Prepare(version, document, resolver, options, immediate);
         var executor = new MacroPlaybackExecutor(inputSink, macroResolver: resolver);
+        executor.StartupGateWaitChanged += startupGateWaitChanged;
         try { executor.Prepare(document, options); return executor; }
         catch { executor.Dispose(); throw; }
     }

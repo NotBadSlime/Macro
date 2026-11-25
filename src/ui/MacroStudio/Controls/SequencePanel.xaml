@@ -30,6 +30,17 @@
                 <TextBlock x:Name="DurationText" Text="0 ms" FontFamily="Cascadia Mono, Consolas"
                            FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
             </StackPanel>
+            <Border x:Name="EditorTabs" Margin="0,9,0,0" BorderThickness="0,0,0,1"
+                    BorderBrush="{DynamicResource PanelBorder}">
+                <StackPanel Orientation="Horizontal">
+                    <ToggleButton x:Name="MainSequenceTab" MinWidth="94" Margin="0,0,4,3"
+                                  Content="主序列" IsChecked="True" Style="{StaticResource RightToolTabStyle}"
+                                  AutomationProperties.AutomationId="MainSequenceTab" Click="EditorTab_Click" />
+                    <ToggleButton x:Name="ConditionsTab" MinWidth="94" Margin="0,0,0,3"
+                                  Content="条件" Style="{StaticResource RightToolTabStyle}"
+                                  AutomationProperties.AutomationId="ConditionsTab" Click="EditorTab_Click" />
+                </StackPanel>
+            </Border>
             <WrapPanel x:Name="SequenceHeaderCommands" Margin="0,12,0,0">
                 <Button x:Name="RunNowHeaderButton"
                         Style="{StaticResource PrimaryButton}"
@@ -37,6 +48,19 @@
                         Content="立即运行"
                         Margin="0,0,6,6"
                         Click="RunNow_Click" />
+                <Button x:Name="StartupGateButton" MaxWidth="244" Padding="8,0" Margin="0,0,6,6"
+                        Style="{StaticResource CommandBarButton}" Foreground="{DynamicResource StudioSignal}"
+                        Background="{DynamicResource Selection}" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1"
+                        Visibility="Collapsed" AutomationProperties.AutomationId="StartupGateButton"
+                        ToolTipService.ShowOnDisabled="True"
+                        AutomationProperties.Name="{Binding Text, ElementName=StartupGateHeaderText}"
+                        AutomationProperties.LiveSetting="Polite" Click="StartupGateButton_Click">
+                    <DockPanel LastChildFill="True">
+                        <TextBlock DockPanel.Dock="Left" Text="&#xE9D9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                   Margin="0,0,7,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="StartupGateHeaderText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                </Button>
                 <Button x:Name="AddStepActionButton" MinWidth="82" Padding="7,0" Content="＋ 添加动作"
                         Margin="0,0,6,6" Click="AddStepAction_Click" />
                 <Button x:Name="StopHeaderButton"
@@ -123,7 +147,7 @@
         <Border x:Name="MainStepsHost" Grid.Row="1" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,1,0,0">
             <local:StepSequencePanel x:Name="StepSequenceControl" />
         </Border>
-        <ContentControl x:Name="StandaloneConditionEditorHost" Grid.Row="1" Visibility="Collapsed"
+        <ContentControl x:Name="ConditionEditorHost" Grid.Row="1" Visibility="Collapsed"
                         HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
     </Grid>
 </UserControl>
