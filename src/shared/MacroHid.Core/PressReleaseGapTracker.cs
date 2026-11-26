@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace MacroHid.Core;
 
 public static class InputPressTiming
@@ -86,16 +88,122 @@ public static class ModifierChord
         return action is KeyInputAction { Kind: KeyActionKind.Up } key
             && (key.Modifiers != HidModifier.None || IsModifier(key.Key));
     }
+
+    internal static bool IsInputRelease(InputAction action) => action is
+        KeyInputAction { Kind: KeyActionKind.Up } or
+        MouseButtonInputAction { Kind: ButtonActionKind.Up, Button: not MouseButton.None } or
+        ConsumerInputAction { Kind: ButtonActionKind.Up };
+}
+
+internal struct ModifierChordState
+{
+    private const int ConsumerUsageOffset = 256;
+    private const int UsageCapacity = 1024;
+
+    // Hold state can be copied while previewing an ordered batch without changing live state.
+    [InlineArray(UsageCapacity / 64)]
+    private struct HeldUsages
+    {
+        private ulong bits;
+    }
+
+    private HeldUsages usages;
+    private HidModifier modifiers;
+    private MouseButton mouseButtons;
+
+    public bool IsActive { get; private set; }
+
+    // A modifier begins a chord only when another input is newly pressed while it is held.
+    public bool Observe(InputAction action)
+    {
+        bool chordPress = action switch
+        {
+            KeyInputAction key => ObserveKeyboard(key),
+            MouseButtonInputAction button => ObserveMouse(button),
+            ConsumerInputAction consumer => ObserveConsumer(consumer),
+            _ => false
+        };
+        if (chordPress) IsActive = true;
+        return chordPress;
+    }
+
+    private bool ObserveKeyboard(KeyInputAction key)
+    {
+        bool down = key.Kind == KeyActionKind.Down;
+        if (key.Modifiers == HidModifier.None) return ObserveKey(key.Key, down);
+
+        // Match SendInput's packet order for implicit modifiers and their primary key.
+        if (down)
+        {
+            bool chordPress = false;
+            for (var i = 0; i < 8; i++)
+                if ((key.Modifiers & (HidModifier)(1 << i)) != 0)
+                    chordPress |= ObserveKey((HidKey)((int)HidKey.LeftControl + i), true);
+            return ObserveKey(key.Key, true) | chordPress;
+        }
+
+        ObserveKey(key.Key, false);
+        for (var i = 7; i >= 0; i--)
+            if ((key.Modifiers & (HidModifier)(1 << i)) != 0)
+                ObserveKey((HidKey)((int)HidKey.LeftControl + i), false);
+        return false;
+    }
+
+    private bool ObserveKey(HidKey key, bool down)
+    {
+        if (key == HidKey.None) return false;
+
+        bool partner = TrackUsage((int)key, down) && modifiers != HidModifier.None;
+        if (!ModifierChord.IsModifier(key)) return partner;
+
+        var bit = (HidModifier)(1 << (key - HidKey.LeftControl));
+        if (down)
+        {
+            modifiers |= bit;
+        }
+        else
+        {
+            modifiers &= ~bit;
+            if (modifiers == HidModifier.None) IsActive = false;
+        }
+        return partner;
+    }
+
+    private bool ObserveMouse(MouseButtonInputAction button)
+    {
+        bool partner = (button.Button & ~mouseButtons) != MouseButton.None && modifiers != HidModifier.None;
+        mouseButtons = button.Kind == ButtonActionKind.Down ? mouseButtons | button.Button : mouseButtons & ~button.Button;
+        return button.Kind != ButtonActionKind.Up && partner;
+    }
+
+    private bool ObserveConsumer(ConsumerInputAction consumer)
+    {
+        int usage = ConsumerUsageOffset + (int)consumer.Control;
+        bool pressed = TrackUsage(usage, consumer.Kind != ButtonActionKind.Up);
+        if (consumer.Kind == ButtonActionKind.Click) TrackUsage(usage, false);
+        return pressed && modifiers != HidModifier.None;
+    }
+
+    private bool TrackUsage(int usage, bool down)
+    {
+        if ((uint)usage >= UsageCapacity) return false;
+
+        ulong mask = 1UL << (usage % 64);
+        ref ulong word = ref usages[usage / 64];
+        bool pressed = down && (word & mask) == 0;
+        word = down ? word | mask : word & ~mask;
+        return pressed;
+    }
 }
 
 public sealed class ModifierChordClock
 {
-    private int held;
+    private ModifierChordState chord;
     private long anchor;
 
     public long AdjustDueTick(IReadOnlyList<InputAction> actions, long dueTick, long holdTicks)
     {
-        if (held <= 0 || anchor <= 0 || !ReleasesHeldChord(actions))
+        if (!chord.IsActive || anchor <= 0 || !ReleasesHeldChord(actions))
         {
             return dueTick;
         }
@@ -106,63 +214,33 @@ public sealed class ModifierChordClock
 
     public void NoteSent(IReadOnlyList<InputAction> actions, long actualTick)
     {
-        var presses = 0;
-        var releases = 0;
-        var otherKeyDown = false;
         foreach (var action in actions)
         {
-            if (ModifierChord.Presses(action))
-            {
-                presses++;
-            }
-
-            if (ModifierChord.Releases(action))
-            {
-                releases++;
-            }
-
-            if (action is KeyInputAction { Kind: KeyActionKind.Down, Modifiers: HidModifier.None } key
-                && !ModifierChord.IsModifier(key.Key))
-            {
-                otherKeyDown = true;
-            }
+            if (chord.Observe(action)) anchor = actualTick;
         }
 
-        if (presses > 0)
-        {
-            held += presses;
-            anchor = actualTick;
-        }
-
-        if (otherKeyDown && held > 0)
-        {
-            anchor = actualTick;
-        }
-
-        held -= releases;
-        if (held <= 0)
-        {
-            held = 0;
-            anchor = 0;
-        }
+        if (!chord.IsActive) anchor = 0;
     }
 
-    public static bool TrySplit(IReadOnlyList<InputAction> actions, out int splitAt)
+    public static bool TrySplit(IReadOnlyList<InputAction> actions, out int splitAt) => TrySplit(actions, default, out splitAt);
+
+    public bool TrySplitActiveBatch(IReadOnlyList<InputAction> actions, out int splitAt) => TrySplit(actions, chord, out splitAt);
+
+    private static bool TrySplit(IReadOnlyList<InputAction> actions, ModifierChordState state, out int splitAt)
     {
         splitAt = -1;
-        var seenPress = false;
+        if (actions.Count < 2) return false;
+
+        bool chordPressInBatch = false;
         for (var i = 0; i < actions.Count; i++)
         {
-            if (ModifierChord.Presses(actions[i]))
-            {
-                seenPress = true;
-            }
-
-            if (seenPress && ModifierChord.Releases(actions[i]))
+            if (chordPressInBatch && ModifierChord.IsInputRelease(actions[i]))
             {
                 splitAt = i;
-                return splitAt > 0;
+                return true;
             }
+
+            chordPressInBatch |= state.Observe(actions[i]);
         }
 
         return false;
@@ -172,7 +250,7 @@ public sealed class ModifierChordClock
     {
         foreach (var action in actions)
         {
-            if (action is KeyInputAction { Kind: KeyActionKind.Up })
+            if (ModifierChord.IsInputRelease(action))
             {
                 return true;
             }
@@ -228,7 +306,7 @@ public sealed class PressReleaseGapTracker
     private readonly long zeroDelayHoldTicks;
     private readonly long modifierChordHoldTicks;
     private readonly bool earlierTimeline;
-    private int modifiersHeld;
+    private ModifierChordState chord;
 
     public PressReleaseGapTracker(long qpcFrequency, InputPressFloor? floor = null)
     {
@@ -269,19 +347,21 @@ public sealed class PressReleaseGapTracker
             moveCursorToDue = true;
         }
 
-        var modifiersHeldBeforeRelease = modifiersHeld; // AdjustDueTick updates the count; the chord test needs the value before
+        bool chordBeforeRelease = chord.IsActive;
         var due = AdjustDueTick(action, cursorTick);
         if (PressIdentity.TryGet(action, out identity, out isDown) && !isDown)
         {
             releaseDueTicks[identity] = due;
             // Chord holds keep the old behaviour: everything after them moves with them.
-            if (due > cursorTick && (modifiersHeldBeforeRelease > 0 || ModifierChord.Releases(action))) moveCursorToDue = true;
+            if (due > cursorTick && chordBeforeRelease) moveCursorToDue = true;
         }
 
         return due;
     }
     public long AdjustDueTick(InputAction action, long dueTick)
     {
+        bool chordBeforeAction = chord.IsActive;
+        chord.Observe(action);
         if (!PressIdentity.TryGet(action, out var identity, out var isDown))
         {
             return dueTick;
@@ -290,17 +370,12 @@ public sealed class PressReleaseGapTracker
         if (isDown)
         {
             lastDownTicks[identity] = dueTick;
-            if (ModifierChord.Presses(action))
-            {
-                modifiersHeld++;
-            }
-
             return dueTick;
         }
 
         if (lastDownTicks.TryGetValue(identity, out var downTick))
         {
-            if (modifiersHeld > 0 || ModifierChord.Releases(action))
+            if (chordBeforeAction)
             {
                 var earliest = downTick + modifierChordHoldTicks;
                 if (dueTick < earliest)
@@ -312,11 +387,6 @@ public sealed class PressReleaseGapTracker
             {
                 dueTick = downTick + zeroDelayHoldTicks;
             }
-        }
-
-        if (ModifierChord.Releases(action))
-        {
-            modifiersHeld = Math.Max(0, modifiersHeld - 1);
         }
 
         lastDownTicks.Remove(identity);

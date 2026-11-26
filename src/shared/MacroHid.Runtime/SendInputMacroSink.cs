@@ -189,7 +189,7 @@ public sealed class SendInputMacroSink : IMacroInputSink
             throw new PlatformNotSupportedException("SendInput is only available on Windows.");
         }
 
-        if (!splittingModifierChord && ModifierChordClock.TrySplit(prepared.Actions, out var splitAt))
+        if (!splittingModifierChord && modifierChord.TrySplitActiveBatch(prepared.Actions, out var splitAt))
         {
             splittingModifierChord = true;
             try

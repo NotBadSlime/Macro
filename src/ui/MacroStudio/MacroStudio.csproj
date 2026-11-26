@@ -9,7 +9,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Version>2.2.0</Version>
+    <Version>2.2.1</Version>
     <TargetFramework>net8.0-windows</TargetFramework>
     <NeutralLanguage>en-US</NeutralLanguage>
     <Nullable>enable</Nullable>

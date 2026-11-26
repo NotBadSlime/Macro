@@ -70,6 +70,73 @@ struct Run
     }
     ~Run() { MhpReleaseRun(handle); }
 };
+
+static void VerifyModifierChordTiming()
+{
+    auto key = [](WORD vk, bool up = false)
+    {
+        INPUT input{};
+        input.type = INPUT_KEYBOARD;
+        input.ki.wVk = vk;
+        if (up) input.ki.dwFlags = KEYEVENTF_KEYUP;
+        return input;
+    };
+    auto mouse = [](DWORD flags)
+    {
+        INPUT input{};
+        input.type = INPUT_MOUSE;
+        input.mi.dwFlags = flags;
+        return input;
+    };
+
+    // Fixed millisecond ticks make the comparison independent of scheduler wake-up latency.
+    auto schedule = [](const std::vector<std::pair<int64_t, std::vector<INPUT>>>& sequence)
+    {
+        NativePlan plan;
+        for (const auto& [due, inputs] : sequence)
+        {
+            const auto count = static_cast<uint32_t>(inputs.size());
+            plan.batches.push_back({due, static_cast<uint32_t>(plan.inputs.size()), count, count});
+            plan.inputs.insert(plan.inputs.end(), inputs.begin(), inputs.end());
+        }
+        CompileModifierChords(plan);
+
+        ModifierChordClock clock;
+        std::vector<int64_t> result;
+        for (size_t index = 0; index < plan.batches.size(); index++)
+        {
+            const auto& chord = plan.chordBatches[index];
+            const auto due = clock.AdjustDue(plan.batches[index].dueTicks, chord, 30);
+            clock.NoteSent(chord, due);
+            result.push_back(due);
+        }
+        return result;
+    };
+
+    const auto shiftDown = key(VK_LSHIFT);
+    const auto shiftUp = key(VK_LSHIFT, true);
+    const auto ctrlDown = key(VK_LCONTROL);
+    const auto ctrlUp = key(VK_LCONTROL, true);
+    const auto cDown = key('C');
+    const auto cUp = key('C', true);
+    const auto mouseDown = mouse(MOUSEEVENTF_LEFTDOWN);
+    const auto mouseUp = mouse(MOUSEEVENTF_LEFTUP);
+
+    Check(schedule({{100,{shiftDown}},{105,{shiftUp}}}) == std::vector<int64_t>{100,105}, "solo Shift keeps its 5 ms hold");
+    Check(schedule({{100,{mouseDown, cDown}},{101,{shiftDown}},{103,{mouseDown, cDown}},{106,{shiftUp}},{120,{mouseUp,cUp}}})
+        == std::vector<int64_t>{100,101,103,106,120}, "already-held inputs do not make a Shift tap a chord");
+    Check(schedule({{100,{shiftDown}},{105,{shiftUp,ctrlDown}},{110,{ctrlUp}}})
+        == std::vector<int64_t>{100,105,110}, "release-before-press within a batch keeps two independent taps");
+    Check(schedule({{100,{ctrlDown,cDown}},{105,{cUp,ctrlUp}}})
+        == std::vector<int64_t>{100,130}, "implicit Ctrl+C batch keeps the chord hold");
+    Check(schedule({{100,{ctrlDown}},{101,{cDown}},{106,{cUp,ctrlUp,shiftDown}},{136,{shiftUp}}})
+        == std::vector<int64_t>{100,101,131,136}, "ending a chord clears the hold before a new solo modifier");
+    Check(schedule({{100,{ctrlDown}},{101,{shiftDown}},{106,{shiftUp}},{107,{ctrlUp}}})
+        == std::vector<int64_t>{100,101,131,131}, "two overlapping modifiers form a chord");
+    Check(schedule({{100,{ctrlDown}},{101,{mouseDown}},{106,{mouseUp}},{107,{ctrlUp}}})
+        == std::vector<int64_t>{100,101,131,131}, "Ctrl+click keeps the hold after a new mouse press");
+}
+
 #include "ReceiverProbe.h"
 int main(int argc, char** argv)
 {
@@ -224,6 +291,7 @@ int main(int argc, char** argv)
             MhpShutdownEngine();
             return 0;
         }
+        VerifyModifierChordTiming();
         Check(MhpWarmEngine(&options, nullptr) == MhpOk, "warm");
         auto ms = [&](int value) { return options.qpcFrequency * value / 1000; };
         {

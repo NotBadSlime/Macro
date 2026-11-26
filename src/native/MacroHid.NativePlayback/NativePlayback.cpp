@@ -72,12 +72,12 @@ namespace
         uint32_t efficiencyClass = 0;
     };
 
-    struct ModifierChordEdges
+    enum class ChordAnchorUpdate { Keep, Refresh, Clear };
+
+    struct ModifierChordBatch
     {
-        int downs = 0;
-        int ups = 0;
-        bool otherKeyDown = false;
-        bool keyUp = false;
+        bool releasesHeldChord = false;
+        ChordAnchorUpdate anchorUpdate = ChordAnchorUpdate::Keep;
     };
 
     struct NativePlan
@@ -89,7 +89,7 @@ namespace
         std::array<CoreChoice, 2> configuredCores{};
         std::vector<INPUT> inputs;
         std::vector<MhpBatch> batches;
-        std::vector<ModifierChordEdges> chordEdges;
+        std::vector<ModifierChordBatch> chordBatches;
         std::vector<std::vector<std::pair<size_t, int64_t>>> releaseDependencies;
     };
 
@@ -214,105 +214,114 @@ namespace
         }
     }
 
-    ModifierChordEdges InspectModifierChord(const INPUT* inputs, uint32_t count)
+    void CompileModifierChords(NativePlan& plan)
     {
-        ModifierChordEdges edges;
-        if (inputs == nullptr)
+        std::array<bool, 256> heldKeys{};
+        std::array<bool, 5> heldButtons{};
+        int modifiersHeld = 0;
+        bool activeChord = false;
+        plan.chordBatches.reserve(plan.batches.size());
+
+        struct MouseButtonEdge { DWORD down, up, data; };
+        constexpr MouseButtonEdge buttonEdges[] = {
+            { MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0 },
+            { MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0 },
+            { MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0 },
+            { MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1 },
+            { MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2 },
+        };
+
+        for (const auto& batch : plan.batches)
         {
-            return edges;
-        }
+            ModifierChordBatch chord;
+            // A prior chord can delay this batch. A press in this batch supplies the anchor for later batches.
+            bool priorAnchor = activeChord;
+            bool newAnchor = false;
 
-        for (uint32_t i = 0; i < count; i++)
-        {
-            if (inputs[i].type != INPUT_KEYBOARD)
+            for (uint32_t i = 0; i < batch.inputCount; i++)
             {
-                continue;
-            }
-
-            const auto& key = inputs[i].ki;
-            if ((key.dwFlags & KEYEVENTF_UNICODE) != 0 || key.wVk == 0)
-            {
-                continue;
-            }
-
-            const bool up = (key.dwFlags & KEYEVENTF_KEYUP) != 0;
-            if (IsModifierVirtualKey(key.wVk))
-            {
-                if (up)
+                const auto& input = plan.inputs[batch.inputOffset + i];
+                if (input.type == INPUT_KEYBOARD)
                 {
-                    edges.ups++;
+                    const auto& key = input.ki;
+                    if ((key.dwFlags & KEYEVENTF_UNICODE) != 0 || key.wVk == 0 || key.wVk >= heldKeys.size()) continue;
+                    const bool modifier = IsModifierVirtualKey(key.wVk);
+                    if ((key.dwFlags & KEYEVENTF_KEYUP) != 0)
+                    {
+                        chord.releasesHeldChord |= priorAnchor;
+                        if (modifier && heldKeys[key.wVk])
+                        {
+                            modifiersHeld--;
+                            if (modifiersHeld == 0)
+                            {
+                                priorAnchor = false;
+                                newAnchor = false;
+                            }
+                        }
+                        heldKeys[key.wVk] = false;
+                    }
+                    else if (!heldKeys[key.wVk])
+                    {
+                        newAnchor |= modifiersHeld > 0;
+                        modifiersHeld += modifier ? 1 : 0;
+                        heldKeys[key.wVk] = true;
+                    }
                 }
-                else
+                else if (input.type == INPUT_MOUSE)
                 {
-                    edges.downs++;
+                    const auto& mouse = input.mi;
+                    for (size_t button = 0; button < heldButtons.size(); button++)
+                    {
+                        const auto& edge = buttonEdges[button];
+                        if (edge.data && !(mouse.mouseData & edge.data)) continue;
+                        if (mouse.dwFlags & edge.down)
+                        {
+                            newAnchor |= modifiersHeld > 0 && !heldButtons[button];
+                            heldButtons[button] = true;
+                        }
+                        if (mouse.dwFlags & edge.up)
+                        {
+                            chord.releasesHeldChord |= priorAnchor && heldButtons[button];
+                            heldButtons[button] = false;
+                        }
+                    }
                 }
             }
-            else if (!up)
-            {
-                edges.otherKeyDown = true;
-            }
 
-            if (up)
-            {
-                edges.keyUp = true;
-            }
+            if (newAnchor) chord.anchorUpdate = ChordAnchorUpdate::Refresh;
+            else if (activeChord && !priorAnchor) chord.anchorUpdate = ChordAnchorUpdate::Clear;
+            activeChord = priorAnchor || newAnchor;
+            plan.chordBatches.push_back(chord);
         }
-
-        return edges;
     }
 
     struct ModifierChordClock
     {
-        std::atomic<int> held{ 0 };
         std::atomic<int64_t> anchor{ 0 };
 
-        int64_t AdjustDue(int64_t dueTick, const ModifierChordEdges& edges, int64_t holdTicks) const
+        int64_t AdjustDue(int64_t dueTick, const ModifierChordBatch& chord, int64_t holdTicks) const
         {
-            const int heldNow = held.load(std::memory_order_acquire);
+            if (!chord.releasesHeldChord) return dueTick;
             const int64_t anchorNow = anchor.load(std::memory_order_acquire);
-            if (heldNow <= 0 || anchorNow <= 0 || !edges.keyUp)
-            {
-                return dueTick;
-            }
-
-            const int64_t earliest = anchorNow + holdTicks;
-            return dueTick < earliest ? earliest : dueTick;
+            return anchorNow > 0 ? std::max(dueTick, anchorNow + holdTicks) : dueTick;
         }
 
-        void NoteSent(const ModifierChordEdges& edges, int64_t actualTick)
+        void NoteSent(const ModifierChordBatch& chord, int64_t actualTick)
         {
-            int heldNow = held.load(std::memory_order_relaxed);
-            if (edges.downs > 0)
-            {
-                heldNow += edges.downs;
-                anchor.store(actualTick, std::memory_order_relaxed);
-            }
-
-            if (edges.otherKeyDown && heldNow > 0)
-            {
-                anchor.store(actualTick, std::memory_order_relaxed);
-            }
-
-            heldNow -= edges.ups;
-            if (heldNow <= 0)
-            {
-                heldNow = 0;
-                anchor.store(0, std::memory_order_relaxed);
-            }
-
-            held.store(heldNow, std::memory_order_release);
+            if (chord.anchorUpdate == ChordAnchorUpdate::Refresh) anchor.store(actualTick, std::memory_order_release);
+            else if (chord.anchorUpdate == ChordAnchorUpdate::Clear) anchor.store(0, std::memory_order_release);
         }
     };
 
     void ExtendDueForModifierChord(
         int64_t& baseDueTick,
         int64_t& dueTick,
-        const ModifierChordEdges& edges,
+        const ModifierChordBatch& chord,
         const ModifierChordClock& clock,
         int64_t holdTicks,
         int64_t pausedTicks)
     {
-        const int64_t chordDue = clock.AdjustDue(dueTick, edges, holdTicks);
+        const int64_t chordDue = clock.AdjustDue(dueTick, chord, holdTicks);
         if (chordDue <= dueTick)
         {
             return;
@@ -2210,13 +2219,10 @@ namespace
                 const auto& batch = context.plan->batches[index];
                 int64_t baseDueTick = timelineStart + batch.dueTicks;
                 int64_t dueTick = baseDueTick + TotalPausedTicks(context.playbackControl);
-                const auto chordEdges = InspectModifierChord(
-                    context.plan->inputs.data() + batch.inputOffset,
-                    batch.inputCount);
                 ExtendDueForModifierChord(
                     baseDueTick,
                     dueTick,
-                    chordEdges,
+                    context.plan->chordBatches[index],
                     context.modifierChord,
                     ModifierChordHoldTicks(context.frequency),
                     TotalPausedTicks(context.playbackControl));
@@ -2310,7 +2316,7 @@ namespace
                 {
                     result.nativeInputsSubmitted = batch.inputCount;
                     context.modifierChord.NoteSent(
-                        InspectModifierChord(inputPointer, batch.inputCount),
+                        context.plan->chordBatches[index],
                         submitEnd);
                 }
             }
@@ -2803,10 +2809,7 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpCreatePlan(
         if (batchCount > 0) nativePlan->batches.assign(batches, batches + batchCount);
         if (!ValidatePlan(*nativePlan)) throw std::invalid_argument("batch input range");
         CompileReleaseDependencies(*nativePlan);
-        nativePlan->chordEdges.reserve(nativePlan->batches.size());
-        for (const auto& batch : nativePlan->batches)
-            nativePlan->chordEdges.push_back(InspectModifierChord(
-                batch.inputCount ? nativePlan->inputs.data() + batch.inputOffset : nullptr, batch.inputCount));
+        CompileModifierChords(*nativePlan);
         nativePlan->configuredCores = g_sharedScheduler.PreparedCores();
     }
     catch (...) { delete nativePlan; *plan = nullptr; SetLastErrorText(L"invalid plan or allocation failed"); return MhpInvalidArgument; }
@@ -2924,13 +2927,11 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
         {
             int64_t baseDueTick = startTick + batch.dueTicks;
             int64_t dueTick = baseDueTick + TotalPausedTicks(control);
-            const auto chordEdges = InspectModifierChord(
-                nativePlan->inputs.data() + batch.inputOffset,
-                batch.inputCount);
+            const auto& chord = nativePlan->chordBatches[batchIndex];
             ExtendDueForModifierChord(
                 baseDueTick,
                 dueTick,
-                chordEdges,
+                chord,
                 modifierChord,
                 modifierHoldTicks,
                 TotalPausedTicks(control));
@@ -3079,7 +3080,7 @@ extern "C" __declspec(dllexport) MhpStatus __cdecl MhpRunPlanControlled(
             stats->nativeInputsSubmitted += nativeInputsSubmitted;
             stats->actionsSubmitted += batch.actionCount;
             stats->batchesSubmitted++;
-            modifierChord.NoteSent(chordEdges, QueryCounter());
+            modifierChord.NoteSent(chord, QueryCounter());
             batchIndex++;
             previousDueTick = dueTick;
         }
