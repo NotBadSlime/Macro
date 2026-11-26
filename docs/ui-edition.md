@@ -30,14 +30,14 @@ MacroHID Studio 可与正式版并列安装。两个界面共用宏库，分别�
 在 `codex/ui-optimized` 分支运行仓库根目录的 `打包.cmd`，也可使用 PowerShell。
 
 ```powershell
-.\scripts\Build-Installer.ps1 -Version 2.2.0 -Configuration Release
+.\scripts\Build-Installer.ps1 -Version 2.2.1 -Configuration Release
 ```
 
 `artifacts/packages-ui` 包含发布文件。`artifacts/local-run-ui/MacroStudio/MacroStudio.exe` 是包含 .NET 运行库的本地版本，运行时保留整个目录。其他选项见 [打包说明](packaging.md)。
 
 ## Studio 发布
 
-从 `codex/ui-optimized` 的发布提交生成 Studio 附件。Studio 2.2.0 使用单独的 `v2.2.0-studio` 标签，发布说明标出构建对应的提交。
+从 `codex/ui-optimized` 的发布提交生成 Studio 附件。Studio 2.2.1 使用 `v2.2.1-studio` 标签，发布说明标出构建对应的提交。
 
 - `MacroHID-Studio-Setup-x64.exe`
 - `MacroHID-Studio-Portable-x64.zip`

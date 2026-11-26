@@ -9,7 +9,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Version>2.2.0</Version>
+    <Version>2.2.1</Version>
     <Product>MacroHID Studio</Product>
     <AssemblyTitle>MacroHID Studio</AssemblyTitle>
     <TargetFramework>net8.0-windows</TargetFramework>

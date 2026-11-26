@@ -431,7 +431,7 @@
   <data name="ZeroGapHold" xml:space="preserve"><value>默认间隔</value></data>
   <data name="ZeroGapHoldHelp" xml:space="preserve"><value>默认间隔：同一按键的按下和抬起之间没写延迟时，抬起推后这么久，避免目标把这一下吞掉。填 0 表示同时发出。默认 10 毫秒。</value></data>
   <data name="ModifierChordHold" xml:space="preserve"><value>组合键间隔</value></data>
-  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>组合键间隔：带 Ctrl、Shift、Alt、Win 的快捷键至少按住这么久，否则目标可能读不到修饰键。宏里写得更长时按写下的时间。默认 30 毫秒。</value></data>
+  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>按住 Ctrl、Shift、Alt 或 Win 再按其他键或鼠标键时，组合键至少保持这么久。单独短按修饰键保留宏中写入的延迟。默认 30 毫秒。</value></data>
   <data name="Microseconds" xml:space="preserve"><value>微秒</value></data>
   <data name="HoldMicrosecondsInvalid" xml:space="preserve"><value>默认间隔和组合键间隔请填写 0 到 60000000 的整数微秒。</value></data>
   <data name="ClearHotkey" xml:space="preserve"><value>清除</value></data>
@@ -745,7 +745,7 @@
   <data name="PlaybackVersionHelp" xml:space="preserve"><value>选择用哪个发行版的代码播放宏。旧版本运行当时的原始代码，当时的问题也会保留；它之后才加入的效果卡片（断网、锁帧等）由当前版本代为执行。测核与系统延迟检查始终使用当前版本。</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（当前，推荐）</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安装缺少该版本的引擎文件，播放会失败，请重新安装完整安装包。</value></data>
-  <data name="PlaybackVersionNotes220" xml:space="preserve"><value>2.2.0（当前）：守护宏可与其他前台宏并行运行，并可单独停止；主序列为空时可执行条件宏，循环模式下持续检查条件；保留 2.1.0 引入的 Max 精度档和垃圾回收控制。</value></data>
+  <data name="PlaybackVersionNotes221" xml:space="preserve"><value>2.2.1（当前）：单独短按修饰键会保留宏里的时长。按住修饰键再按其他键或鼠标键时才应用组合键间隔。</value></data>
   <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（当前）：新增版本切换器；移除并行卡片，同一时间只运行一个宏；引擎同 2.0.3：冷启动首次热键从约 2 毫秒降到约 250 微秒；按键时长从 SendInput 开始时起算；SendInput 耗时补偿；可选热键启动对齐与 Raw Input 热键；测核避开中断密集的核心；系统延迟检查。</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：循环末尾的等待不再被丢弃，周期等于写下的总时长；默认间隔只推迟这一次抬起，不再推迟整条时间线；修复「宏基础控制」确定后设置不生效。</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（测试版）：热键入口与启动预热——启动时预热播放路径，低抖动热键待命时保持计时器分辨率；增加诊断追踪。播放时间线与 2.0.0 相同。</value></data>

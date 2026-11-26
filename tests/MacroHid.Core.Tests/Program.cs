@@ -205,6 +205,8 @@ var tests = new (string Name, Action Body)[]
     ("Input action compiler applies key down hold before matching key up", InputActionCompilerAppliesKeyDownHoldBeforeMatchingKeyUp),
     ("Input action compiler keeps simultaneous distinct key downs on the same tick", InputActionCompilerKeepsSimultaneousDistinctKeyDownsOnTheSameTick),
     ("Modifier chord hold keeps a short copy shortcut down for 30ms", ModifierChordHoldKeepsShortCopyShortcutDownAndPreservesLongerHolds),
+    ("Standalone modifier taps keep their recorded delay in compiled and managed playback", StandaloneModifierTapsKeepRecordedDelay),
+    ("SendInput chord clock waits for a new partner press", ModifierChordClockWaitsForPartnerPress),
     ("Input action compiler uses configured press floors", InputActionCompilerUsesConfiguredPressFloors),
     ("Compiled playback plan does not batch zero-delay key down and up", CompiledPlaybackPlanDoesNotBatchZeroDelayKeyDownAndUp),
     ("Input action compiler emits text actions", InputActionCompilerEmitsTextActions),
@@ -256,7 +258,7 @@ var tests = new (string Name, Action Body)[]
     ("Localization resources cover playback label in three languages", LocalizationResourcesCoverPlaybackLabelInThreeLanguages),
     ("Localization resources cover macro workbench labels in three languages", LocalizationResourcesCoverMacroWorkbenchLabelsInThreeLanguages),
     ("MacroStudio manifest requests administrator by default", MacroStudioManifestRequestsAdministratorByDefault),
-    ("MacroHID release version is 2.2.0", MacroHidReleaseVersionIsTwoTwoZero),
+    ("MacroHID Studio release version is 2.2.1", MacroHidReleaseVersionIsTwoTwoOne),
     ("MacroStudio uses borderless custom window chrome", MacroStudioUsesBorderlessCustomWindowChrome),
     ("MacroStudio maximized borderless window respects taskbar work area", MacroStudioMaximizedBorderlessWindowRespectsTaskbarWorkArea),
     ("Switching screens does not minimize MacroStudio to the tray", SwitchingScreensDoesNotMinimizeMacroStudioToTheTray),
@@ -1038,7 +1040,8 @@ static void PrecisionDialogOffersEveryGeneration()
     Assert.Equal(PlaybackVersions.Current, PlaybackVersions.All[0].Id);
     Assert.True(PlaybackVersions.All[0].Folder is null);
     var ids = PlaybackVersions.All.Select(v => v.Id).ToArray();
-    Assert.Equal("2.2.0,2.0.2,2.0.1,2.0.0,1.6.0,1.5.0,1.4.1,1.4.0,1.2.0", string.Join(",", ids));
+    Assert.Equal("2.2.1,2.0.2,2.0.1,2.0.0,1.6.0,1.5.0,1.4.1,1.4.0,1.2.0", string.Join(",", ids));
+    Assert.Equal(PlaybackVersions.Current, PlaybackVersions.Resolve("2.2.0").Id);
     Assert.Equal(PlaybackVersions.Current, PlaybackVersions.Resolve("2.0.4").Id); // a 2.0.4 setting means the current engine
     foreach (var file in new[] { "Strings.resx", "Strings.zh-CN.resx", "Strings.zh-TW.resx" })
     {
@@ -1530,6 +1533,93 @@ static void ModifierChordHoldKeepsShortCopyShortcutDownAndPreservesLongerHolds()
     Assert.Equal(31_000, clock.AdjustDueTick([up], dueTick: 1_000, holdTicks: 30_000));
     Assert.True(ModifierChordClock.TrySplit([down, up], out var splitAt));
     Assert.Equal(1, splitAt);
+}
+
+static void StandaloneModifierTapsKeepRecordedDelay()
+{
+    const long frequency = 1_000_000;
+    const long chordFloor = 30_000;
+    var floor = InputPressFloor.FromMicroseconds(10_000, chordFloor);
+    foreach (var modifier in new[]
+    {
+        HidKey.LeftShift, HidKey.RightShift, HidKey.LeftControl, HidKey.RightControl,
+        HidKey.LeftAlt, HidKey.RightAlt, HidKey.LeftGui, HidKey.RightGui
+    })
+    {
+        var document = new MacroDocument(1, "standalone-modifier",
+        [
+            new MouseButtonStep(MouseButton.Left, ButtonActionKind.Down, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromMilliseconds(1)),
+            new KeyStep(KeyActionKind.Down, modifier, HidModifier.None, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromMilliseconds(5)),
+            new KeyStep(KeyActionKind.Up, modifier, HidModifier.None, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromMilliseconds(9)),
+            new MouseButtonStep(MouseButton.Left, ButtonActionKind.Up, TimeSpan.Zero),
+            new WaitStep(TimeSpan.FromMilliseconds(3))
+        ]);
+        long[] expected = [0, 1_000, 6_000, 15_000];
+        var plan = CompiledPlaybackPlan.Create(document, frequency, pressFloor: floor);
+        Assert.True(plan.Batches.Select(batch => batch.DueTick).SequenceEqual(expected));
+        Assert.Equal(18_000L, plan.DurationTicks);
+
+        var clock = new FakeHighResolutionClock(frequency);
+        var reached = new List<long>();
+        var runner = new ManagedMacroControlFlowRunner(new RecordingMacroSink(_ => reached.Add(clock.GetTimestamp())),
+            new ImmediatePlaybackDelayStrategy(clock), clock, null, null, pressFloor: floor);
+        uint sequence = 1;
+        var submitted = 0;
+        Assert.Equal(MacroControlFlowResult.Completed,
+            runner.Run(document, 0, frequency, CancellationToken.None, false, ref sequence, ref submitted));
+        Assert.True(reached.SequenceEqual(expected));
+        Assert.Equal(18_000L, clock.GetTimestamp());
+
+        var zeroGap = InputActionCompiler.Compile(new MacroDocument(1, "zero-gap-modifier",
+        [
+            new KeyStep(KeyActionKind.Down, modifier, HidModifier.None, TimeSpan.Zero),
+            new KeyStep(KeyActionKind.Up, modifier, HidModifier.None, TimeSpan.Zero)
+        ]), 0, frequency, pressFloor: floor);
+        Assert.Equal(10_000L, zeroGap[1].DueTick);
+    }
+
+    var mouseChord = InputActionCompiler.Compile(new MacroDocument(1, "modifier-mouse-chord",
+    [
+        new KeyStep(KeyActionKind.Down, HidKey.LeftShift, HidModifier.None, TimeSpan.Zero),
+        new WaitStep(TimeSpan.FromMilliseconds(1)),
+        new MouseButtonStep(MouseButton.Left, ButtonActionKind.Down, TimeSpan.Zero),
+        new WaitStep(TimeSpan.FromMilliseconds(5)),
+        new MouseButtonStep(MouseButton.Left, ButtonActionKind.Up, TimeSpan.Zero),
+        new KeyStep(KeyActionKind.Up, HidKey.LeftShift, HidModifier.None, TimeSpan.Zero)
+    ]), 0, frequency, pressFloor: floor);
+    Assert.Equal(31_000L, mouseChord[2].DueTick);
+    Assert.Equal(31_000L, mouseChord[3].DueTick);
+}
+
+static void ModifierChordClockWaitsForPartnerPress()
+{
+    var clock = new ModifierChordClock();
+    var shiftDown = new KeyInputAction(KeyActionKind.Down, HidKey.LeftShift, HidModifier.None);
+    var shiftUp = new KeyInputAction(KeyActionKind.Up, HidKey.LeftShift, HidModifier.None);
+    var keyDown = new KeyInputAction(KeyActionKind.Down, HidKey.C, HidModifier.None);
+    var keyUp = new KeyInputAction(KeyActionKind.Up, HidKey.C, HidModifier.None);
+    var mouseDown = new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Down);
+    var mouseUp = new MouseButtonInputAction(MouseButton.Left, ButtonActionKind.Up);
+
+    clock.NoteSent([mouseDown, shiftDown], actualTick: 1_000);
+    Assert.Equal(6_000L, clock.AdjustDueTick([shiftUp], dueTick: 6_000, holdTicks: 30_000));
+    Assert.False(ModifierChordClock.TrySplit([shiftDown, shiftUp], out _));
+    clock.NoteSent([shiftUp, keyDown], actualTick: 6_000);
+    Assert.Equal(7_000L, clock.AdjustDueTick([keyUp], dueTick: 7_000, holdTicks: 30_000));
+    clock.NoteSent([keyUp, mouseUp], actualTick: 7_000);
+
+    clock.NoteSent([shiftDown], actualTick: 10_000);
+    clock.NoteSent([keyDown], actualTick: 12_000);
+    Assert.Equal(42_000L, clock.AdjustDueTick([keyUp, shiftUp], dueTick: 15_000, holdTicks: 30_000));
+    clock.NoteSent([keyUp, shiftUp], actualTick: 42_000);
+    Assert.True(ModifierChordClock.TrySplit([shiftDown, keyDown, keyUp, shiftUp], out var splitAt));
+    Assert.Equal(2, splitAt);
+
+    clock.NoteSent([shiftDown, mouseDown], actualTick: 50_000);
+    Assert.Equal(80_000L, clock.AdjustDueTick([mouseUp, shiftUp], dueTick: 55_000, holdTicks: 30_000));
 }
 
 static void InputActionCompilerUsesConfiguredPressFloors()
@@ -4371,24 +4461,24 @@ static void MacroStudioManifestRequestsAdministratorByDefault()
     Assert.Contains("<ApplicationManifest>app.manifest</ApplicationManifest>", File.ReadAllText(projectPath));
 }
 
-static void MacroHidReleaseVersionIsTwoTwoZero()
+static void MacroHidReleaseVersionIsTwoTwoOne()
 {
     var buildProps = File.ReadAllText("Directory.Build.props");
     var installer = File.ReadAllText(Path.Combine("installer", "MacroHID.iss"));
     var installerBuild = File.ReadAllText(Path.Combine("scripts", "Build-Installer.ps1"));
     var readme = File.ReadAllText("README.md");
-    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.2.0.md"));
+    var releaseNotes = File.ReadAllText(Path.Combine("docs", "releases", "2.2.1.md"));
 
-    Assert.Contains("<Version>2.2.0</Version>", buildProps);
-    Assert.Contains("<AssemblyVersion>2.2.0.0</AssemblyVersion>", buildProps);
-    Assert.Contains("<FileVersion>2.2.0.0</FileVersion>", buildProps);
-    Assert.Contains("<InformationalVersion>2.2.0</InformationalVersion>", buildProps);
+    Assert.Contains("<Version>2.2.1</Version>", buildProps);
+    Assert.Contains("<AssemblyVersion>2.2.1.0</AssemblyVersion>", buildProps);
+    Assert.Contains("<FileVersion>2.2.1.0</FileVersion>", buildProps);
+    Assert.Contains("<InformationalVersion>2.2.1</InformationalVersion>", buildProps);
     Assert.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", buildProps);
-    Assert.Contains("#define AppVersion \"2.2.0\"", installer);
-    Assert.Contains("[string]$Version = \"2.2.0\"", installerBuild);
-    Assert.Contains("MacroHID Studio 当前版本是 **2.2.0**", readme);
-    Assert.Contains("MacroHID 2.2.0 正式版", releaseNotes);
-    Assert.Contains("<Version>2.2.0</Version>", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MacroStudio.csproj")));
+    Assert.Contains("#define AppVersion \"2.2.1\"", installer);
+    Assert.Contains("[string]$Version = \"2.2.1\"", installerBuild);
+    Assert.Contains("MacroHID Studio 当前版本是 **2.2.1**", readme);
+    Assert.Contains("MacroHID Studio 2.2.1", releaseNotes);
+    Assert.Contains("<Version>2.2.1</Version>", File.ReadAllText(Path.Combine("src", "ui", "MacroStudio", "MacroStudio.csproj")));
 }
 
 static void MacroStudioUsesBorderlessCustomWindowChrome()

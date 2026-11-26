@@ -354,7 +354,7 @@ private:
         for (const auto& dependency : run.plan->releaseDependencies[index])
             due = std::max(due, run.submittedAt[dependency.first] + dependency.second);
         return run.chord.AdjustDue(due,
-            run.plan->chordEdges[index], ModifierChordHoldTicks(run.frequency));
+            run.plan->chordBatches[index], ModifierChordHoldTicks(run.frequency));
     }
     bool CanPumpSingleRun(ScheduledRun& run)
     {
@@ -421,7 +421,7 @@ private:
             const bool loopEnd = run.options.loopStepCount > 0 && (index + 1) % run.options.loopStepCount == 0;
             if (lateUs > run.options.outlierThresholdUs) { stats.outliersOverThreshold++; RecordOutlierEvent(stats, run.options, static_cast<uint32_t>(index), nominalDue, actual, lateUs, cpu, worker, loopEnd); }
             if (loopEnd) { run.loopLate.push_back(lateUs); stats.maxLoopEndLateUs = std::max(stats.maxLoopEndLateUs, lateUs); if (lateUs > run.options.outlierThresholdUs) stats.loopEndOutliersOverThreshold++; }
-            if (sent == batch.inputCount && batch.inputCount) run.chord.NoteSent(run.plan->chordEdges[index], submitted);
+            if (sent == batch.inputCount && batch.inputCount) run.chord.NoteSent(run.plan->chordBatches[index], submitted);
         }
         run.next++;
         if (error || (!run.IsStopped() && sent != batch.inputCount))

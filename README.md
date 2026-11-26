@@ -12,12 +12,16 @@ Studio 和正式版读取并保存同一套宏库 `%APPDATA%\MacroHID\MacroLibra
 
 双击根目录的 `打包.cmd` 可同时生成安装包、便携包和本地运行版。安装包与便携包位于 `artifacts/packages-ui`，本地运行版位于 `artifacts/local-run-ui`。脚本会更新桌面 `Start Item` 目录中的「MacroHID Studio」快捷方式。 [打包说明](docs/packaging.md)
 
-MacroHID Studio 当前版本是 **2.2.0**。 [GitHub Releases](https://github.com/NotBadSlime/Macro/releases)
+MacroHID Studio 当前版本是 **2.2.1**。 [GitHub Releases](https://github.com/NotBadSlime/Macro/releases)
 
 - `MacroHID-Studio-Setup-x64.exe` 为安装包。如果 Windows 在安装时拦截文件，可按对应步骤处理。 [安装说明](docs/installer.md#从网上下载后被拦截)
 - `MacroHID-Studio-Portable-x64.zip` 为便携包。解压后运行 `MacroHID-Studio` 目录内的 `MacroStudio.cmd`。
 
 需要先安装 [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（x64）。安装包不内置运行时。控制管理员窗口时，请以管理员身份运行 MacroStudio。
+
+### 2.2.1 更新
+
+- 单独短按 Shift、Ctrl、Alt 或 Win 时，按宏中写入的延迟播放。按住修饰键再按其他键或鼠标键时才应用「组合键间隔」。 [Studio 2.2.1 说明](docs/releases/2.2.1.md)
 
 ### 2.2.0 正式版新增与优化
 

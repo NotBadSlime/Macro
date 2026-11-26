@@ -424,7 +424,7 @@
   <data name="ZeroGapHold" xml:space="preserve"><value>預設間隔</value></data>
   <data name="ZeroGapHoldHelp" xml:space="preserve"><value>預設間隔：同一按鍵的按下和放開之間沒寫延遲時，放開延後這麼久，避免目標把這一下吞掉。填 0 表示同時送出。預設 10 毫秒。</value></data>
   <data name="ModifierChordHold" xml:space="preserve"><value>組合鍵間隔</value></data>
-  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>組合鍵間隔：帶 Ctrl、Shift、Alt、Win 的快捷鍵至少按住這麼久，否則目標可能讀不到修飾鍵。巨集裡寫得更長時依寫下的時間。預設 30 毫秒。</value></data>
+  <data name="ModifierChordHoldHelp" xml:space="preserve"><value>按住 Ctrl、Shift、Alt 或 Win 再按其他按鍵或滑鼠鍵時，組合鍵至少保持這麼久。單獨短按修飾鍵會保留巨集中的延遲。預設 30 毫秒。</value></data>
   <data name="Microseconds" xml:space="preserve"><value>微秒</value></data>
   <data name="HoldMicrosecondsInvalid" xml:space="preserve"><value>預設間隔和組合鍵間隔請填寫 0 到 60000000 的整數微秒。</value></data>
   <data name="ClearHotkey" xml:space="preserve"><value>清除</value></data>
@@ -745,7 +745,7 @@
   <data name="PlaybackVersionHelp" xml:space="preserve"><value>選擇用哪個發行版的程式碼播放巨集。舊版本執行當時的原始程式碼，當時的問題也會保留；它之後才加入的效果卡片（斷網、鎖幀等）由目前版本代為執行。測核與系統延遲檢查始終使用目前版本。</value></data>
   <data name="PlaybackVersionCurrent" xml:space="preserve"><value>{0}（目前，推薦）</value></data>
   <data name="PlaybackVersionMissing" xml:space="preserve"><value>此安裝缺少該版本的引擎檔案，播放會失敗，請重新安裝完整安裝包。</value></data>
-  <data name="PlaybackVersionNotes220" xml:space="preserve"><value>2.2.0（目前）：守護巨集可與其他前景巨集並行執行，並可單獨停止；主序列為空時可執行條件巨集，循環模式下持續檢查條件；保留 2.1.0 引入的 Max 精度檔和記憶體回收控制。</value></data>
+  <data name="PlaybackVersionNotes221" xml:space="preserve"><value>2.2.1（目前）：單獨短按修飾鍵會保留巨集中的時長。按住修飾鍵再按其他按鍵或滑鼠鍵時才套用組合鍵間隔。</value></data>
   <data name="PlaybackVersionNotes203" xml:space="preserve"><value>2.0.4（目前）：新增版本切換器；移除並行卡片，同一時間只執行一個巨集；引擎同 2.0.3：冷啟動首次熱鍵從約 2 毫秒降到約 250 微秒；按鍵時長從 SendInput 開始時起算；SendInput 耗時補償；可選熱鍵啟動對齊與 Raw Input 熱鍵；測核避開中斷密集的核心；系統延遲檢查。</value></data>
   <data name="PlaybackVersionNotes202" xml:space="preserve"><value>2.0.2：迴圈末尾的等待不再被丟棄，週期等於寫下的總時長；預設間隔只推遲這一次放開，不再推遲整條時間線；修復「巨集基礎控制」確定後設定不生效。</value></data>
   <data name="PlaybackVersionNotes201" xml:space="preserve"><value>2.0.1（測試版）：熱鍵入口與啟動預熱——啟動時預熱播放路徑，低抖動熱鍵待命時保持計時器解析度；增加診斷追蹤。播放時間線與 2.0.0 相同。</value></data>
