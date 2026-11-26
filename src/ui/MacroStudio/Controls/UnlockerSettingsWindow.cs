@@ -72,11 +72,7 @@ public sealed class UnlockerSettingsWindow : Window
     {
         string? fufuDirectory = DirectoryFor(fufu, FpsBackend.Fufu), ky3Directory = DirectoryFor(ky3, FpsBackend.Ky3);
         if (fufuDirectory is not null)
-        {
-            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(fufuDirectory, UnlockerConfiguration.PluginName(FpsBackend.Fufu)))));
-            if (hash != "58240C6B54A074AE6525C314B79A995ED6F614AB3626EF527EF9B88250DBBE6B") throw new InvalidOperationException("Fufu DLL 版本不受支持。");
             UnlockerConfiguration.ReadConfigurationTarget(FpsBackend.Fufu, fufuDirectory);
-        }
         if (ky3Directory is not null && Ky3ReloadPatch.Inspect(Path.Combine(ky3Directory, UnlockerConfiguration.PluginName(FpsBackend.Ky3))) == Ky3PatchState.Unsupported)
             throw new InvalidOperationException("KY3 DLL 版本不受支持，拒绝套用补丁。");
         if (ky3Directory is not null) UnlockerConfiguration.ReadConfigurationTarget(FpsBackend.Ky3, ky3Directory);

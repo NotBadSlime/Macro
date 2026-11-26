@@ -12,7 +12,6 @@ public sealed record UnlockerSettings(string? FufuDirectory = null, string? Ky3D
 
 public static class UnlockerConfiguration
 {
-    internal const string FufuHash = "58240C6B54A074AE6525C314B79A995ED6F614AB3626EF527EF9B88250DBBE6B";
     // Share leases and recovery journals with the standard edition for external targets.
     internal static string Root { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroHID", "unlockers");
     public static event Action<FpsBackend, string>? Faulted;
@@ -77,22 +76,15 @@ public static class UnlockerConfiguration
         if (candidates.Length != 1) throw new InvalidOperationException($"{backend}：请在「解帧器设置」选择安装目录（检测到 {candidates.Length} 个候选）。");
         return candidates[0];
     }
-    internal static void Validate(FpsBackend backend, string directory)
+    internal static void ValidateKy3(string directory)
     {
-        string dll = Path.Combine(directory, PluginName(backend));
-        if (backend == FpsBackend.Fufu)
-        {
-            if (Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(dll))) != FufuHash)
-                throw new InvalidOperationException("Fufu DLL 版本不受支持，请更新适配；未修改配置。");
-        }
-        else
-        {
-            var state = Ky3ReloadPatch.Inspect(dll);
-            if (state == Ky3PatchState.Unsupported) throw new InvalidOperationException("KY3 DLL 版本不受支持，请更新适配；未修改配置。");
-            if (state == Ky3PatchState.Original && !Load().AllowSlowKy3)
-                throw new InvalidOperationException("请在「解帧器设置」安装 KY3 20 毫秒补丁并重新启动游戏，或明确启用 2 秒备用模式。");
-        }
-        GameFpsDiagnostics.Log($"CONFIG DLL backend={backend} path={dll} sha256={Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(dll)))}");
+        string dll = Path.Combine(directory, PluginName(FpsBackend.Ky3));
+        var state = Ky3ReloadPatch.Inspect(dll);
+        if (state == Ky3PatchState.Unsupported) throw new InvalidOperationException("KY3 DLL 版本不受支持，请更新适配；未修改配置。");
+        if (state == Ky3PatchState.Original && !Load().AllowSlowKy3)
+            throw new InvalidOperationException("请在「解帧器设置」安装 KY3 20 毫秒补丁并重新启动游戏，或明确启用 2 秒备用模式。");
+        string hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(dll)));
+        GameFpsDiagnostics.Log($"CONFIG DLL backend={FpsBackend.Ky3} path={dll} sha256={hash}");
     }
     public static int ReadConfigurationTarget(FpsBackend backend, string directory)
     {

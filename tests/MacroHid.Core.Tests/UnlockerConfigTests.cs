@@ -120,8 +120,32 @@ internal static class UnlockerConfigTests
             Require(UnlockerConfiguration.FindDirectories(FpsBackend.Ky3, new[] { directory, directory }).Length == 1, "deduplicate");
             UnlockerConfiguration.Save(new(directory, another, true));
             Require(UnlockerConfiguration.Load() == new UnlockerSettings(directory, another, true), "local settings persistence");
-            Fails(() => UnlockerConfiguration.Validate(FpsBackend.Ky3, directory));
-            Fails(() => UnlockerConfiguration.Validate(FpsBackend.Fufu, directory));
+            Fails(() => UnlockerConfiguration.ValidateKy3(directory));
+            string fufuDll = Path.Combine(directory, UnlockerConfiguration.PluginName(FpsBackend.Fufu));
+            File.WriteAllText(fufuDll, "first Fufu build fixture");
+            File.WriteAllText(fufu, initial);
+            using (var owner = ConfigFpsChannel.Open(FpsBackend.Fufu))
+            {
+                owner.Write(178);
+                Require(owner.Read() == 178, "Fufu config can be updated without a recognized DLL hash");
+                File.WriteAllText(fufuDll, "updated Fufu build fixture");
+                owner.Write(179);
+                Require(owner.Read() == 179, "Fufu DLL updates do not disrupt config writes");
+                owner.Restore(10000);
+            }
+            Require(File.ReadAllText(fufu) == initial, "Fufu still restores the original config");
+            foreach (string invalid in new[]
+            {
+                initial.Replace("Value = 1\r\n", "Value = 0\r\n"),
+                initial.Replace("[TargetFps]", "[OtherTarget]"),
+                initial.Replace("Value = 10000", "Value = 10000\r\nValue = 178"),
+                initial.Replace("Value = 10000", "Value = 100001")
+            })
+            {
+                File.WriteAllText(fufu, invalid);
+                Fails(() => ConfigFpsChannel.Open(FpsBackend.Fufu).Dispose());
+                Require(File.ReadAllText(fufu) == invalid, "invalid Fufu config is rejected before writes");
+            }
             string? fixture = Environment.GetEnvironmentVariable("MACROHID_KY3_PATCH_FIXTURE");
             var fixtures = (Environment.GetEnvironmentVariable("MACROHID_KY3_PATCH_FIXTURES") ?? fixture ?? "")
                 .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
@@ -168,12 +192,12 @@ internal static class UnlockerConfigTests
         File.WriteAllBytes(plugin, original);
         File.WriteAllText(config, configuration);
         UnlockerConfiguration.Save(new(Ky3Directory: root, AllowSlowKy3: true));
-        UnlockerConfiguration.Validate(FpsBackend.Ky3, root);
+        UnlockerConfiguration.ValidateKy3(root);
         Require(File.ReadAllBytes(plugin).SequenceEqual(original), "fallback validation does not patch DLL");
         UnlockerConfiguration.Save(new(Ky3Directory: root, AllowSlowKy3: false));
-        Fails(() => UnlockerConfiguration.Validate(FpsBackend.Ky3, root));
+        Fails(() => UnlockerConfiguration.ValidateKy3(root));
         File.WriteAllBytes(plugin, patched);
-        UnlockerConfiguration.Validate(FpsBackend.Ky3, root);
+        UnlockerConfiguration.ValidateKy3(root);
         Require(File.ReadAllText(config) == configuration, "version validation does not modify configuration");
         string dll = Path.Combine(root, "patch-test.dll"); File.WriteAllBytes(dll, original);
         Ky3ReloadPatch.TestGameRunning = () => true; Fails(() => Ky3ReloadPatch.Install(dll));

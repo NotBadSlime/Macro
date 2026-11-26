@@ -82,9 +82,10 @@ internal sealed class ConfigFpsChannel : IYsrFpsChannel
     internal static IYsrFpsChannel Open(FpsBackend backend)
     {
         string directory = UnlockerConfiguration.Resolve(backend);
-        UnlockerConfiguration.Validate(backend, directory);
-        return new ConfigFpsChannel(System.IO.Path.Combine(directory, UnlockerConfiguration.ConfigName(backend)), backend,
-            () => UnlockerConfiguration.Validate(backend, directory));
+        // Fufu uses the INI contract checked by this channel. KY3 also depends on a supported reload mode.
+        Action? validateVersion = backend == FpsBackend.Ky3 ? () => UnlockerConfiguration.ValidateKy3(directory) : null;
+        validateVersion?.Invoke();
+        return new ConfigFpsChannel(System.IO.Path.Combine(directory, UnlockerConfiguration.ConfigName(backend)), backend, validateVersion);
     }
     private FpsIni ReadIni()
     {
